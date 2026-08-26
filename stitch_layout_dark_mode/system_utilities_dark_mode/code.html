@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>System &amp; Utilities</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-primary": "#7b5800",
+                        "primary": "#f7bd48",
+                        "on-primary": "#412d00",
+                        "on-secondary-fixed-variant": "#454747",
+                        "secondary": "#c6c6c7",
+                        "on-secondary-fixed": "#1a1c1c",
+                        "error": "#ffb4ab",
+                        "outline-variant": "#4f4535",
+                        "surface-tint": "#f7bd48",
+                        "on-info": "#99c2ff",
+                        "inverse-surface": "#e5e2e1",
+                        "primary-container": "#ba880f",
+                        "success-muted": "#2d4d3a",
+                        "tertiary": "#c7c6c6",
+                        "inverse-on-surface": "#313030",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "on-background": "#e5e2e1",
+                        "surface": "#1a1a1a",
+                        "surface-bright": "#3a3939",
+                        "on-surface-variant": "#d3c4af",
+                        "on-secondary": "#2f3131",
+                        "outline": "#9c8f7b",
+                        "tertiary-container": "#909191",
+                        "primary-fixed-dim": "#f7bd48",
+                        "on-tertiary-container": "#292a2a",
+                        "on-tertiary": "#2f3131",
+                        "on-primary-fixed": "#271900",
+                        "on-primary-fixed-variant": "#5d4200",
+                        "on-secondary-container": "#b4b5b5",
+                        "tertiary-fixed": "#e3e2e2",
+                        "error-container": "#93000a",
+                        "info-muted": "#2b3e5c",
+                        "surface-container": "#201f1f",
+                        "surface-container-highest": "#353534",
+                        "error-muted": "#5c2b2b",
+                        "on-error": "#ff9999",
+                        "on-primary-container": "#392700",
+                        "secondary-fixed-dim": "#c6c6c7",
+                        "on-success": "#8edba3",
+                        "border-subtle": "#2a2a2a",
+                        "secondary-fixed": "#e2e2e2",
+                        "surface-variant": "#353534",
+                        "on-surface": "#e5e2e1",
+                        "surface-container-lowest": "#0e0e0e",
+                        "background": "#131313",
+                        "surface-container-low": "#1c1b1b",
+                        "surface-container-high": "#2a2a2a",
+                        "on-error-container": "#ffdad6",
+                        "primary-fixed": "#ffdea6",
+                        "surface-dim": "#131313",
+                        "tertiary-fixed-dim": "#c7c6c6",
+                        "secondary-container": "#454747",
+                        "on-tertiary-fixed-variant": "#464747"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "12px",
+                        "stack-lg": "32px",
+                        "base": "8px",
+                        "touch-target": "44px",
+                        "stack-md": "16px",
+                        "margin-mobile": "20px",
+                        "stack-sm": "4px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Manrope"],
+                        "body-lg": ["Manrope"],
+                        "label-md": ["Manrope"],
+                        "headline-md": ["Manrope"],
+                        "body-md": ["Manrope"],
+                        "data-lg": ["Manrope"],
+                        "label-sm": ["Manrope"],
+                        "headline-sm": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "data-lg": ["28px", { "lineHeight": "32px", "letterSpacing": "-0.03em", "fontWeight": "500" }],
+                        "label-sm": ["10px", { "lineHeight": "12px", "letterSpacing": "0.08em", "fontWeight": "700" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body { font-family: 'Manrope', sans-serif; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky z-50 bg-background dark:bg-background flat no shadows">
+<div class="flex justify-between items-center px-margin-mobile py-4 max-w-7xl mx-auto">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full overflow-hidden border border-border-subtle bg-surface-container-highest cursor-pointer hover:opacity-80 transition-opacity">
+<img alt="User profile avatar" class="w-full h-full object-cover" data-alt="A sophisticated close-up portrait of a high-net-worth individual, moody lighting, obsidian dark mode aesthetic, minimal background, highly detailed." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDmfj-yprRl1sChQEzcJCf-s6JVE2l2PT90UO4-INu0uWo6o7yvcwXWPq13-AG-nM8pl0pEgZ4Ifo-MBLZc3ILgUr_4axe5IZAKqc_oKCEqnGVt9iGT1HrhA2PjddDnfVBi_InO5E5aGvOLzl3hhfU3EQwt5tmcPVKwcZe_mybo114mTyz-v49tYy8_AKsGquYJlwqzwibcAemtcSpALtRt4w25EpRS6KdhE4Bz8S7PhdhIVyptweQ4"/>
+</div>
+<h1 class="font-display-lg text-display-lg text-primary dark:text-primary-fixed-dim tracking-tighter">Clarity</h1>
+</div>
+<button class="w-touch-target h-touch-target flex items-center justify-center text-primary dark:text-primary-fixed-dim hover:opacity-80 transition-opacity active:scale-95 transition-transform rounded-full bg-surface">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">notifications</span>
+</button>
+</div>
+</header>
+<main class="max-w-7xl mx-auto px-margin-mobile py-stack-lg md:px-8 grid grid-cols-4 md:grid-cols-12 gap-gutter md:gap-stack-lg">
+<!-- Header Section -->
+<section class="col-span-4 md:col-span-12 mb-stack-lg">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-base">System &amp; Utilities</h2>
+<p class="font-body-md text-body-md text-secondary">Manage your secure environment and insights.</p>
+</section>
+<!-- Intelligence Cards (Bento Layout) -->
+<div class="col-span-4 md:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-stack-md">
+<!-- Dining Trend Card -->
+<div class="bg-surface border border-border-subtle rounded-xl p-stack-md flex flex-col justify-between hover:border-primary/50 transition-colors duration-300">
+<div>
+<div class="flex justify-between items-start mb-stack-md">
+<div class="bg-surface-container-highest w-10 h-10 rounded-lg flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">restaurant</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant bg-surface-container px-2 py-1 rounded-full border border-border-subtle">INTELLIGENCE</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-base">Dining Trends</h3>
+<p class="font-body-md text-body-md text-secondary mb-stack-md">Your expenditure in fine dining has increased by 14% this quarter.</p>
+</div>
+<div class="mt-auto">
+<div class="h-16 w-full relative overflow-hidden rounded-lg">
+<!-- Simple trendline visualization -->
+<div class="absolute bottom-0 w-full h-full bg-gradient-to-t from-primary/10 to-transparent"></div>
+<svg class="absolute bottom-0 w-full h-full" preserveaspectratio="none" viewbox="0 0 100 100">
+<path d="M0,100 L0,50 Q25,30 50,60 T100,20 L100,100 Z" fill="none" stroke="#f7bd48" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+</svg>
+</div>
+<button class="mt-stack-md w-full bg-transparent border-[1.5px] border-surface-container-highest text-primary font-label-md text-label-md py-2 rounded-lg hover:bg-surface-container transition-colors">VIEW ANALYSIS</button>
+</div>
+</div>
+<!-- Goal Status Card -->
+<div class="bg-surface border border-border-subtle rounded-xl p-stack-md flex flex-col justify-between hover:border-primary/50 transition-colors duration-300">
+<div>
+<div class="flex justify-between items-start mb-stack-md">
+<div class="bg-surface-container-highest w-10 h-10 rounded-lg flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">flag</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant bg-surface-container px-2 py-1 rounded-full border border-border-subtle">ACTIVE</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-base">Swiss Chalet Acquisition</h3>
+<p class="font-body-md text-body-md text-secondary mb-stack-md">On track for Q4 completion. Capital allocated effectively.</p>
+</div>
+<div>
+<div class="flex justify-between items-center mb-2">
+<span class="font-data-lg text-data-lg text-on-surface">68%</span>
+<span class="font-label-md text-label-md text-on-success">+2.4% this month</span>
+</div>
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 68%;"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column: Alerts & Vault -->
+<div class="col-span-4 md:col-span-4 flex flex-col gap-stack-md">
+<!-- Security Alerts -->
+<div class="bg-surface border border-border-subtle rounded-xl p-stack-md">
+<div class="flex items-center gap-2 mb-stack-md">
+<span class="material-symbols-outlined text-error">warning</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Security Alerts</h3>
+</div>
+<div class="space-y-4">
+<div class="flex gap-3 items-start pb-4 border-b border-border-subtle last:border-0 last:pb-0">
+<div class="w-2 h-2 rounded-full bg-error mt-2 flex-shrink-0"></div>
+<div>
+<p class="font-body-md text-body-md text-on-surface">Unusual login attempt from Geneva.</p>
+<p class="font-label-sm text-label-sm text-secondary mt-1">10 mins ago</p>
+</div>
+</div>
+<div class="flex gap-3 items-start pb-4 border-b border-border-subtle last:border-0 last:pb-0">
+<div class="w-2 h-2 rounded-full bg-surface-container-highest mt-2 flex-shrink-0"></div>
+<div>
+<p class="font-body-md text-body-md text-secondary">Quarterly security audit completed successfully.</p>
+<p class="font-label-sm text-label-sm text-secondary mt-1">2 days ago</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Data Vault -->
+<div class="bg-surface border border-border-subtle rounded-xl p-stack-md flex-grow">
+<div class="flex items-center gap-2 mb-stack-md">
+<span class="material-symbols-outlined text-primary">lock</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Data Vault</h3>
+</div>
+<p class="font-body-md text-body-md text-secondary mb-stack-md">Your encrypted documents are secured with AES-256 bit encryption.</p>
+<ul class="space-y-2 mb-stack-md">
+<li class="flex justify-between items-center bg-background border border-border-subtle rounded-lg p-3">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary">description</span>
+<span class="font-body-md text-body-md text-on-surface">Tax_Filings_2023.pdf</span>
+</div>
+<button class="text-primary hover:text-primary-fixed transition-colors"><span class="material-symbols-outlined">download</span></button>
+</li>
+<li class="flex justify-between items-center bg-background border border-border-subtle rounded-lg p-3">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary">folder_shared</span>
+<span class="font-body-md text-body-md text-on-surface">Trust_Documents</span>
+</div>
+<button class="text-primary hover:text-primary-fixed transition-colors"><span class="material-symbols-outlined">chevron_right</span></button>
+</li>
+</ul>
+<button class="w-full bg-primary-container text-on-primary-container font-label-md text-label-md py-3 rounded-lg hover:bg-primary hover:text-on-primary transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined" style="font-size: 18px;">upload</span> UPLOAD SECURE DOCUMENT
+                </button>
+</div>
+</div>
+</main>
+</body></html>

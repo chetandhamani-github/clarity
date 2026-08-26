@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<title>Clarity Financial - Accounts &amp; Goals</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "primary-fixed": "#ffdea6",
+                      "on-primary-fixed": "#271900",
+                      "secondary-container": "#e2dfde",
+                      "on-primary-fixed-variant": "#5d4200",
+                      "secondary": "#5f5e5e",
+                      "inverse-on-surface": "#f1f0f5",
+                      "surface-dim": "#dad9df",
+                      "secondary-fixed-dim": "#c8c6c5",
+                      "on-primary": "#ffffff",
+                      "on-secondary-fixed": "#1c1b1b",
+                      "on-tertiary-fixed": "#1b1c1a",
+                      "on-secondary-fixed-variant": "#474746",
+                      "on-background": "#1a1b1f",
+                      "outline": "#817563",
+                      "surface-container-highest": "#e3e2e7",
+                      "tertiary-fixed-dim": "#c7c7c3",
+                      "surface-bright": "#faf9fe",
+                      "on-error": "#ffffff",
+                      "on-tertiary-fixed-variant": "#464744",
+                      "tertiary-container": "#747572",
+                      "surface-container-lowest": "#ffffff",
+                      "on-error-container": "#93000a",
+                      "on-primary-container": "#fffbff",
+                      "on-secondary": "#ffffff",
+                      "inverse-primary": "#f7bd48",
+                      "on-tertiary": "#ffffff",
+                      "on-surface": "#1a1b1f",
+                      "surface": "#faf9fe",
+                      "outline-variant": "#d3c4af",
+                      "surface-container-high": "#e9e7ed",
+                      "tertiary": "#5b5c59",
+                      "surface-container": "#eeedf3",
+                      "inverse-surface": "#2f3034",
+                      "surface-tint": "#7b5800",
+                      "primary-fixed-dim": "#f7bd48",
+                      "error": "#ba1a1a",
+                      "surface-container-low": "#f4f3f8",
+                      "primary": "#785600",
+                      "secondary-fixed": "#e5e2e1",
+                      "on-tertiary-container": "#fefcf8",
+                      "tertiary-fixed": "#e3e2df",
+                      "error-container": "#ffdad6",
+                      "primary-container": "#986d00",
+                      "surface-variant": "#e3e2e7",
+                      "background": "#faf9fe",
+                      "on-secondary-container": "#636262",
+                      "on-surface-variant": "#4f4535"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "gutter": "12px",
+                      "stack-lg": "32px",
+                      "stack-md": "16px",
+                      "margin-mobile": "20px",
+                      "stack-sm": "4px",
+                      "base": "8px"
+              },
+              "fontFamily": {
+                      "display-lg": [
+                              "Manrope"
+                      ],
+                      "headline-md": [
+                              "Manrope"
+                      ],
+                      "body-md": [
+                              "Manrope"
+                      ],
+                      "label-md": [
+                              "Manrope"
+                      ],
+                      "data-lg": [
+                              "Manrope"
+                      ],
+                      "body-lg": [
+                              "Manrope"
+                      ],
+                      "headline-sm": [
+                              "Manrope"
+                      ]
+              },
+              "fontSize": {
+                      "display-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "data-lg": [
+                              "28px",
+                              {
+                                      "lineHeight": "32px",
+                                      "letterSpacing": "-0.03em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-sm": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ]
+              }
+            },
+          },
+        }
+    </script>
+<style>
+        body { background-color: #F7F6F2; }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid #E5E4E0;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .nav-active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background-color: #B8860B;
+            border-radius: 2px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface antialiased min-h-screen flex flex-col pb-24 md:pb-0">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky bg-background dark:bg-background flat no shadows z-40">
+<div class="flex justify-between items-center px-margin-mobile py-4 max-w-7xl mx-auto">
+<div class="flex items-center gap-4">
+<h1 class="font-display-lg text-display-lg text-on-surface tracking-tighter">Accounts</h1>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-on-surface" style="font-variation-settings: 'FILL' 0;">add</span>
+</button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 w-full max-w-7xl mx-auto px-margin-mobile md:px-8 py-stack-md flex flex-col gap-6">
+<!-- Navigation Tabs (Desktop only, subtle context switch) -->
+<div class="hidden md:flex gap-8 border-b border-outline-variant relative mb-4">
+<button class="pb-2 font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors">Overview</button>
+<button class="pb-2 font-label-md text-label-md text-primary nav-active transition-colors relative">Accounts &amp; Goals</button>
+<button class="pb-2 font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors">Transactions</button>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+<!-- Left Column: Accounts list & Add Account -->
+<div class="lg:col-span-4 flex flex-col gap-6">
+<!-- Add Account Form Card -->
+<section class="bg-surface-container-lowest border border-surface-variant rounded-[16px] p-4 shadow-[0_8px_24px_rgba(26,26,26,0.02)]">
+<div class="flex justify-between items-center mb-6">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">New Account</h2>
+<span class="material-symbols-outlined text-secondary">add_circle</span>
+</div>
+<form class="flex flex-col gap-4">
+<div class="flex flex-col gap-1">
+<label class="font-label-md text-label-md text-on-surface-variant">Account Name</label>
+<input class="bg-[#F0EFEA] border-none rounded-[12px] px-4 py-3 font-body-lg text-body-lg text-on-surface focus:ring-0 focus:bg-surface-container-lowest focus:border focus:border-[#B8860B] transition-all outline-none" placeholder="e.g. Chase Checking" type="text"/>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-md text-label-md text-on-surface-variant">Account Type</label>
+<div class="relative">
+<select class="w-full bg-[#F0EFEA] border-none rounded-[12px] px-4 py-3 font-body-lg text-body-lg text-on-surface appearance-none focus:ring-0 focus:bg-surface-container-lowest focus:border focus:border-[#B8860B] transition-all outline-none">
+<option value="checking">Checking</option>
+<option value="savings">Savings</option>
+<option value="investment">Investment</option>
+<option value="credit">Credit Card</option>
+</select>
+<span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none">expand_more</span>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-md text-label-md text-on-surface-variant">Current Balance</label>
+<div class="relative">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 font-body-lg text-on-surface-variant">$</span>
+<input class="w-full bg-[#F0EFEA] border-none rounded-[12px] pl-8 pr-4 py-3 font-body-lg text-body-lg text-on-surface focus:ring-0 focus:bg-surface-container-lowest focus:border focus:border-[#B8860B] transition-all outline-none" placeholder="0.00" type="number"/>
+</div>
+</div>
+<button class="mt-2 w-full bg-[#B8860B] text-on-primary rounded-[12px] h-12 font-label-md text-label-md flex justify-center items-center gap-2 hover:opacity-90 transition-opacity" type="button">
+                            Add Account
+                        </button>
+</form>
+</section>
+<!-- Account Details Snippet (Selection list) -->
+<section class="bg-surface-container-lowest border border-surface-variant rounded-[16px] p-4">
+<h3 class="font-label-md text-label-md text-on-surface-variant px-2 mb-2 uppercase tracking-widest">Active Accounts</h3>
+<div class="flex flex-col gap-2">
+<!-- Active Item -->
+<div class="flex items-center justify-between p-4 rounded-[12px] bg-surface-container border border-surface-variant cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container" style="font-variation-settings: 'FILL' 1;">account_balance</span>
+</div>
+<div>
+<p class="font-body-lg text-body-lg font-medium text-on-surface">Vanguard Brokerage</p>
+<p class="font-body-md text-body-md text-on-surface-variant">Investment</p>
+</div>
+</div>
+<p class="font-body-lg text-body-lg font-semibold text-on-surface">$142,500</p>
+</div>
+<!-- Inactive Item -->
+<div class="flex items-center justify-between p-4 rounded-[12px] bg-surface-container-lowest border border-surface-variant cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-surface-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">credit_card</span>
+</div>
+<div>
+<p class="font-body-lg text-body-lg font-medium text-on-surface">Chase Sapphire</p>
+<p class="font-body-md text-body-md text-on-surface-variant">Credit</p>
+</div>
+</div>
+<p class="font-body-lg text-body-lg font-semibold text-on-surface">-$2,140</p>
+</div>
+</div>
+</section>
+</div>
+<!-- Right Column: Account Details & Goals -->
+<div class="lg:col-span-8 flex flex-col gap-6">
+<!-- Account Details Canvas (Vanguard Brokerage) -->
+<section class="bg-surface-container-lowest border border-surface-variant rounded-[16px] p-4 shadow-[0_8px_24px_rgba(26,26,26,0.02)]">
+<div class="flex justify-between items-start mb-6">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest mb-1">Vanguard Brokerage</p>
+<h2 class="font-data-lg text-data-lg text-on-surface">$142,500.00</h2>
+<p class="font-body-md text-body-md text-primary mt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">trending_up</span>
+                                +$3,240 (2.4%) this month
+                            </p>
+</div>
+<button class="p-2 rounded-full border border-outline-variant text-on-surface hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined">more_horiz</span>
+</button>
+</div>
+<!-- Faux Chart Area -->
+<div class="w-full h-48 mb-6 relative rounded-[12px] bg-surface-container-lowest border border-surface-variant overflow-hidden flex items-end">
+<div class="absolute inset-0 w-full h-full opacity-5 bg-gradient-to-t from-primary to-transparent"></div>
+<svg class="w-full h-full preserve-3d" preserveaspectratio="none" viewbox="0 0 100 40">
+<path d="M0,40 L0,30 C10,25 20,35 30,20 C40,5 50,15 60,10 C70,5 80,25 90,15 C95,10 100,5 100,5 L100,40 Z" fill="url(#grad)" opacity="0.1"></path>
+<path d="M0,30 C10,25 20,35 30,20 C40,5 50,15 60,10 C70,5 80,25 90,15 C95,10 100,5" fill="none" stroke="#B8860B" stroke-width="0.5"></path>
+<defs>
+<lineargradient id="grad" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#B8860B"></stop>
+<stop offset="100%" stop-color="#ffffff"></stop>
+</lineargradient>
+</defs>
+</svg>
+<div class="absolute bottom-2 left-4 font-label-md text-label-md text-on-surface-variant">30 Days</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="p-4 rounded-[12px] bg-surface-container-low border border-surface-variant">
+<p class="font-label-md text-label-md text-on-surface-variant mb-1">Deposits</p>
+<p class="font-body-lg text-body-lg font-semibold text-on-surface">+$4,500.00</p>
+</div>
+<div class="p-4 rounded-[12px] bg-surface-container-low border border-surface-variant">
+<p class="font-label-md text-label-md text-on-surface-variant mb-1">Withdrawals</p>
+<p class="font-body-lg text-body-lg font-semibold text-on-surface">-$1,260.00</p>
+</div>
+</div>
+</section>
+<!-- Goal Management Bento -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<!-- Goal Progress Detail -->
+<section class="bg-surface-container-lowest border border-surface-variant rounded-[16px] p-4 shadow-[0_8px_24px_rgba(26,26,26,0.02)] flex flex-col justify-between">
+<div>
+<div class="flex justify-between items-center mb-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">health_and_safety</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Emergency Fund</h3>
+</div>
+<span class="font-label-md text-label-md px-2 py-1 bg-surface-variant rounded-md text-on-surface-variant">Target: Dec 2024</span>
+</div>
+<div class="flex items-end gap-2 mb-2">
+<span class="font-data-lg text-data-lg text-on-surface">$15,000</span>
+<span class="font-body-md text-body-md text-on-surface-variant mb-1">/ $20,000</span>
+</div>
+<!-- Progress Bar -->
+<div class="w-full h-2 bg-surface-container rounded-full overflow-hidden mb-4">
+<div class="h-full bg-[#B8860B] rounded-full" style="width: 75%;"></div>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">Monthly target: <span class="text-on-surface font-medium">$500</span></p>
+</div>
+<div class="mt-6">
+<p class="font-label-md text-label-md text-on-surface-variant mb-2">Recent Contributions</p>
+<div class="flex flex-col gap-2">
+<div class="flex justify-between items-center text-sm">
+<span class="text-on-surface">Oct 1, 2023</span>
+<span class="font-medium text-on-surface">+$500</span>
+</div>
+<div class="flex justify-between items-center text-sm border-t border-surface-variant pt-2">
+<span class="text-on-surface">Sep 1, 2023</span>
+<span class="font-medium text-on-surface">+$500</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Add Goal Contribution -->
+<section class="bg-surface-container-lowest border border-surface-variant rounded-[16px] p-4 shadow-[0_8px_24px_rgba(26,26,26,0.02)] flex flex-col justify-center">
+<div class="text-center mb-6">
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-2">Add Contribution</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Boost your Emergency Fund</p>
+</div>
+<div class="flex justify-center mb-6">
+<div class="relative w-48">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 font-data-lg text-on-surface-variant">$</span>
+<input class="w-full bg-[#F0EFEA] border-none rounded-[12px] pl-10 pr-4 py-4 font-data-lg text-data-lg text-center text-on-surface focus:ring-0 focus:bg-surface-container-lowest focus:border focus:border-[#B8860B] transition-all outline-none" placeholder="0" type="number"/>
+</div>
+</div>
+<div class="flex justify-between items-center mb-6 px-4">
+<div class="text-center">
+<p class="font-label-md text-label-md text-on-surface-variant">Current</p>
+<p class="font-body-lg text-body-lg font-medium">75%</p>
+</div>
+<span class="material-symbols-outlined text-surface-variant">arrow_forward</span>
+<div class="text-center">
+<p class="font-label-md text-label-md text-primary">New</p>
+<p class="font-body-lg text-body-lg font-medium text-primary">--%</p>
+</div>
+</div>
+<button class="w-full bg-transparent border-2 border-[#1A1A1A] text-[#1A1A1A] rounded-[12px] h-12 font-label-md text-label-md hover:bg-surface-container-lowest transition-colors">
+                            Deposit Funds
+                        </button>
+</section>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-safe h-20 bg-surface-container-lowest dark:bg-inverse-surface border-t-[0.5px] border-outline-variant shadow-[0_-8px_24px_rgba(26,26,26,0.04)] md:hidden">
+<button class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:text-primary dark:hover:text-primary-fixed transition-colors">
+<span class="material-symbols-outlined mb-1 text-2xl" style="font-variation-settings: 'FILL' 0;">home</span>
+<span class="font-label-md text-[10px]">Home</span>
+</button>
+<button class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:text-primary dark:hover:text-primary-fixed transition-colors">
+<span class="material-symbols-outlined mb-1 text-2xl" style="font-variation-settings: 'FILL' 0;">analytics</span>
+<span class="font-label-md text-[10px]">Plan</span>
+</button>
+<!-- Central FAB Contextual -->
+<div class="relative -top-5">
+<button class="w-14 h-14 bg-[#B8860B] rounded-full flex items-center justify-center shadow-lg text-on-primary hover:scale-95 transition-transform">
+<span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">add</span>
+</button>
+</div>
+<button class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:text-primary dark:hover:text-primary-fixed transition-colors">
+<span class="material-symbols-outlined mb-1 text-2xl" style="font-variation-settings: 'FILL' 0;">track_changes</span>
+<span class="font-label-md text-[10px]">Goals</span>
+</button>
+<button class="flex flex-col items-center justify-center text-primary dark:text-primary-fixed-dim font-bold transition-transform">
+<span class="material-symbols-outlined mb-1 text-2xl text-[#B8860B]" style="font-variation-settings: 'FILL' 1;">account_balance</span>
+<span class="font-label-md text-[10px] text-[#B8860B]">Accounts</span>
+</button>
+</nav>
+</body></html>

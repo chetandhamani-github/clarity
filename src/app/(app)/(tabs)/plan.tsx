@@ -1,0 +1,372 @@
+import React, { useMemo } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Text } from '@/components/ui';
+import { typography, useTheme, ThemeColors } from '@/theme';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
+import { formatCurrency } from '@/utils/format';
+
+export default function PlanScreen() {
+  const { colors } = useTheme();
+  const styles = getStyles(colors);
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+  const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+  const daysRemaining = daysInMonth - now.getDate();
+  
+  const monthName = now.toLocaleString('default', { month: 'long' });
+
+  const { plan, isLoading: planLoading } = useBudgetPlan();
+  const { spending, isLoading: spendingLoading } = useCategorySpending(currentMonth, currentYear);
+
+  const isLoading = planLoading || spendingLoading;
+
+  // Calculate totals from spending
+  const totals = useMemo(() => {
+    if (!plan) return { needsSpent: 0, wantsSpent: 0, savingsSpent: 0, totalSpent: 0 };
+    
+    let needsSpent = 0;
+    let wantsSpent = 0;
+    let savingsSpent = 0;
+    
+    spending.forEach(cat => {
+      if (cat.bucketType === 'needs') needsSpent += cat.spent;
+      if (cat.bucketType === 'wants') wantsSpent += cat.spent;
+      if (cat.bucketType === 'savings') savingsSpent += cat.spent;
+    });
+    
+    return {
+      needsSpent,
+      wantsSpent,
+      savingsSpent,
+      totalSpent: needsSpent + wantsSpent + savingsSpent
+    };
+  }, [plan, spending]);
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  // If no plan, prompt to set one up
+  if (!plan) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle} numberOfLines={1}>Budget Plan</Text>
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, gap: 16 }}>
+          <MaterialIcons name="account-balance-wallet" size={64} color={colors.primaryContainer} />
+          <Text style={{ ...typography.headlineSm, color: colors.onSurface }}>No Budget Plan Set</Text>
+          <Text style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, textAlign: 'center' }}>
+            Set up your monthly income and allocation to start tracking your budget.
+          </Text>
+          <TouchableOpacity 
+            style={styles.editBtn} 
+            onPress={() => router.push('/budget-setup')}
+          >
+            <Text style={styles.editBtnText}>Set Up Budget</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  const needsLimit = plan.monthlyIncome * (plan.needsPercent / 100);
+  const wantsLimit = plan.monthlyIncome * (plan.wantsPercent / 100);
+  const savingsLimit = plan.monthlyIncome * (plan.savingsPercent / 100);
+
+  const remaining = plan.monthlyIncome - totals.totalSpent;
+
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
+          <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
+            <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
+          </View>
+        </TouchableOpacity>
+
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          Budget Plan
+        </Text>
+
+        <View style={{ width: 40 }} />
+      </View>
+
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
+        {/* Section Header */}
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>{monthName} Plan</Text>
+            <Text style={styles.sectionSubtitle}>{daysRemaining} days remaining</Text>
+          </View>
+          <TouchableOpacity style={styles.editBtn} onPress={() => router.push('/budget-setup')}>
+            <Text style={styles.editBtnText}>Edit Allocation</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Summary Cards Grid */}
+        <View style={styles.summaryGrid}>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Monthly Income</Text>
+            <Text style={styles.summaryValue}>{formatCurrency(plan.monthlyIncome)}</Text>
+          </View>
+
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Allocated</Text>
+            <Text style={styles.summaryValue}>{formatCurrency(plan.monthlyIncome)}</Text>
+          </View>
+
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Spent / Saved</Text>
+            <Text style={styles.summaryValue}>{formatCurrency(totals.totalSpent)}</Text>
+          </View>
+
+          <View style={[styles.summaryCard, styles.summaryCardHighlight]}>
+            <View style={styles.highlightBackground} />
+            <Text style={styles.summaryLabel}>Remaining</Text>
+            <Text style={[styles.summaryValue, { color: colors.primary }]}>{formatCurrency(Math.max(0, remaining))}</Text>
+          </View>
+        </View>
+
+        {/* Allocation Sections */}
+        <View style={styles.allocationSections}>
+          {/* Needs */}
+          <TouchableOpacity
+            style={styles.allocationCard}
+            onPress={() => router.push('/manage-categories')}
+          >
+            <View style={styles.allocationHeader}>
+              <View style={styles.allocationHeaderLeft}>
+                <MaterialIcons name="home" size={24} color={colors.primary} />
+                <Text style={styles.allocationTitle}>Needs</Text>
+              </View>
+              <Text style={styles.allocationPercent}>{plan.needsPercent}%</Text>
+            </View>
+            <View style={styles.progressSection}>
+              <View style={styles.progressTextRow}>
+                <Text style={styles.progressLabel}>Spent</Text>
+                <Text style={styles.progressValue}>{formatCurrency(totals.needsSpent)} / {formatCurrency(needsLimit)}</Text>
+              </View>
+              <View style={styles.progressBarTrack}>
+                <View style={[styles.progressBarFill, { width: `${Math.min(100, (totals.needsSpent / Math.max(1, needsLimit)) * 100)}%` }]} />
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* Wants */}
+          <TouchableOpacity
+            style={styles.allocationCard}
+            onPress={() => router.push('/manage-categories')}
+          >
+            <View style={styles.allocationHeader}>
+              <View style={styles.allocationHeaderLeft}>
+                <MaterialIcons name="shopping-bag" size={24} color={colors.primary} />
+                <Text style={styles.allocationTitle}>Wants</Text>
+              </View>
+              <Text style={styles.allocationPercent}>{plan.wantsPercent}%</Text>
+            </View>
+            <View style={styles.progressSection}>
+              <View style={styles.progressTextRow}>
+                <Text style={styles.progressLabel}>Spent</Text>
+                <Text style={styles.progressValue}>{formatCurrency(totals.wantsSpent)} / {formatCurrency(wantsLimit)}</Text>
+              </View>
+              <View style={styles.progressBarTrack}>
+                <View style={[styles.progressBarFill, { width: `${Math.min(100, (totals.wantsSpent / Math.max(1, wantsLimit)) * 100)}%` }]} />
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* Savings */}
+          <TouchableOpacity
+            style={styles.allocationCard}
+            onPress={() => router.push('/manage-categories')}
+          >
+            <View style={styles.allocationHeader}>
+              <View style={styles.allocationHeaderLeft}>
+                <MaterialIcons name="savings" size={24} color={colors.primary} />
+                <Text style={styles.allocationTitle}>Savings</Text>
+              </View>
+              <Text style={styles.allocationPercent}>{plan.savingsPercent}%</Text>
+            </View>
+            <View style={styles.progressSection}>
+              <View style={styles.progressTextRow}>
+                <Text style={styles.progressLabel}>Saved</Text>
+                <Text style={styles.progressValue}>{formatCurrency(totals.savingsSpent)} / {formatCurrency(savingsLimit)}</Text>
+              </View>
+              <View style={styles.progressBarTrack}>
+                <View style={[styles.progressBarFill, { width: `${Math.min(100, (totals.savingsSpent / Math.max(1, savingsLimit)) * 100)}%` }]} />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+const getStyles = (colors: ThemeColors) => {
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      height: 64,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.surfaceVariant,
+    },
+    headerTitle: {
+      ...typography.headlineMd,
+      color: colors.primary,
+    },
+    avatarButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+    },
+    avatarFallback: {
+      width: '100%',
+      height: '100%',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    scrollContent: {
+      padding: 20,
+      gap: 24,
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-end',
+    },
+    sectionTitle: {
+      ...typography.headlineSm,
+      color: colors.onSurface,
+    },
+    sectionSubtitle: {
+      ...typography.bodyMd,
+      color: colors.onSurfaceVariant,
+      marginTop: 2,
+    },
+    editBtn: {
+      backgroundColor: colors.primary,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 8,
+    },
+    editBtnText: {
+      ...typography.labelMd,
+      color: colors.onPrimary,
+    },
+    summaryGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 16,
+    },
+    summaryCard: {
+      width: '47%', 
+      backgroundColor: colors.surfaceContainerLowest,
+      borderWidth: 1,
+      borderColor: colors.surfaceVariant,
+      borderRadius: 16,
+      padding: 16,
+      justifyContent: 'space-between',
+      minHeight: 100,
+    },
+    summaryCardHighlight: {
+      position: 'relative',
+      overflow: 'hidden',
+    },
+    highlightBackground: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: colors.primaryContainer,
+      opacity: 0.1,
+    },
+    summaryLabel: {
+      ...typography.labelMd,
+      color: colors.onSurfaceVariant,
+    },
+    summaryValue: {
+      ...typography.dataLg,
+      color: colors.onSurface,
+      marginTop: 8,
+      fontSize: 22, 
+    },
+    allocationSections: {
+      gap: 16,
+    },
+    allocationCard: {
+      backgroundColor: colors.surfaceContainerLowest,
+      borderWidth: 1,
+      borderColor: colors.surfaceVariant,
+      borderRadius: 16,
+      padding: 24,
+      gap: 16,
+    },
+    allocationHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    allocationHeaderLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    allocationTitle: {
+      ...typography.headlineSm,
+      color: colors.onSurface,
+    },
+    allocationPercent: {
+      ...typography.labelMd,
+      color: colors.onSurfaceVariant,
+    },
+    progressSection: {
+      gap: 8,
+    },
+    progressTextRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    progressLabel: {
+      ...typography.bodyMd,
+      color: colors.onSurfaceVariant,
+    },
+    progressValue: {
+      ...typography.bodyMd,
+      color: colors.onSurface,
+    },
+    progressBarTrack: {
+      width: '100%',
+      height: 8,
+      backgroundColor: colors.surfaceContainer,
+      borderRadius: 4,
+      overflow: 'hidden',
+    },
+    progressBarFill: {
+      height: '100%',
+      backgroundColor: colors.primary,
+      borderRadius: 4,
+    },
+  });
+  return styles;
+};

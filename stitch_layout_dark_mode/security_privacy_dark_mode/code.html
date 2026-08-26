@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Security &amp; Privacy - Clarity</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "inverse-primary": "#7b5800",
+                      "primary": "#f7bd48",
+                      "on-primary": "#412d00",
+                      "on-secondary-fixed-variant": "#454747",
+                      "secondary": "#c6c6c7",
+                      "on-secondary-fixed": "#1a1c1c",
+                      "error": "#ffb4ab",
+                      "outline-variant": "#4f4535",
+                      "surface-tint": "#f7bd48",
+                      "on-info": "#99c2ff",
+                      "inverse-surface": "#e5e2e1",
+                      "primary-container": "#ba880f",
+                      "success-muted": "#2d4d3a",
+                      "tertiary": "#c7c6c6",
+                      "inverse-on-surface": "#313030",
+                      "on-tertiary-fixed": "#1a1c1c",
+                      "on-background": "#e5e2e1",
+                      "surface": "#1a1a1a",
+                      "surface-bright": "#3a3939",
+                      "on-surface-variant": "#d3c4af",
+                      "on-secondary": "#2f3131",
+                      "outline": "#9c8f7b",
+                      "tertiary-container": "#909191",
+                      "primary-fixed-dim": "#f7bd48",
+                      "on-tertiary-container": "#292a2a",
+                      "on-tertiary": "#2f3131",
+                      "on-primary-fixed": "#271900",
+                      "on-primary-fixed-variant": "#5d4200",
+                      "on-secondary-container": "#b4b5b5",
+                      "tertiary-fixed": "#e3e2e2",
+                      "error-container": "#93000a",
+                      "info-muted": "#2b3e5c",
+                      "surface-container": "#201f1f",
+                      "surface-container-highest": "#353534",
+                      "error-muted": "#5c2b2b",
+                      "on-error": "#ff9999",
+                      "on-primary-container": "#392700",
+                      "secondary-fixed-dim": "#c6c6c7",
+                      "on-success": "#8edba3",
+                      "border-subtle": "#2a2a2a",
+                      "secondary-fixed": "#e2e2e2",
+                      "surface-variant": "#353534",
+                      "on-surface": "#e5e2e1",
+                      "surface-container-lowest": "#0e0e0e",
+                      "background": "#131313",
+                      "surface-container-low": "#1c1b1b",
+                      "surface-container-high": "#2a2a2a",
+                      "on-error-container": "#ffdad6",
+                      "primary-fixed": "#ffdea6",
+                      "surface-dim": "#131313",
+                      "tertiary-fixed-dim": "#c7c6c6",
+                      "secondary-container": "#454747",
+                      "on-tertiary-fixed-variant": "#464747"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "gutter": "12px",
+                      "stack-lg": "32px",
+                      "base": "8px",
+                      "touch-target": "44px",
+                      "stack-md": "16px",
+                      "margin-mobile": "20px",
+                      "stack-sm": "4px"
+              },
+              "fontFamily": {
+                      "display-lg": [
+                              "Manrope"
+                      ],
+                      "body-lg": [
+                              "Manrope"
+                      ],
+                      "label-md": [
+                              "Manrope"
+                      ],
+                      "headline-md": [
+                              "Manrope"
+                      ],
+                      "body-md": [
+                              "Manrope"
+                      ],
+                      "data-lg": [
+                              "Manrope"
+                      ],
+                      "label-sm": [
+                              "Manrope"
+                      ],
+                      "headline-sm": [
+                              "Manrope"
+                      ]
+              },
+              "fontSize": {
+                      "display-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "data-lg": [
+                              "28px",
+                              {
+                                      "lineHeight": "32px",
+                                      "letterSpacing": "-0.03em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "label-sm": [
+                              "10px",
+                              {
+                                      "lineHeight": "12px",
+                                      "letterSpacing": "0.08em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-sm": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ]
+              }
+            },
+          }
+        }
+    </script>
+<style>
+        /* Custom toggle styles to match primary gold */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #f7bd48;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #ba880f; /* primary-container */
+        }
+        .toggle-checkbox:checked + .toggle-label::after {
+            transform: translateX(100%);
+            border-color: white;
+        }
+        
+        .toggle-label {
+            width: 44px;
+            height: 24px;
+            background-color: #2a2a2a; /* border-subtle / surface-container-high */
+            border-radius: 9999px;
+            position: relative;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        
+        .toggle-label::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background-color: #e5e2e1; /* on-surface */
+            border-radius: 50%;
+            transition: transform 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        /* Subtly animated gradient background for high-end feel */
+        body {
+            background: radial-gradient(circle at top right, #1a1a1a 0%, #131313 100%);
+            min-height: 100vh;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface antialiased font-body-lg">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky bg-background dark:bg-background z-50">
+<div class="flex justify-between items-center px-margin-mobile md:px-6 py-4 max-w-7xl mx-auto">
+<!-- Back Button for sub-page -->
+<button aria-label="Go back" class="flex items-center justify-center w-touch-target h-touch-target rounded-full hover:bg-surface-container-high transition-colors text-primary dark:text-primary-fixed-dim">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">arrow_back</span>
+</button>
+<h1 class="font-headline-md text-headline-md text-on-surface">Security &amp; Privacy</h1>
+<!-- Trailing action or placeholder to balance header -->
+<div class="w-touch-target h-touch-target flex justify-center items-center">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 0;">help</span>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="max-w-7xl mx-auto px-margin-mobile md:px-6 py-stack-lg pb-24">
+<div class="grid grid-cols-1 md:grid-cols-12 gap-stack-lg">
+<!-- Desktop Side Nav (Hidden on Mobile) -->
+<aside class="hidden md:block md:col-span-3">
+<nav class="flex flex-col space-y-2 sticky top-24">
+<a class="px-4 py-3 rounded-lg flex items-center space-x-3 text-on-surface-variant hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">manage_accounts</span>
+<span class="font-body-md text-body-md">Account Details</span>
+</a>
+<a class="px-4 py-3 rounded-lg flex items-center space-x-3 bg-primary-container text-on-primary-container transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">shield</span>
+<span class="font-body-md text-body-md font-semibold">Security &amp; Privacy</span>
+</a>
+<a class="px-4 py-3 rounded-lg flex items-center space-x-3 text-on-surface-variant hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">notifications</span>
+<span class="font-body-md text-body-md">Notifications</span>
+</a>
+<a class="px-4 py-3 rounded-lg flex items-center space-x-3 text-on-surface-variant hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">credit_card</span>
+<span class="font-body-md text-body-md">Billing &amp; Cards</span>
+</a>
+</nav>
+</aside>
+<!-- Settings Content -->
+<div class="col-span-1 md:col-span-9 space-y-stack-lg max-w-3xl">
+<!-- Section: Access Control -->
+<section>
+<h2 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-stack-md ml-2">Access Control</h2>
+<div class="bg-surface border border-border-subtle rounded-xl overflow-hidden flex flex-col">
+<!-- Setting Item: Password -->
+<div class="p-4 md:p-6 flex items-center justify-between border-b border-border-subtle hover:bg-surface-container-low transition-colors cursor-pointer group">
+<div class="flex items-start space-x-4">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 0;">password</span>
+</div>
+<div>
+<h3 class="font-body-lg text-body-lg text-on-surface group-hover:text-primary transition-colors">Change Password</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Last changed 45 days ago</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors" style="font-variation-settings: 'FILL' 0;">chevron_right</span>
+</div>
+<!-- Setting Item: 2FA -->
+<div class="p-4 md:p-6 flex items-center justify-between hover:bg-surface-container-low transition-colors group">
+<div class="flex items-start space-x-4">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">verified_user</span>
+</div>
+<div>
+<h3 class="font-body-lg text-body-lg text-on-surface group-hover:text-primary transition-colors">Two-Factor Authentication</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Authenticator App configured</p>
+</div>
+</div>
+<div class="flex items-center space-x-3">
+<span class="font-label-sm text-label-sm text-success-muted bg-[#14261d] px-2 py-1 rounded-full uppercase tracking-wider">Active</span>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors" style="font-variation-settings: 'FILL' 0;">chevron_right</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Section: Data & Privacy -->
+<section>
+<h2 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-stack-md ml-2">Data &amp; Privacy</h2>
+<div class="bg-surface border border-border-subtle rounded-xl overflow-hidden flex flex-col">
+<!-- Toggle Item: Location -->
+<div class="p-4 md:p-6 flex items-center justify-between border-b border-border-subtle">
+<div class="flex items-start space-x-4 pr-4">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 0;">location_on</span>
+</div>
+<div>
+<h3 class="font-body-lg text-body-lg text-on-surface">Location Services</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Allow Clarity to access your location to provide regional market insights.</p>
+</div>
+</div>
+<div class="relative shrink-0 flex items-center h-touch-target">
+<input checked="" class="sr-only toggle-checkbox" id="toggle-location" type="checkbox"/>
+<label class="toggle-label" for="toggle-location"></label>
+</div>
+</div>
+<!-- Toggle Item: Analytics -->
+<div class="p-4 md:p-6 flex items-center justify-between">
+<div class="flex items-start space-x-4 pr-4">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 0;">analytics</span>
+</div>
+<div>
+<h3 class="font-body-lg text-body-lg text-on-surface">Usage Analytics</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Share anonymized usage data to help us improve the Clarity experience.</p>
+</div>
+</div>
+<div class="relative shrink-0 flex items-center h-touch-target">
+<input class="sr-only toggle-checkbox" id="toggle-analytics" type="checkbox"/>
+<label class="toggle-label" for="toggle-analytics"></label>
+</div>
+</div>
+</div>
+</section>
+<!-- Section: Advanced -->
+<section>
+<div class="bg-surface border border-border-subtle rounded-xl overflow-hidden mt-stack-lg">
+<div class="p-4 md:p-6 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group">
+<div class="flex items-center space-x-3">
+<span class="material-symbols-outlined text-error" style="font-variation-settings: 'FILL' 0;">delete_forever</span>
+<span class="font-body-lg text-body-lg text-error">Delete Account</span>
+</div>
+<span class="material-symbols-outlined text-secondary group-hover:text-error transition-colors" style="font-variation-settings: 'FILL' 0;">chevron_right</span>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+<script>
+        // Simple logic to toggle the visual state of the checkboxes for demo purposes
+        document.querySelectorAll('.toggle-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                // The CSS handles the visual transition based on the :checked state
+                console.log(this.id + ' is now ' + (this.checked ? 'on' : 'off'));
+            });
+        });
+    </script>
+</body></html>

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<title>Clarity Financial - Notifications</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-surface-variant": "#4f4535",
+                        "on-tertiary-fixed-variant": "#464744",
+                        "primary-fixed-dim": "#f7bd48",
+                        "surface-container": "#eeedf3",
+                        "on-tertiary-container": "#fefcf8",
+                        "secondary": "#5f5e5e",
+                        "on-secondary-fixed-variant": "#474746",
+                        "primary": "#785600",
+                        "error": "#ba1a1a",
+                        "on-primary-fixed-variant": "#5d4200",
+                        "surface-container-high": "#e9e7ed",
+                        "on-primary-fixed": "#271900",
+                        "tertiary-fixed-dim": "#c7c7c3",
+                        "tertiary": "#5b5c59",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "secondary-container": "#e2dfde",
+                        "on-primary-container": "#fffbff",
+                        "tertiary-container": "#747572",
+                        "on-error": "#ffffff",
+                        "surface": "#faf9fe",
+                        "surface-container-highest": "#e3e2e7",
+                        "primary-fixed": "#ffdea6",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-variant": "#e3e2e7",
+                        "primary-container": "#986d00",
+                        "surface-dim": "#dad9df",
+                        "on-surface": "#1a1b1f",
+                        "tertiary-fixed": "#e3e2df",
+                        "on-secondary-fixed": "#1c1b1b",
+                        "surface-container-low": "#f4f3f8",
+                        "on-error-container": "#93000a",
+                        "background": "#faf9fe",
+                        "surface-bright": "#faf9fe",
+                        "on-secondary-container": "#636262",
+                        "secondary-fixed": "#e5e2e1",
+                        "on-tertiary-fixed": "#1b1c1a",
+                        "on-background": "#1a1b1f",
+                        "inverse-on-surface": "#f1f0f5",
+                        "on-tertiary": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "inverse-primary": "#f7bd48",
+                        "outline": "#817563",
+                        "outline-variant": "#d3c4af",
+                        "error-container": "#ffdad6",
+                        "inverse-surface": "#2f3034",
+                        "surface-tint": "#7b5800",
+                        "on-secondary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-lg": "32px",
+                        "base": "8px",
+                        "stack-sm": "4px",
+                        "gutter": "12px",
+                        "margin-mobile": "20px",
+                        "stack-md": "16px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Manrope"],
+                        "headline-sm": ["Manrope"],
+                        "headline-md": ["Manrope"],
+                        "label-md": ["Manrope"],
+                        "data-lg": ["Manrope"],
+                        "body-lg": ["Manrope"],
+                        "body-md": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "data-lg": ["28px", { "lineHeight": "32px", "letterSpacing": "-0.03em", "fontWeight": "500" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        /* Hide scrollbar for clean look */
+        ::-webkit-scrollbar { display: none; }
+        * { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="text-on-background font-body-lg min-h-screen pb-safe bg-surface-container-low">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky z-50 bg-background dark:bg-background flex justify-between items-center px-margin-mobile py-4 max-w-7xl mx-auto border-b border-outline-variant/30 md:border-none">
+<div class="flex items-center gap-4">
+<button class="md:hidden text-primary hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined text-[24px]">arrow_back</span>
+</button>
+<div class="hidden md:flex h-10 w-10 rounded-full overflow-hidden border border-outline-variant items-center justify-center bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="A sophisticated close-up portrait of a professional individual in their 30s. Soft, warm natural lighting highlights their features against a muted, elegant background. The overall aesthetic is premium, calm, and fits a high-end financial application's light-mode design. Crisp focus, subtle neutral tones with a hint of gold warmth." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBkYGZomGaNZMwFLwIVTscbwElM1zqAU1P2IyxqAuYSgqhts-UPuQFaN3wybvqVnNRQuqW-sWyqFAyLqNtgOy8aqKBGmQNJmhAEZa2Mdx4FLPYs5PvBiuGgMNFWE-sjoYrZ6sXRBhUlacrWCfwOOeUCTx10NOJfprpZKPuvlIqzz6_DDzxBaqyDv2jYn42sh_hfyBzT8y3aooBSN9cmUGNZFDofaFSI0u9XKTkDAK50aKt7kDUanYTE"/>
+</div>
+<h1 class="font-display-lg text-display-lg text-primary dark:text-primary-fixed-dim tracking-tighter hidden md:block">Clarity</h1>
+<h1 class="font-headline-md text-headline-md md:hidden text-on-surface">Notifications</h1>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:opacity-80 transition-opacity hidden md:flex">
+<span class="material-symbols-outlined text-[24px]">search</span>
+</button>
+<button class="text-primary hover:opacity-80 transition-opacity relative Active: scale-95 transition-transform hidden md:flex">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 rounded-full bg-primary"></span>
+</button>
+<button class="md:hidden text-primary hover:opacity-80 transition-opacity relative">
+<span class="material-symbols-outlined text-[24px]">more_vert</span>
+</button>
+</div>
+</header>
+<main class="max-w-3xl mx-auto px-margin-mobile pt-stack-md pb-stack-lg">
+<div class="flex justify-between items-end mb-stack-lg hidden md:flex">
+<div>
+<h2 class="font-display-lg text-display-lg text-on-surface">Notifications</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">You have 3 unread messages.</p>
+</div>
+<button class="font-label-md text-label-md text-primary hover:opacity-80 transition-opacity flex items-center gap-1 uppercase tracking-wider">
+<span class="material-symbols-outlined text-[16px]">done_all</span> Mark all as read
+            </button>
+</div>
+<div class="md:hidden flex justify-end mb-stack-md">
+<button class="font-label-md text-label-md text-primary hover:opacity-80 transition-opacity flex items-center gap-1 uppercase tracking-wider">
+                Mark all as read
+            </button>
+</div>
+<!-- Alerts Section -->
+<section class="mb-stack-lg">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-stack-md flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-error">warning</span> Alerts
+            </h3>
+<div class="flex flex-col gap-2">
+<!-- Unread Alert -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-[16px] p-4 flex gap-4 items-start relative cursor-pointer hover:bg-surface-container-low transition-colors overflow-hidden">
+<div class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-error rounded-r-full"></div>
+<div class="w-10 h-10 rounded-full bg-error-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-on-error-container text-[20px]">account_balance_wallet</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-baseline gap-2 mb-1">
+<h4 class="font-headline-sm text-body-lg text-on-surface truncate">Budget Exceeded: Dining</h4>
+<span class="font-body-md text-[12px] text-on-surface-variant shrink-0">2m ago</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2">You've spent $450 this month on dining, exceeding your set budget of $400.</p>
+</div>
+</div>
+<!-- Read Alert -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-[16px] p-4 flex gap-4 items-start cursor-pointer hover:bg-surface-container-low transition-colors opacity-80">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">security</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-baseline gap-2 mb-1">
+<h4 class="font-headline-sm text-body-lg text-on-surface truncate">New Login Detected</h4>
+<span class="font-body-md text-[12px] text-on-surface-variant shrink-0">Yesterday</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2">A new login was detected from Safari on macOS in San Francisco.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Milestones Section -->
+<section>
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-stack-md flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-primary">star</span> Milestones
+            </h3>
+<div class="flex flex-col gap-2">
+<!-- Unread Milestone -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-[16px] p-4 flex gap-4 items-start relative cursor-pointer hover:bg-surface-container-low transition-colors overflow-hidden">
+<div class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r-full"></div>
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-on-primary-container text-[20px]">flag</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-baseline gap-2 mb-1">
+<h4 class="font-headline-sm text-body-lg text-on-surface truncate">Goal Reached: 50%</h4>
+<span class="font-body-md text-[12px] text-on-surface-variant shrink-0">1h ago</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant mb-2">You are halfway to your "European Vacation" savings goal. Keep it up!</p>
+<!-- Progress bar micro-interaction area -->
+<div class="w-full bg-surface-container-highest h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-1/2 rounded-full"></div>
+</div>
+</div>
+</div>
+<!-- Unread Milestone -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-[16px] p-4 flex gap-4 items-start relative cursor-pointer hover:bg-surface-container-low transition-colors overflow-hidden">
+<div class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r-full"></div>
+<div class="w-10 h-10 rounded-full bg-surface-container-high border border-outline-variant flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">insert_chart</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-baseline gap-2 mb-1">
+<h4 class="font-headline-sm text-body-lg text-on-surface truncate">Monthly Report Ready</h4>
+<span class="font-body-md text-[12px] text-on-surface-variant shrink-0">3h ago</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">Your financial summary for October is now available to view.</p>
+<button class="mt-2 text-label-md font-label-md text-primary flex items-center gap-1 uppercase hover:opacity-80">
+                            View Report <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Read Milestone -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-[16px] p-4 flex gap-4 items-start cursor-pointer hover:bg-surface-container-low transition-colors opacity-80">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">emoji_events</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-baseline gap-2 mb-1">
+<h4 class="font-headline-sm text-body-lg text-on-surface truncate">Portfolio High</h4>
+<span class="font-body-md text-[12px] text-on-surface-variant shrink-0">Oct 12</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2">Your investment portfolio reached a new all-time high this week.</p>
+</div>
+</div>
+</div>
+</section>
+</main>
+</body></html>

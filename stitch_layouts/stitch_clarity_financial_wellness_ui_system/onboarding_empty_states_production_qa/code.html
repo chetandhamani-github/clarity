@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Clarity - Empty States</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary-fixed-variant": "#5d4200",
+                    "inverse-on-surface": "#f1f0f5",
+                    "surface-dim": "#dad9df",
+                    "on-tertiary": "#ffffff",
+                    "on-background": "#1a1b1f",
+                    "secondary": "#5f5e5e",
+                    "surface": "#faf9fe",
+                    "on-primary": "#ffffff",
+                    "on-tertiary-container": "#fefcf8",
+                    "error": "#ba1a1a",
+                    "on-primary-container": "#fffbff",
+                    "on-error": "#ffffff",
+                    "outline-variant": "#d3c4af",
+                    "surface-container-lowest": "#ffffff",
+                    "primary-fixed": "#ffdea6",
+                    "surface-container-highest": "#e3e2e7",
+                    "tertiary-fixed-dim": "#c7c7c3",
+                    "on-tertiary-fixed-variant": "#464744",
+                    "on-surface-variant": "#4f4535",
+                    "on-secondary": "#ffffff",
+                    "outline": "#817563",
+                    "background": "#faf9fe",
+                    "tertiary": "#5b5c59",
+                    "on-secondary-fixed": "#1c1b1b",
+                    "surface-variant": "#e3e2e7",
+                    "tertiary-container": "#747572",
+                    "inverse-surface": "#2f3034",
+                    "on-tertiary-fixed": "#1b1c1a",
+                    "secondary-container": "#e2dfde",
+                    "surface-container": "#eeedf3",
+                    "primary-container": "#986d00",
+                    "primary-fixed-dim": "#f7bd48",
+                    "primary": "#785600",
+                    "surface-container-low": "#f4f3f8",
+                    "on-primary-fixed": "#271900",
+                    "surface-container-high": "#e9e7ed",
+                    "inverse-primary": "#f7bd48",
+                    "secondary-fixed-dim": "#c8c6c5",
+                    "tertiary-fixed": "#e3e2df",
+                    "on-surface": "#1a1b1f",
+                    "on-secondary-fixed-variant": "#474746",
+                    "secondary-fixed": "#e5e2e1",
+                    "surface-tint": "#7b5800",
+                    "on-secondary-container": "#636262",
+                    "on-error-container": "#93000a",
+                    "surface-bright": "#faf9fe",
+                    "error-container": "#ffdad6"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "stack-sm": "4px",
+                    "base": "8px",
+                    "stack-lg": "32px",
+                    "stack-md": "16px",
+                    "gutter": "12px",
+                    "margin-mobile": "20px"
+            },
+            "fontFamily": {
+                    "data-lg": [
+                            "Manrope"
+                    ],
+                    "headline-md": [
+                            "Manrope"
+                    ],
+                    "headline-sm": [
+                            "Manrope"
+                    ],
+                    "body-lg": [
+                            "Manrope"
+                    ],
+                    "display-lg": [
+                            "Manrope"
+                    ],
+                    "label-md": [
+                            "Manrope"
+                    ],
+                    "body-md": [
+                            "Manrope"
+                    ]
+            },
+            "fontSize": {
+                    "data-lg": [
+                            "28px",
+                            {
+                                    "lineHeight": "32px",
+                                    "letterSpacing": "-0.03em",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "headline-md": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "letterSpacing": "-0.01em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-sm": [
+                            "20px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-lg": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "display-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "label-md": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "letterSpacing": "0.05em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ]
+            }
+        },
+        },
+      }
+    </script>
+<style>
+        body { background-color: #F7F6F2; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="antialiased text-on-background font-body-lg pb-24 md:pb-0">
+<!-- Top App Bar -->
+<header class="w-full top-0 sticky bg-background z-50 transition-transform flex justify-between items-center px-margin-mobile py-4 max-w-7xl mx-auto">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full overflow-hidden border border-outline-variant">
+<img alt="User profile avatar" class="w-full h-full object-cover" data-alt="A sophisticated minimalist avatar for a financial app user, using neutral tones of cream, charcoal, and muted gold, capturing a sense of ordered calm and premium quality." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDgkc6zsHjuDDiqNq7MQDXcHn1fNBkVt6MKgf2ymqrQ2hSsG_p4Fbdg-L9YDp8XWXefBdLyCiQEbqJEna4UMDt4V_fOCMbeV1XPx-pUGpt5ypv7k5OXjH2B28S4aAq_SCISiTSaq20bvz263937Q6mUxt61jMlmS2YUmwOvafWRKU1wz9WY4-alZVoYT4s5riVQxmWUiXCSEoumJTkU2LWE4KnVb3G1d6CVeRdw8McFaQMCZLrUUuhj"/>
+</div>
+<h1 class="font-display-lg text-display-lg text-primary tracking-tighter">Clarity</h1>
+</div>
+<button aria-label="notifications" class="w-10 h-10 flex items-center justify-center rounded-full text-primary hover:bg-surface-container-low transition-colors active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+</header>
+<main class="max-w-7xl mx-auto px-margin-mobile pt-stack-md flex flex-col gap-stack-lg">
+<!-- Section 1: Empty Dashboard -->
+<section class="bg-surface-container-lowest rounded-[16px] border border-surface-variant p-8 md:p-12 flex flex-col items-center text-center"><div class="w-48 h-48 mb-6 flex items-center justify-center rounded-full bg-surface-container-low">
+<span class="material-symbols-outlined text-[80px] text-primary" style="font-variation-settings: 'wght' 200;">account_balance</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-background mb-4">Welcome to Your Sanctuary</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-md mx-auto mb-8">
+                Your financial picture begins here. Link your accounts to gain absolute clarity over your wealth, seamlessly and securely.
+            </p>
+<button class="bg-[#B8860B] text-white font-label-md text-label-md rounded-[12px] px-8 py-4 hover:opacity-90 transition-opacity active:scale-95 shadow-[0_8px_24px_rgba(26,26,26,0.04)]">
+                Link Your First Account
+            </button></section>
+<!-- Section 2: Empty Transactions -->
+<section class="bg-surface-container-lowest rounded-[16px] border border-surface-variant p-8 md:p-12 flex flex-col items-center text-center"><div class="w-48 h-48 mb-6 flex items-center justify-center rounded-full bg-surface-container-low">
+<span class="material-symbols-outlined text-[80px] text-tertiary" style="font-variation-settings: 'wght' 200;">receipt_long</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-background mb-4">A Blank Ledger</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-md mx-auto mb-8">
+                No recent activity to display. Once your accounts are linked, your transactions will elegantly categorize themselves here.
+            </p>
+<div class="flex flex-col sm:flex-row gap-4">
+<button class="bg-[#B8860B] text-white font-label-md text-label-md rounded-[12px] px-8 py-4 hover:opacity-90 transition-opacity active:scale-95 shadow-[0_8px_24px_rgba(26,26,26,0.04)]">
+                    Sync Your Bank
+                </button>
+<button class="bg-transparent border-[1.5px] border-outline text-on-background font-label-md text-label-md rounded-[12px] px-8 py-4 hover:bg-surface-container-low transition-colors active:scale-95">
+                    Add Manually
+                </button>
+</div></section>
+<!-- Section 3: Empty Goals -->
+<section class="bg-surface-container-lowest rounded-[16px] border border-surface-variant p-8 md:p-12 flex flex-col items-center text-center mb-12"><div class="w-48 h-48 mb-6 flex items-center justify-center rounded-full bg-surface-container-low">
+<span class="material-symbols-outlined text-[80px] text-primary" style="font-variation-settings: 'wght' 200;">flag</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-background mb-4">Design Your Future</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-md mx-auto mb-8">
+                Wealth is a tool for your ambitions. Dream big and set your first financial goal, whether it's an emergency fund or a new endeavor.
+            </p>
+<button class="bg-[#B8860B] text-white font-label-md text-label-md rounded-[12px] px-8 py-4 hover:opacity-90 transition-opacity active:scale-95 shadow-[0_8px_24px_rgba(26,26,26,0.04)] flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                Create Your First Goal
+            </button></section>
+</main>
+<!-- Bottom Navigation Shell -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-safe h-20 bg-surface-container-lowest border-t-[0.5px] border-outline-variant shadow-[0_-8px_24px_rgba(26,26,26,0.04)] md:hidden">
+<a class="flex flex-col items-center justify-center text-primary font-bold active:scale-90 duration-200 transition-transform" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="home" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-label-md text-label-md">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary hover:text-primary active:scale-90 duration-200 transition-transform" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="analytics">analytics</span>
+<span class="font-label-md text-label-md">Plan</span>
+</a>
+<!-- FAB Placeholder -> Center -->
+<div class="relative -top-6">
+<button class="w-14 h-14 bg-[#B8860B] rounded-full shadow-[0_8px_24px_rgba(26,26,26,0.15)] flex items-center justify-center text-white hover:opacity-90 transition-opacity active:scale-95">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+<a class="flex flex-col items-center justify-center text-secondary hover:text-primary active:scale-90 duration-200 transition-transform" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="track_changes">track_changes</span>
+<span class="font-label-md text-label-md">Goals</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary hover:text-primary active:scale-90 duration-200 transition-transform" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="account_balance">account_balance</span>
+<span class="font-label-md text-label-md">Accounts</span>
+</a>
+</nav>
+<!-- Desktop Nav Drawer (Hidden on mobile) -->
+<aside class="hidden md:flex fixed inset-y-0 left-0 z-[60] flex-col p-6 h-full w-80 rounded-r-xl bg-surface shadow-2xl transition-colors duration-200" style="display: none;">
+<div class="flex items-center gap-4 mb-stack-lg left_align">
+<div class="w-12 h-12 rounded-full overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="User profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7PPjxfg_8XgBt5bCpz2Amynw5lfbueQ9VhOkpbPv_JZ2J5KxmULIpouodOc1Sd8MuAD6EbGaCavO2xCEbzf-5yP-wBv3jSli2-wAtuJymxJOpd7j_Do1IIrgkxjXIYlpTCzXK7wFXmFJjFQr9n0JGWwkl0Afu4DqJ9AjM5natLNlH50pKKmkq2IC44t1N2k9he7vXBXIj5HgRxMRXtAdLLH8Y2sKMEX5BKVwqI97v7-VsT2fvYgVq"/>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-primary">Premium Member</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Private Wealth Tier</p>
+</div>
+</div>
+<nav class="flex flex-col gap-2">
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-body-lg text-body-lg">Settings</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="shield">shield</span>
+<span class="font-body-lg text-body-lg">Security</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span class="font-body-lg text-body-lg">Help Center</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors mt-auto" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="font-body-lg text-body-lg">Log Out</span>
+</a>
+</nav>
+</aside>
+</body></html>

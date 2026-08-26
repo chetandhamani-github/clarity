@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Analytics Overview</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-primary": "#7b5800",
+                        "primary": "#f7bd48",
+                        "on-primary": "#412d00",
+                        "on-secondary-fixed-variant": "#454747",
+                        "secondary": "#c6c6c7",
+                        "on-secondary-fixed": "#1a1c1c",
+                        "error": "#ffb4ab",
+                        "outline-variant": "#4f4535",
+                        "surface-tint": "#f7bd48",
+                        "on-info": "#99c2ff",
+                        "inverse-surface": "#e5e2e1",
+                        "primary-container": "#ba880f",
+                        "success-muted": "#2d4d3a",
+                        "tertiary": "#c7c6c6",
+                        "inverse-on-surface": "#313030",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "on-background": "#e5e2e1",
+                        "surface": "#1a1a1a",
+                        "surface-bright": "#3a3939",
+                        "on-surface-variant": "#d3c4af",
+                        "on-secondary": "#2f3131",
+                        "outline": "#9c8f7b",
+                        "tertiary-container": "#909191",
+                        "primary-fixed-dim": "#f7bd48",
+                        "on-tertiary-container": "#292a2a",
+                        "on-tertiary": "#2f3131",
+                        "on-primary-fixed": "#271900",
+                        "on-primary-fixed-variant": "#5d4200",
+                        "on-secondary-container": "#b4b5b5",
+                        "tertiary-fixed": "#e3e2e2",
+                        "error-container": "#93000a",
+                        "info-muted": "#2b3e5c",
+                        "surface-container": "#201f1f",
+                        "surface-container-highest": "#353534",
+                        "error-muted": "#5c2b2b",
+                        "on-error": "#ff9999",
+                        "on-primary-container": "#392700",
+                        "secondary-fixed-dim": "#c6c6c7",
+                        "on-success": "#8edba3",
+                        "border-subtle": "#2a2a2a",
+                        "secondary-fixed": "#e2e2e2",
+                        "surface-variant": "#353534",
+                        "on-surface": "#e5e2e1",
+                        "surface-container-lowest": "#0e0e0e",
+                        "background": "#131313",
+                        "surface-container-low": "#1c1b1b",
+                        "surface-container-high": "#2a2a2a",
+                        "on-error-container": "#ffdad6",
+                        "primary-fixed": "#ffdea6",
+                        "surface-dim": "#131313",
+                        "tertiary-fixed-dim": "#c7c6c6",
+                        "secondary-container": "#454747",
+                        "on-tertiary-fixed-variant": "#464747"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "12px",
+                        "stack-lg": "32px",
+                        "base": "8px",
+                        "touch-target": "44px",
+                        "stack-md": "16px",
+                        "margin-mobile": "20px",
+                        "stack-sm": "4px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Manrope"],
+                        "body-lg": ["Manrope"],
+                        "label-md": ["Manrope"],
+                        "headline-md": ["Manrope"],
+                        "body-md": ["Manrope"],
+                        "data-lg": ["Manrope"],
+                        "label-sm": ["Manrope"],
+                        "headline-sm": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "data-lg": ["28px", { "lineHeight": "32px", "letterSpacing": "-0.03em", "fontWeight": "500" }],
+                        "label-sm": ["10px", { "lineHeight": "12px", "letterSpacing": "0.08em", "fontWeight": "700" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: #131313; color: #e5e2e1; font-family: 'Manrope', sans-serif; }
+        .chart-grid { stroke: #2a2a2a; stroke-dasharray: 4; }
+        .chart-line { stroke: #8edba3; stroke-width: 2px; fill: none; }
+        .chart-area { fill: url(#chartGradient); }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background antialiased selection:bg-primary selection:text-on-primary">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky bg-background z-40 transition-shadow">
+<div class="flex justify-between items-center px-margin-mobile py-4 max-w-7xl mx-auto border-b border-border-subtle">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full overflow-hidden border border-border-subtle cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0">
+<img alt="User profile avatar" class="w-full h-full object-cover" data-alt="Close up of a sophisticated digital avatar representing a premium private wealth client. The avatar is rendered in high-end 3D with realistic lighting, set against a dark obsidian background with subtle gold accents, fitting the minimalist dark theme." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBuD8eJqZFgKY50fwAcUKZn9izXVHGLje_h_0l5AWFtGtupW_TR0ZxYHqdgMw8aCwNyPjil_zoV4NrjQuvS2b9k9-Vc9AERgA4NJ5fX8JqtIYOjy-DsXib4ld7YcWWHlV9H3prXh2aDW8l2pICb4RxSSgGM34oE3kjMi2e2eevtuAbIzLAVFyoChPuQ9rHgtv9INtpa9YBR8949iOw4KwlnDb8sH9N1aSAlruNRR_p50XHRxMjCJK6A"/>
+</div>
+<h1 class="font-display-lg text-display-lg text-primary tracking-tighter">Clarity</h1>
+</div>
+<button class="w-touch-target h-touch-target flex items-center justify-center rounded-full hover:bg-surface-container-highest transition-colors group">
+<span class="material-symbols-outlined text-primary group-hover:opacity-80 transition-opacity" data-icon="notifications">notifications</span>
+</button>
+</div>
+</header>
+<main class="max-w-7xl mx-auto px-margin-mobile md:px-8 py-stack-lg flex flex-col gap-stack-lg pb-32">
+<!-- Header Section -->
+<section class="flex flex-col md:flex-row md:items-end justify-between gap-stack-md">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface mb-2">Analytics Overview</h2>
+<p class="font-body-md text-body-md text-secondary">Your wealth trajectory and spending habits this month.</p>
+</div>
+<div class="flex bg-surface border border-border-subtle rounded-lg p-1">
+<button class="px-4 py-2 font-label-md text-label-md text-secondary hover:text-on-surface transition-colors rounded">1W</button>
+<button class="px-4 py-2 font-label-md text-label-md bg-surface-bright text-on-surface rounded shadow-sm">1M</button>
+<button class="px-4 py-2 font-label-md text-label-md text-secondary hover:text-on-surface transition-colors rounded">3M</button>
+<button class="px-4 py-2 font-label-md text-label-md text-secondary hover:text-on-surface transition-colors rounded">YTD</button>
+</div>
+</section>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-gutter md:gap-6">
+<!-- Net Cash Flow Chart (Span 8) -->
+<div class="md:col-span-8 bg-surface border border-border-subtle rounded-xl p-6 flex flex-col gap-4">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-label-md text-label-md text-secondary uppercase tracking-wider mb-1">Net Cash Flow</h3>
+<div class="font-data-lg text-data-lg text-on-surface">+$14,250.00</div>
+<div class="font-label-sm text-label-sm text-on-success flex items-center gap-1 mt-1">
+<span class="material-symbols-outlined text-[14px]">trending_up</span>
+<span>+12.5% vs last month</span>
+</div>
+</div>
+<button class="text-primary font-label-md text-label-md hover:opacity-80 transition-opacity">Details</button>
+</div>
+<div class="h-64 w-full relative mt-4">
+<svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 100 100">
+<defs>
+<lineargradient id="chartGradient" x1="0%" x2="0%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#8edba3" stop-opacity="0.2"></stop>
+<stop offset="100%" stop-color="#1a1a1a" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+<!-- Grid -->
+<line class="chart-grid" x1="0" x2="100" y1="25" y2="25"></line>
+<line class="chart-grid" x1="0" x2="100" y1="50" y2="50"></line>
+<line class="chart-grid" x1="0" x2="100" y1="75" y2="75"></line>
+<!-- Area -->
+<path class="chart-area" d="M0,80 Q20,60 40,70 T80,40 T100,20 L100,100 L0,100 Z"></path>
+<!-- Line -->
+<path class="chart-line" d="M0,80 Q20,60 40,70 T80,40 T100,20"></path>
+</svg>
+<!-- X-Axis Labels -->
+<div class="absolute bottom-0 w-full flex justify-between transform translate-y-6 px-2 font-label-sm text-label-sm text-secondary">
+<span>Oct 1</span>
+<span>Oct 8</span>
+<span>Oct 15</span>
+<span>Oct 22</span>
+<span>Oct 31</span>
+</div>
+</div>
+</div>
+<!-- Spending by Category (Span 4) -->
+<div class="md:col-span-4 bg-surface border border-border-subtle rounded-xl p-6 flex flex-col gap-6">
+<div class="flex justify-between items-center">
+<h3 class="font-label-md text-label-md text-secondary uppercase tracking-wider">Top Categories</h3>
+<span class="material-symbols-outlined text-secondary text-[20px]">pie_chart</span>
+</div>
+<div class="flex flex-col gap-5 flex-grow justify-center">
+<!-- Category 1 -->
+<div class="flex flex-col gap-2">
+<div class="flex justify-between font-body-md text-body-md">
+<span class="text-on-surface">Travel &amp; Luxury</span>
+<span class="text-on-surface font-medium">$8,450</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[65%] rounded-full"></div>
+</div>
+</div>
+<!-- Category 2 -->
+<div class="flex flex-col gap-2">
+<div class="flex justify-between font-body-md text-body-md">
+<span class="text-on-surface">Dining</span>
+<span class="text-on-surface font-medium">$3,200</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-outline w-[35%] rounded-full"></div>
+</div>
+</div>
+<!-- Category 3 -->
+<div class="flex flex-col gap-2">
+<div class="flex justify-between font-body-md text-body-md">
+<span class="text-on-surface">Automotive</span>
+<span class="text-on-surface font-medium">$1,800</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-secondary-container w-[20%] rounded-full"></div>
+</div>
+</div>
+<!-- Category 4 -->
+<div class="flex flex-col gap-2">
+<div class="flex justify-between font-body-md text-body-md">
+<span class="text-on-surface">Subscriptions</span>
+<span class="text-on-surface font-medium">$450</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-tertiary w-[10%] rounded-full"></div>
+</div>
+</div>
+</div>
+<button class="w-full py-2 mt-auto border border-border-subtle rounded-lg font-label-md text-label-md text-secondary hover:bg-surface-container-high hover:text-on-surface transition-colors">View All Categories</button>
+</div>
+<!-- Top Merchants List (Span 12) -->
+<div class="md:col-span-12 bg-surface border border-border-subtle rounded-xl p-6">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Top Merchants</h3>
+<button class="text-primary font-label-md text-label-md flex items-center gap-1 hover:opacity-80 transition-opacity">
+                        See All <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</div>
+<div class="flex flex-col gap-4">
+<!-- Merchant Item 1 -->
+<div class="flex items-center justify-between p-4 rounded-lg hover:bg-surface-container-low transition-colors cursor-pointer group border border-transparent hover:border-border-subtle">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-on-surface">flight_takeoff</span>
+</div>
+<div>
+<h4 class="font-body-lg text-body-lg text-on-surface font-medium">AeroLux Private Jets</h4>
+<p class="font-label-sm text-label-sm text-secondary mt-1">Travel • Oct 28</p>
+</div>
+</div>
+<div class="text-right">
+<div class="font-body-lg text-body-lg text-on-surface">-$5,200.00</div>
+<p class="font-label-sm text-label-sm text-secondary mt-1 group-hover:text-primary transition-colors">View Receipt</p>
+</div>
+</div>
+<!-- Merchant Item 2 -->
+<div class="flex items-center justify-between p-4 rounded-lg hover:bg-surface-container-low transition-colors cursor-pointer group border border-transparent hover:border-border-subtle">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-on-surface">restaurant</span>
+</div>
+<div>
+<h4 class="font-body-lg text-body-lg text-on-surface font-medium">Maison Blanc</h4>
+<p class="font-label-sm text-label-sm text-secondary mt-1">Dining • Oct 25</p>
+</div>
+</div>
+<div class="text-right">
+<div class="font-body-lg text-body-lg text-on-surface">-$1,450.00</div>
+<p class="font-label-sm text-label-sm text-secondary mt-1 group-hover:text-primary transition-colors">View Receipt</p>
+</div>
+</div>
+<!-- Merchant Item 3 -->
+<div class="flex items-center justify-between p-4 rounded-lg hover:bg-surface-container-low transition-colors cursor-pointer group border border-transparent hover:border-border-subtle">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-on-surface">directions_car</span>
+</div>
+<div>
+<h4 class="font-body-lg text-body-lg text-on-surface font-medium">Equinox Motors</h4>
+<p class="font-label-sm text-label-sm text-secondary mt-1">Automotive • Oct 15</p>
+</div>
+</div>
+<div class="text-right">
+<div class="font-body-lg text-body-lg text-on-surface">-$850.00</div>
+<p class="font-label-sm text-label-sm text-secondary mt-1 group-hover:text-primary transition-colors">View Receipt</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

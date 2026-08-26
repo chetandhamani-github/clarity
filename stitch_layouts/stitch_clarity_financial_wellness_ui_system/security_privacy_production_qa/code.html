@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<title>Security &amp; Privacy - Clarity</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-bright": "#faf9fe",
+                        "on-tertiary-fixed-variant": "#464744",
+                        "on-secondary-container": "#636262",
+                        "outline-variant": "#d3c4af",
+                        "error": "#ba1a1a",
+                        "on-surface": "#1a1b1f",
+                        "tertiary": "#5b5c59",
+                        "on-background": "#1a1b1f",
+                        "inverse-surface": "#2f3034",
+                        "on-secondary-fixed-variant": "#474746",
+                        "primary-fixed": "#ffdea6",
+                        "on-tertiary": "#ffffff",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "surface-container-lowest": "#ffffff",
+                        "primary": "#785600",
+                        "surface": "#faf9fe",
+                        "on-tertiary-container": "#fefcf8",
+                        "primary-fixed-dim": "#f7bd48",
+                        "surface-tint": "#7b5800",
+                        "inverse-on-surface": "#f1f0f5",
+                        "on-tertiary-fixed": "#1b1c1a",
+                        "error-container": "#ffdad6",
+                        "tertiary-container": "#747572",
+                        "secondary": "#5f5e5e",
+                        "on-primary-fixed": "#271900",
+                        "tertiary-fixed-dim": "#c7c7c3",
+                        "surface-container-highest": "#e3e2e7",
+                        "on-primary": "#ffffff",
+                        "on-primary-container": "#fffbff",
+                        "on-error": "#ffffff",
+                        "background": "#faf9fe",
+                        "on-secondary-fixed": "#1c1b1b",
+                        "on-surface-variant": "#4f4535",
+                        "surface-variant": "#e3e2e7",
+                        "tertiary-fixed": "#e3e2df",
+                        "outline": "#817563",
+                        "surface-dim": "#dad9df",
+                        "on-primary-fixed-variant": "#5d4200",
+                        "on-error-container": "#93000a",
+                        "secondary-fixed": "#e5e2e1",
+                        "surface-container-high": "#e9e7ed",
+                        "secondary-container": "#e2dfde",
+                        "on-secondary": "#ffffff",
+                        "surface-container-low": "#f4f3f8",
+                        "surface-container": "#eeedf3",
+                        "inverse-primary": "#f7bd48",
+                        "primary-container": "#986d00"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-lg": "32px",
+                        "stack-md": "16px",
+                        "base": "8px",
+                        "gutter": "12px",
+                        "stack-sm": "4px",
+                        "margin-mobile": "20px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Manrope"],
+                        "body-md": ["Manrope"],
+                        "headline-sm": ["Manrope"],
+                        "data-lg": ["Manrope"],
+                        "display-lg": ["Manrope"],
+                        "headline-md": ["Manrope"],
+                        "label-md": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "data-lg": ["28px", { "lineHeight": "32px", "letterSpacing": "-0.03em", "fontWeight": "500" }],
+                        "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface antialiased min-h-screen pb-safe md:pb-0 flex flex-col pt-safe">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky z-40 bg-background dark:bg-background flat no shadows">
+<div class="flex items-center px-margin-mobile py-4 max-w-4xl mx-auto gap-4">
+<a aria-label="Go back" class="p-2 -ml-2 rounded-full hover:bg-surface-container-high transition-colors text-on-surface" href="#">
+<span class="material-symbols-outlined">arrow_back</span>
+</a>
+<h1 class="font-headline-md text-headline-md text-on-surface">Security &amp; Privacy</h1>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-grow flex flex-col max-w-4xl w-full mx-auto px-margin-mobile py-stack-md gap-stack-lg">
+<header class="flex flex-col gap-stack-sm mb-4">
+<p class="font-body-lg text-body-lg text-secondary max-w-2xl">Manage your authentication methods and control how your data is handled within Clarity.</p>
+</header>
+<!-- Access Controls Bento -->
+<section class="flex flex-col gap-stack-md">
+<h3 class="font-headline-sm text-headline-sm text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-outline">lock</span>
+                Access Controls
+            </h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+<!-- Biometric -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 flex flex-col gap-4">
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">fingerprint</span>
+</div>
+<div>
+<h4 class="font-headline-md text-headline-sm text-on-surface">Biometric Unlock</h4>
+<p class="font-body-md text-body-md text-secondary">Use Face ID or Touch ID to log in.</p>
+</div>
+</div>
+<!-- Toggle Switch -->
+<label class="relative inline-block w-12 h-6 mt-2 cursor-pointer select-none">
+<input checked="" class="peer sr-only" type="checkbox"/>
+<div class="w-full h-full bg-surface-variant rounded-full peer-checked:bg-primary transition-colors duration-200"></div>
+<div class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-200 peer-checked:translate-x-6"></div>
+</label>
+</div>
+</div>
+<!-- 2FA -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 flex flex-col gap-4">
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">phonelink_lock</span>
+</div>
+<div>
+<h4 class="font-headline-md text-headline-sm text-on-surface">Two-Factor Auth</h4>
+<p class="font-body-md text-body-md text-secondary">Require a code for new devices.</p>
+</div>
+</div>
+<label class="relative inline-block w-12 h-6 mt-2 cursor-pointer select-none">
+<input checked="" class="peer sr-only" type="checkbox"/>
+<div class="w-full h-full bg-surface-variant rounded-full peer-checked:bg-primary transition-colors duration-200"></div>
+<div class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-200 peer-checked:translate-x-6"></div>
+</label>
+</div>
+</div>
+<!-- App Timeout -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 flex flex-col gap-4 md:col-span-2">
+<div class="flex items-center gap-3 mb-2">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">timer</span>
+</div>
+<div>
+<h4 class="font-headline-md text-headline-sm text-on-surface">Auto-Lock Timeout</h4>
+<p class="font-body-md text-body-md text-secondary">Time before requiring re-authentication.</p>
+</div>
+</div>
+<div class="flex flex-wrap gap-3 mt-2">
+<label class="cursor-pointer relative">
+<input class="peer sr-only" name="timeout" type="radio" value="immediate"/>
+<div class="px-4 py-2 rounded-lg border border-outline-variant text-on-surface peer-checked:bg-primary peer-checked:text-on-primary peer-checked:border-primary transition-all font-body-md">
+                                Immediate
+                            </div>
+</label>
+<label class="cursor-pointer relative">
+<input checked="" class="peer sr-only" name="timeout" type="radio" value="1min"/>
+<div class="px-4 py-2 rounded-lg border border-outline-variant text-on-surface peer-checked:bg-primary peer-checked:text-on-primary peer-checked:border-primary transition-all font-body-md">
+                                1 Minute
+                            </div>
+</label>
+<label class="cursor-pointer relative">
+<input class="peer sr-only" name="timeout" type="radio" value="5min"/>
+<div class="px-4 py-2 rounded-lg border border-outline-variant text-on-surface peer-checked:bg-primary peer-checked:text-on-primary peer-checked:border-primary transition-all font-body-md">
+                                5 Minutes
+                            </div>
+</label>
+<label class="cursor-pointer relative">
+<input class="peer sr-only" name="timeout" type="radio" value="never"/>
+<div class="px-4 py-2 rounded-lg border border-outline-variant text-on-surface peer-checked:bg-primary peer-checked:text-on-primary peer-checked:border-primary transition-all font-body-md opacity-70">
+                                Never (Not Recommended)
+                            </div>
+</label>
+</div>
+</div>
+</div>
+</section>
+<!-- Data Privacy Section -->
+<section class="flex flex-col gap-stack-md mt-4">
+<h3 class="font-headline-sm text-headline-sm text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-outline">data_check</span>
+                Data Privacy
+            </h3>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-[0_8px_24px_rgba(26,26,26,0.02)]">
+<!-- Linked Accounts -->
+<div class="p-5 border-b border-surface-variant flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+<div>
+<h4 class="font-headline-md text-headline-sm text-on-surface mb-1">Third-Party Connections</h4>
+<p class="font-body-md text-body-md text-secondary">Manage banks and services linked to your account.</p>
+</div>
+<button class="bg-transparent border-[1.5px] border-on-surface text-on-surface px-6 py-2 rounded-lg font-label-md text-label-md hover:bg-surface-container-high transition-colors whitespace-nowrap shrink-0 h-11 flex items-center justify-center">
+                        Manage Links
+                    </button>
+</div>
+<!-- Download Data -->
+<div class="p-5 border-b border-surface-variant flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+<div>
+<h4 class="font-headline-md text-headline-sm text-on-surface mb-1">Download Personal Data</h4>
+<p class="font-body-md text-body-md text-secondary">Get a complete archive of your transaction history and profile data.</p>
+</div>
+<button class="text-primary font-label-md text-label-md hover:opacity-80 transition-opacity whitespace-nowrap shrink-0 flex items-center gap-1 h-11 px-2">
+<span class="material-symbols-outlined" style="font-size: 18px;">download</span>
+                        Request Archive
+                    </button>
+</div>
+<!-- Delete Account -->
+<div class="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-error-container/10">
+<div>
+<h4 class="font-headline-md text-headline-sm text-error mb-1">Delete Account</h4>
+<p class="font-body-md text-body-md text-secondary">Permanently remove your account and all associated data.</p>
+</div>
+<button class="bg-error text-on-error px-6 py-2 rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity whitespace-nowrap shrink-0 h-11 flex items-center justify-center">
+                        Delete Account
+                    </button>
+</div>
+</div>
+</section>
+<div class="text-center py-stack-md">
+<button class="bg-primary text-on-primary px-8 py-3 rounded-xl font-label-md text-label-md hover:opacity-90 transition-opacity h-12 inline-flex items-center justify-center min-w-[200px] shadow-[0_8px_24px_rgba(26,26,26,0.04)]">
+                Save Changes
+            </button>
+</div>
+</main>
+</body></html>

@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Clarity - Accounts</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-fixed": "#271900",
+                        "surface-container-high": "#2a2a2a",
+                        "on-tertiary-container": "#292a2a",
+                        "success-muted": "#2d4d3a",
+                        "error-muted": "#5c2b2b",
+                        "primary-fixed-dim": "#f7bd48",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "inverse-surface": "#e5e2e1",
+                        "on-primary": "#412d00",
+                        "on-error": "#690005",
+                        "surface-container": "#201f1f",
+                        "on-primary-fixed-variant": "#5d4200",
+                        "tertiary-container": "#909191",
+                        "surface-bright": "#3a3939",
+                        "surface-container-highest": "#353534",
+                        "surface-tint": "#f7bd48",
+                        "secondary-fixed": "#e2e2e2",
+                        "tertiary": "#c7c6c6",
+                        "inverse-on-surface": "#313030",
+                        "secondary-container": "#454747",
+                        "on-secondary-container": "#b4b5b5",
+                        "primary-fixed": "#ffdea6",
+                        "tertiary-fixed": "#e3e2e2",
+                        "outline": "#9c8f7b",
+                        "error": "#ffb4ab",
+                        "on-secondary-fixed-variant": "#454747",
+                        "primary": "#f7bd48",
+                        "primary-container": "#ba880f",
+                        "surface-dim": "#131313",
+                        "secondary": "#c6c6c7",
+                        "border-subtle": "#2a2a2a",
+                        "secondary-fixed-dim": "#c6c6c7",
+                        "background": "#131313",
+                        "outline-variant": "#4f4535",
+                        "surface-container-low": "#1c1b1b",
+                        "on-primary-container": "#392700",
+                        "error-container": "#93000a",
+                        "surface": "#1a1a1a",
+                        "on-secondary-fixed": "#1a1c1c",
+                        "on-secondary": "#2f3131",
+                        "on-info": "#99c2ff",
+                        "surface-variant": "#353534",
+                        "on-success": "#8edba3",
+                        "on-tertiary-fixed-variant": "#464747",
+                        "on-error-container": "#ffdad6",
+                        "info-muted": "#2b3e5c",
+                        "on-background": "#e5e2e1",
+                        "on-surface": "#e5e2e1",
+                        "tertiary-fixed-dim": "#c7c6c6",
+                        "on-surface-variant": "#d3c4af",
+                        "inverse-primary": "#7b5800",
+                        "on-tertiary": "#2f3131",
+                        "surface-container-lowest": "#0e0e0e"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-sm": "4px",
+                        "base": "8px",
+                        "stack-lg": "32px",
+                        "touch-target": "44px",
+                        "gutter": "12px",
+                        "margin-mobile": "20px",
+                        "stack-md": "16px"
+                    },
+                    "fontFamily": {
+                        "label-sm": ["Manrope"],
+                        "headline-md": ["Manrope"],
+                        "headline-sm": ["Manrope"],
+                        "display-lg": ["Manrope"],
+                        "body-lg": ["Manrope"],
+                        "body-md": ["Manrope"],
+                        "label-md": ["Manrope"],
+                        "data-lg": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "label-sm": ["10px", { "lineHeight": "12px", "letterSpacing": "0.08em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "data-lg": ["28px", { "lineHeight": "32px", "letterSpacing": "-0.03em", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: #0f0f0f; color: #e5e2e1; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 1; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen flex flex-col font-body-md pb-24 md:pb-0">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky bg-background dark:bg-background border-b border-border-subtle dark:border-border-subtle z-40 hidden md:flex">
+<div class="flex items-center justify-between px-margin-mobile h-touch-target w-full max-w-7xl mx-auto">
+<button aria-label="Go Back" class="text-primary dark:text-primary active:scale-95 duration-200 w-touch-target h-touch-target flex items-center justify-center hover:bg-surface-container dark:hover:bg-surface-container transition-colors rounded-full">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<h1 class="font-headline-sm text-headline-sm font-bold text-primary dark:text-primary">Clarity</h1>
+<button aria-label="Account" class="text-primary dark:text-primary active:scale-95 duration-200 w-touch-target h-touch-target flex items-center justify-center hover:bg-surface-container dark:hover:bg-surface-container transition-colors rounded-full">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Mobile Header Replacement -->
+<header class="w-full sticky top-0 bg-background/90 backdrop-blur-md z-40 border-b border-border-subtle md:hidden px-margin-mobile py-4">
+<h1 class="font-display-lg text-display-lg font-bold text-on-background">Accounts</h1>
+</header>
+<main class="flex-grow w-full max-w-7xl mx-auto px-margin-mobile md:px-margin-mobile py-stack-md md:py-stack-lg flex flex-col md:flex-row gap-stack-lg">
+<!-- Sidebar Navigation (Desktop) -->
+<nav class="hidden md:flex flex-col w-64 gap-base sticky top-[80px] h-[calc(100vh-100px)]">
+<a class="flex items-center gap-gutter px-4 py-3 rounded-lg text-secondary hover:bg-surface-container transition-colors" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="font-label-md text-label-md">Home</span>
+</a>
+<a class="flex items-center gap-gutter px-4 py-3 rounded-lg text-secondary hover:bg-surface-container transition-colors" href="#">
+<span class="material-symbols-outlined">event_note</span>
+<span class="font-label-md text-label-md">Plan</span>
+</a>
+<a class="flex items-center gap-gutter px-4 py-3 rounded-lg text-secondary hover:bg-surface-container transition-colors" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-label-md text-label-md">Activity</span>
+</a>
+<a class="flex items-center gap-gutter px-4 py-3 rounded-lg text-secondary hover:bg-surface-container transition-colors" href="#">
+<span class="material-symbols-outlined">track_changes</span>
+<span class="font-label-md text-label-md">Goals</span>
+</a>
+<a class="flex items-center gap-gutter px-4 py-3 rounded-lg text-primary bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined">account_balance</span>
+<span class="font-label-md text-label-md">Accounts</span>
+</a>
+</nav>
+<div class="flex-grow flex flex-col gap-stack-lg">
+<header class="hidden md:block mb-stack-md">
+<h1 class="font-display-lg text-display-lg font-bold text-on-background">Total Net Worth</h1>
+<div class="font-data-lg text-data-lg text-primary mt-base">$1,245,678.90</div>
+</header>
+<!-- Mobile Total -->
+<div class="md:hidden bg-surface border border-border-subtle rounded-xl p-stack-md mb-stack-md flex flex-col items-center justify-center">
+<span class="font-label-md text-label-md text-secondary uppercase tracking-wider mb-sm">Net Worth</span>
+<div class="font-data-lg text-data-lg text-primary">$1,245,678.90</div>
+</div>
+<!-- Featured Account Chart -->
+<section class="bg-surface border border-primary/50 rounded-xl p-stack-md relative overflow-hidden">
+<div class="flex justify-between items-start mb-stack-md">
+<div>
+<h2 class="font-headline-sm text-headline-sm text-on-background">Vanguard Brokerage</h2>
+<p class="font-body-md text-body-md text-secondary">Individual - *4920</p>
+</div>
+<div class="text-right">
+<div class="font-headline-md text-headline-md text-on-background">$842,105.40</div>
+<div class="font-label-md text-label-md text-on-success flex items-center justify-end gap-1">
+<span class="material-symbols-outlined text-[16px]">trending_up</span>
+                            +$12,450.00 (1.5%)
+                        </div>
+</div>
+</div>
+<div class="h-48 w-full border-b border-l border-border-subtle relative mt-stack-md flex items-end pt-4">
+<!-- Faux Chart Lines -->
+<div class="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20 z-0">
+<div class="border-t border-border-subtle w-full"></div>
+<div class="border-t border-border-subtle w-full"></div>
+<div class="border-t border-border-subtle w-full"></div>
+<div class="border-t border-border-subtle w-full"></div>
+</div>
+<!-- Chart Graphic (SVG) -->
+<svg class="w-full h-full z-10 stroke-on-success stroke-2 fill-none" preserveaspectratio="none" viewbox="0 0 100 40">
+<defs>
+<lineargradient id="chartGrad" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#8edba3" stop-opacity="0.3"></stop>
+<stop offset="100%" stop-color="#8edba3" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+<path d="M0,35 Q10,30 20,25 T40,15 T60,20 T80,5 T100,2 L100,40 L0,40 Z" fill="url(#chartGrad)" stroke="none"></path>
+<path d="M0,35 Q10,30 20,25 T40,15 T60,20 T80,5 T100,2"></path>
+</svg>
+</div>
+<div class="flex justify-between mt-2 font-label-sm text-label-sm text-secondary">
+<span>30 Days Ago</span>
+<span>Today</span>
+</div>
+</section>
+<!-- Accounts List -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-stack-md">
+<!-- Chase Checking -->
+<div class="bg-surface border border-border-subtle rounded-xl p-stack-md flex justify-between items-center hover:border-primary/30 transition-colors cursor-pointer group">
+<div class="flex items-center gap-gutter">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary group-hover:bg-primary/10 transition-colors">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+</div>
+<div>
+<h3 class="font-body-lg text-body-lg text-on-background font-medium">Chase Checking</h3>
+<p class="font-label-md text-label-md text-secondary">Checking - *1102</p>
+</div>
+</div>
+<div class="font-headline-sm text-headline-sm text-on-background">
+                        $24,500.00
+                    </div>
+</div>
+<!-- Chase Savings -->
+<div class="bg-surface border border-border-subtle rounded-xl p-stack-md flex justify-between items-center hover:border-primary/30 transition-colors cursor-pointer group">
+<div class="flex items-center gap-gutter">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary group-hover:bg-primary/10 transition-colors">
+<span class="material-symbols-outlined">savings</span>
+</div>
+<div>
+<h3 class="font-body-lg text-body-lg text-on-background font-medium">Chase Savings</h3>
+<p class="font-label-md text-label-md text-secondary">Savings - *8821</p>
+</div>
+</div>
+<div class="font-headline-sm text-headline-sm text-on-background">
+                        $150,000.00
+                    </div>
+</div>
+<!-- Amex Credit -->
+<div class="bg-surface border border-border-subtle rounded-xl p-stack-md flex justify-between items-center hover:border-primary/30 transition-colors cursor-pointer group">
+<div class="flex items-center gap-gutter">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-error-muted group-hover:bg-error-muted/20 transition-colors">
+<span class="material-symbols-outlined text-error">credit_card</span>
+</div>
+<div>
+<h3 class="font-body-lg text-body-lg text-on-background font-medium">Amex Platinum</h3>
+<p class="font-label-md text-label-md text-secondary">Credit - *3004</p>
+</div>
+</div>
+<div class="font-headline-sm text-headline-sm text-on-background">
+                        -$4,200.50
+                    </div>
+</div>
+<!-- Add Account Button -->
+<button class="bg-transparent border border-dashed border-border-subtle rounded-xl p-stack-md flex flex-col justify-center items-center gap-base text-secondary hover:text-primary hover:border-primary/50 transition-colors h-full min-h-[88px]">
+<span class="material-symbols-outlined">add_circle</span>
+<span class="font-label-md text-label-md">Link New Account</span>
+</button>
+</section>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 bg-background/70 dark:bg-background/70 backdrop-blur-xl border-t border-border-subtle dark:border-border-subtle md:hidden">
+<div class="flex justify-around items-center h-20 px-gutter w-full">
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary-fixed-dim transition-colors active:scale-90 duration-200 h-touch-target w-touch-target" href="#">
+<span class="material-symbols-outlined" data-weight="fill">home</span>
+<span class="font-label-md text-label-md mt-1 text-[10px]">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary-fixed-dim transition-colors active:scale-90 duration-200 h-touch-target w-touch-target" href="#">
+<span class="material-symbols-outlined">event_note</span>
+<span class="font-label-md text-label-md mt-1 text-[10px]">Plan</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary-fixed-dim transition-colors active:scale-90 duration-200 h-touch-target w-touch-target" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-label-md text-label-md mt-1 text-[10px]">Activity</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary-fixed-dim transition-colors active:scale-90 duration-200 h-touch-target w-touch-target" href="#">
+<span class="material-symbols-outlined">track_changes</span>
+<span class="font-label-md text-label-md mt-1 text-[10px]">Goals</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary dark:text-primary hover:text-primary-fixed-dim transition-colors active:scale-90 duration-200 h-touch-target w-touch-target" href="#">
+<span class="material-symbols-outlined" data-weight="fill">account_balance</span>
+<span class="font-label-md text-label-md mt-1 text-[10px]">Accounts</span>
+</a>
+</div>
+</nav>
+</body></html>
