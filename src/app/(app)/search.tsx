@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { Text, Header } from '@/components/ui';
+import { Text, Header, Loader } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -77,11 +77,12 @@ export default function SearchScreen() {
         {/* Search Results */}
         <KeyboardAwareScrollView
           style={styles.resultsContainer}
-          contentContainerStyle={[styles.resultsScrollContent, { paddingBottom: insets.bottom + 60 }]}
+          contentContainerStyle={[styles.resultsScrollContent, { paddingBottom: insets.bottom + 120 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           enableOnAndroid={true}
         >
+        { isLoading ? <Loader /> : (<>
           <View style={styles.resultsHeader}>
             <Text style={styles.resultsTitle}>
               {searchQuery ? 'Matching Results' : 'Recent Activity'}
@@ -89,11 +90,7 @@ export default function SearchScreen() {
             <Text style={styles.resultsCount}>{transactions.length} Transactions</Text>
           </View>
 
-          {isLoading ? (
-            <View style={styles.loaderContainer}>
-              <ActivityIndicator size="large" color={colors.primary} />
-            </View>
-          ) : transactions.length === 0 ? (
+          {transactions.length === 0 ? (
             <View style={styles.emptyContainer}>
               <MaterialIcons name="search-off" size={48} color={colors.outline} />
               <Text style={styles.emptyText}>No results found.</Text>
@@ -130,8 +127,12 @@ export default function SearchScreen() {
                             />
                           </View>
                           <View style={styles.txTextContent}>
-                            <Text style={styles.txTitle}>{tx.merchant}</Text>
-                            <Text style={styles.txSubtitle}>{tx.accountName}</Text>
+                            <Text style={styles.txTitle}>
+                              {tx.type === 'transfer' ? `Transfer` : tx.merchant}
+                            </Text>
+                            <Text style={styles.txSubtitle}>
+                              {tx.type === 'transfer' ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}` : tx.accountName}
+                            </Text>
                           </View>
                         </View>
                         <View style={styles.txRight}>
@@ -152,6 +153,7 @@ export default function SearchScreen() {
               ))}
             </View>
           )}
+        </>)}
         </KeyboardAwareScrollView>
       </View>
     </View>

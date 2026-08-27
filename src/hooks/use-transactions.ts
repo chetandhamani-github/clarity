@@ -1,3 +1,4 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   deleteTransaction as deleteTransactionDao,
   getAccountHistory,
@@ -12,272 +13,173 @@ import {
   updateTransaction as updateTransactionDao,
   type HistoryPoint,
 } from '@/services/database/transaction-dao';
+import {
+  createRecurringTransaction,
+  getActiveRecurringTransactions,
+  deleteRecurringTransaction
+} from '@/services/database/recurring-dao';
 import type {
   MonthlyTotals,
   Transaction,
   TransactionFilters,
   TransactionWithAccount,
 } from '@/types';
-import { useCallback, useEffect, useState } from 'react';
 
 export function useTransactions(filters?: TransactionFilters) {
-  const [transactions, setTransactions] = useState<TransactionWithAccount[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Stringify filters to use safely in the queryKey
+  const filtersString = JSON.stringify(filters || {});
+  
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['transactions', 'list', filtersString],
+    queryFn: () => {
+      const parsedFilters = filters ? JSON.parse(filtersString) : undefined;
+      return getTransactions(parsedFilters);
+    },
+  });
 
-  // We stringify filters to safely use them as a dependency
-  const filtersString = JSON.stringify(filters);
-
-  const refetch = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const parsedFilters = filtersString ? JSON.parse(filtersString) : undefined;
-      const data = await getTransactions(parsedFilters);
-      setTransactions(data);
-    } catch (error) {
-      console.error('Failed to fetch transactions:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [filtersString]);
-
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
-
-  return { transactions, isLoading, refetch };
+  return { transactions: data || [], isLoading, refetch };
 }
 
 export function useCreateTransaction() {
-  const [isPending, setIsPending] = useState(false);
+  const queryClient = useQueryClient();
 
-  const mutate = useCallback(
-    async (data: Omit<Transaction, 'id'>, options?: { onSuccess?: () => void }) => {
-      setIsPending(true);
-      try {
-        await insertTransaction(data);
-        options?.onSuccess?.();
-      } catch (error) {
-        console.error('Failed to create transaction:', error);
-        throw error;
-      } finally {
-        setIsPending(false);
-      }
+  const mutation = useMutation({
+    mutationFn: (data: Omit<Transaction, 'id'>) => insertTransaction(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['budget'] });
     },
-    []
-  );
+  });
 
-  return { mutate, isPending };
+  return { 
+    mutate: (data: Omit<Transaction, 'id'>, options?: { onSuccess?: () => void }) => {
+      mutation.mutate(data, { onSuccess: options?.onSuccess });
+    }, 
+    isPending: mutation.isPending 
+  };
 }
 
 export function useUpdateTransaction() {
-  const [isPending, setIsPending] = useState(false);
+  const queryClient = useQueryClient();
 
-  const mutate = useCallback(
-    async (
-      id: string,
-      data: Partial<Omit<Transaction, 'id'>>,
-      options?: { onSuccess?: () => void }
-    ) => {
-      setIsPending(true);
-      try {
-        await updateTransactionDao(id, data);
-        options?.onSuccess?.();
-      } catch (error) {
-        console.error('Failed to update transaction:', error);
-        throw error;
-      } finally {
-        setIsPending(false);
-      }
+  const mutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Omit<Transaction, 'id'>> }) => 
+      updateTransactionDao(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['budget'] });
     },
-    []
-  );
+  });
 
-  return { mutate, isPending };
+  return { 
+    mutate: (id: string, data: Partial<Omit<Transaction, 'id'>>, options?: { onSuccess?: () => void }) => {
+      mutation.mutate({ id, data }, { onSuccess: options?.onSuccess });
+    }, 
+    isPending: mutation.isPending 
+  };
 }
 
 export function useTransaction(id: string | undefined) {
-  const [transaction, setTransaction] = useState<TransactionWithAccount | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['transactions', 'detail', id],
+    queryFn: () => getTransactionById(id as string),
+    enabled: !!id,
+  });
 
-  const refetch = useCallback(async () => {
-    if (!id) {
-      setTransaction(null);
-      setIsLoading(false);
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const data = await getTransactionById(id);
-      setTransaction(data);
-    } catch (error) {
-      console.error('Failed to fetch transaction:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
-
-  return { transaction, isLoading, refetch };
+  return { transaction: data || null, isLoading, refetch };
 }
 
 export function useDeleteTransaction() {
-  const [isPending, setIsPending] = useState(false);
+  const queryClient = useQueryClient();
 
-  const mutate = useCallback(async (id: string, options?: { onSuccess?: () => void }) => {
-    setIsPending(true);
-    try {
-      await deleteTransactionDao(id);
-      options?.onSuccess?.();
-    } catch (error) {
-      console.error('Failed to delete transaction:', error);
-      throw error;
-    } finally {
-      setIsPending(false);
-    }
-  }, []);
+  const mutation = useMutation({
+    mutationFn: (id: string) => deleteTransactionDao(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['budget'] });
+    },
+  });
 
-  return { mutate, isPending };
+  return { 
+    mutate: (id: string, options?: { onSuccess?: () => void }) => {
+      mutation.mutate(id, { onSuccess: options?.onSuccess });
+    }, 
+    isPending: mutation.isPending 
+  };
 }
 
 export function useMonthlyTotals(month: number, year: number) {
-  const [totals, setTotals] = useState<MonthlyTotals>({ income: 0, expenses: 0 });
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['transactions', 'monthlyTotals', month, year],
+    queryFn: () => getMonthlyTotals(month, year),
+  });
 
-  const refetch = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await getMonthlyTotals(month, year);
-      setTotals(data);
-    } catch (error) {
-      console.error('Failed to fetch monthly totals:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [month, year]);
-
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
-
-  return { totals, isLoading, refetch };
+  return { totals: data || { income: 0, expenses: 0 }, isLoading, refetch };
 }
 
 export function useMonthlyReports() {
-  const [reports, setReports] = useState<
-    { datePrefix: string; income: number; expenses: number }[]
-  >([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['transactions', 'monthlyReports'],
+    queryFn: () => getMonthlyReports(),
+  });
 
-  const refetch = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await getMonthlyReports();
-      setReports(data);
-    } catch (error) {
-      console.error('Failed to fetch monthly reports:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
-
-  return { reports, isLoading, refetch };
+  return { reports: data || [], isLoading, refetch };
 }
 
 export function useTopMerchants(month: number, year: number, limit = 5) {
-  const [merchants, setMerchants] = useState<{ merchant: string; total: number }[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['transactions', 'topMerchants', month, year, limit],
+    queryFn: () => getTopMerchants(month, year, limit),
+  });
 
-  const refetch = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await getTopMerchants(month, year, limit);
-      setMerchants(data);
-    } catch (error) {
-      console.error('Failed to fetch top merchants:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [month, year, limit]);
-
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
-
-  return { merchants, isLoading, refetch };
+  return { merchants: data || [], isLoading, refetch };
 }
 
 export function useRecurringTransactions() {
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['transactions', 'recurring'],
+    queryFn: () => getActiveRecurringTransactions(),
+  });
 
-  const refetch = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await getRecurringTransactions();
-      setTransactions(data);
-    } catch (error) {
-      console.error('Failed to fetch recurring transactions:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  return { transactions: data || [], isLoading, refetch };
+}
 
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
+export function useCreateRecurringTransaction() {
+  const queryClient = useQueryClient();
 
-  return { transactions, isLoading, refetch };
+  const mutation = useMutation({
+    mutationFn: (data: any) => createRecurringTransaction(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    },
+  });
+
+  return { 
+    mutate: (data: any, options?: { onSuccess?: () => void }) => {
+      mutation.mutate(data, { onSuccess: options?.onSuccess });
+    }, 
+    isPending: mutation.isPending 
+  };
 }
 
 export function useNetWorthHistory(days: number = 30) {
-  const [history, setHistory] = useState<HistoryPoint[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['transactions', 'netWorthHistory', days],
+    queryFn: () => getNetWorthHistory(days),
+  });
 
-  const refetch = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await getNetWorthHistory(days);
-      setHistory(data);
-    } catch (error) {
-      console.error('Failed to fetch net worth history:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [days]);
-
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
-
-  return { history, isLoading, refetch };
+  return { history: data || [], isLoading, refetch };
 }
 
 export function useAccountHistory(accountId: string, days: number = 30) {
-  const [history, setHistory] = useState<HistoryPoint[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['transactions', 'accountHistory', accountId, days],
+    queryFn: () => getAccountHistory(accountId, days),
+    enabled: !!accountId,
+  });
 
-  const refetch = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await getAccountHistory(accountId, days);
-      setHistory(data);
-    } catch (error) {
-      console.error('Failed to fetch account history:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [accountId, days]);
-
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
-
-  return { history, isLoading, refetch };
+  return { history: data || [], isLoading, refetch };
 }

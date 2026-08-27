@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Text, Header } from '@/components/ui';
+import { Text, Header, Loader } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -33,12 +33,8 @@ export default function ReportsScreen() {
         }
       />
 
-      {isLoading ? (
-        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      ) : (
-        <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 60 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
+      { isLoading ? <Loader /> : (<>
           <View style={styles.introSection}>
             <Text style={styles.introText}>Review your past monthly financial performance.</Text>
           </View>
@@ -50,7 +46,12 @@ export default function ReportsScreen() {
                 : 0;
 
               return (
-                <TouchableOpacity key={report.datePrefix} style={styles.reportCard}>
+                <TouchableOpacity 
+                  key={report.datePrefix} 
+                  style={styles.reportCard}
+                  onPress={() => router.push('/analytics')}
+                  activeOpacity={0.7}
+                >
                   <View style={styles.reportHeader}>
                     <View>
                       <Text style={styles.reportTitle}>{getMonthName(report.datePrefix)}</Text>
@@ -61,15 +62,15 @@ export default function ReportsScreen() {
                   <View style={styles.reportGrid}>
                     <View style={styles.gridItem}>
                       <Text style={styles.gridLabel}>Income</Text>
-                      <Text style={styles.gridValue}>{formatCurrency(report.income)}</Text>
+                      <Text style={styles.gridValue} numberOfLines={1} adjustsFontSizeToFit>{formatCurrency(report.income)}</Text>
                     </View>
                     <View style={styles.gridItem}>
                       <Text style={styles.gridLabel}>Expenses</Text>
-                      <Text style={styles.gridValue}>{formatCurrency(report.expenses)}</Text>
+                      <Text style={styles.gridValue} numberOfLines={1} adjustsFontSizeToFit>{formatCurrency(report.expenses)}</Text>
                     </View>
                     <View style={styles.gridItem}>
                       <Text style={styles.gridLabel}>Savings Rate</Text>
-                      <Text style={[styles.gridValue, { color: savingsRate > 0 ? colors.primary : colors.error }]}>
+                      <Text style={[styles.gridValue, { color: savingsRate > 0 ? colors.primary : colors.onSurface }]} numberOfLines={1} adjustsFontSizeToFit>
                         {savingsRate.toFixed(1)}%
                       </Text>
                     </View>
@@ -88,8 +89,8 @@ export default function ReportsScreen() {
               </View>
             )}
           </View>
-        </ScrollView>
-      )}
+        </>)}
+      </ScrollView>
     </View>
   );
 }
@@ -136,17 +137,19 @@ const getStyles = (colors: ThemeColors) => {
       marginBottom: 16,
     },
     reportTitle: {
-      ...typography.headlineSm,
+      ...typography.headlineMd,
       color: colors.onSurface,
     },
     reportSubtitle: {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
+      letterSpacing: 0.8,
       marginTop: 4,
     },
     reportGrid: {
       flexDirection: 'row',
       justifyContent: 'space-between',
+      gap: 12,
     },
     gridItem: {
       flex: 1,
@@ -157,8 +160,9 @@ const getStyles = (colors: ThemeColors) => {
       marginBottom: 4,
     },
     gridValue: {
-      ...typography.dataLg,
+      ...typography.headlineSm,
       color: colors.onSurface,
+      fontSize: 18,
     },
   });
   return styles;

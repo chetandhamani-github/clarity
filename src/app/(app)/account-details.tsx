@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Dimensions } from 'react-native';
-import { Text, Header } from '@/components/ui';
+import { Text, Header, Loader } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -145,17 +145,16 @@ export default function AccountDetailsScreen() {
         }
       />
 
-      {isLoading || isDeleting ? (
-        <View style={styles.loaderContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      ) : !account ? (
+      {!account && !isLoading && !isDeleting ? (
         <View style={styles.loaderContainer}>
           <Text style={{ color: colors.onSurfaceVariant }}>Account not found.</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 60 }]} showsVerticalScrollIndicator={false}>
-          {/* Main Details Card */}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
+        { isLoading || isDeleting ? <Loader /> : (<>
+        {account && (
+          <>
+          /* Main Details Card */
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View>
@@ -280,7 +279,9 @@ export default function AccountDetailsScreen() {
                           />
                         </View>
                         <View>
-                          <Text style={styles.txTitle}>{tx.merchant}</Text>
+                          <Text style={styles.txTitle}>
+                            {tx.type === 'transfer' ? (tx.accountId === account?.id ? `Transfer to ${tx.toAccountName || 'Unknown'}` : `Transfer from ${tx.accountName}`) : tx.merchant}
+                          </Text>
                           <Text style={styles.txSubtitle}>{formatDate(tx.date)}</Text>
                         </View>
                       </View>
@@ -306,6 +307,9 @@ export default function AccountDetailsScreen() {
               </View>
             )}
           </View>
+          </>
+        )}
+        </>)}
         </ScrollView>
       )}
     </View>

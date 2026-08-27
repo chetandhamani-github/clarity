@@ -1,13 +1,12 @@
 import React, { useMemo } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Text, Header } from '@/components/ui';
+import { Text, Header, Loader } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
 import { formatCurrency } from '@/utils/format';
-import { Skeleton } from 'boneyard-js/native';
 
 export default function PlanScreen() {
   const { colors } = useTheme();
@@ -72,7 +71,7 @@ export default function PlanScreen() {
           }
           rightNode={<View style={styles.iconButton} />}
         />
-        <Skeleton loading={true} style={{ padding: 20 }}>
+        { true ? <Loader /> : (<>
           <View style={{ height: 40, width: '100%', marginBottom: 20, borderRadius: 8 }} />
           <View style={{ flexDirection: 'row', gap: 16, marginBottom: 24 }}>
             <View style={{ flex: 1, height: 100, borderRadius: 12 }} />
@@ -80,7 +79,7 @@ export default function PlanScreen() {
           </View>
           <View style={{ height: 120, width: '100%', borderRadius: 12, marginBottom: 16 }} />
           <View style={{ height: 120, width: '100%', borderRadius: 12, marginBottom: 16 }} />
-        </Skeleton>
+        </>)}
       </View>
     );
   }
@@ -143,11 +142,15 @@ export default function PlanScreen() {
             </View>
           </TouchableOpacity>
         }
-        rightNode={<View style={styles.iconButton} />}
+        rightNode={
+          <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/reports')}>
+            <MaterialIcons name="assessment" size={24} color={colors.onSurface} />
+          </TouchableOpacity>
+        }
       />
 
-      <Skeleton name="budget-plan-content" loading={isLoading}>
-      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
+      { isLoading ? <Loader /> : (<>
         {/* Section Header */}
         <View style={styles.sectionHeader}>
           <View>
@@ -254,8 +257,8 @@ export default function PlanScreen() {
             </View>
           </TouchableOpacity>
         </View>
+      </>)}
       </ScrollView>
-      </Skeleton>
     </View>
   );
 }
@@ -282,8 +285,26 @@ const getStyles = (colors: ThemeColors) => {
       justifyContent: 'center',
     },
     iconButton: {
-      width: 40,
-      height: 40,
+      width: 44,
+      height: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 22,
+    },
+    editBtn: {
+      backgroundColor: colors.primary,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 8,
+    },
+    editBtnText: {
+      ...typography.labelMd,
+      color: colors.onPrimary,
+    },
+    daysRemainingText: {
+      ...typography.bodyMd,
+      color: colors.onSurfaceVariant,
+      marginTop: 2,
     },
     scrollContent: {
       padding: 20,
@@ -303,16 +324,7 @@ const getStyles = (colors: ThemeColors) => {
       color: colors.onSurfaceVariant,
       marginTop: 2,
     },
-    editBtn: {
-      backgroundColor: colors.primary,
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 8,
-    },
-    editBtnText: {
-      ...typography.labelMd,
-      color: colors.onPrimary,
-    },
+
     summaryGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Text, Header } from '@/components/ui';
+import { Text, Header, Loader } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -30,14 +30,6 @@ export default function AnalyticsScreen() {
 
   const isLoading = loadingTotals || loadingAccounts || loadingSpending || loadingMerchants || loadingRecurring || loadingReports;
 
-  if (isLoading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
   const netCashFlow = totals.income - totals.expenses;
   const savingsRate = totals.income > 0 ? (netCashFlow / totals.income) * 100 : 0;
   
@@ -58,17 +50,23 @@ export default function AnalyticsScreen() {
         showBack
         title="Analytics Overview"
         rightNode={
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity style={styles.iconButton} onPress={() => {}}>
             <MaterialIcons name="more-vert" size={24} color={colors.primary} />
           </TouchableOpacity>
         }
       />
 
-      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 60 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+        showsVerticalScrollIndicator={false}
+      >
+      { isLoading ? <Loader /> : (<>
+        <View style={{ gap: 24 }}>
         {/* Page Header */}
         <View style={styles.pageHeader}>
           <Text style={styles.dateInsightsText}>{currentMonthName} insights</Text>
-          <TouchableOpacity style={styles.exportButton}>
+          <TouchableOpacity style={styles.exportButton} onPress={() => router.push('/export-success')}>
             <Text style={styles.exportButtonText}>Export Report</Text>
             <MaterialIcons name="download" size={16} color={colors.onPrimary} />
           </TouchableOpacity>
@@ -88,10 +86,10 @@ export default function AnalyticsScreen() {
             </View>
 
             <View style={styles.inOutRow}>
-              <Text style={styles.inOutAmount}>{formatCurrency(totals.income)}</Text>
+              <Text style={styles.inOutAmount} numberOfLines={1} adjustsFontSizeToFit>{formatCurrency(totals.income)}</Text>
               <Text style={styles.inOutLabel}>In</Text>
               <Text style={styles.inOutDivider}>/</Text>
-              <Text style={styles.inOutAmountOut}>{formatCurrency(totals.expenses)}</Text>
+              <Text style={styles.inOutAmountOut} numberOfLines={1} adjustsFontSizeToFit>{formatCurrency(totals.expenses)}</Text>
               <Text style={styles.inOutLabel}>Out</Text>
             </View>
             <Text style={styles.savedMessage}>You saved {savingsRate.toFixed(1)}% of your income this month.</Text>
@@ -101,11 +99,17 @@ export default function AnalyticsScreen() {
               {reports.slice(0, 6).reverse().map((report, idx, arr) => {
                 const isLast = idx === arr.length - 1;
                 // Calculate height based on max expenses to give a relative sense of scale
-                const maxExpenses = Math.max(...arr.map(r => r.expenses), 1);
+                const maxExpenses = arr.length > 0 ? Math.max(...arr.map(r => r.expenses), 1) : 1;
                 const heightPct = Math.max((report.expenses / maxExpenses) * 100, 10); // min 10% height
                 
-                const reportDate = new Date(parseInt(report.datePrefix.split('-')[0]), parseInt(report.datePrefix.split('-')[1]) - 1, 1);
-                const monthShort = reportDate.toLocaleString('default', { month: 'short' });
+                let monthShort = '';
+                try {
+                  const parts = report.datePrefix.split('-');
+                  const reportDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1);
+                  monthShort = reportDate.toLocaleString('default', { month: 'short' });
+                } catch (e) {
+                  monthShort = '';
+                }
 
                 return (
                   <View style={styles.barColumn} key={report.datePrefix}>
@@ -236,7 +240,7 @@ export default function AnalyticsScreen() {
           <View style={styles.card}>
             <View style={styles.recurringHeader}>
               <Text style={styles.cardTitle}>Recurring</Text>
-              <TouchableOpacity style={styles.addRecurringBtn}>
+              <TouchableOpacity style={styles.addRecurringBtn} onPress={() => router.push('/add-transaction')}>
                 <Text style={styles.addRecurringText}>Add</Text>
                 <MaterialIcons name="add" size={16} color={colors.primary} />
               </TouchableOpacity>
@@ -249,8 +253,12 @@ export default function AnalyticsScreen() {
                     <MaterialIcons name="autorenew" size={20} color={colors.onSurface} />
                   </View>
                   <View>
-                    <Text style={styles.listItemTitle}>{tx.merchant}</Text>
-                    <Text style={styles.listItemSubtitle}>{tx.category}</Text>
+                    <Text style={styles.listItemTitle}>
+                      {tx.type === 'transfer' ? `Transfer` : tx.merchant}
+                    </Text>
+                    <Text style={styles.listItemSubtitle}>
+                      {tx.type === 'transfer' ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'} • ${tx.frequency}` : `${tx.category} • ${tx.frequency}`}
+                    </Text>
                   </View>
                 </View>
                 <Text style={styles.listItemAmount}>{formatCurrency(tx.amount)}</Text>
@@ -262,6 +270,8 @@ export default function AnalyticsScreen() {
             )}
           </View>
         </View>
+        </View>
+      </>)}
       </ScrollView>
     </View>
   );
@@ -343,14 +353,18 @@ const getStyles = (colors: ThemeColors) => {
     },
     inOutAmount: {
       ...typography.dataLg,
+      fontSize: 24,
       color: colors.onSurface,
       marginRight: 8,
+      flexShrink: 1,
     },
     inOutAmountOut: {
       ...typography.dataLg,
+      fontSize: 24,
       color: colors.onSurface,
       opacity: 0.6,
       marginRight: 8,
+      flexShrink: 1,
     },
     inOutLabel: {
       ...typography.bodyMd,
@@ -368,10 +382,12 @@ const getStyles = (colors: ThemeColors) => {
       marginBottom: 24,
     },
     barChartContainer: {
-      height: 96,
+      height: 120,
       flexDirection: 'row',
       alignItems: 'flex-end',
       gap: 8,
+      paddingTop: 24, // Space for tooltip
+      overflow: 'visible',
     },
     barColumn: {
       flex: 1,
@@ -425,6 +441,7 @@ const getStyles = (colors: ThemeColors) => {
     },
     netWorthAmount: {
       ...typography.dataLg,
+      fontSize: 28,
       color: colors.onSurface,
     },
     netWorthBars: {

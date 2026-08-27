@@ -16,8 +16,10 @@ const getStyles = (colors: ThemeColors) => {
   const styles = StyleSheet.create({
     container: {
       flex: 1,
+      minHeight: 200,
       justifyContent: 'center',
       alignItems: 'center',
+      paddingTop: 100,
     },
   });
   return styles;

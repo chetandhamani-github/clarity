@@ -135,7 +135,7 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
                             isDefault && styles.defaultText,
                           ]}
                         >
-                          {btn.text}
+                          Ok
                         </Text>
                       </TouchableOpacity>
                     );

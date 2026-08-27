@@ -13,6 +13,8 @@ import { ToastProvider, AlertProvider, AnimatedSplashScreen } from '@/components
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme/useTheme';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '@/lib/query-client';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -31,7 +33,15 @@ export default function RootLayout() {
 
   useEffect(() => {
     initDatabase()
-      .then(() => setDbReady(true))
+      .then(async () => {
+        try {
+          const { processDueRecurringTransactions } = await import('@/services/database/recurring-dao');
+          await processDueRecurringTransactions();
+        } catch (e) {
+          console.error('Failed to process recurring transactions:', e);
+        }
+        setDbReady(true);
+      })
       .catch((err) => {
         console.error('Failed to initialize database:', err);
         setDbReady(true);
@@ -51,14 +61,16 @@ export default function RootLayout() {
   return (
     <>
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
-      <ToastProvider>
-        <AlertProvider>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(app)" options={{ headerShown: false }} />
-            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-          </Stack>
-        </AlertProvider>
-      </ToastProvider>
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>
+          <AlertProvider>
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(app)" options={{ headerShown: false }} />
+              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+            </Stack>
+          </AlertProvider>
+        </ToastProvider>
+      </QueryClientProvider>
       {!isSplashAnimationComplete && (
         <AnimatedSplashScreen onAnimationComplete={() => setIsSplashAnimationComplete(true)} />
       )}

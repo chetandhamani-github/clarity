@@ -20,13 +20,16 @@ interface TransactionRow {
   date: string;
   is_recurring: number;
   note: string;
+  to_account_id?: string;
   account_name?: string; // from JOIN
+  to_account_name?: string; // from JOIN
 }
 
 function mapRow(row: TransactionRow): TransactionWithAccount {
   return {
     id: row.id,
     accountId: row.account_id,
+    toAccountId: row.to_account_id,
     amount: row.amount,
     type: row.type as TransactionType,
     merchant: row.merchant,
@@ -35,6 +38,7 @@ function mapRow(row: TransactionRow): TransactionWithAccount {
     isRecurring: Boolean(row.is_recurring),
     note: row.note,
     accountName: row.account_name ?? 'Unknown Account',
+    toAccountName: row.to_account_name,
   };
 }
 
@@ -44,9 +48,10 @@ export async function getTransactions(
   const db = getDatabase();
   
   let query = `
-    SELECT t.*, a.name as account_name 
+    SELECT t.*, a.name as account_name, ta.name as to_account_name 
     FROM transactions t
     LEFT JOIN accounts a ON t.account_id = a.id
+    LEFT JOIN accounts ta ON t.to_account_id = ta.id
     WHERE 1=1
   `;
   const params: any[] = [];
@@ -96,9 +101,10 @@ export async function getTransactionById(
 ): Promise<TransactionWithAccount | null> {
   const db = getDatabase();
   const row = await db.getFirstAsync<TransactionRow>(
-    `SELECT t.*, a.name as account_name 
+    `SELECT t.*, a.name as account_name, ta.name as to_account_name 
      FROM transactions t
      LEFT JOIN accounts a ON t.account_id = a.id
+     LEFT JOIN accounts ta ON t.to_account_id = ta.id
      WHERE t.id = ?`,
     [id]
   );
@@ -117,19 +123,23 @@ export async function insertTransaction(
 
   let balanceChange = 0;
   if (data.type === 'income') balanceChange = data.amount;
-  else if (data.type === 'expense') balanceChange = -data.amount;
-  // Note: Transfers require a second transaction for the other account, 
-  // keeping it simple for now and treating it as a neutral/zero sum on the balance 
-  // unless explicitly handled by the UI.
+  else if (data.type === 'expense' || data.type === 'transfer') balanceChange = -data.amount;
 
   const newBalance = account.balance + balanceChange;
+
+  let toAccount;
+  if (data.type === 'transfer') {
+    if (!data.toAccountId) throw new Error('Transfer missing destination account');
+    toAccount = await getAccountById(data.toAccountId);
+    if (!toAccount) throw new Error('Destination account not found');
+  }
 
   // 2. Insert transaction and update account balance in a transaction
   await db.execAsync('BEGIN TRANSACTION');
   try {
     await db.runAsync(
-      `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, to_account_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         data.accountId,
@@ -140,6 +150,7 @@ export async function insertTransaction(
         data.date,
         data.isRecurring ? 1 : 0,
         data.note,
+        data.toAccountId || null
       ],
     );
 
@@ -147,6 +158,14 @@ export async function insertTransaction(
       await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
         newBalance,
         data.accountId,
+      ]);
+    }
+
+    if (toAccount && data.toAccountId) {
+      const newToBalance = toAccount.balance + data.amount;
+      await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
+        newToBalance,
+        data.toAccountId,
       ]);
     }
 
@@ -171,6 +190,7 @@ export async function updateTransaction(
   
   // We need to figure out what data is new, falling back to old
   const newAccountId = data.accountId ?? oldTx.account_id;
+  const newToAccountId = data.toAccountId !== undefined ? data.toAccountId : oldTx.to_account_id;
   const newAmount = data.amount ?? oldTx.amount;
   const newType = data.type ?? oldTx.type;
   
@@ -183,12 +203,18 @@ export async function updateTransaction(
     if (oldAccount) {
       let balanceRevert = 0;
       if (oldTx.type === 'income') balanceRevert = -oldTx.amount;
-      else if (oldTx.type === 'expense') balanceRevert = oldTx.amount;
+      else if (oldTx.type === 'expense' || oldTx.type === 'transfer') balanceRevert = oldTx.amount;
       
       if (balanceRevert !== 0) {
-        // We do this by updating our in-memory oldAccount so we don't have conflicting writes
         oldAccount.balance += balanceRevert;
         await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [oldAccount.balance, oldAccount.id]);
+      }
+    }
+    if (oldTx.type === 'transfer' && oldTx.to_account_id) {
+      const oldToAccount = await getAccountById(oldTx.to_account_id);
+      if (oldToAccount) {
+        oldToAccount.balance -= oldTx.amount;
+        await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [oldToAccount.balance, oldToAccount.id]);
       }
     }
     
@@ -196,15 +222,21 @@ export async function updateTransaction(
     if (newAccount) {
       let balanceApply = 0;
       if (newType === 'income') balanceApply = newAmount;
-      else if (newType === 'expense') balanceApply = -newAmount;
+      else if (newType === 'expense' || newType === 'transfer') balanceApply = -newAmount;
       
       if (balanceApply !== 0) {
-        // If the old account is the same as the new account, we need to apply it to the already reverted balance
-        if (newAccount.id === oldAccount?.id) {
-            newAccount.balance = oldAccount.balance;
-        }
+        if (newAccount.id === oldAccount?.id) newAccount.balance = oldAccount.balance;
         newAccount.balance += balanceApply;
         await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [newAccount.balance, newAccount.id]);
+      }
+    }
+    if (newType === 'transfer' && newToAccountId) {
+      const newToAccount = await getAccountById(newToAccountId);
+      if (newToAccount) {
+        if (newToAccount.id === oldAccount?.id) newToAccount.balance = oldAccount.balance;
+        if (newToAccount.id === newAccount?.id) newToAccount.balance = newAccount.balance;
+        newToAccount.balance += newAmount;
+        await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [newToAccount.balance, newToAccount.id]);
       }
     }
     
@@ -213,6 +245,7 @@ export async function updateTransaction(
     const params: any[] = [];
     
     if (data.accountId !== undefined) { sets.push('account_id = ?'); params.push(data.accountId); }
+    if (data.toAccountId !== undefined) { sets.push('to_account_id = ?'); params.push(data.toAccountId); }
     if (data.amount !== undefined) { sets.push('amount = ?'); params.push(data.amount); }
     if (data.type !== undefined) { sets.push('type = ?'); params.push(data.type); }
     if (data.merchant !== undefined) { sets.push('merchant = ?'); params.push(data.merchant); }
@@ -258,11 +291,19 @@ export async function deleteTransaction(id: string): Promise<void> {
     if (account) {
       let balanceRevert = 0;
       if (tx.type === 'income') balanceRevert = -tx.amount;
-      else if (tx.type === 'expense') balanceRevert = tx.amount;
+      else if (tx.type === 'expense' || tx.type === 'transfer') balanceRevert = tx.amount;
       
       if (balanceRevert !== 0) {
         account.balance += balanceRevert;
         await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [account.balance, account.id]);
+      }
+    }
+
+    if (tx.type === 'transfer' && tx.to_account_id) {
+      const toAccount = await getAccountById(tx.to_account_id);
+      if (toAccount) {
+        toAccount.balance -= tx.amount;
+        await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [toAccount.balance, toAccount.id]);
       }
     }
     

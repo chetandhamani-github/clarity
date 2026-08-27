@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
-import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme';
+import { MaterialIcons } from '@expo/vector-icons';
+import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import { StyleSheet, TouchableOpacity } from 'react-native';
+import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from './Text';
 
 export type ToastType = 'success' | 'error' | 'info';
@@ -30,9 +30,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const showToast = useCallback((message: string, type: ToastType = 'info') => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    
+
     setToast({ id: Math.random().toString(), message, type });
-    
+
     timerRef.current = setTimeout(() => {
       setToast(null);
     }, 3000);
@@ -45,17 +45,25 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const getBackgroundColor = (type: ToastType) => {
     switch (type) {
-      case 'success': return colors.primary;
-      case 'error': return colors.error;
-      case 'info': default: return colors.secondary;
+      case 'success':
+        return colors.primary;
+      case 'error':
+        return colors.error;
+      case 'info':
+      default:
+        return colors.secondary;
     }
   };
 
   const getIcon = (type: ToastType) => {
     switch (type) {
-      case 'success': return 'check-circle';
-      case 'error': return 'error';
-      case 'info': default: return 'info';
+      case 'success':
+        return 'check-circle';
+      case 'error':
+        return 'error';
+      case 'info':
+      default:
+        return 'info';
     }
   };
 
@@ -63,14 +71,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <ToastContext.Provider value={{ showToast }}>
       {children}
       {toast && (
-        <Animated.View 
+        <Animated.View
           key={toast.id}
           entering={FadeInUp.duration(300)}
           exiting={FadeOutUp.duration(200)}
           style={[styles.toastContainer, { top: insets.top + 16 }]}
         >
-          <TouchableOpacity 
-            activeOpacity={0.9} 
+          <TouchableOpacity
+            activeOpacity={0.9}
             onPress={hideToast}
             style={[styles.toastContent, { backgroundColor: getBackgroundColor(toast.type) }]}
           >

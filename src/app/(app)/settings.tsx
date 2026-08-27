@@ -12,6 +12,7 @@ import { useGoals } from '@/hooks/use-goals';
 import { useCategorySpending } from '@/hooks/use-budget';
 import { formatCurrency } from '@/utils/format';
 import { useAlert } from '@/components/ui';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
@@ -26,6 +27,7 @@ export default function SettingsScreen() {
   const setBiometricsEnabled = useAppStore(state => state.setBiometricEnabled);
   const [isResetting, setIsResetting] = useState(false);
   const { showAlert } = useAlert();
+  const queryClient = useQueryClient();
 
   const now = new Date();
   const { notifications } = useNotifications();
@@ -62,6 +64,7 @@ export default function SettingsScreen() {
             try {
               setIsResetting(true);
               await clearDatabase();
+              queryClient.clear();
               showAlert('Success', 'App data has been reset to defaults. Please restart the app.');
             } catch (error) {
               console.error(error);
@@ -206,6 +209,16 @@ export default function SettingsScreen() {
                 thumbColor={colors.surfaceContainerLowest}
               />
             </TouchableOpacity>
+            <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/manage-categories')}>
+              <View style={styles.settingItemLeft}>
+                <MaterialIcons name="category" size={24} color={colors.secondary} />
+                <View>
+                  <Text style={styles.settingTitle}>Manage Categories</Text>
+                  <Text style={styles.settingSub}>Customize spending categories</Text>
+                </View>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -217,6 +230,12 @@ export default function SettingsScreen() {
               <Text style={styles.settingTitle}>Manage your local data.</Text>
             </View>
             <View style={{ gap: 8 }}>
+              <TouchableOpacity
+                style={styles.btnSecondary}
+                onPress={() => router.push('/empty-states')}
+              >
+                <Text style={styles.btnSecondaryText}>VIEW ONBOARDING</Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.btnSecondary}
                 onPress={() => router.push('/export-success')}

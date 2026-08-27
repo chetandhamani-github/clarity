@@ -1,8 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Text, Header } from '@/components/ui';
+import { Text, Header, Loader } from '@/components/ui';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
-import { Skeleton } from 'boneyard-js/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -51,13 +50,18 @@ export default function TransactionsScreen() {
           </TouchableOpacity>
         }
         rightNode={
-          <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/search')}>
-            <MaterialIcons name="search" size={24} color={colors.onSurface} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/search')}>
+              <MaterialIcons name="search" size={24} color={colors.onSurface} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/add-transaction')}>
+              <MaterialIcons name="add" size={24} color={colors.onSurface} />
+            </TouchableOpacity>
+          </View>
         }
       />
 
-      <ScrollView 
+      <ScrollView style={{ flex: 1 }}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} 
         showsVerticalScrollIndicator={false}
       >
@@ -102,7 +106,7 @@ export default function TransactionsScreen() {
           <Text style={styles.resultsCount}>{transactions.length} Transactions</Text>
         </View>
 
-        <Skeleton name="transactions-list" loading={isLoading}>
+        { isLoading ? <Loader /> : (<>
         {transactions.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No transactions found</Text>
@@ -138,8 +142,12 @@ export default function TransactionsScreen() {
                           />
                         </View>
                         <View>
-                          <Text style={styles.transactionName}>{tx.merchant}</Text>
-                          <Text style={styles.transactionMeta}>{tx.accountName}</Text>
+                          <Text style={styles.transactionName}>
+                            {tx.type === 'transfer' ? `Transfer` : tx.merchant}
+                          </Text>
+                          <Text style={styles.transactionMeta}>
+                            {tx.type === 'transfer' ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}` : tx.accountName}
+                          </Text>
                         </View>
                       </View>
                       <View style={styles.transactionRight}>
@@ -160,7 +168,7 @@ export default function TransactionsScreen() {
             ))}
           </View>
         )}
-        </Skeleton>
+        </>)}
       </ScrollView>
     </View>
   );

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput } from 'react-native';
-import { Text, Header } from '@/components/ui';
+import { Text, Header, Loader } from '@/components/ui';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -108,14 +108,6 @@ export default function ManageCategoriesScreen() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
   // Calculate bucket totals
   const needsCategories = categories.filter(c => c.bucketType === 'needs');
   const wantsCategories = categories.filter(c => c.bucketType === 'wants');
@@ -136,7 +128,8 @@ export default function ManageCategoriesScreen() {
         title="Category Management"
       />
 
-      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
+      { isLoading ? <Loader /> : (<>
         {/* Mobile Action Section */}
         <View style={styles.mobileActionSection}>
           <Text style={styles.subtitleText}>Organize your {plan?.needsPercent}/{plan?.wantsPercent}/{plan?.savingsPercent} budget hierarchy.</Text>
@@ -344,6 +337,7 @@ export default function ManageCategoriesScreen() {
             </View>
           </View>
         </View>
+      </>)}
       </ScrollView>
     </View>
   );

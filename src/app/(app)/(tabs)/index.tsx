@@ -1,4 +1,4 @@
-import { Header, ProgressBar, Text } from '@/components/ui';
+import { Header, ProgressBar, Text, Loader } from '@/components/ui';
 import { radius, ThemeColors, typography, useTheme } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { LineChart, PieChart } from 'react-native-gifted-charts';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Skeleton } from 'boneyard-js/native';
 
 import { useAccounts } from '@/hooks/use-accounts';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
@@ -202,9 +201,14 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         }
         rightNode={
-          <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/notifications')}>
-            <MaterialIcons name="notifications-none" size={24} color={colors.onSurface} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/analytics')}>
+              <MaterialIcons name="insights" size={24} color={colors.onSurface} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/notifications')}>
+              <MaterialIcons name="notifications-none" size={24} color={colors.onSurface} />
+            </TouchableOpacity>
+          </View>
         }
       />
 
@@ -212,7 +216,8 @@ export default function DashboardScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
-        <Skeleton name="dashboard-content" loading={isLoading}>
+        <View style={{ flex: 1 }}>
+        { isLoading ? <Loader /> : (<>
         {/* Main Card: Net Worth */}
         <View style={styles.netWorthCard}>
           <View style={styles.netWorthHeader}>
@@ -443,9 +448,11 @@ export default function DashboardScreen() {
                       />
                     </View>
                     <View style={styles.activityDetails}>
-                      <Text style={styles.activityName}>{tx.merchant}</Text>
+                      <Text style={styles.activityName}>
+                        {tx.type === 'transfer' ? `Transfer` : tx.merchant}
+                      </Text>
                       <Text style={styles.activityDate}>
-                        {tx.date} • {tx.category}
+                        {tx.date} • {tx.type === 'transfer' ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}` : tx.category}
                       </Text>
                     </View>
                     <Text
@@ -464,7 +471,8 @@ export default function DashboardScreen() {
             )}
           </View>
         </View>
-        </Skeleton>
+        </>)}
+        </View>
       </ScrollView>
     </View>
   );

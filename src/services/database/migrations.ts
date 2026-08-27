@@ -89,4 +89,27 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
   } catch (e) {
     // Column might already exist, ignore error
   }
+
+  try {
+    await db.execAsync('ALTER TABLE transactions ADD COLUMN to_account_id TEXT;');
+  } catch (e) {
+    // Column might already exist, ignore error
+  }
+
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS recurring_transactions (
+      id TEXT PRIMARY KEY NOT NULL,
+      account_id TEXT NOT NULL,
+      amount REAL NOT NULL,
+      type TEXT NOT NULL CHECK(type IN ('expense', 'income', 'transfer')),
+      merchant TEXT NOT NULL,
+      category TEXT NOT NULL,
+      frequency TEXT NOT NULL CHECK(frequency IN ('daily', 'weekly', 'monthly', 'yearly')),
+      next_process_date TEXT NOT NULL,
+      last_processed_date TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      to_account_id TEXT,
+      FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+    );
+  `);
 }

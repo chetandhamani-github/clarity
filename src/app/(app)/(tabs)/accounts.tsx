@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Dimensions } from 'react-native';
-import { Text, Header } from '@/components/ui';
+import { Text, Header, Loader } from '@/components/ui';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,7 +11,6 @@ import { useAccountHistory } from '@/hooks/use-transactions';
 import { formatCurrency, formatCurrencyWhole } from '@/utils/format';
 import { getAccountTypeIcon } from '@/utils/icons';
 import type { Account } from '@/types';
-import { Skeleton } from 'boneyard-js/native';
 
 export default function AccountsScreen() {
   const { colors } = useTheme();
@@ -70,11 +69,13 @@ export default function AccountsScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <Skeleton name="accounts-list" loading={isLoading}>
         <ScrollView
+          style={{ flex: 1 }}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
           showsVerticalScrollIndicator={false}
         >
+        { isLoading ? <Loader /> : (<>
+          <View style={{ gap: 24 }}>
           {/* Total Balance Card */}
           <View style={styles.contentPadding}>
             <View style={styles.totalCard}>
@@ -137,12 +138,13 @@ export default function AccountsScreen() {
                 account={selectedAccount}
                 colors={colors}
                 styles={styles}
-                onViewDetails={() => router.push(`/account-details?accountId=${selectedAccount.id}`)}
+                onViewDetails={() => router.push({ pathname: '/account-details', params: { accountId: selectedAccount.id } })}
               />
             )}
           </View>
+          </View>
+        </>)}
         </ScrollView>
-        </Skeleton>
       )}
     </View>
   );

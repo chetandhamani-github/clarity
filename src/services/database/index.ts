@@ -35,6 +35,7 @@ export async function clearDatabase(): Promise<void> {
     DROP TABLE IF EXISTS goals;
     DROP TABLE IF EXISTS budget_categories;
     DROP TABLE IF EXISTS budget_plans;
+    DROP TABLE IF EXISTS recurring_transactions;
     DROP TABLE IF EXISTS transactions;
     DROP TABLE IF EXISTS accounts;
     DROP TABLE IF EXISTS notifications;

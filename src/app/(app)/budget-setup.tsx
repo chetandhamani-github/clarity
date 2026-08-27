@@ -1,4 +1,4 @@
-import { Text, useAlert, Header } from '@/components/ui';
+import { Text, useAlert, Header, Loader } from '@/components/ui';
 import { useBudgetPlan, useUpdateBudgetPlan } from '@/hooks/use-budget';
 import { ThemeColors, typography, useTheme } from '@/theme';
 import { formatCurrencyWhole, getCurrencySymbol } from '@/utils/format';
@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { formatCurrency } from '@/utils/format';
 
 export default function BudgetSetupScreen() {
   const { colors } = useTheme();
@@ -73,14 +74,6 @@ export default function BudgetSetupScreen() {
     );
   };
 
-  if (isLoading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Simplified Header */}
@@ -96,12 +89,13 @@ export default function BudgetSetupScreen() {
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
         extraScrollHeight={200}
       >
+      { isLoading ? <Loader /> : (<>
         {/* Header Text */}
         <View style={styles.introSection}>
           <Text style={styles.titleText}>Design your foundation</Text>
@@ -291,6 +285,7 @@ export default function BudgetSetupScreen() {
             </View>
           </View>
         </View>
+      </>)}
       </KeyboardAwareScrollView>
 
       {/* Fixed Bottom Action Area */}

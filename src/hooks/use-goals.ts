@@ -1,146 +1,92 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as goalDao from '@/services/database/goal-dao';
 import type { Goal, GoalContribution } from '@/types';
 
 export function useGoals() {
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['goals'],
+    queryFn: () => goalDao.getGoals(),
+  });
 
-  const refetch = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await goalDao.getGoals();
-      setGoals(data);
-    } catch (error) {
-      console.error('Failed to fetch goals:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
-
-  return { goals, isLoading, refetch };
+  return { goals: data || [], isLoading, refetch };
 }
 
 export function useGoal(id: string) {
-  const [goal, setGoal] = useState<Goal | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['goals', id],
+    queryFn: () => goalDao.getGoalById(id),
+    enabled: !!id,
+  });
 
-  const refetch = useCallback(async () => {
-    if (!id) return;
-    setIsLoading(true);
-    try {
-      const data = await goalDao.getGoalById(id);
-      setGoal(data);
-    } catch (error) {
-      console.error('Failed to fetch goal:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
-
-  return { goal, isLoading, refetch };
+  return { goal: data || null, isLoading, refetch };
 }
 
 export function useGoalContributions(goalId: string) {
-  const [contributions, setContributions] = useState<GoalContribution[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['goalContributions', goalId],
+    queryFn: () => goalDao.getGoalContributions(goalId),
+    enabled: !!goalId,
+  });
 
-  const refetch = useCallback(async () => {
-    if (!goalId) return;
-    setIsLoading(true);
-    try {
-      const data = await goalDao.getGoalContributions(goalId);
-      setContributions(data);
-    } catch (error) {
-      console.error('Failed to fetch goal contributions:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [goalId]);
-
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
-
-  return { contributions, isLoading, refetch };
+  return { contributions: data || [], isLoading, refetch };
 }
 
 export function useCreateGoal() {
-  const [isPending, setIsPending] = useState(false);
-
-  const mutate = useCallback(
-    async (
-      data: Omit<Goal, 'id' | 'createdAt' | 'autoSaveAmount'>,
-      options?: { onSuccess?: () => void },
-    ) => {
-      setIsPending(true);
-      try {
-        await goalDao.createGoal(data);
-        options?.onSuccess?.();
-      } catch (error) {
-        console.error('Failed to create goal:', error);
-        throw error;
-      } finally {
-        setIsPending(false);
-      }
+  const queryClient = useQueryClient();
+  
+  const mutation = useMutation({
+    mutationFn: (data: Omit<Goal, 'id' | 'createdAt' | 'autoSaveAmount'>) => goalDao.createGoal(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['goals'] });
     },
-    [],
-  );
+  });
 
-  return { mutate, isPending };
+  return { 
+    mutate: (data: Omit<Goal, 'id' | 'createdAt' | 'autoSaveAmount'>, options?: { onSuccess?: () => void }) => {
+      mutation.mutate(data, { onSuccess: options?.onSuccess });
+    }, 
+    isPending: mutation.isPending 
+  };
 }
 
 export function useDeleteGoal() {
-  const [isPending, setIsPending] = useState(false);
+  const queryClient = useQueryClient();
 
-  const mutate = useCallback(
-    async (id: string, options?: { onSuccess?: () => void }) => {
-      setIsPending(true);
-      try {
-        await goalDao.deleteGoal(id);
-        options?.onSuccess?.();
-      } catch (error) {
-        console.error('Failed to delete goal:', error);
-        throw error;
-      } finally {
-        setIsPending(false);
-      }
+  const mutation = useMutation({
+    mutationFn: (id: string) => goalDao.deleteGoal(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['goals'] });
     },
-    []
-  );
+  });
 
-  return { mutate, isPending };
+  return { 
+    mutate: (id: string, options?: { onSuccess?: () => void }) => {
+      mutation.mutate(id, { onSuccess: options?.onSuccess });
+    }, 
+    isPending: mutation.isPending 
+  };
 }
 
 export function useAddGoalContribution() {
-  const [isPending, setIsPending] = useState(false);
+  const queryClient = useQueryClient();
 
-  const mutate = useCallback(
-    async (
-      { data, accountId }: { data: Omit<GoalContribution, 'id'>; accountId?: string },
-      options?: { onSuccess?: () => void },
-    ) => {
-      setIsPending(true);
-      try {
-        await goalDao.addGoalContribution(data, accountId);
-        options?.onSuccess?.();
-      } catch (error) {
-        console.error('Failed to add goal contribution:', error);
-        throw error;
-      } finally {
-        setIsPending(false);
+  const mutation = useMutation({
+    mutationFn: ({ data, accountId }: { data: Omit<GoalContribution, 'id'>; accountId?: string }) => 
+      goalDao.addGoalContribution(data, accountId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['goals'] });
+      queryClient.invalidateQueries({ queryKey: ['goalContributions', variables.data.goalId] });
+      if (variables.accountId) {
+        queryClient.invalidateQueries({ queryKey: ['accounts'] });
+        queryClient.invalidateQueries({ queryKey: ['transactions'] });
       }
     },
-    [],
-  );
+  });
 
-  return { mutate, isPending };
+  return { 
+    mutate: (variables: { data: Omit<GoalContribution, 'id'>; accountId?: string }, options?: { onSuccess?: () => void }) => {
+      mutation.mutate(variables, { onSuccess: options?.onSuccess });
+    }, 
+    isPending: mutation.isPending 
+  };
 }

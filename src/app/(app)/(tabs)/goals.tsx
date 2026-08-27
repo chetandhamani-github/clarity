@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Pressable, Image, ActivityIndicator, TextInput } from 'react-native';
-import { Text, Header } from '@/components/ui';
+import { Text, Header, Loader } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,7 +9,6 @@ import { useGoals, useCreateGoal } from '@/hooks/use-goals';
 import { useToast, useAlert } from '@/components/ui';
 import { formatCurrency, getCurrencySymbol } from '@/utils/format';
 import type { Goal } from '@/types';
-import { Skeleton } from 'boneyard-js/native';
 
 export default function GoalsScreen() {
   const { colors } = useTheme();
@@ -81,8 +80,8 @@ export default function GoalsScreen() {
         }
       />
 
-      <Skeleton name="goals-list" loading={isLoading}>
-      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
+      { isLoading ? <Loader /> : (<>
         
         {showAdd && (
           <View style={styles.addFormCard}>
@@ -160,8 +159,8 @@ export default function GoalsScreen() {
             </Pressable>
           );
         })}
+      </>)}
       </ScrollView>
-      </Skeleton>
     </View>
   );
 }

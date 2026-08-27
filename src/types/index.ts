@@ -20,6 +20,7 @@ export const ACCOUNT_TYPES: { label: string; value: AccountType }[] = [
 export interface Transaction {
   id: string;
   accountId: string;
+  toAccountId?: string;
   amount: number;
   type: TransactionType;
   merchant: string;
@@ -30,6 +31,21 @@ export interface Transaction {
 }
 
 export type TransactionType = 'expense' | 'income' | 'transfer';
+export type RecurringFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
+
+export interface RecurringTransaction {
+  id: string;
+  accountId: string;
+  toAccountId?: string;
+  amount: number;
+  type: TransactionType;
+  merchant: string;
+  category: string;
+  frequency: RecurringFrequency;
+  nextProcessDate: string;
+  lastProcessedDate?: string;
+  isActive: boolean;
+}
 
 export interface TransactionFilters {
   category?: string;
@@ -44,6 +60,12 @@ export interface TransactionFilters {
 
 export interface TransactionWithAccount extends Transaction {
   accountName: string;
+  toAccountName?: string;
+}
+
+export interface RecurringTransactionWithAccount extends RecurringTransaction {
+  accountName: string;
+  toAccountName?: string;
 }
 
 export interface Goal {

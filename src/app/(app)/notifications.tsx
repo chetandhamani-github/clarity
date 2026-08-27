@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Pressable, ActivityIndicator } from 'react-native';
-import { Text, Header } from '@/components/ui';
+import { Text, Header, Loader } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,14 +30,6 @@ export default function NotificationsScreen() {
       router.push(url as any);
     }
   };
-
-  if (isLoading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
 
   const alerts = notifications.filter(n => n.type === 'alert');
   const milestones = notifications.filter(n => n.type === 'milestone');
@@ -100,7 +92,8 @@ export default function NotificationsScreen() {
         }
       />
 
-      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 60 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
+      { isLoading ? <Loader /> : (<>
         <View style={styles.topActions}>
           <TouchableOpacity style={styles.markReadBtn} onPress={handleMarkAllRead} disabled={markingAll}>
             <Text style={styles.markReadBtnText}>{markingAll ? 'MARKING...' : 'MARK ALL AS READ'}</Text>
@@ -155,6 +148,7 @@ export default function NotificationsScreen() {
             </View>
           </View>
         )}
+      </>)}
       </ScrollView>
     </View>
   );

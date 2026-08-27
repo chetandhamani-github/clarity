@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
-import { Text, Header, useToast, useAlert } from '@/components/ui';
+import { Text, Header, useToast, useAlert, Loader } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -32,15 +32,7 @@ export default function GoalDetailsScreen() {
 
   const isLoading = goalLoading || contribLoading;
 
-  if (isLoading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
-  if (!goal) {
+  if (!goal && !isLoading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <Text style={{ color: colors.error }}>Goal not found</Text>
@@ -57,7 +49,7 @@ export default function GoalDetailsScreen() {
 
     addContrib({
       data: {
-        goalId: goal.id,
+        goalId: goal?.id || '',
         amount: amt,
         date: new Date().toISOString().split('T')[0],
         description: notes.trim() || ''
@@ -85,7 +77,7 @@ export default function GoalDetailsScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            deleteGoal(goal.id, {
+            deleteGoal(goal?.id || '', {
               onSuccess: () => {
                 router.replace('/goals');
               }
@@ -96,7 +88,7 @@ export default function GoalDetailsScreen() {
     );
   };
 
-  const progress = goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
+  const progress = goal && goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
   // Map progress to dash array (max 100 circumference is roughly `42` in this SVG)
   // Or rather, the path total length for r=15.9155 is exactly 100. So we can use `progress` directly!
   const strokeDash = `${progress}, 100`;
@@ -105,7 +97,7 @@ export default function GoalDetailsScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <Header
         showBack
-        title={goal.name}
+        title={goal?.name ?? 'Goal Details'}
         rightNode={
           <TouchableOpacity style={styles.iconButton} onPress={handleDeleteGoal} disabled={isDeleting}>
             {isDeleting ? (
@@ -117,7 +109,9 @@ export default function GoalDetailsScreen() {
         }
       />
 
-      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]} showsVerticalScrollIndicator={false}>
+      {goal && (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
+        { isLoading ? <Loader /> : (<>
         {/* Header Section */}
         <View style={styles.heroSection}>
           <View>
@@ -262,7 +256,9 @@ export default function GoalDetailsScreen() {
             )}
           </View>
         </View>
-      </ScrollView>
+        </>)}
+        </ScrollView>
+      )}
     </View>
   );
 }

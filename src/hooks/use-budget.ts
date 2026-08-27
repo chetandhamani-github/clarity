@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { BudgetPlan, BudgetCategory, BucketType, CategorySpending } from '@/types';
 import {
   getCurrentBudgetPlan,
@@ -11,156 +11,103 @@ import {
 } from '@/services/database/budget-dao';
 
 export function useBudgetPlan() {
-  const [plan, setPlan] = useState<BudgetPlan | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['budgetPlan'],
+    queryFn: () => getCurrentBudgetPlan(),
+  });
 
-  const refetch = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await getCurrentBudgetPlan();
-      setPlan(data);
-    } catch (error) {
-      console.error('Failed to fetch budget plan:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
-
-  return { plan, isLoading, refetch };
+  return { plan: data || null, isLoading, refetch };
 }
 
 export function useUpdateBudgetPlan() {
-  const [isPending, setIsPending] = useState(false);
+  const queryClient = useQueryClient();
 
-  const mutate = useCallback(
-    async (
-      data: Omit<BudgetPlan, 'id'>,
-      options?: { onSuccess?: () => void },
-    ) => {
-      setIsPending(true);
-      try {
-        await upsertBudgetPlan(data);
-        options?.onSuccess?.();
-      } catch (error) {
-        console.error('Failed to update budget plan:', error);
-        throw error;
-      } finally {
-        setIsPending(false);
-      }
+  const mutation = useMutation({
+    mutationFn: (data: Omit<BudgetPlan, 'id'>) => upsertBudgetPlan(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
     },
-    [],
-  );
+  });
 
-  return { mutate, isPending };
+  return { 
+    mutate: (data: Omit<BudgetPlan, 'id'>, options?: { onSuccess?: () => void }) => {
+      mutation.mutate(data, { onSuccess: options?.onSuccess });
+    }, 
+    isPending: mutation.isPending 
+  };
 }
 
 export function useCategories() {
-  const [categories, setCategories] = useState<BudgetCategory[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => getAllCategories(),
+  });
 
-  const refetch = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await getAllCategories();
-      setCategories(data);
-    } catch (error) {
-      console.error('Failed to fetch categories:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
-
-  return { categories, isLoading, refetch };
+  return { categories: data || [], isLoading, refetch };
 }
 
 export function useCreateCategory() {
-  const [isPending, setIsPending] = useState(false);
+  const queryClient = useQueryClient();
 
-  const mutate = useCallback(
-    async (
-      data: Omit<BudgetCategory, 'id'>,
-      options?: { onSuccess?: () => void },
-    ) => {
-      setIsPending(true);
-      try {
-        await insertCategory(data);
-        options?.onSuccess?.();
-      } catch (error) {
-        console.error('Failed to create category:', error);
-        throw error;
-      } finally {
-        setIsPending(false);
-      }
+  const mutation = useMutation({
+    mutationFn: (data: Omit<BudgetCategory, 'id'>) => insertCategory(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
     },
-    [],
-  );
+  });
 
-  return { mutate, isPending };
+  return { 
+    mutate: (data: Omit<BudgetCategory, 'id'>, options?: { onSuccess?: () => void }) => {
+      mutation.mutate(data, { onSuccess: options?.onSuccess });
+    }, 
+    isPending: mutation.isPending 
+  };
 }
 
 export function useUpdateCategory() {
-  const [isPending, setIsPending] = useState(false);
+  const queryClient = useQueryClient();
 
-  const mutate = useCallback(
-    async (
-      id: string,
-      data: Partial<Omit<BudgetCategory, 'id'>>,
-      options?: { onSuccess?: () => void },
-    ) => {
-      setIsPending(true);
-      try {
-        await updateCategory(id, data);
-        options?.onSuccess?.();
-      } catch (error) {
-        console.error('Failed to update category:', error);
-        throw error;
-      } finally {
-        setIsPending(false);
-      }
+  const mutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Omit<BudgetCategory, 'id'>> }) => 
+      updateCategory(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
     },
-    [],
-  );
+  });
 
-  return { mutate, isPending };
+  return { 
+    mutate: (id: string, data: Partial<Omit<BudgetCategory, 'id'>>, options?: { onSuccess?: () => void }) => {
+      mutation.mutate({ id, data }, { onSuccess: options?.onSuccess });
+    }, 
+    isPending: mutation.isPending 
+  };
 }
 
 export function useDeleteCategory() {
-  const [isPending, setIsPending] = useState(false);
+  const queryClient = useQueryClient();
 
-  const mutate = useCallback(
-    async (id: string, options?: { onSuccess?: () => void }) => {
-      setIsPending(true);
-      try {
-        await deleteCategory(id);
-        options?.onSuccess?.();
-      } catch (error) {
-        console.error('Failed to delete category:', error);
-        throw error;
-      } finally {
-        setIsPending(false);
-      }
+  const mutation = useMutation({
+    mutationFn: (id: string) => deleteCategory(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
     },
-    [],
-  );
+  });
 
-  return { mutate, isPending };
+  return { 
+    mutate: (id: string, options?: { onSuccess?: () => void }) => {
+      mutation.mutate(id, { onSuccess: options?.onSuccess });
+    }, 
+    isPending: mutation.isPending 
+  };
 }
 
 export function useCategorySpending(month: number, year: number) {
-  const [spending, setSpending] = useState<CategorySpending[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const refetch = useCallback(async () => {
-    setIsLoading(true);
-    try {
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['categorySpending', month, year],
+    queryFn: async () => {
       const categories = await getAllCategories();
       const spentDict = await getSpentByCategory(month, year);
 
@@ -171,18 +118,9 @@ export function useCategorySpending(month: number, year: number) {
         spent: spentDict[cat.name] || 0,
         bucketType: cat.bucketType,
       }));
+      return spendingData;
+    },
+  });
 
-      setSpending(spendingData);
-    } catch (error) {
-      console.error('Failed to fetch category spending:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [month, year]);
-
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
-
-  return { spending, isLoading, refetch };
+  return { spending: data || [], isLoading, refetch };
 }

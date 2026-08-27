@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput, Switch, ActivityIndicator, ScrollView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, TextInput, Switch, ActivityIndicator, ScrollView, Platform } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Text, Header } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useCreateTransaction, useUpdateTransaction, useTransaction, useDeleteTransaction } from '@/hooks/use-transactions';
+import { useCreateTransaction, useUpdateTransaction, useTransaction, useDeleteTransaction, useCreateRecurringTransaction } from '@/hooks/use-transactions';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useToast, useAlert } from '@/components/ui';
-import type { TransactionType } from '@/types';
+import type { TransactionType, RecurringFrequency } from '@/types';
 import { getAccountTypeIcon } from '@/utils/icons';
 import { getCurrencySymbol } from '@/utils/format';
 
@@ -35,8 +36,9 @@ export default function AddTransactionScreen() {
   const { mutate: createTransaction, isPending: isCreating } = useCreateTransaction();
   const { mutate: updateTransaction, isPending: isUpdating } = useUpdateTransaction();
   const { mutate: deleteTransaction, isPending: isDeleting } = useDeleteTransaction();
+  const { mutate: createRecurring, isPending: isCreatingRecurring } = useCreateRecurringTransaction();
 
-  const isPending = isCreating || isUpdating || isDeleting;
+  const isPending = isCreating || isUpdating || isDeleting || isCreatingRecurring;
 
   const [type, setType] = useState<TransactionType>('expense');
   const [amountStr, setAmountStr] = useState('');
@@ -44,10 +46,15 @@ export default function AddTransactionScreen() {
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [accountId, setAccountId] = useState<string | null>(null);
+  const [toAccountId, setToAccountId] = useState<string | null>(null);
   const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringFreq, setRecurringFreq] = useState<RecurringFrequency>('monthly');
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const [showToAccountMenu, setShowToAccountMenu] = useState(false);
+  const [showFreqMenu, setShowFreqMenu] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
   // Pre-populate if editing
@@ -59,6 +66,9 @@ export default function AddTransactionScreen() {
       setCategory(transaction.category);
       setDate(transaction.date);
       setAccountId(transaction.accountId);
+      if ('toAccountId' in transaction) {
+        setToAccountId(transaction.toAccountId || null);
+      }
       setIsRecurring(transaction.isRecurring);
       setInitialized(true);
     }
@@ -76,27 +86,53 @@ export default function AddTransactionScreen() {
       showAlert('Validation Error', 'Please select an account.');
       return;
     }
+    if (type === 'transfer' && !toAccountId) {
+      showAlert('Validation Error', 'Please select a destination account.');
+      return;
+    }
+    if (type === 'transfer' && accountId === toAccountId) {
+      showAlert('Validation Error', 'Source and destination accounts must be different.');
+      return;
+    }
     const amount = parseFloat(amountStr);
     if (isNaN(amount) || amount <= 0) {
       showAlert('Validation Error', 'Please enter a valid amount greater than 0.');
       return;
     }
-    if (!merchant.trim()) {
-      showAlert('Validation Error', 'Please enter a merchant or description.');
-      return;
-    }
+    // Merchant description is optional
     // Basic date validation
     if (!date.trim() || date.length !== 10) {
       showAlert('Validation Error', 'Please enter date in YYYY-MM-DD format.');
       return;
     }
 
+    if (isRecurring && !isEditing) {
+      const recData = {
+        accountId,
+        toAccountId: type === 'transfer' ? (toAccountId || undefined) : undefined,
+        amount,
+        type,
+        merchant: type === 'transfer' ? 'Transfer' : merchant.trim(),
+        category: type === 'transfer' ? 'Transfer' : category,
+        frequency: recurringFreq,
+        nextProcessDate: date,
+      };
+      createRecurring(recData, {
+        onSuccess: () => {
+          showToast('Recurring transaction created', 'success');
+          router.back();
+        }
+      });
+      return;
+    }
+
     const txData = {
       accountId,
+      toAccountId: type === 'transfer' ? (toAccountId || undefined) : undefined,
       amount,
       type,
-      merchant: merchant.trim(),
-      category,
+      merchant: type === 'transfer' ? 'Transfer' : merchant.trim(),
+      category: type === 'transfer' ? 'Transfer' : category,
       date,
       isRecurring,
       note: '', // Could add note field later
@@ -197,84 +233,162 @@ export default function AddTransactionScreen() {
 
           {/* Form Fields */}
           <View style={styles.formGroup}>
-            {/* Merchant */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Merchant / Description</Text>
-              <View style={styles.textInputWrapper}>
-                <MaterialIcons
-                  name="storefront"
-                  size={24}
-                  color={colors.onSurfaceVariant}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="e.g. Whole Foods Market"
-                  placeholderTextColor={colors.outline}
-                  value={merchant}
-                  onChangeText={setMerchant}
-                />
-              </View>
-            </View>
-
-            {/* Category and Date Row */}
-            <View style={styles.row}>
-              <View style={[styles.inputContainer, { flex: 1 }]}>
-                <Text style={styles.inputLabel}>Category</Text>
-                <TouchableOpacity 
-                  style={[styles.textInputWrapper, { zIndex: 10 }]} 
-                  onPress={() => setShowCategoryMenu(!showCategoryMenu)}
-                >
-                  <MaterialIcons
-                    name="category"
-                    size={24}
-                    color={colors.primary}
-                    style={styles.inputIcon}
-                  />
-                  <View style={[styles.textInput, { justifyContent: 'center' }]}>
-                    <Text style={{ color: colors.onSurface }}>{category}</Text>
-                  </View>
-                  <MaterialIcons
-                    name={showCategoryMenu ? "expand-less" : "expand-more"}
-                    size={24}
-                    color={colors.onSurfaceVariant}
-                    style={styles.inputRightIcon}
-                  />
-                </TouchableOpacity>
+            {type === 'transfer' ? (
+              <View style={[styles.inputContainer, { zIndex: 11 }]}>
+                <Text style={styles.inputLabel}>To Account</Text>
                 
-                {showCategoryMenu && (
-                  <View style={styles.dropdownMenu}>
-                    <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
-                      {CATEGORIES.map(cat => (
-                        <TouchableOpacity 
-                          key={cat} 
-                          style={styles.dropdownItem}
-                          onPress={() => {
-                            setCategory(cat);
-                            setShowCategoryMenu(false);
-                          }}
-                        >
-                          <Text style={{ color: cat === category ? colors.primary : colors.onSurface }}>{cat}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
+                {isLoadingAccounts ? (
+                  <View style={styles.accountSelector}>
+                    <ActivityIndicator size="small" color={colors.primary} />
                   </View>
+                ) : accounts.length === 0 ? (
+                  <View style={styles.accountSelector}>
+                    <Text style={{ color: colors.error }}>No accounts available.</Text>
+                  </View>
+                ) : (
+                  <>
+                    <TouchableOpacity 
+                      style={styles.accountSelector}
+                      onPress={() => setShowToAccountMenu(!showToAccountMenu)}
+                    >
+                      {toAccountId && accounts.find(a => a.id === toAccountId) ? (
+                        <View style={styles.accountSelectorLeft}>
+                          <View style={styles.accountIconBox}>
+                            <MaterialIcons
+                              name={getAccountTypeIcon(accounts.find(a => a.id === toAccountId)!.type)}
+                              size={16}
+                              color={colors.onPrimaryContainer}
+                            />
+                          </View>
+                          <View>
+                            <Text style={styles.accountSelectorName}>{accounts.find(a => a.id === toAccountId)!.name}</Text>
+                            {accounts.find(a => a.id === toAccountId)!.lastFour && (
+                              <Text style={styles.accountSelectorNumber}>...{accounts.find(a => a.id === toAccountId)!.lastFour}</Text>
+                            )}
+                          </View>
+                        </View>
+                      ) : (
+                        <Text style={{ color: colors.onSurfaceVariant }}>Select destination account</Text>
+                      )}
+                      <MaterialIcons name={showToAccountMenu ? "expand-less" : "expand-more"} size={24} color={colors.onSurfaceVariant} />
+                    </TouchableOpacity>
+                    
+                    {showToAccountMenu && (
+                      <View style={styles.dropdownMenu}>
+                        {accounts.map(acc => (
+                          <TouchableOpacity 
+                            key={acc.id} 
+                            style={styles.dropdownItem}
+                            onPress={() => {
+                              setToAccountId(acc.id);
+                              setShowToAccountMenu(false);
+                            }}
+                          >
+                            <Text style={{ color: acc.id === toAccountId ? colors.primary : colors.onSurface }}>
+                              {acc.name} {acc.lastFour ? `(...${acc.lastFour})` : ''}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                  </>
                 )}
               </View>
-
-              <View style={[styles.inputContainer, { flex: 1, zIndex: 1 }]}>
-                <Text style={styles.inputLabel}>Date</Text>
-                <View style={styles.textInputWrapper}>
-                  <TextInput
-                    style={[styles.textInput, { paddingLeft: 16 }]} 
-                    value={date}
-                    onChangeText={setDate}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor={colors.outline}
-                  />
+            ) : (
+              <>
+                {/* Merchant */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Merchant / Description</Text>
+                  <View style={styles.textInputWrapper}>
+                    <MaterialIcons
+                      name="storefront"
+                      size={24}
+                      color={colors.onSurfaceVariant}
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="e.g. Whole Foods Market"
+                      placeholderTextColor={colors.outline}
+                      value={merchant}
+                      onChangeText={setMerchant}
+                    />
+                  </View>
                 </View>
-              </View>
+
+                {/* Category */}
+                <View style={[styles.inputContainer, { zIndex: 10 }]}>
+                  <Text style={styles.inputLabel}>Category</Text>
+                  <TouchableOpacity 
+                    style={styles.textInputWrapper} 
+                    onPress={() => setShowCategoryMenu(!showCategoryMenu)}
+                  >
+                    <MaterialIcons
+                      name="category"
+                      size={24}
+                      color={colors.primary}
+                      style={styles.inputIcon}
+                    />
+                    <View style={[styles.textInput, { justifyContent: 'center' }]}>
+                      <Text style={{ color: colors.onSurface }}>{category}</Text>
+                    </View>
+                    <MaterialIcons
+                      name={showCategoryMenu ? "expand-less" : "expand-more"}
+                      size={24}
+                      color={colors.onSurfaceVariant}
+                      style={styles.inputRightIcon}
+                    />
+                  </TouchableOpacity>
+                  
+                  {showCategoryMenu && (
+                    <View style={styles.dropdownMenu}>
+                      <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
+                        {CATEGORIES.map(cat => (
+                          <TouchableOpacity 
+                            key={cat} 
+                            style={styles.dropdownItem}
+                            onPress={() => {
+                              setCategory(cat);
+                              setShowCategoryMenu(false);
+                            }}
+                          >
+                            <Text style={{ color: cat === category ? colors.primary : colors.onSurface }}>{cat}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              </>
+            )}
+
+            <View style={[styles.inputContainer, { zIndex: 1 }]}>
+              <Text style={styles.inputLabel}>Date</Text>
+              <TouchableOpacity 
+                style={styles.textInputWrapper}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <View style={[styles.textInput, { paddingLeft: 16, justifyContent: 'center' }]}>
+                  <Text style={{ color: date ? colors.onSurface : colors.outline }}>
+                    {date || 'YYYY-MM-DD'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
             </View>
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={new Date(date || new Date())}
+                mode="date"
+                display="default"
+                onChange={(event, selectedDate) => {
+                  setShowDatePicker(false);
+                  if (selectedDate) {
+                    setDate(selectedDate.toISOString().split('T')[0]);
+                  }
+                }}
+              />
+            )}
 
             {/* Account Selector */}
             <View style={[styles.inputContainer, { zIndex: 5 }]}>
@@ -348,8 +462,56 @@ export default function AddTransactionScreen() {
                 value={isRecurring}
                 onValueChange={setIsRecurring}
                 trackColor={{ false: colors.surfaceVariant, true: colors.primary }}
+                disabled={isEditing}
               />
             </View>
+
+            {isRecurring && !isEditing && (
+              <View style={[styles.inputContainer, { zIndex: 4, marginTop: 16 }]}>
+                <Text style={styles.inputLabel}>Frequency</Text>
+                <TouchableOpacity 
+                  style={styles.textInputWrapper} 
+                  onPress={() => setShowFreqMenu(!showFreqMenu)}
+                >
+                  <MaterialIcons
+                    name="update"
+                    size={24}
+                    color={colors.primary}
+                    style={styles.inputIcon}
+                  />
+                  <View style={[styles.textInput, { justifyContent: 'center' }]}>
+                    <Text style={{ color: colors.onSurface }}>
+                      {recurringFreq.charAt(0).toUpperCase() + recurringFreq.slice(1)}
+                    </Text>
+                  </View>
+                  <MaterialIcons
+                    name={showFreqMenu ? "expand-less" : "expand-more"}
+                    size={24}
+                    color={colors.onSurfaceVariant}
+                    style={styles.inputRightIcon}
+                  />
+                </TouchableOpacity>
+                
+                {showFreqMenu && (
+                  <View style={styles.dropdownMenu}>
+                    {(['daily', 'weekly', 'monthly', 'yearly'] as RecurringFrequency[]).map(freq => (
+                      <TouchableOpacity 
+                        key={freq} 
+                        style={styles.dropdownItem}
+                        onPress={() => {
+                          setRecurringFreq(freq);
+                          setShowFreqMenu(false);
+                        }}
+                      >
+                        <Text style={{ color: freq === recurringFreq ? colors.primary : colors.onSurface }}>
+                          {freq.charAt(0).toUpperCase() + freq.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
           </View>
 
           <TouchableOpacity
