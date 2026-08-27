@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Switch } from 'react-native';
-import { Text, Button } from '@/components/ui';
+import { Text, Button, Header } from '@/components/ui';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -25,15 +25,10 @@ export default function SecurityPrivacyScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Top App Bar */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.onSurface} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          Security & Privacy
-        </Text>
-      </View>
+      <Header
+        showBack
+        title="Security & Privacy"
+      />
 
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 60 }]} showsVerticalScrollIndicator={false}>
         <View style={styles.introSection}>
@@ -243,21 +238,7 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.background, // colors.background
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 12,
-      paddingVertical: 16,
-      gap: 12,
-    },
-    headerTitle: {
-      ...typography.headlineMd,
-      color: colors.onSurface,
-    },
-    iconButton: {
-      padding: 8,
-      borderRadius: 24,
-    },
+
     scrollContent: {
       padding: 20,
       paddingBottom: 60,

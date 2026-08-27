@@ -11,3 +11,5 @@ export * from './IconButton';
 export * from './NotificationCard';
 export * from './Toast';
 export * from './Alert';
+export * from './AnimatedSplashScreen';
+export * from './Header';

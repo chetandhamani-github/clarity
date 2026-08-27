@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, TextInput, ScrollView } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { Text } from '@/components/ui';
+import { Text, Header } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCreateAccount, useUpdateAccount, useAccount } from '@/hooks/use-accounts';
 import { useToast, useAlert } from '@/components/ui';
 import { ACCOUNT_TYPES, type AccountType } from '@/types';
+import { getCurrencySymbol } from '@/utils/format';
 
 export default function AddAccountScreen() {
   const { colors } = useTheme();
@@ -87,16 +88,10 @@ export default function AddAccountScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.onSurfaceVariant} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {isEditing ? 'Edit Account' : 'Add Account'}
-        </Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <Header
+        showBack
+        title={isEditing ? 'Edit Account' : 'Add Account'}
+      />
 
       <KeyboardAwareScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 60 }]}
@@ -155,7 +150,7 @@ export default function AddAccountScreen() {
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Current Balance*</Text>
             <View style={styles.currencyInputContainer}>
-              <Text style={styles.currencySymbol}>$</Text>
+              <Text style={styles.currencySymbol}>{getCurrencySymbol()}</Text>
               <TextInput
                 style={styles.currencyInput}
                 placeholder="0.00"
@@ -213,19 +208,7 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.background,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 12,
-      height: 64,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.surfaceVariant,
-    },
-    headerTitle: {
-      ...typography.headlineMd,
-      color: colors.onSurface,
-    },
+
     iconButton: {
       padding: 8,
     },

@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Pressable, Image, ActivityIndicator, TextInput } from 'react-native';
-import { Text } from '@/components/ui';
+import { Text, Header } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useGoals, useCreateGoal } from '@/hooks/use-goals';
 import { useToast, useAlert } from '@/components/ui';
-import { formatCurrency } from '@/utils/format';
+import { formatCurrency, getCurrencySymbol } from '@/utils/format';
 import type { Goal } from '@/types';
+import { Skeleton } from 'boneyard-js/native';
 
 export default function GoalsScreen() {
   const { colors } = useTheme();
@@ -16,12 +17,18 @@ export default function GoalsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const { goals, isLoading } = useGoals();
+  const { goals, isLoading, refetch } = useGoals();
   const { mutate: createGoal, isPending } = useCreateGoal();
 
   const [showAdd, setShowAdd] = useState(false);
   const [newGoalName, setNewGoalName] = useState('');
   const [newGoalTarget, setNewGoalTarget] = useState('');
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
 
   const { showToast } = useToast();
   const { showAlert } = useAlert();
@@ -49,36 +56,32 @@ export default function GoalsScreen() {
         setNewGoalName('');
         setNewGoalTarget('');
         setShowAdd(false);
+        refetch();
       }
     });
   };
 
-  if (isLoading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
+      <Header
+        isMainTab
+        title="Goals"
+        leftNode={
           <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
             <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
               <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
             </View>
           </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            Goals
-          </Text>
-        </View>
-        <TouchableOpacity style={styles.addBtn} onPress={() => setShowAdd(!showAdd)}>
-          <MaterialIcons name={showAdd ? "close" : "add"} size={24} color={colors.onPrimary} />
-        </TouchableOpacity>
-      </View>
+        }
+        rightNode={
+          <TouchableOpacity style={styles.iconButton} onPress={() => setShowAdd(!showAdd)}>
+            <MaterialIcons name={showAdd ? "close" : "add"} size={24} color={colors.onSurface} />
+          </TouchableOpacity>
+        }
+      />
 
+      <Skeleton name="goals-list" loading={isLoading}>
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
         
         {showAdd && (
@@ -94,7 +97,7 @@ export default function GoalsScreen() {
             />
 
             <View style={styles.currencyInputRow}>
-              <Text style={styles.currencySymbol}>$</Text>
+              <Text style={styles.currencySymbol}>{getCurrencySymbol()}</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Target Amount"
@@ -158,6 +161,7 @@ export default function GoalsScreen() {
           );
         })}
       </ScrollView>
+      </Skeleton>
     </View>
   );
 }
@@ -168,23 +172,7 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.background, // colors.background
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      height: 64,
-    },
-    headerTitle: {
-      ...typography.displayLg,
-      fontSize: 28, 
-      color: colors.onSurface,
-    },
-    headerLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-    },
+
     avatarButton: {
       width: 40,
       height: 40,
@@ -199,18 +187,11 @@ const getStyles = (colors: ThemeColors) => {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    addBtn: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: colors.primary,
+    iconButton: {
+      width: 40,
+      height: 40,
       alignItems: 'center',
       justifyContent: 'center',
-      shadowColor: colors.onSurface,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 2,
     },
     scrollContent: {
       padding: 20,

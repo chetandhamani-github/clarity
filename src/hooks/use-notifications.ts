@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { DeviceEventEmitter } from 'react-native';
 import type { Notification } from '@/types';
 import * as notificationDao from '@/services/database/notification-dao';
 
@@ -20,6 +21,10 @@ export function useNotifications() {
 
   useEffect(() => {
     refetch();
+    const subscription = DeviceEventEmitter.addListener('notificationsUpdated', refetch);
+    return () => {
+      subscription.remove();
+    };
   }, [refetch]);
 
   return { notifications, isLoading, refetch };

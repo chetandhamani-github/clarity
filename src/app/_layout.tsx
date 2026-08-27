@@ -9,12 +9,19 @@ import {
 } from '@expo-google-fonts/manrope';
 import * as SplashScreen from 'expo-splash-screen';
 import { initDatabase } from '@/services/database';
-import { ToastProvider, AlertProvider } from '@/components/ui';
+import { ToastProvider, AlertProvider, AnimatedSplashScreen } from '@/components/ui';
+import { usePushNotifications } from '@/hooks/use-push-notifications';
+import { StatusBar } from 'expo-status-bar';
+import { useTheme } from '@/theme/useTheme';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [dbReady, setDbReady] = useState(false);
+  const [isSplashAnimationComplete, setIsSplashAnimationComplete] = useState(false);
+  const { expoPushToken } = usePushNotifications();
+  const { theme } = useTheme();
+  
   const [fontsLoaded, fontsError] = useFonts({
     Manrope_400Regular,
     Manrope_500Medium,
@@ -42,13 +49,19 @@ export default function RootLayout() {
   }
 
   return (
-    <ToastProvider>
-      <AlertProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(app)" options={{ headerShown: false }} />
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        </Stack>
-      </AlertProvider>
-    </ToastProvider>
+    <>
+      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
+      <ToastProvider>
+        <AlertProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(app)" options={{ headerShown: false }} />
+            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          </Stack>
+        </AlertProvider>
+      </ToastProvider>
+      {!isSplashAnimationComplete && (
+        <AnimatedSplashScreen onAnimationComplete={() => setIsSplashAnimationComplete(true)} />
+      )}
+    </>
   );
 }

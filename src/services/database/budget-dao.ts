@@ -96,20 +96,71 @@ export async function upsertBudgetPlan(data: Omit<BudgetPlan, 'id'>): Promise<Bu
   return { id, ...data };
 }
 
+const DEFAULT_CATEGORIES = [
+  { name: 'Groceries', icon: 'local-grocery-store', bucket: 'needs' },
+  { name: 'Rent', icon: 'house', bucket: 'needs' },
+  { name: 'Utilities', icon: 'bolt', bucket: 'needs' },
+  { name: 'Transport', icon: 'directions-car', bucket: 'needs' },
+  { name: 'Health', icon: 'local-hospital', bucket: 'needs' },
+  { name: 'Dining', icon: 'restaurant', bucket: 'wants' },
+  { name: 'Shopping', icon: 'shopping-bag', bucket: 'wants' },
+  { name: 'Entertainment', icon: 'movie', bucket: 'wants' },
+  { name: 'Subscriptions', icon: 'subscriptions', bucket: 'wants' },
+  { name: 'Travel', icon: 'flight', bucket: 'wants' },
+  { name: 'Personal', icon: 'person', bucket: 'wants' },
+  { name: 'Other', icon: 'category', bucket: 'wants' },
+  { name: 'Savings', icon: 'savings', bucket: 'savings' },
+  { name: 'Transfer', icon: 'swap-horiz', bucket: 'savings' },
+  { name: 'Salary', icon: 'attach-money', bucket: 'savings' },
+];
+
+async function seedDefaultCategories(db: any) {
+  let sortOrder = 0;
+  for (const cat of DEFAULT_CATEGORIES) {
+    const id = generateId();
+    await db.runAsync(
+      `INSERT INTO budget_categories (id, name, icon, budget_limit, bucket_type, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, cat.name, cat.icon, 0, cat.bucket, sortOrder++]
+    );
+  }
+}
+
 export async function getAllCategories(): Promise<BudgetCategory[]> {
   const db = getDatabase();
-  const rows = await db.getAllAsync<BudgetCategoryRow>(
+  let rows = await db.getAllAsync<BudgetCategoryRow>(
     'SELECT * FROM budget_categories ORDER BY bucket_type, sort_order'
   );
+  
+  if (rows.length === 0) {
+    await seedDefaultCategories(db);
+    rows = await db.getAllAsync<BudgetCategoryRow>(
+      'SELECT * FROM budget_categories ORDER BY bucket_type, sort_order'
+    );
+  }
+  
   return rows.map(mapBudgetCategoryRow);
 }
 
 export async function getCategoriesByBucket(bucket: BucketType): Promise<BudgetCategory[]> {
   const db = getDatabase();
-  const rows = await db.getAllAsync<BudgetCategoryRow>(
+  let rows = await db.getAllAsync<BudgetCategoryRow>(
     'SELECT * FROM budget_categories WHERE bucket_type = ? ORDER BY sort_order',
     [bucket]
   );
+  
+  if (rows.length === 0) {
+    // Just in case this is called first
+    const all = await db.getAllAsync<BudgetCategoryRow>('SELECT id FROM budget_categories LIMIT 1');
+    if (all.length === 0) {
+      await seedDefaultCategories(db);
+      rows = await db.getAllAsync<BudgetCategoryRow>(
+        'SELECT * FROM budget_categories WHERE bucket_type = ? ORDER BY sort_order',
+        [bucket]
+      );
+    }
+  }
+  
   return rows.map(mapBudgetCategoryRow);
 }
 

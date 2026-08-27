@@ -1,16 +1,24 @@
-import { useState, useEffect, useCallback } from 'react';
-import type { Transaction, TransactionWithAccount, TransactionFilters, MonthlyTotals } from '@/types';
 import {
-  getTransactions,
+  deleteTransaction as deleteTransactionDao,
+  getAccountHistory,
+  getMonthlyReports,
+  getMonthlyTotals,
+  getNetWorthHistory,
+  getRecurringTransactions,
+  getTopMerchants,
   getTransactionById,
+  getTransactions,
   insertTransaction,
   updateTransaction as updateTransactionDao,
-  deleteTransaction as deleteTransactionDao,
-  getMonthlyTotals,
-  getMonthlyReports,
-  getTopMerchants,
-  getRecurringTransactions
+  type HistoryPoint,
 } from '@/services/database/transaction-dao';
+import type {
+  MonthlyTotals,
+  Transaction,
+  TransactionFilters,
+  TransactionWithAccount,
+} from '@/types';
+import { useCallback, useEffect, useState } from 'react';
 
 export function useTransactions(filters?: TransactionFilters) {
   const [transactions, setTransactions] = useState<TransactionWithAccount[]>([]);
@@ -43,10 +51,7 @@ export function useCreateTransaction() {
   const [isPending, setIsPending] = useState(false);
 
   const mutate = useCallback(
-    async (
-      data: Omit<Transaction, 'id'>,
-      options?: { onSuccess?: () => void },
-    ) => {
+    async (data: Omit<Transaction, 'id'>, options?: { onSuccess?: () => void }) => {
       setIsPending(true);
       try {
         await insertTransaction(data);
@@ -58,7 +63,7 @@ export function useCreateTransaction() {
         setIsPending(false);
       }
     },
-    [],
+    []
   );
 
   return { mutate, isPending };
@@ -71,7 +76,7 @@ export function useUpdateTransaction() {
     async (
       id: string,
       data: Partial<Omit<Transaction, 'id'>>,
-      options?: { onSuccess?: () => void },
+      options?: { onSuccess?: () => void }
     ) => {
       setIsPending(true);
       try {
@@ -84,7 +89,7 @@ export function useUpdateTransaction() {
         setIsPending(false);
       }
     },
-    [],
+    []
   );
 
   return { mutate, isPending };
@@ -121,21 +126,18 @@ export function useTransaction(id: string | undefined) {
 export function useDeleteTransaction() {
   const [isPending, setIsPending] = useState(false);
 
-  const mutate = useCallback(
-    async (id: string, options?: { onSuccess?: () => void }) => {
-      setIsPending(true);
-      try {
-        await deleteTransactionDao(id);
-        options?.onSuccess?.();
-      } catch (error) {
-        console.error('Failed to delete transaction:', error);
-        throw error;
-      } finally {
-        setIsPending(false);
-      }
-    },
-    [],
-  );
+  const mutate = useCallback(async (id: string, options?: { onSuccess?: () => void }) => {
+    setIsPending(true);
+    try {
+      await deleteTransactionDao(id);
+      options?.onSuccess?.();
+    } catch (error) {
+      console.error('Failed to delete transaction:', error);
+      throw error;
+    } finally {
+      setIsPending(false);
+    }
+  }, []);
 
   return { mutate, isPending };
 }
@@ -164,7 +166,9 @@ export function useMonthlyTotals(month: number, year: number) {
 }
 
 export function useMonthlyReports() {
-  const [reports, setReports] = useState<{ datePrefix: string; income: number; expenses: number }[]>([]);
+  const [reports, setReports] = useState<
+    { datePrefix: string; income: number; expenses: number }[]
+  >([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const refetch = useCallback(async () => {
@@ -230,4 +234,50 @@ export function useRecurringTransactions() {
   }, [refetch]);
 
   return { transactions, isLoading, refetch };
+}
+
+export function useNetWorthHistory(days: number = 30) {
+  const [history, setHistory] = useState<HistoryPoint[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const refetch = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await getNetWorthHistory(days);
+      setHistory(data);
+    } catch (error) {
+      console.error('Failed to fetch net worth history:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [days]);
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+
+  return { history, isLoading, refetch };
+}
+
+export function useAccountHistory(accountId: string, days: number = 30) {
+  const [history, setHistory] = useState<HistoryPoint[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const refetch = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await getAccountHistory(accountId, days);
+      setHistory(data);
+    } catch (error) {
+      console.error('Failed to fetch account history:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [accountId, days]);
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+
+  return { history, isLoading, refetch };
 }

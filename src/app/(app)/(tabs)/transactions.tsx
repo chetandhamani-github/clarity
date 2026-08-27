@@ -1,7 +1,8 @@
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Text } from '@/components/ui';
+import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { Text, Header } from '@/components/ui';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
+import { Skeleton } from 'boneyard-js/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -39,19 +40,22 @@ export default function TransactionsScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
-          <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
-            <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
-          </View>
-        </TouchableOpacity>
-
-        <Text style={styles.headerTitleMobile}>Activity</Text>
-
-        <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/search')}>
-          <MaterialIcons name="search" size={24} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
+      <Header
+        isMainTab
+        title="Activity"
+        leftNode={
+          <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
+            <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
+              <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
+            </View>
+          </TouchableOpacity>
+        }
+        rightNode={
+          <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/search')}>
+            <MaterialIcons name="search" size={24} color={colors.onSurface} />
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView 
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} 
@@ -98,20 +102,10 @@ export default function TransactionsScreen() {
           <Text style={styles.resultsCount}>{transactions.length} Transactions</Text>
         </View>
 
-        {isLoading ? (
-          <View style={styles.loaderContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
-        ) : transactions.length === 0 ? (
+        <Skeleton name="transactions-list" loading={isLoading}>
+        {transactions.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <MaterialIcons name="receipt-long" size={48} color={colors.outline} />
-            <Text style={styles.emptyText}>No transactions found.</Text>
-            <TouchableOpacity 
-              style={[styles.emptyButton, { backgroundColor: colors.primary }]}
-              onPress={() => router.push('/add-transaction')}
-            >
-              <Text style={{ color: colors.onPrimary, fontWeight: '500' }}>Add Transaction</Text>
-            </TouchableOpacity>
+            <Text style={styles.emptyText}>No transactions found</Text>
           </View>
         ) : (
           <View style={styles.listCard}>
@@ -120,7 +114,6 @@ export default function TransactionsScreen() {
                 <View style={styles.dateGroupHeader}>
                   <Text style={styles.dateGroupText}>{group.label}</Text>
                 </View>
-
                 {group.items.map((tx, txIndex) => {
                   const isLast = groupIndex === groupedTransactions.length - 1 && txIndex === group.items.length - 1;
                   const sign = getTransactionSign(tx.type);
@@ -167,6 +160,7 @@ export default function TransactionsScreen() {
             ))}
           </View>
         )}
+        </Skeleton>
       </ScrollView>
     </View>
   );
@@ -178,19 +172,7 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.surfaceContainerLow,
     },
-    header: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingHorizontal: 20,
-      paddingVertical: 16,
-      backgroundColor: colors.surfaceContainerLow,
-      zIndex: 40,
-    },
-    headerTitleMobile: {
-      ...typography.headlineMd,
-      color: colors.onSurface,
-    },
+
     avatarButton: {
       width: 40,
       height: 40,
@@ -206,7 +188,10 @@ const getStyles = (colors: ThemeColors) => {
       justifyContent: 'center',
     },
     iconButton: {
-      padding: 4,
+      width: 40,
+      height: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     scrollContent: {
       paddingHorizontal: 20,

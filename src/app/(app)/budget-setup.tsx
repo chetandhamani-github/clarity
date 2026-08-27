@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { Text, useToast, useAlert } from '@/components/ui';
-import { typography, useTheme, ThemeColors } from '@/theme';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Text, useAlert, Header } from '@/components/ui';
 import { useBudgetPlan, useUpdateBudgetPlan } from '@/hooks/use-budget';
+import { ThemeColors, typography, useTheme } from '@/theme';
+import { formatCurrencyWhole, getCurrencySymbol } from '@/utils/format';
+import { MaterialIcons } from '@expo/vector-icons';
+import Slider from '@react-native-community/slider';
+import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function BudgetSetupScreen() {
   const { colors } = useTheme();
@@ -36,16 +38,12 @@ export default function BudgetSetupScreen() {
   const needsNum = parseInt(needsPct) || 0;
   const wantsNum = parseInt(wantsPct) || 0;
   const savingsNum = parseInt(savingsPct) || 0;
-  
+
   const totalPct = needsNum + wantsNum + savingsNum;
 
   const needsAmt = parsedIncome * (needsNum / 100);
   const wantsAmt = parsedIncome * (wantsNum / 100);
   const savingsAmt = parsedIncome * (savingsNum / 100);
-
-  const formatCurrency = (val: number) => {
-    return '$' + val.toLocaleString('en-US', { maximumFractionDigits: 0 });
-  };
 
   const handleSave = () => {
     if (totalPct !== 100) {
@@ -58,18 +56,21 @@ export default function BudgetSetupScreen() {
     }
 
     const now = new Date();
-    updatePlan({
-      monthlyIncome: parsedIncome,
-      needsPercent: needsNum,
-      wantsPercent: wantsNum,
-      savingsPercent: savingsNum,
-      month: now.getMonth() + 1,
-      year: now.getFullYear()
-    }, {
-      onSuccess: () => {
-        router.back();
+    updatePlan(
+      {
+        monthlyIncome: parsedIncome,
+        needsPercent: needsNum,
+        wantsPercent: wantsNum,
+        savingsPercent: savingsNum,
+        month: now.getMonth() + 1,
+        year: now.getFullYear(),
+      },
+      {
+        onSuccess: () => {
+          router.back();
+        },
       }
-    });
+    );
   };
 
   if (isLoading) {
@@ -81,23 +82,25 @@ export default function BudgetSetupScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Simplified Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-        <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.onSurface} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Configure Budget</Text>
-        <TouchableOpacity style={styles.skipButton} onPress={() => router.back()}>
-          <Text style={styles.skipText}>Cancel</Text>
-        </TouchableOpacity>
-      </View>
+      <Header
+        showBack
+        title="Configure Budget"
+        rightNode={
+          <TouchableOpacity style={styles.skipButton} onPress={() => router.back()}>
+            <Text style={styles.skipText}>Cancel</Text>
+          </TouchableOpacity>
+        }
+      />
 
       <KeyboardAwareScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
+        extraScrollHeight={200}
       >
         {/* Header Text */}
         <View style={styles.introSection}>
@@ -111,7 +114,7 @@ export default function BudgetSetupScreen() {
         <View style={styles.incomeCard}>
           <Text style={styles.incomeLabel}>MONTHLY AFTER-TAX INCOME</Text>
           <View style={styles.incomeInputRow}>
-            <Text style={styles.incomeCurrency}>$</Text>
+            <Text style={styles.incomeCurrency}>{getCurrencySymbol()}</Text>
             <TextInput
               style={styles.incomeInput}
               keyboardType="numeric"
@@ -178,18 +181,20 @@ export default function BudgetSetupScreen() {
                   style={{ opacity: 0.5 }}
                 />
               </View>
-              <Text style={styles.bentoAmount}>{formatCurrency(needsAmt)}</Text>
+              <Text style={styles.bentoAmount}>{formatCurrencyWhole(needsAmt)}</Text>
 
               <View style={styles.inputControlsRow}>
-                {/* Mock Slider Track */}
-                <View style={styles.mockSliderTrack}>
-                  <View
-                    style={[
-                      styles.mockSliderThumb,
-                      { left: `${Math.min(needsNum, 100)}%`, transform: [{ translateX: -12 }] },
-                    ]}
-                  />
-                </View>
+                <Slider
+                  style={{ flex: 1, height: 40, marginHorizontal: -8 }}
+                  minimumValue={0}
+                  maximumValue={100}
+                  step={1}
+                  value={needsNum}
+                  onValueChange={(val) => setNeedsPct(val.toString())}
+                  minimumTrackTintColor={colors.primary}
+                  maximumTrackTintColor={colors.surfaceVariant}
+                  thumbTintColor={colors.primary}
+                />
                 <View style={styles.percentageInputBox}>
                   <TextInput
                     style={styles.percentageInput}
@@ -217,17 +222,20 @@ export default function BudgetSetupScreen() {
                   style={{ opacity: 0.5 }}
                 />
               </View>
-              <Text style={styles.bentoAmount}>{formatCurrency(wantsAmt)}</Text>
+              <Text style={styles.bentoAmount}>{formatCurrencyWhole(wantsAmt)}</Text>
 
               <View style={styles.inputControlsRow}>
-                <View style={styles.mockSliderTrack}>
-                  <View
-                    style={[
-                      styles.mockSliderThumb,
-                      { left: `${Math.min(wantsNum, 100)}%`, transform: [{ translateX: -12 }] },
-                    ]}
-                  />
-                </View>
+                <Slider
+                  style={{ flex: 1, height: 40, marginHorizontal: -8 }}
+                  minimumValue={0}
+                  maximumValue={100}
+                  step={1}
+                  value={wantsNum}
+                  onValueChange={(val) => setWantsPct(val.toString())}
+                  minimumTrackTintColor={colors.tertiary}
+                  maximumTrackTintColor={colors.surfaceVariant}
+                  thumbTintColor={colors.tertiary}
+                />
                 <View style={styles.percentageInputBox}>
                   <TextInput
                     style={styles.percentageInput}
@@ -255,17 +263,20 @@ export default function BudgetSetupScreen() {
                   style={{ opacity: 0.5 }}
                 />
               </View>
-              <Text style={styles.bentoAmount}>{formatCurrency(savingsAmt)}</Text>
+              <Text style={styles.bentoAmount}>{formatCurrencyWhole(savingsAmt)}</Text>
 
               <View style={styles.inputControlsRow}>
-                <View style={styles.mockSliderTrack}>
-                  <View
-                    style={[
-                      styles.mockSliderThumb,
-                      { left: `${Math.min(savingsNum, 100)}%`, transform: [{ translateX: -12 }] },
-                    ]}
-                  />
-                </View>
+                <Slider
+                  style={{ flex: 1, height: 40, marginHorizontal: -8 }}
+                  minimumValue={0}
+                  maximumValue={100}
+                  step={1}
+                  value={savingsNum}
+                  onValueChange={(val) => setSavingsPct(val.toString())}
+                  minimumTrackTintColor={colors.secondary}
+                  maximumTrackTintColor={colors.surfaceVariant}
+                  thumbTintColor={colors.secondary}
+                />
                 <View style={styles.percentageInputBox}>
                   <TextInput
                     style={styles.percentageInput}
@@ -283,9 +294,9 @@ export default function BudgetSetupScreen() {
       </KeyboardAwareScrollView>
 
       {/* Fixed Bottom Action Area */}
-      <View style={[styles.bottomActionArea, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <TouchableOpacity 
-          style={[styles.confirmButton, (isPending || totalPct !== 100) && { opacity: 0.5 }]} 
+      <View style={[styles.bottomActionArea, { paddingBottom: Math.max(insets.bottom + 20, 16) }]}>
+        <TouchableOpacity
+          style={[styles.confirmButton, (isPending || totalPct !== 100) && { opacity: 0.5 }]}
           onPress={handleSave}
           disabled={isPending || totalPct !== 100}
         >
@@ -305,26 +316,7 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.background,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingBottom: 16,
-      backgroundColor: colors.background + 'CC', 
-      zIndex: 10,
-    },
-    headerTitle: {
-      ...typography.headlineSm,
-      color: colors.onSurface,
-    },
-    iconButton: {
-      width: 44,
-      height: 44,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 22,
-    },
+
     skipButton: {
       width: 44,
       height: 44,
@@ -336,9 +328,10 @@ const getStyles = (colors: ThemeColors) => {
       color: colors.onSurfaceVariant,
     },
     scrollContent: {
+      flexGrow: 1,
       paddingHorizontal: 20,
       paddingTop: 16,
-      paddingBottom: 120, 
+      paddingBottom: 40,
     },
     introSection: {
       gap: 4,
@@ -525,10 +518,6 @@ const getStyles = (colors: ThemeColors) => {
       color: colors.onSurfaceVariant,
     },
     bottomActionArea: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
       backgroundColor: colors.surfaceContainerLowest + 'E6',
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.outlineVariant,

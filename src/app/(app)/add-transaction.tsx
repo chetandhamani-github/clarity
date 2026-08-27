@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, TextInput, Switch, ActivityIndicator, ScrollView } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { Text } from '@/components/ui';
+import { Text, Header } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -11,6 +11,7 @@ import { useAccounts } from '@/hooks/use-accounts';
 import { useToast, useAlert } from '@/components/ui';
 import type { TransactionType } from '@/types';
 import { getAccountTypeIcon } from '@/utils/icons';
+import { getCurrencySymbol } from '@/utils/format';
 
 const CATEGORIES = [
   'Groceries', 'Dining', 'Rent', 'Utilities', 'Transport',
@@ -146,22 +147,16 @@ export default function AddTransactionScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-            <MaterialIcons name="arrow-back" size={24} color={colors.onSurface} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{isEditing ? 'Edit Transaction' : 'Add Transaction'}</Text>
-        </View>
-        <View style={{ width: 40 }} />
-      </View>
+      <Header
+        showBack
+        title={isEditing ? 'Edit Transaction' : 'Add Transaction'}
+      />
 
       <KeyboardAwareScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 60 }]}
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        enableOnAndroid={true}
       >
         <View style={styles.card}>
           {/* Type Switcher */}
@@ -188,7 +183,7 @@ export default function AddTransactionScreen() {
           <View style={styles.amountContainer}>
             <Text style={styles.amountLabel}>Amount</Text>
             <View style={styles.amountInputRow}>
-              <Text style={styles.currencySymbol}>$</Text>
+              <Text style={styles.currencySymbol}>{getCurrencySymbol()}</Text>
               <TextInput
                 style={styles.amountInput}
                 placeholder="0.00"
@@ -388,28 +383,7 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.surfaceContainerLow,
     },
-    header: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingHorizontal: 16,
-      paddingVertical: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.surfaceContainer,
-    },
-    headerLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 16,
-    },
-    headerTitle: {
-      ...typography.headlineMd,
-      color: colors.onSurface,
-    },
-    iconButton: {
-      padding: 8,
-      borderRadius: 20,
-    },
+
     scrollContent: {
       padding: 20,
       paddingBottom: 40,

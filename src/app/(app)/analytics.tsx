@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Text } from '@/components/ui';
+import { Text, Header } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -54,20 +54,15 @@ export default function AnalyticsScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Top App Bar */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-            <MaterialIcons name="arrow-back" size={24} color={colors.onSurface} />
+      <Header
+        showBack
+        title="Analytics Overview"
+        rightNode={
+          <TouchableOpacity style={styles.iconButton}>
+            <MaterialIcons name="more-vert" size={24} color={colors.primary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            Analytics Overview
-          </Text>
-        </View>
-        <TouchableOpacity style={styles.iconButton}>
-          <MaterialIcons name="more-vert" size={24} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
+        }
+      />
 
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 60 }]} showsVerticalScrollIndicator={false}>
         {/* Page Header */}
@@ -278,24 +273,7 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.background,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 12,
-      paddingVertical: 16,
-    },
-    headerLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 16,
-      flex: 1,
-    },
-    headerTitle: {
-      ...typography.headlineSm,
-      color: colors.onSurface,
-      letterSpacing: -0.5,
-    },
+
     iconButton: {
       padding: 8,
       borderRadius: 24,

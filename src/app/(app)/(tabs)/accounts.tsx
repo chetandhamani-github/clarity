@@ -1,14 +1,17 @@
 import React, { useCallback, useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
-import { Text } from '@/components/ui';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Dimensions } from 'react-native';
+import { Text, Header } from '@/components/ui';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { LineChart } from 'react-native-gifted-charts';
 import { useAccounts } from '@/hooks/use-accounts';
+import { useAccountHistory } from '@/hooks/use-transactions';
 import { formatCurrency, formatCurrencyWhole } from '@/utils/format';
 import { getAccountTypeIcon } from '@/utils/icons';
 import type { Account } from '@/types';
+import { Skeleton } from 'boneyard-js/native';
 
 export default function AccountsScreen() {
   const { colors } = useTheme();
@@ -29,25 +32,25 @@ export default function AccountsScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
+      <Header
+        isMainTab
+        title="Accounts"
+        leftNode={
           <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
             <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
               <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
             </View>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Accounts</Text>
-        </View>
-        <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/add-account')}>
-          <MaterialIcons name="add" size={24} color={colors.onSurface} />
-        </TouchableOpacity>
-      </View>
+        }
+        rightNode={
+          <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/add-account')}>
+            <MaterialIcons name="add" size={24} color={colors.onSurface} />
+          </TouchableOpacity>
+        }
+      />
 
-      {isLoading ? (
-        <View style={styles.loaderContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      ) : accounts.length === 0 ? (
+
+      {accounts.length === 0 ? (
         <View style={styles.emptyContainer}>
           <View style={[styles.emptyIconCircle, { backgroundColor: colors.surfaceContainerLow }]}>
             <MaterialIcons name="account-balance" size={48} color={colors.primary} />
@@ -67,6 +70,7 @@ export default function AccountsScreen() {
           </TouchableOpacity>
         </View>
       ) : (
+        <Skeleton name="accounts-list" loading={isLoading}>
         <ScrollView
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
           showsVerticalScrollIndicator={false}
@@ -138,6 +142,7 @@ export default function AccountsScreen() {
             )}
           </View>
         </ScrollView>
+        </Skeleton>
       )}
     </View>
   );
@@ -154,6 +159,39 @@ function AccountDetailCard({
   styles: ReturnType<typeof getStyles>;
   onViewDetails: () => void;
 }) {
+  const { history, isLoading } = useAccountHistory(account.id, 30);
+  
+  const chartData = React.useMemo(() => {
+    let data = history;
+    if (data.length === 0) data = [{ date: new Date().toISOString().split('T')[0], value: 0 }, { date: new Date().toISOString().split('T')[0], value: 0 }];
+    else if (data.length === 1) data = [data[0], data[0]];
+    
+    return data.map((point) => ({ 
+      value: point.value,
+      dataPointText: formatCurrency(point.value) 
+    }));
+  }, [history]);
+
+  const chartConfig = React.useMemo(() => {
+    const vals = chartData.map(d => d.value);
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const range = max - min;
+    
+    if (range === 0) {
+      return { yAxisOffset: min - 10, maxValue: 20 };
+    }
+    
+    return {
+      yAxisOffset: min - (range * 0.2),
+      maxValue: range * 1.4,
+    };
+  }, [chartData]);
+
+  const screenWidth = Dimensions.get('window').width;
+  // screen padding 20x2 = 40, card padding 20x2 = 40 -> total 80
+  const chartWidth = screenWidth - 80;
+
   return (
     <View style={styles.sectionCard}>
       <View style={styles.detailsHeader}>
@@ -169,10 +207,63 @@ function AccountDetailCard({
         </TouchableOpacity>
       </View>
 
-      {/* Chart Placeholder */}
       <View style={styles.chartArea}>
         <View style={styles.chartBg} />
-        <View style={styles.chartLineMockup} />
+        {isLoading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="small" color={colors.primary} />
+          </View>
+        ) : (
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}>
+            <LineChart
+              data={chartData}
+              width={chartWidth}
+              height={60}
+              yAxisOffset={chartConfig.yAxisOffset}
+              maxValue={chartConfig.maxValue}
+              hideDataPoints
+              hideRules
+              hideYAxisText
+              hideAxesAndRules
+              color={colors.primary}
+              thickness={2}
+              initialSpacing={0}
+              endSpacing={0}
+              areaChart
+              startFillColor={colors.primary}
+              startOpacity={0.15}
+              endFillColor={colors.primary}
+              endOpacity={0}
+              curved
+              pointerConfig={{
+                pointerStripHeight: 60,
+                pointerStripColor: colors.outline,
+                pointerStripWidth: 2,
+                pointerColor: colors.primary,
+                radius: 4,
+                activatePointersOnLongPress: true,
+                autoAdjustPointerLabelPosition: true,
+                pointerLabelComponent: (items: any) => {
+                  return (
+                    <View
+                      style={{
+                        height: 30,
+                        width: 80,
+                        justifyContent: 'center',
+                        backgroundColor: colors.surfaceContainerHighest,
+                        borderRadius: 4,
+                        padding: 4,
+                      }}>
+                      <Text style={{ color: colors.onSurface, fontSize: 10, fontWeight: 'bold', textAlign: 'center' }}>
+                        {items[0].dataPointText}
+                      </Text>
+                    </View>
+                  );
+                },
+              }}
+            />
+          </View>
+        )}
         <Text style={styles.chartTimeframe}>30 Days</Text>
       </View>
 
@@ -200,25 +291,7 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.surfaceContainerLow,
     },
-    header: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingHorizontal: 20,
-      paddingVertical: 16,
-      backgroundColor: colors.surfaceContainerLow,
-      zIndex: 40,
-    },
-    headerTitle: {
-      ...typography.displayLg,
-      color: colors.onSurface,
-      letterSpacing: -0.64,
-    },
-    headerLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-    },
+
     avatarButton: {
       width: 40,
       height: 40,
@@ -236,8 +309,6 @@ const getStyles = (colors: ThemeColors) => {
     iconButton: {
       width: 40,
       height: 40,
-      borderRadius: 20,
-      backgroundColor: colors.surfaceContainerLowest,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -427,15 +498,6 @@ const getStyles = (colors: ThemeColors) => {
       bottom: 0,
       backgroundColor: colors.primaryContainer,
       opacity: 0.05,
-    },
-    chartLineMockup: {
-      position: 'absolute',
-      top: '50%',
-      left: 0,
-      right: 0,
-      height: 1,
-      backgroundColor: colors.primary,
-      opacity: 0.5,
     },
     chartTimeframe: {
       ...typography.labelMd,

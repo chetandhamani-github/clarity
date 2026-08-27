@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Text } from '@/components/ui';
+import { Text, Header } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -23,18 +23,15 @@ export default function ReportsScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Top App Bar */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.onSurface} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          Reports History
-        </Text>
-        <TouchableOpacity style={styles.iconButton}>
-          <MaterialIcons name="search" size={24} color={colors.onSurface} />
-        </TouchableOpacity>
-      </View>
+      <Header
+        showBack
+        title="Reports History"
+        rightNode={
+          <TouchableOpacity style={styles.iconButton}>
+            <MaterialIcons name="search" size={24} color={colors.onSurface} />
+          </TouchableOpacity>
+        }
+      />
 
       {isLoading ? (
         <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -103,22 +100,7 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.background, // colors.background
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 12,
-      paddingVertical: 16,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.surfaceVariant,
-    },
-    headerTitle: {
-      ...typography.headlineMd,
-      color: colors.onSurface,
-      flex: 1,
-      textAlign: 'left',
-      marginLeft: 8,
-    },
+
     iconButton: {
       padding: 8,
       borderRadius: 24,

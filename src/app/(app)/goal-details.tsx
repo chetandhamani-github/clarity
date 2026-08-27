@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
-import { Text, useToast, useAlert } from '@/components/ui';
+import { Text, Header, useToast, useAlert } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import { useGoal, useGoalContributions, useAddGoalContribution } from '@/hooks/use-goals';
-import { formatCurrency } from '@/utils/format';
+import { useGoal, useGoalContributions, useAddGoalContribution, useDeleteGoal } from '@/hooks/use-goals';
+import { useAccounts } from '@/hooks/use-accounts';
+import { formatCurrency, getCurrencySymbol } from '@/utils/format';
 import type { GoalContribution } from '@/types';
 
 export default function GoalDetailsScreen() {
@@ -18,13 +19,16 @@ export default function GoalDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { showAlert } = useAlert();
 
-  const { goal, isLoading: goalLoading } = useGoal(id as string);
-  const { contributions, isLoading: contribLoading } = useGoalContributions(id as string);
+  const { goal, isLoading: goalLoading, refetch: refetchGoal } = useGoal(id as string);
+  const { contributions, isLoading: contribLoading, refetch: refetchContribs } = useGoalContributions(id as string);
   const { mutate: addContrib, isPending } = useAddGoalContribution();
+  const { mutate: deleteGoal, isPending: isDeleting } = useDeleteGoal();
+  const { accounts } = useAccounts();
 
   const [showAdd, setShowAdd] = useState(false);
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
 
   const isLoading = goalLoading || contribLoading;
 
@@ -52,17 +56,44 @@ export default function GoalDetailsScreen() {
     }
 
     addContrib({
-      goalId: goal.id,
-      amount: amt,
-      date: new Date().toISOString().split('T')[0],
-      description: notes.trim() || ''
+      data: {
+        goalId: goal.id,
+        amount: amt,
+        date: new Date().toISOString().split('T')[0],
+        description: notes.trim() || ''
+      },
+      accountId: selectedAccountId || undefined,
     }, {
       onSuccess: () => {
         setAmount('');
         setNotes('');
         setShowAdd(false);
+        setSelectedAccountId(null);
+        refetchGoal();
+        refetchContribs();
       }
     });
+  };
+
+  const handleDeleteGoal = () => {
+    showAlert(
+      'Delete Goal',
+      'Are you sure you want to delete this goal? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            deleteGoal(goal.id, {
+              onSuccess: () => {
+                router.replace('/goals');
+              }
+            });
+          }
+        }
+      ]
+    );
   };
 
   const progress = goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
@@ -72,18 +103,19 @@ export default function GoalDetailsScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.onSurface} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {goal.name}
-        </Text>
-        <TouchableOpacity style={styles.iconButton}>
-          <MaterialIcons name="more-vert" size={24} color={colors.onSurface} />
-        </TouchableOpacity>
-      </View>
+      <Header
+        showBack
+        title={goal.name}
+        rightNode={
+          <TouchableOpacity style={styles.iconButton} onPress={handleDeleteGoal} disabled={isDeleting}>
+            {isDeleting ? (
+              <ActivityIndicator size="small" color={colors.error} />
+            ) : (
+              <MaterialIcons name="delete-outline" size={24} color={colors.error} />
+            )}
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]} showsVerticalScrollIndicator={false}>
         {/* Header Section */}
@@ -108,7 +140,7 @@ export default function GoalDetailsScreen() {
           <View style={styles.addFormCard}>
             <Text style={styles.addFormTitle}>Add Contribution</Text>
             <View style={styles.currencyInputRow}>
-              <Text style={styles.currencySymbol}>$</Text>
+              <Text style={styles.currencySymbol}>{getCurrencySymbol()}</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Amount"
@@ -125,6 +157,28 @@ export default function GoalDetailsScreen() {
               value={notes}
               onChangeText={setNotes}
             />
+            <View style={styles.accountSelector}>
+              <Text style={styles.accountSelectorTitle}>Deduct from account (optional)</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 8 }}>
+                {accounts.map(acc => (
+                  <TouchableOpacity
+                    key={acc.id}
+                    style={[
+                      styles.accountChip,
+                      selectedAccountId === acc.id && { backgroundColor: colors.primary, borderColor: colors.primary }
+                    ]}
+                    onPress={() => setSelectedAccountId(selectedAccountId === acc.id ? null : acc.id)}
+                  >
+                    <Text style={[
+                      styles.accountChipText,
+                      selectedAccountId === acc.id && { color: colors.onPrimary }
+                    ]}>
+                      {acc.name} ({formatCurrency(acc.balance)})
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
             <TouchableOpacity 
               style={styles.saveBtn}
               onPress={handleAddContribution}
@@ -219,22 +273,7 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.background,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 12,
-      paddingVertical: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.surfaceVariant,
-    },
-    headerTitle: {
-      flex: 1,
-      ...typography.headlineSm,
-      color: colors.onSurface,
-      textAlign: 'center',
-      marginHorizontal: 16,
-    },
+
     iconButton: {
       padding: 8,
     },
@@ -440,6 +479,26 @@ const getStyles = (colors: ThemeColors) => {
     saveBtnText: {
       ...typography.labelMd,
       color: colors.onPrimary,
+    },
+    accountSelector: {
+      marginTop: 8,
+    },
+    accountSelectorTitle: {
+      ...typography.labelMd,
+      color: colors.secondary,
+      marginBottom: 4,
+    },
+    accountChip: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      backgroundColor: colors.surfaceContainerLowest,
+    },
+    accountChipText: {
+      ...typography.labelMd,
+      color: colors.onSurface,
     },
   });
   return styles;

@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput } from 'react-native';
-import { Text } from '@/components/ui';
+import { Text, Header } from '@/components/ui';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBudgetPlan, useCategories, useCreateCategory, useUpdateCategory, useDeleteCategory } from '@/hooks/use-budget';
 import { useToast, useAlert } from '@/components/ui';
-import { formatCurrency } from '@/utils/format';
+import { formatCurrency, getCurrencySymbol } from '@/utils/format';
 import type { BudgetCategory, BucketType } from '@/types';
 
 export default function ManageCategoriesScreen() {
@@ -131,17 +131,10 @@ export default function ManageCategoriesScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Mobile Top App Bar */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-            <MaterialIcons name="arrow-back" size={24} color={colors.onSurface} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            Category Management
-          </Text>
-        </View>
-      </View>
+      <Header
+        showBack
+        title="Category Management"
+      />
 
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]} showsVerticalScrollIndicator={false}>
         {/* Mobile Action Section */}
@@ -192,7 +185,7 @@ export default function ManageCategoriesScreen() {
             />
 
             <View style={styles.currencyInputRow}>
-              <Text style={styles.currencySymbol}>$</Text>
+              <Text style={styles.currencySymbol}>{getCurrencySymbol()}</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Monthly Limit"
@@ -362,29 +355,7 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.background,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 12,
-      paddingVertical: 16,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.outlineVariant,
-    },
-    headerLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      flex: 1,
-    },
-    headerTitle: {
-      ...typography.headlineSm,
-      color: colors.onSurface,
-    },
-    iconButton: {
-      padding: 8,
-      borderRadius: 24,
-    },
+
     scrollContent: {
       padding: 20,
       gap: 24,

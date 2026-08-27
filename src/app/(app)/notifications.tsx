@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Pressable, ActivityIndicator } from 'react-native';
-import { Text } from '@/components/ui';
+import { Text, Header } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -90,18 +90,15 @@ export default function NotificationsScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Mobile Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.primary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          Notifications
-        </Text>
-        <TouchableOpacity style={styles.iconButton}>
-          <MaterialIcons name="more-vert" size={24} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
+      <Header
+        showBack
+        title="Notifications"
+        rightNode={
+          <TouchableOpacity style={styles.iconButton}>
+            <MaterialIcons name="more-vert" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 60 }]} showsVerticalScrollIndicator={false}>
         <View style={styles.topActions}>
@@ -169,20 +166,7 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.surfaceContainerLow,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 12,
-      height: 64,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.surfaceVariant,
-      backgroundColor: colors.background,
-    },
-    headerTitle: {
-      ...typography.headlineMd,
-      color: colors.onSurface,
-    },
+
     iconButton: {
       padding: 8,
     },

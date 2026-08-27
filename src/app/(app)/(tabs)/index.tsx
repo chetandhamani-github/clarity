@@ -1,15 +1,23 @@
-import React, { useMemo } from 'react';
-import { ProgressBar, Text } from '@/components/ui';
+import { Header, ProgressBar, Text } from '@/components/ui';
 import { radius, ThemeColors, typography, useTheme } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { Image, ScrollView, StyleSheet, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useMemo } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { LineChart, PieChart } from 'react-native-gifted-charts';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
+import { Skeleton } from 'boneyard-js/native';
 
 import { useAccounts } from '@/hooks/use-accounts';
-import { useTransactions, useMonthlyTotals } from '@/hooks/use-transactions';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
+import { useMonthlyTotals, useNetWorthHistory, useTransactions } from '@/hooks/use-transactions';
 import { formatCurrency, getTransactionSign } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
 
@@ -24,13 +32,45 @@ export default function DashboardScreen() {
   const currentYear = now.getFullYear();
 
   // Fetch Data
-  const { accounts, isLoading: accountsLoading } = useAccounts();
-  const { transactions, isLoading: txLoading } = useTransactions({ limit: 5 });
-  const { totals: monthlyTotals, isLoading: totalsLoading } = useMonthlyTotals(currentMonth, currentYear);
-  const { plan, isLoading: planLoading } = useBudgetPlan();
-  const { spending, isLoading: spendingLoading } = useCategorySpending(currentMonth, currentYear);
+  const { accounts, isLoading: accountsLoading, refetch: refetchAccounts } = useAccounts();
+  const {
+    transactions,
+    isLoading: txLoading,
+    refetch: refetchTransactions,
+  } = useTransactions({ limit: 5 });
+  const {
+    totals: monthlyTotals,
+    isLoading: totalsLoading,
+    refetch: refetchTotals,
+  } = useMonthlyTotals(currentMonth, currentYear);
+  const { plan, isLoading: planLoading, refetch: refetchPlan } = useBudgetPlan();
+  const {
+    spending,
+    isLoading: spendingLoading,
+    refetch: refetchSpending,
+  } = useCategorySpending(currentMonth, currentYear);
+  const { history: nwHistory, isLoading: nwLoading, refetch: refetchNw } = useNetWorthHistory(30);
 
-  const isLoading = accountsLoading || txLoading || totalsLoading || planLoading || spendingLoading;
+  useFocusEffect(
+    useCallback(() => {
+      refetchAccounts();
+      refetchTransactions();
+      refetchTotals();
+      refetchPlan();
+      refetchSpending();
+      refetchNw();
+    }, [
+      refetchAccounts,
+      refetchTransactions,
+      refetchTotals,
+      refetchPlan,
+      refetchSpending,
+      refetchNw,
+    ])
+  );
+
+  const isLoading =
+    accountsLoading || txLoading || totalsLoading || planLoading || spendingLoading || nwLoading;
 
   // Calculate Net Worth
   const netWorth = useMemo(() => {
@@ -40,30 +80,109 @@ export default function DashboardScreen() {
   // Calculate Budget Progress
   const budgetProgress = useMemo(() => {
     if (!plan) return { needsSpent: 0, wantsSpent: 0, savingsSpent: 0 };
-    
+
     let needsSpent = 0;
     let wantsSpent = 0;
     let savingsSpent = 0;
-    
-    spending.forEach(cat => {
+
+    spending.forEach((cat) => {
       if (cat.bucketType === 'needs') needsSpent += cat.spent;
       if (cat.bucketType === 'wants') wantsSpent += cat.spent;
       if (cat.bucketType === 'savings') savingsSpent += cat.spent;
     });
-    
+
     return { needsSpent, wantsSpent, savingsSpent };
   }, [plan, spending]);
 
-  if (isLoading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
+  // Calculate Net Worth change percentage
+  const nwChangePercent = useMemo(() => {
+    if (nwHistory.length < 2) return 0;
+    const start = nwHistory[0].value;
+    const end = nwHistory[nwHistory.length - 1].value;
+    if (start === 0) return end > 0 ? 100 : 0;
+    return ((end - start) / start) * 100;
+  }, [nwHistory]);
+
+  const isPositiveTrend = nwChangePercent >= 0;
+  const nwTrendStr = `${isPositiveTrend ? '+' : ''}${nwChangePercent.toFixed(1)}%`;
+
+  // Format history for LineChart
+  const chartData = useMemo(() => {
+    let data = nwHistory;
+    if (data.length === 0)
+      data = [
+        { date: new Date().toISOString().split('T')[0], value: 0 },
+        { date: new Date().toISOString().split('T')[0], value: 0 },
+      ];
+    else if (data.length === 1) data = [data[0], data[0]];
+
+    return data.map((point, index) => {
+      const isStart = index === 0;
+      const isEnd = index === data.length - 1;
+      const isMid = index === Math.floor(data.length / 2);
+
+      const dateParts = point.date.split('-');
+      const label = isStart || isEnd || isMid ? `${dateParts[1]}/${dateParts[2]}` : '';
+
+      return {
+        value: point.value,
+        label,
+        dataPointText: formatCurrency(point.value),
+      };
+    });
+  }, [nwHistory]);
+
+  const chartConfig = useMemo(() => {
+    const vals = chartData.map((d) => d.value);
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const range = max - min;
+
+    if (range === 0) {
+      const offset = Math.max(0, min - 10);
+      return {
+        yAxisOffset: offset,
+        maxValue: max === 0 ? 100 : max - offset + 20,
+      };
+    }
+
+    const offset = Math.max(0, min - range * 0.2);
+    return {
+      yAxisOffset: offset,
+      maxValue: max - offset + range * 0.2,
+    };
+  }, [chartData]);
+
+  const screenWidth = Dimensions.get('window').width;
+  const chartWidth = screenWidth - 80;
+
 
   // Savings calculation: Income - Expenses (from transactions)
   const savedAmount = Math.max(0, monthlyTotals.income - monthlyTotals.expenses);
+
+  const pieData = useMemo(() => {
+    const activeSpending = spending.filter((s) => s.spent > 0);
+    if (activeSpending.length === 0) {
+      return [{ value: 1, color: colors.surfaceVariant, text: 'No Data' }];
+    }
+
+    const pieColors = [
+      colors.primary,
+      colors.tertiary,
+      colors.error,
+      '#FF9800',
+      '#4CAF50',
+      '#9C27B0',
+      '#00BCD4',
+    ];
+
+    return activeSpending.map((item, index) => ({
+      value: item.spent,
+      color: pieColors[index % pieColors.length],
+      text: item.category,
+      label: item.category,
+    }));
+  }, [spending, colors]);
 
   const needsLimit = plan ? plan.monthlyIncome * (plan.needsPercent / 100) : 0;
   const wantsLimit = plan ? plan.monthlyIncome * (plan.wantsPercent / 100) : 0;
@@ -72,57 +191,108 @@ export default function DashboardScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
-          <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
-            <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
-          </View>
-        </TouchableOpacity>
-
-        <Text style={styles.headerTitle}>Clarity</Text>
-
-        <TouchableOpacity
-          style={styles.notificationButton}
-          onPress={() => router.push('/notifications')}
-        >
-          <MaterialIcons name="notifications-none" size={24} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
+      <Header
+        isMainTab
+        title="Clarity Finance"
+        leftNode={
+          <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
+            <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
+              <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
+            </View>
+          </TouchableOpacity>
+        }
+        rightNode={
+          <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/notifications')}>
+            <MaterialIcons name="notifications-none" size={24} color={colors.onSurface} />
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
+        <Skeleton name="dashboard-content" loading={isLoading}>
         {/* Main Card: Net Worth */}
         <View style={styles.netWorthCard}>
           <View style={styles.netWorthHeader}>
             <Text style={styles.netWorthLabel}>TOTAL NET WORTH</Text>
-            {/* Hardcoded badge for now since historical data requires a complex timeseries table */}
-            <View style={styles.netWorthBadge}>
-              <Text style={styles.netWorthBadgeText}>+4.2%</Text>
+            <View
+              style={[
+                styles.netWorthBadge,
+                { backgroundColor: isPositiveTrend ? colors.primary + '1A' : colors.error + '1A' },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.netWorthBadgeText,
+                  { color: isPositiveTrend ? colors.primary : colors.error },
+                ]}
+              >
+                {nwTrendStr}
+              </Text>
             </View>
           </View>
           <Text style={styles.netWorthAmount}>{formatCurrency(netWorth)}</Text>
 
           <View style={styles.chartContainer}>
-            <Svg width="100%" height="100%" viewBox="0 0 100 30" preserveAspectRatio="none">
-              <Defs>
-                <LinearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0%" stopColor={colors.primary} stopOpacity="0.1" />
-                  <Stop offset="100%" stopColor={colors.primary} stopOpacity="0" />
-                </LinearGradient>
-              </Defs>
-              <Path
-                d="M0,30 L0,20 Q10,15 20,22 T40,15 T60,18 T80,5 T100,10 L100,30 Z"
-                fill="url(#chartGradient)"
-              />
-              <Path
-                d="M0,20 Q10,15 20,22 T40,15 T60,18 T80,5 T100,10"
-                fill="none"
-                stroke={colors.primary}
-                strokeWidth="1.5"
-              />
-            </Svg>
+            <LineChart
+              data={chartData}
+              width={chartWidth}
+              height={140}
+              yAxisOffset={chartConfig.yAxisOffset}
+              maxValue={chartConfig.maxValue}
+              hideDataPoints
+              color={isPositiveTrend ? colors.primary : colors.error}
+              thickness={3}
+              initialSpacing={0}
+              endSpacing={0}
+              areaChart
+              startFillColor={isPositiveTrend ? colors.primary : colors.error}
+              startOpacity={0.3}
+              endFillColor={isPositiveTrend ? colors.primary : colors.error}
+              endOpacity={0.05}
+              curved
+              hideRules
+              hideYAxisText
+              hideAxesAndRules
+              pointerConfig={{
+                pointerStripHeight: 140,
+                pointerStripColor: colors.outline,
+                pointerStripWidth: 2,
+                pointerColor: colors.primary,
+                radius: 6,
+                pointerLabelWidth: 80,
+                pointerLabelHeight: 30,
+                activatePointersOnLongPress: true,
+                autoAdjustPointerLabelPosition: true,
+                pointerLabelComponent: (items: any) => {
+                  return (
+                    <View
+                      style={{
+                        height: 30,
+                        width: 80,
+                        justifyContent: 'center',
+                        backgroundColor: colors.surfaceContainerHighest,
+                        borderRadius: 8,
+                        padding: 4,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: colors.onSurface,
+                          fontSize: 12,
+                          fontWeight: 'bold',
+                          textAlign: 'center',
+                        }}
+                      >
+                        {items[0].dataPointText}
+                      </Text>
+                    </View>
+                  );
+                },
+              }}
+            />
           </View>
         </View>
 
@@ -138,7 +308,35 @@ export default function DashboardScreen() {
           </View>
           <View style={styles.snapshotCard}>
             <Text style={styles.snapshotLabel}>SAVED</Text>
-            <Text style={[styles.snapshotValue, { color: colors.primary }]}>{formatCurrency(savedAmount)}</Text>
+            <Text style={[styles.snapshotValue, { color: colors.primary }]}>
+              {formatCurrency(savedAmount)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Spending by Category Donut */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Spending Summary</Text>
+          <View style={styles.budgetCard}>
+            <View style={{ alignItems: 'center', marginVertical: 10 }}>
+              <PieChart
+                data={pieData}
+                donut
+                radius={80}
+                innerRadius={55}
+                innerCircleColor={colors.surfaceContainerLowest}
+                centerLabelComponent={() => {
+                  return (
+                    <View style={{ justifyContent: 'center', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 12, color: colors.onSurfaceVariant }}>Total</Text>
+                      <Text style={{ fontSize: 16, color: colors.onSurface, fontWeight: 'bold' }}>
+                        {formatCurrency(monthlyTotals.expenses)}
+                      </Text>
+                    </View>
+                  );
+                }}
+              />
+            </View>
           </View>
         </View>
 
@@ -150,7 +348,9 @@ export default function DashboardScreen() {
               <View style={styles.budgetItem}>
                 <View style={styles.budgetRow}>
                   <Text style={styles.budgetType}>Needs ({plan.needsPercent}%)</Text>
-                  <Text style={styles.budgetAmount}>{formatCurrency(budgetProgress.needsSpent)} / {formatCurrency(needsLimit)}</Text>
+                  <Text style={styles.budgetAmount}>
+                    {formatCurrency(budgetProgress.needsSpent)} / {formatCurrency(needsLimit)}
+                  </Text>
                 </View>
                 <ProgressBar
                   progress={Math.min(1, budgetProgress.needsSpent / Math.max(1, needsLimit))}
@@ -162,7 +362,9 @@ export default function DashboardScreen() {
               <View style={styles.budgetItem}>
                 <View style={styles.budgetRow}>
                   <Text style={styles.budgetType}>Wants ({plan.wantsPercent}%)</Text>
-                  <Text style={styles.budgetAmount}>{formatCurrency(budgetProgress.wantsSpent)} / {formatCurrency(wantsLimit)}</Text>
+                  <Text style={styles.budgetAmount}>
+                    {formatCurrency(budgetProgress.wantsSpent)} / {formatCurrency(wantsLimit)}
+                  </Text>
                 </View>
                 <ProgressBar
                   progress={Math.min(1, budgetProgress.wantsSpent / Math.max(1, wantsLimit))}
@@ -174,7 +376,9 @@ export default function DashboardScreen() {
               <View style={styles.budgetItem}>
                 <View style={styles.budgetRow}>
                   <Text style={styles.budgetType}>Savings ({plan.savingsPercent}%)</Text>
-                  <Text style={styles.budgetAmount}>{formatCurrency(budgetProgress.savingsSpent)} / {formatCurrency(savingsLimit)}</Text>
+                  <Text style={styles.budgetAmount}>
+                    {formatCurrency(budgetProgress.savingsSpent)} / {formatCurrency(savingsLimit)}
+                  </Text>
                 </View>
                 <ProgressBar
                   progress={Math.min(1, budgetProgress.savingsSpent / Math.max(1, savingsLimit))}
@@ -184,14 +388,17 @@ export default function DashboardScreen() {
               </View>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity style={styles.budgetCard} onPress={() => router.push('/budget-setup')}>
+            <TouchableOpacity
+              style={styles.budgetCard}
+              onPress={() => router.push('/budget-setup')}
+            >
               <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-                <Text style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, marginBottom: 12 }}>
+                <Text
+                  style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, marginBottom: 12 }}
+                >
                   No budget plan set up yet.
                 </Text>
-                <Text style={{ ...typography.labelMd, color: colors.primary }}>
-                  SET UP BUDGET
-                </Text>
+                <Text style={{ ...typography.labelMd, color: colors.primary }}>SET UP BUDGET</Text>
               </View>
             </TouchableOpacity>
           )}
@@ -221,22 +428,35 @@ export default function DashboardScreen() {
                     style={[styles.activityItem, isLast && styles.lastActivityItem]}
                     onPress={() => router.push('/(app)/(tabs)/transactions')} // Could route to details if built
                   >
-                    <View style={[
-                      styles.activityIconContainer, 
-                      tx.type === 'income' ? { backgroundColor: colors.primary + '1A' } : undefined
-                    ]}>
-                      <MaterialIcons 
-                        name={getCategoryIcon(tx.category)} 
-                        size={20} 
-                        color={tx.type === 'income' ? colors.primary : colors.onSurface} 
+                    <View
+                      style={[
+                        styles.activityIconContainer,
+                        tx.type === 'income'
+                          ? { backgroundColor: colors.primary + '1A' }
+                          : undefined,
+                      ]}
+                    >
+                      <MaterialIcons
+                        name={getCategoryIcon(tx.category)}
+                        size={20}
+                        color={tx.type === 'income' ? colors.primary : colors.onSurface}
                       />
                     </View>
                     <View style={styles.activityDetails}>
                       <Text style={styles.activityName}>{tx.merchant}</Text>
-                      <Text style={styles.activityDate}>{tx.date} • {tx.category}</Text>
+                      <Text style={styles.activityDate}>
+                        {tx.date} • {tx.category}
+                      </Text>
                     </View>
-                    <Text style={tx.type === 'income' ? styles.activityAmountPositive : styles.activityAmountNegative}>
-                      {sign}{formatCurrency(tx.amount)}
+                    <Text
+                      style={
+                        tx.type === 'income'
+                          ? styles.activityAmountPositive
+                          : styles.activityAmountNegative
+                      }
+                    >
+                      {sign}
+                      {formatCurrency(tx.amount)}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -244,6 +464,7 @@ export default function DashboardScreen() {
             )}
           </View>
         </View>
+        </Skeleton>
       </ScrollView>
     </View>
   );
@@ -255,15 +476,7 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.background,
     },
-    header: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingHorizontal: 20,
-      paddingVertical: 16,
-      backgroundColor: colors.background + 'F2',
-      zIndex: 40,
-    },
+
     avatarButton: {
       width: 40,
       height: 40,
@@ -278,11 +491,8 @@ const getStyles = (colors: ThemeColors) => {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    headerTitle: {
-      ...typography.displayLg,
-      color: colors.primary,
-    },
-    notificationButton: {
+
+    iconButton: {
       width: 40,
       height: 40,
       alignItems: 'center',
@@ -312,7 +522,7 @@ const getStyles = (colors: ThemeColors) => {
       color: colors.onSurfaceVariant,
     },
     netWorthBadge: {
-      backgroundColor: colors.primary + '1A', 
+      backgroundColor: colors.primary + '1A',
       paddingHorizontal: 8,
       paddingVertical: 4,
       borderRadius: radius.full,
@@ -324,11 +534,12 @@ const getStyles = (colors: ThemeColors) => {
     netWorthAmount: {
       ...typography.dataLg,
       color: colors.onSurface,
-      marginBottom: 24,
+      marginBottom: 8,
     },
     chartContainer: {
-      height: 96,
-      width: '100%',
+      marginTop: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     snapshotRow: {
       flexDirection: 'row',

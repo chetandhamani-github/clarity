@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { Text } from '@/components/ui';
+import { Text, Header } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -39,16 +39,10 @@ export default function SearchScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Mobile Top App Bar */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.onSurface} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          Search
-        </Text>
-        <View style={styles.iconButtonSpacer} />
-      </View>
+      <Header
+        showBack
+        title="Search"
+      />
 
       <View style={styles.content}>
         {/* Search Input Section */}
@@ -170,24 +164,7 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.surfaceContainerLow,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 12,
-      paddingVertical: 16,
-    },
-    headerTitle: {
-      ...typography.headlineMd,
-      color: colors.onSurface,
-    },
-    iconButton: {
-      padding: 8,
-      borderRadius: 24,
-    },
-    iconButtonSpacer: {
-      width: 40,
-    },
+
     content: {
       flex: 1,
     },

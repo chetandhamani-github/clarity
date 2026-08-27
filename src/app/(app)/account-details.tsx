@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
-import { Text } from '@/components/ui';
+import React, { useState, useMemo } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Dimensions } from 'react-native';
+import { Text, Header } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAccount, useDeleteAccount } from '@/hooks/use-accounts';
-import { useTransactions } from '@/hooks/use-transactions';
+import { useTransactions, useAccountHistory } from '@/hooks/use-transactions';
 import { useToast, useAlert } from '@/components/ui';
+import { LineChart } from 'react-native-gifted-charts';
 import { formatCurrency, formatDate, getTransactionSign } from '@/utils/format';
 import { getCategoryIcon, getAccountTypeIcon } from '@/utils/icons';
 
@@ -20,6 +21,7 @@ export default function AccountDetailsScreen() {
 
   const { account, isLoading } = useAccount(accountId);
   const { transactions, isLoading: isTxLoading } = useTransactions({ accountId });
+  const { history, isLoading: isHistoryLoading } = useAccountHistory(accountId, 30);
   const { mutate: deleteAccount, isPending: isDeleting } = useDeleteAccount();
   const [showMenu, setShowMenu] = useState(false);
   const { showToast } = useToast();
@@ -55,39 +57,93 @@ export default function AccountDetailsScreen() {
     router.push(`/(app)/add-account?id=${accountId}`);
   };
 
+  // Format history for LineChart
+  const chartData = useMemo(() => {
+    let data = history;
+    if (!data || data.length === 0) data = [{ date: new Date().toISOString().split('T')[0], value: account?.balance || 0 }, { date: new Date().toISOString().split('T')[0], value: account?.balance || 0 }];
+    else if (data.length === 1) data = [data[0], data[0]];
+    
+    return data.map((point, index) => {
+      const isStart = index === 0;
+      const isEnd = index === data.length - 1;
+      const isMid = index === Math.floor(data.length / 2);
+      
+      const dateParts = point.date.split('-');
+      const label = (isStart || isEnd || isMid) ? `${dateParts[1]}/${dateParts[2]}` : '';
+
+      return {
+        value: point.value,
+        label,
+        dataPointText: formatCurrency(point.value)
+      };
+    });
+  }, [history, account]);
+
+  const chartConfig = useMemo(() => {
+    const vals = chartData.map(d => d.value);
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const range = max - min;
+    
+    if (range === 0) {
+      const offset = Math.max(0, min - 10);
+      return { 
+        yAxisOffset: offset, 
+        maxValue: max === 0 ? 100 : (max - offset + 20) 
+      };
+    }
+    
+    const offset = Math.max(0, min - (range * 0.2));
+    return {
+      yAxisOffset: offset,
+      maxValue: (max - offset) + (range * 0.2),
+    };
+  }, [chartData]);
+
+  // Calculate Account change percentage
+  const balanceChangePercent = useMemo(() => {
+    if (!history || history.length < 2) return 0;
+    const start = history[0].value;
+    const end = history[history.length - 1].value;
+    if (start === 0) return end > 0 ? 100 : 0;
+    return ((end - start) / start) * 100;
+  }, [history]);
+  
+  const isPositiveTrend = balanceChangePercent >= 0;
+
+  const screenWidth = Dimensions.get('window').width;
+  const chartWidth = screenWidth - 80;
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.onSurfaceVariant} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          Account Details
-        </Text>
-        <View style={{ position: 'relative' }}>
-          <TouchableOpacity 
-            style={styles.iconButton} 
-            onPress={() => setShowMenu(!showMenu)}
-            disabled={!account}
-          >
-            <MaterialIcons name="more-vert" size={24} color={colors.onSurfaceVariant} />
-          </TouchableOpacity>
-          
-          {showMenu && (
-            <View style={styles.menuPopup}>
-              <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
-                <MaterialIcons name="edit" size={20} color={colors.onSurface} />
-                <Text style={styles.menuItemText}>Edit Account</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
-                <MaterialIcons name="delete-outline" size={20} color={colors.error} />
-                <Text style={[styles.menuItemText, { color: colors.error }]}>Delete Account</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      </View>
+      <Header
+        showBack
+        title="Account Details"
+        rightNode={
+          <View style={{ position: 'relative' }}>
+            <TouchableOpacity 
+              style={styles.iconButton} 
+              onPress={() => setShowMenu(!showMenu)}
+              disabled={!account}
+            >
+              <MaterialIcons name="more-vert" size={24} color={colors.onSurfaceVariant} />
+            </TouchableOpacity>
+            
+            {showMenu && (
+              <View style={styles.menuPopup}>
+                <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
+                  <MaterialIcons name="edit" size={20} color={colors.onSurface} />
+                  <Text style={styles.menuItemText}>Edit Account</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
+                  <MaterialIcons name="delete-outline" size={20} color={colors.error} />
+                  <Text style={[styles.menuItemText, { color: colors.error }]}>Delete Account</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        }
+      />
 
       {isLoading || isDeleting ? (
         <View style={styles.loaderContainer}>
@@ -130,6 +186,59 @@ export default function AccountDetailsScreen() {
                 <Text style={styles.statLabel}>Added</Text>
                 <Text style={styles.statValue}>{formatDate(account.createdAt, 'month-year')}</Text>
               </View>
+            </View>
+            
+            {/* Balance Trend LineChart */}
+            <View style={{ marginTop: 16, alignItems: 'center', justifyContent: 'center' }}>
+            <LineChart
+              data={chartData}
+              width={chartWidth}
+              height={140}
+              yAxisOffset={chartConfig.yAxisOffset}
+              maxValue={chartConfig.maxValue}
+              hideDataPoints
+              color={isPositiveTrend ? colors.primary : colors.error}
+              thickness={3}
+              initialSpacing={0}
+              endSpacing={0}
+              areaChart
+              startFillColor={isPositiveTrend ? colors.primary : colors.error}
+              startOpacity={0.3}
+              endFillColor={isPositiveTrend ? colors.primary : colors.error}
+              endOpacity={0.05}
+              curved
+              hideRules
+              hideYAxisText
+              hideAxesAndRules
+              pointerConfig={{
+                pointerStripHeight: 140,
+                pointerStripColor: colors.outline,
+                pointerStripWidth: 2,
+                pointerColor: colors.primary,
+                radius: 6,
+                pointerLabelWidth: 80,
+                pointerLabelHeight: 30,
+                activatePointersOnLongPress: true,
+                autoAdjustPointerLabelPosition: true,
+                pointerLabelComponent: (items: any) => {
+                  return (
+                    <View
+                      style={{
+                        height: 30,
+                        width: 80,
+                        justifyContent: 'center',
+                        backgroundColor: colors.surfaceContainerHighest,
+                        borderRadius: 8,
+                        padding: 4,
+                      }}>
+                      <Text style={{ color: colors.onSurface, fontSize: 12, fontWeight: 'bold', textAlign: 'center' }}>
+                        {items[0].dataPointText}
+                      </Text>
+                    </View>
+                  );
+                },
+              }}
+            />
             </View>
           </View>
 
@@ -209,20 +318,7 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.background,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 12,
-      height: 64,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.surfaceVariant,
-      zIndex: 10,
-    },
-    headerTitle: {
-      ...typography.headlineMd,
-      color: colors.onSurface,
-    },
+
     iconButton: {
       padding: 8,
     },

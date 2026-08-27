@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert } from 'react-native';
-import { Text } from '@/components/ui';
+import { Text, Header } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +20,8 @@ export default function SettingsScreen() {
   const router = useRouter();
   const themeSetting = useAppStore((state) => state.theme);
   const setTheme = useAppStore((state) => state.setTheme);
+  const currencySetting = useAppStore((state) => state.currency);
+  const setCurrency = useAppStore((state) => state.setCurrency);
   const biometricsEnabled = useAppStore(state => state.biometricEnabled);
   const setBiometricsEnabled = useAppStore(state => state.setBiometricEnabled);
   const [isResetting, setIsResetting] = useState(false);
@@ -38,6 +40,13 @@ export default function SettingsScreen() {
     if (themeSetting === 'system') setTheme('light');
     else if (themeSetting === 'light') setTheme('dark');
     else setTheme('system');
+  };
+
+  const cycleCurrency = () => {
+    if (currencySetting === 'INR') setCurrency('USD');
+    else if (currencySetting === 'USD') setCurrency('EUR');
+    else if (currencySetting === 'EUR') setCurrency('GBP');
+    else setCurrency('INR');
   };
 
   const handleResetData = () => {
@@ -68,18 +77,15 @@ export default function SettingsScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.onSurfaceVariant} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          Intelligence & System
-        </Text>
-        <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/notifications')}>
-          <MaterialIcons name="notifications" size={24} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
+      <Header
+        showBack
+        title="Intelligence & System"
+        rightNode={
+          <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/notifications')}>
+            <MaterialIcons name="notifications" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 60 }]}
@@ -170,6 +176,21 @@ export default function SettingsScreen() {
               </View>
               <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
             </TouchableOpacity>
+            <TouchableOpacity style={styles.settingItem} onPress={cycleCurrency}>
+              <View style={styles.settingItemLeft}>
+                <MaterialIcons name="payments" size={24} color={colors.secondary} />
+                <View>
+                  <Text style={styles.settingTitle}>Currency</Text>
+                  <Text style={styles.settingSub}>
+                    {currencySetting === 'INR' ? 'Indian Rupee (₹)' : 
+                     currencySetting === 'USD' ? 'US Dollar ($)' : 
+                     currencySetting === 'EUR' ? 'Euro (€)' : 
+                     currencySetting === 'GBP' ? 'British Pound (£)' : currencySetting}
+                  </Text>
+                </View>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
+            </TouchableOpacity>
             <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/security')}>
               <View style={styles.settingItemLeft}>
                 <MaterialIcons name="lock" size={24} color={colors.secondary} />
@@ -223,21 +244,12 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.background, // colors.background
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 12,
-      height: 64,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.surfaceVariant,
-    },
-    headerTitle: {
-      ...typography.headlineMd,
-      color: colors.onSurface,
-    },
+
     iconButton: {
-      padding: 8,
+      width: 40,
+      height: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     scrollContent: {
       padding: 20,

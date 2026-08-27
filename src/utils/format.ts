@@ -1,32 +1,49 @@
+import { useAppStore } from '@/store/use-app-store';
+
 export function formatCurrency(
   amount: number,
   compact: boolean = false,
 ): string {
+  const currency = useAppStore.getState().currency || 'INR';
+  const locale = currency === 'INR' ? 'en-IN' : 'en-US';
+
   if (compact) {
-    const abs = Math.abs(amount);
-    if (abs >= 1_000_000) {
-      return `$${(amount / 1_000_000).toFixed(1)}M`;
-    }
-    if (abs >= 1_000) {
-      return `$${(amount / 1_000).toFixed(1)}K`;
-    }
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currency,
+      notation: 'compact',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 1,
+    }).format(amount);
   }
 
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
-    currency: 'USD',
+    currency: currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
 }
 
 export function formatCurrencyWhole(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
+  const currency = useAppStore.getState().currency || 'INR';
+  const locale = currency === 'INR' ? 'en-IN' : 'en-US';
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
-    currency: 'USD',
+    currency: currency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+export function getCurrencySymbol(): string {
+  const currency = useAppStore.getState().currency || 'INR';
+  const locale = currency === 'INR' ? 'en-IN' : 'en-US';
+  const parts = new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency: currency,
+  }).formatToParts(0);
+  return parts.find(part => part.type === 'currency')?.value || '$';
 }
 
 export function formatPercentage(value: number, decimals: number = 1): string {

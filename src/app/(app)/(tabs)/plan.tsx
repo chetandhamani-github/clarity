@@ -1,12 +1,13 @@
 import React, { useMemo } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Text } from '@/components/ui';
+import { Text, Header } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
 import { formatCurrency } from '@/utils/format';
+import { Skeleton } from 'boneyard-js/native';
 
 export default function PlanScreen() {
   const { colors } = useTheme();
@@ -22,8 +23,15 @@ export default function PlanScreen() {
   
   const monthName = now.toLocaleString('default', { month: 'long' });
 
-  const { plan, isLoading: planLoading } = useBudgetPlan();
-  const { spending, isLoading: spendingLoading } = useCategorySpending(currentMonth, currentYear);
+  const { plan, isLoading: planLoading, refetch: refetchPlan } = useBudgetPlan();
+  const { spending, isLoading: spendingLoading, refetch: refetchSpending } = useCategorySpending(currentMonth, currentYear);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refetchPlan();
+      refetchSpending();
+    }, [refetchPlan, refetchSpending])
+  );
 
   const isLoading = planLoading || spendingLoading;
 
@@ -51,8 +59,28 @@ export default function PlanScreen() {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <Header
+          isMainTab
+          title="Budget Plan"
+          leftNode={
+            <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
+              <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
+                <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
+              </View>
+            </TouchableOpacity>
+          }
+          rightNode={<View style={styles.iconButton} />}
+        />
+        <Skeleton loading={true} style={{ padding: 20 }}>
+          <View style={{ height: 40, width: '100%', marginBottom: 20, borderRadius: 8 }} />
+          <View style={{ flexDirection: 'row', gap: 16, marginBottom: 24 }}>
+            <View style={{ flex: 1, height: 100, borderRadius: 12 }} />
+            <View style={{ flex: 1, height: 100, borderRadius: 12 }} />
+          </View>
+          <View style={{ height: 120, width: '100%', borderRadius: 12, marginBottom: 16 }} />
+          <View style={{ height: 120, width: '100%', borderRadius: 12, marginBottom: 16 }} />
+        </Skeleton>
       </View>
     );
   }
@@ -61,9 +89,18 @@ export default function PlanScreen() {
   if (!plan) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle} numberOfLines={1}>Budget Plan</Text>
-        </View>
+        <Header
+          isMainTab
+          title="Budget Plan"
+          leftNode={
+            <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
+              <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
+                <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
+              </View>
+            </TouchableOpacity>
+          }
+          rightNode={<View style={styles.iconButton} />}
+        />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, gap: 16 }}>
           <MaterialIcons name="account-balance-wallet" size={64} color={colors.primaryContainer} />
           <Text style={{ ...typography.headlineSm, color: colors.onSurface }}>No Budget Plan Set</Text>
@@ -81,28 +118,35 @@ export default function PlanScreen() {
     );
   }
 
-  const needsLimit = plan.monthlyIncome * (plan.needsPercent / 100);
-  const wantsLimit = plan.monthlyIncome * (plan.wantsPercent / 100);
-  const savingsLimit = plan.monthlyIncome * (plan.savingsPercent / 100);
+  const safePlan = plan || {
+    monthlyIncome: 0,
+    needsPercent: 50,
+    wantsPercent: 30,
+    savingsPercent: 20
+  };
 
-  const remaining = plan.monthlyIncome - totals.totalSpent;
+  const needsLimit = safePlan.monthlyIncome * (safePlan.needsPercent / 100);
+  const wantsLimit = safePlan.monthlyIncome * (safePlan.wantsPercent / 100);
+  const savingsLimit = safePlan.monthlyIncome * (safePlan.savingsPercent / 100);
+
+  const remaining = safePlan.monthlyIncome - totals.totalSpent;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
-          <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
-            <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
-          </View>
-        </TouchableOpacity>
+      <Header
+        isMainTab
+        title="Budget Plan"
+        leftNode={
+          <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
+            <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
+              <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
+            </View>
+          </TouchableOpacity>
+        }
+        rightNode={<View style={styles.iconButton} />}
+      />
 
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          Budget Plan
-        </Text>
-
-        <View style={{ width: 40 }} />
-      </View>
-
+      <Skeleton name="budget-plan-content" loading={isLoading}>
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
         {/* Section Header */}
         <View style={styles.sectionHeader}>
@@ -119,12 +163,12 @@ export default function PlanScreen() {
         <View style={styles.summaryGrid}>
           <View style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>Monthly Income</Text>
-            <Text style={styles.summaryValue}>{formatCurrency(plan.monthlyIncome)}</Text>
+            <Text style={styles.summaryValue}>{formatCurrency(safePlan.monthlyIncome)}</Text>
           </View>
 
           <View style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>Allocated</Text>
-            <Text style={styles.summaryValue}>{formatCurrency(plan.monthlyIncome)}</Text>
+            <Text style={styles.summaryValue}>{formatCurrency(safePlan.monthlyIncome)}</Text>
           </View>
 
           <View style={styles.summaryCard}>
@@ -151,7 +195,7 @@ export default function PlanScreen() {
                 <MaterialIcons name="home" size={24} color={colors.primary} />
                 <Text style={styles.allocationTitle}>Needs</Text>
               </View>
-              <Text style={styles.allocationPercent}>{plan.needsPercent}%</Text>
+              <Text style={styles.allocationPercent}>{safePlan.needsPercent}%</Text>
             </View>
             <View style={styles.progressSection}>
               <View style={styles.progressTextRow}>
@@ -174,7 +218,7 @@ export default function PlanScreen() {
                 <MaterialIcons name="shopping-bag" size={24} color={colors.primary} />
                 <Text style={styles.allocationTitle}>Wants</Text>
               </View>
-              <Text style={styles.allocationPercent}>{plan.wantsPercent}%</Text>
+              <Text style={styles.allocationPercent}>{safePlan.wantsPercent}%</Text>
             </View>
             <View style={styles.progressSection}>
               <View style={styles.progressTextRow}>
@@ -197,7 +241,7 @@ export default function PlanScreen() {
                 <MaterialIcons name="savings" size={24} color={colors.primary} />
                 <Text style={styles.allocationTitle}>Savings</Text>
               </View>
-              <Text style={styles.allocationPercent}>{plan.savingsPercent}%</Text>
+              <Text style={styles.allocationPercent}>{safePlan.savingsPercent}%</Text>
             </View>
             <View style={styles.progressSection}>
               <View style={styles.progressTextRow}>
@@ -211,6 +255,7 @@ export default function PlanScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      </Skeleton>
     </View>
   );
 }
@@ -221,19 +266,7 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.background,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      height: 64,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.surfaceVariant,
-    },
-    headerTitle: {
-      ...typography.headlineMd,
-      color: colors.primary,
-    },
+
     avatarButton: {
       width: 40,
       height: 40,
@@ -247,6 +280,10 @@ const getStyles = (colors: ThemeColors) => {
       height: '100%',
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    iconButton: {
+      width: 40,
+      height: 40,
     },
     scrollContent: {
       padding: 20,

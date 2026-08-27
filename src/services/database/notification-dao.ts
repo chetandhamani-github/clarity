@@ -24,3 +24,29 @@ export async function markAllNotificationsAsRead(): Promise<void> {
   const db = getDatabase();
   await db.runAsync('UPDATE notifications SET is_read = 1 WHERE is_read = 0;');
 }
+
+function generateId(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+export async function insertNotification(
+  notification: Omit<Notification, 'id' | 'isRead' | 'createdAt'>
+): Promise<void> {
+  const db = getDatabase();
+  const id = generateId();
+  await db.runAsync(
+    `INSERT INTO notifications (id, title, description, type, action_url) 
+     VALUES (?, ?, ?, ?, ?);`,
+    [
+      id,
+      notification.title,
+      notification.description,
+      notification.type || 'default',
+      notification.actionUrl || '',
+    ]
+  );
+}

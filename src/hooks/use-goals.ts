@@ -98,17 +98,39 @@ export function useCreateGoal() {
   return { mutate, isPending };
 }
 
+export function useDeleteGoal() {
+  const [isPending, setIsPending] = useState(false);
+
+  const mutate = useCallback(
+    async (id: string, options?: { onSuccess?: () => void }) => {
+      setIsPending(true);
+      try {
+        await goalDao.deleteGoal(id);
+        options?.onSuccess?.();
+      } catch (error) {
+        console.error('Failed to delete goal:', error);
+        throw error;
+      } finally {
+        setIsPending(false);
+      }
+    },
+    []
+  );
+
+  return { mutate, isPending };
+}
+
 export function useAddGoalContribution() {
   const [isPending, setIsPending] = useState(false);
 
   const mutate = useCallback(
     async (
-      data: Omit<GoalContribution, 'id'>,
+      { data, accountId }: { data: Omit<GoalContribution, 'id'>; accountId?: string },
       options?: { onSuccess?: () => void },
     ) => {
       setIsPending(true);
       try {
-        await goalDao.addGoalContribution(data);
+        await goalDao.addGoalContribution(data, accountId);
         options?.onSuccess?.();
       } catch (error) {
         console.error('Failed to add goal contribution:', error);

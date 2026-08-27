@@ -83,4 +83,10 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_budget_plans_month_year ON budget_plans(month, year);
     CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(is_read);
   `);
+
+  try {
+    await db.execAsync('ALTER TABLE goal_contributions ADD COLUMN transaction_id TEXT;');
+  } catch (e) {
+    // Column might already exist, ignore error
+  }
 }

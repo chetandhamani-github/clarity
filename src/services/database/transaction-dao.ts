@@ -226,6 +226,18 @@ export async function updateTransaction(
       await db.runAsync(`UPDATE transactions SET ${sets.join(', ')} WHERE id = ?`, params);
     }
     
+    // 5. Sync with goal contributions if this transaction is linked
+    if (data.amount !== undefined) {
+      const gc = await db.getFirstAsync<any>('SELECT * FROM goal_contributions WHERE transaction_id = ?', [id]);
+      if (gc) {
+        const diff = data.amount - oldTx.amount;
+        if (diff !== 0) {
+          await db.runAsync('UPDATE goal_contributions SET amount = ? WHERE id = ?', [data.amount, gc.id]);
+          await db.runAsync('UPDATE goals SET current_amount = current_amount + ? WHERE id = ?', [diff, gc.goal_id]);
+        }
+      }
+    }
+
     await db.execAsync('COMMIT');
   } catch (error) {
     await db.execAsync('ROLLBACK');
@@ -235,29 +247,35 @@ export async function updateTransaction(
 
 export async function deleteTransaction(id: string): Promise<void> {
   const db = getDatabase();
-  
-  // Need to get the transaction first to revert the account balance
-  const txRow = await db.getFirstAsync<TransactionRow>('SELECT * FROM transactions WHERE id = ?', [id]);
-  if (!txRow) return;
+  const tx = await db.getFirstAsync<TransactionRow>('SELECT * FROM transactions WHERE id = ?', [id]);
+  if (!tx) return;
 
-  const account = await getAccountById(txRow.account_id);
+  const account = await getAccountById(tx.account_id);
   
   await db.execAsync('BEGIN TRANSACTION');
   try {
-    await db.runAsync('DELETE FROM transactions WHERE id = ?', [id]);
-    
+    // 1. Revert transaction's effect on account
     if (account) {
       let balanceRevert = 0;
-      if (txRow.type === 'income') balanceRevert = -txRow.amount;
-      else if (txRow.type === 'expense') balanceRevert = txRow.amount;
+      if (tx.type === 'income') balanceRevert = -tx.amount;
+      else if (tx.type === 'expense') balanceRevert = tx.amount;
       
       if (balanceRevert !== 0) {
-        await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
-          account.balance + balanceRevert,
-          txRow.account_id,
-        ]);
+        account.balance += balanceRevert;
+        await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [account.balance, account.id]);
       }
     }
+    
+    // 2. Sync with goal contributions if this transaction is linked
+    const gc = await db.getFirstAsync<any>('SELECT * FROM goal_contributions WHERE transaction_id = ?', [id]);
+    if (gc) {
+      await db.runAsync('DELETE FROM goal_contributions WHERE id = ?', [gc.id]);
+      await db.runAsync('UPDATE goals SET current_amount = current_amount - ? WHERE id = ?', [gc.amount, gc.goal_id]);
+    }
+
+    // 3. Delete the transaction
+    await db.runAsync('DELETE FROM transactions WHERE id = ?', [id]);
+    
     await db.execAsync('COMMIT');
   } catch (error) {
     await db.execAsync('ROLLBACK');
@@ -328,4 +346,112 @@ export async function getRecurringTransactions(): Promise<TransactionWithAccount
      ORDER BY t.date DESC`
   );
   return rows.map(mapRow);
+}
+
+export interface HistoryPoint {
+  date: string;
+  value: number;
+}
+
+export async function getNetWorthHistory(days: number = 30): Promise<HistoryPoint[]> {
+  const db = getDatabase();
+  
+  // 1. Get current total net worth
+  const currentResult = await db.getFirstAsync<{ total: number }>('SELECT COALESCE(SUM(balance), 0) as total FROM accounts');
+  let currentBalance = currentResult?.total ?? 0;
+
+  // 2. Get all transactions from the last `days` days
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  const startDateStr = startDate.toISOString().split('T')[0];
+
+  const transactions = await db.getAllAsync<{ amount: number, type: string, date: string }>(
+    `SELECT amount, type, date 
+     FROM transactions 
+     WHERE date >= ? 
+     ORDER BY date DESC`,
+    [startDateStr]
+  );
+
+  // 3. Build the timeseries backward
+  const history: HistoryPoint[] = [];
+  const today = new Date();
+  
+  // Group transactions by date string (YYYY-MM-DD)
+  const txByDate = transactions.reduce((acc, tx) => {
+    const d = tx.date.split('T')[0];
+    if (!acc[d]) acc[d] = 0;
+    // To reverse a transaction: if it was income (added to balance), subtract it.
+    // If it was expense (subtracted from balance), add it back.
+    if (tx.type === 'income') acc[d] -= tx.amount;
+    else if (tx.type === 'expense') acc[d] += tx.amount;
+    return acc;
+  }, {} as Record<string, number>);
+
+  let runningBalance = currentBalance;
+
+  for (let i = 0; i < days; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+
+    // Push the balance for the current day being processed
+    history.unshift({ date: dateStr, value: runningBalance });
+
+    // Apply the reverse of transactions that happened on this day to get the balance at the end of the previous day
+    if (txByDate[dateStr]) {
+      runningBalance += txByDate[dateStr];
+    }
+  }
+
+  return history;
+}
+
+export async function getAccountHistory(accountId: string, days: number = 30): Promise<HistoryPoint[]> {
+  const db = getDatabase();
+  
+  // 1. Get current account balance
+  const account = await getAccountById(accountId);
+  let currentBalance = account?.balance ?? 0;
+
+  // 2. Get transactions for this account in the last `days` days
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  const startDateStr = startDate.toISOString().split('T')[0];
+
+  const transactions = await db.getAllAsync<{ amount: number, type: string, date: string }>(
+    `SELECT amount, type, date 
+     FROM transactions 
+     WHERE account_id = ? AND date >= ? 
+     ORDER BY date DESC`,
+    [accountId, startDateStr]
+  );
+
+  // 3. Build timeseries backward
+  const history: HistoryPoint[] = [];
+  const today = new Date();
+  
+  const txByDate = transactions.reduce((acc, tx) => {
+    const d = tx.date.split('T')[0];
+    if (!acc[d]) acc[d] = 0;
+    if (tx.type === 'income') acc[d] -= tx.amount;
+    else if (tx.type === 'expense') acc[d] += tx.amount;
+    return acc;
+  }, {} as Record<string, number>);
+
+  let runningBalance = currentBalance;
+
+  for (let i = 0; i < days; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+
+    history.unshift({ date: dateStr, value: runningBalance });
+
+    if (txByDate[dateStr]) {
+      runningBalance += txByDate[dateStr];
+    }
+  }
+
+  return history;
 }
