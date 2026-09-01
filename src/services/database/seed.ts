@@ -34,18 +34,19 @@ export async function seedDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
       { name: 'Electricity & Bills', icon: 'flash-on', limit: 2500, bucketType: 'needs', sortOrder: 3 },
       { name: 'Fuel & Transport', icon: 'directions-car', limit: 2500, bucketType: 'needs', sortOrder: 4 },
       { name: 'Health & Medical', icon: 'favorite', limit: 2000, bucketType: 'needs', sortOrder: 5 },
+      { name: 'Loan & Debt Repayment', icon: 'handshake', limit: 0, bucketType: 'needs', sortOrder: 6 },
 
       // Wants (30%)
-      { name: 'Dining & Food Delivery', icon: 'restaurant', limit: 4000, bucketType: 'wants', sortOrder: 6 },
-      { name: 'Shopping', icon: 'local-mall', limit: 3000, bucketType: 'wants', sortOrder: 7 },
-      { name: 'Entertainment & Movies', icon: 'movie', limit: 1500, bucketType: 'wants', sortOrder: 8 },
-      { name: 'OTT & Subscriptions', icon: 'subscriptions', limit: 1000, bucketType: 'wants', sortOrder: 9 },
-      { name: 'Travel & Outings', icon: 'flight', limit: 2500, bucketType: 'wants', sortOrder: 10 },
+      { name: 'Dining & Food Delivery', icon: 'restaurant', limit: 4000, bucketType: 'wants', sortOrder: 7 },
+      { name: 'Shopping', icon: 'local-mall', limit: 3000, bucketType: 'wants', sortOrder: 8 },
+      { name: 'Entertainment & Movies', icon: 'movie', limit: 1500, bucketType: 'wants', sortOrder: 9 },
+      { name: 'OTT & Subscriptions', icon: 'subscriptions', limit: 1000, bucketType: 'wants', sortOrder: 10 },
+      { name: 'Travel & Outings', icon: 'flight', limit: 2500, bucketType: 'wants', sortOrder: 11 },
 
       // Savings / Investments (20%)
-      { name: 'Mutual Funds & SIP', icon: 'trending-up', limit: 5000, bucketType: 'savings', sortOrder: 11 },
-      { name: 'Emergency Fund', icon: 'savings', limit: 3000, bucketType: 'savings', sortOrder: 12 },
-      { name: 'Salary / Income', icon: 'work', limit: 0, bucketType: 'savings', sortOrder: 13 },
+      { name: 'Mutual Funds & SIP', icon: 'trending-up', limit: 5000, bucketType: 'savings', sortOrder: 12 },
+      { name: 'Emergency Fund', icon: 'savings', limit: 3000, bucketType: 'savings', sortOrder: 13 },
+      { name: 'Salary / Income', icon: 'work', limit: 0, bucketType: 'savings', sortOrder: 14 },
     ];
 
     for (const cat of defaultCategories) {

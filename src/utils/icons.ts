@@ -61,8 +61,10 @@ const ACCOUNT_TYPE_ICON_MAP: Record<string, IconName> = {
   current: 'account-balance',
   checking: 'account-balance',
   credit: 'credit-card',
+  loan: 'handshake',
   investment: 'show-chart',
   wallet: 'account-balance-wallet',
+  other: 'account-balance',
 };
 
 export function getAccountTypeIcon(accountType: string): IconName {
