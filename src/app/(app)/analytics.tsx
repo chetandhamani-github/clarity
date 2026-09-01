@@ -183,7 +183,9 @@ export default function AnalyticsScreen() {
                     <Text style={styles.inOutLabel}>Out</Text>
                   </View>
                   <Text style={styles.savedMessage}>
-                    You saved {savingsRate.toFixed(1)}% of your income this month.
+                    {netCashFlow >= 0
+                      ? `You saved ${savingsRate.toFixed(1)}% of your income this month.`
+                      : `You spent more than your income by ${Math.abs(savingsRate).toFixed(1)}% this month.`}
                   </Text>
 
                   {/* Simplified Bar Chart Representation */}

@@ -97,10 +97,11 @@ export default function AccountDetailsScreen() {
     const max = Math.max(...vals);
     const range = max - min;
 
-    if (range === 0) {
+    if (range <= 0) {
       return {
-        yAxisOffset: 0,
-        maxValue: max === 0 ? 100 : Math.abs(max) * 1.3,
+        yAxisOffset: min < 0 ? min * 1.2 : 0,
+        maxValue: max <= 0 ? (max === 0 ? 100 : 0) : max * 1.25,
+        hasVariance: false,
       };
     }
 
@@ -108,6 +109,7 @@ export default function AccountDetailsScreen() {
     return {
       yAxisOffset: Math.max(0, min - padding),
       maxValue: max + padding,
+      hasVariance: true,
     };
   }, [chartData]);
 
@@ -116,8 +118,8 @@ export default function AccountDetailsScreen() {
     if (!history || history.length < 2) return 0;
     const start = history[0].value;
     const end = history[history.length - 1].value;
-    if (start === 0) return end > 0 ? 100 : 0;
-    return ((end - start) / start) * 100;
+    if (start === 0) return end > 0 ? 100 : end < 0 ? -100 : 0;
+    return ((end - start) / Math.abs(start)) * 100;
   }, [history]);
 
   const isPositiveTrend = balanceChangePercent >= 0;
@@ -205,11 +207,19 @@ export default function AccountDetailsScreen() {
               </View>
 
               {/* Balance Trend LineChart */}
-              <View style={{ marginTop: 16, alignItems: 'center', justifyContent: 'center' }}>
+              <View
+                style={{
+                  marginTop: 12,
+                  height: 135,
+                  overflow: 'hidden',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
                 <LineChart
                   data={chartData}
                   width={chartWidth}
-                  height={140}
+                  height={130}
                   spacing={
                     chartData.length > 1 ? chartWidth / (chartData.length - 1) : chartWidth
                   }
@@ -226,7 +236,7 @@ export default function AccountDetailsScreen() {
                   startOpacity={0.3}
                   endFillColor={isPositiveTrend ? colors.primary : colors.error}
                   endOpacity={0.05}
-                  curved
+                  curved={chartConfig.hasVariance && chartData.length > 2}
                   hideRules
                   hideYAxisText
                   hideAxesAndRules

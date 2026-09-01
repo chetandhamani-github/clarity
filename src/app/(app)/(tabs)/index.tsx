@@ -16,10 +16,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
 import { useMonthlyTotals, useNetWorthHistory, useTransactions } from '@/hooks/use-transactions';
+import { useDoubleBackToExit } from '@/hooks/use-double-back-to-exit';
 import { formatCurrency, getTransactionSign } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
 
 export default function DashboardScreen() {
+  useDoubleBackToExit();
+
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const insets = useSafeAreaInsets();
@@ -97,8 +100,8 @@ export default function DashboardScreen() {
     if (nwHistory.length < 2) return 0;
     const start = nwHistory[0].value;
     const end = nwHistory[nwHistory.length - 1].value;
-    if (start === 0) return end > 0 ? 100 : 0;
-    return ((end - start) / start) * 100;
+    if (start === 0) return end > 0 ? 100 : end < 0 ? -100 : 0;
+    return ((end - start) / Math.abs(start)) * 100;
   }, [nwHistory]);
 
   const isPositiveTrend = nwChangePercent >= 0;
@@ -136,10 +139,11 @@ export default function DashboardScreen() {
     const max = Math.max(...vals);
     const range = max - min;
 
-    if (range === 0) {
+    if (range <= 0) {
       return {
-        yAxisOffset: 0,
-        maxValue: max === 0 ? 100 : Math.abs(max) * 1.3,
+        yAxisOffset: min < 0 ? min * 1.2 : 0,
+        maxValue: max <= 0 ? (max === 0 ? 100 : 0) : max * 1.25,
+        hasVariance: false,
       };
     }
 
@@ -147,6 +151,7 @@ export default function DashboardScreen() {
     return {
       yAxisOffset: Math.max(0, min - padding),
       maxValue: max + padding,
+      hasVariance: true,
     };
   }, [chartData]);
 
@@ -252,7 +257,7 @@ export default function DashboardScreen() {
                   <LineChart
                     data={chartData}
                     width={chartWidth}
-                    height={140}
+                    height={130}
                     spacing={
                       chartData.length > 1 ? chartWidth / (chartData.length - 1) : chartWidth
                     }
@@ -269,7 +274,7 @@ export default function DashboardScreen() {
                     startOpacity={0.3}
                     endFillColor={isPositiveTrend ? colors.primary : colors.error}
                     endOpacity={0.05}
-                    curved
+                    curved={chartConfig.hasVariance && chartData.length > 2}
                     hideRules
                     hideYAxisText
                     hideAxesAndRules
@@ -577,7 +582,9 @@ const getStyles = (colors: ThemeColors) => {
       marginBottom: 8,
     },
     chartContainer: {
-      marginTop: 16,
+      marginTop: 12,
+      height: 135,
+      overflow: 'hidden',
       alignItems: 'center',
       justifyContent: 'center',
     },

@@ -187,9 +187,14 @@ export default function PlanScreen() {
 
               <View style={[styles.summaryCard, styles.summaryCardHighlight]}>
                 <View style={styles.highlightBackground} />
-                <Text style={styles.summaryLabel}>Remaining</Text>
-                <Text style={[styles.summaryValue, { color: colors.primary }]}>
-                  {formatCurrency(Math.max(0, remaining))}
+                <Text style={styles.summaryLabel}>{remaining >= 0 ? 'Remaining' : 'Overspent'}</Text>
+                <Text
+                  style={[
+                    styles.summaryValue,
+                    { color: remaining >= 0 ? colors.primary : colors.error },
+                  ]}
+                >
+                  {formatCurrency(remaining)}
                 </Text>
               </View>
             </View>
