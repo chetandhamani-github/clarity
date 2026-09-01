@@ -8,7 +8,7 @@ import {
   Alert,
   Dimensions,
 } from 'react-native';
-import { Text, Header, Loader } from '@/components/ui';
+import { Text, Header, DetailSkeleton } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -98,17 +98,16 @@ export default function AccountDetailsScreen() {
     const range = max - min;
 
     if (range === 0) {
-      const offset = Math.max(0, min - 10);
       return {
-        yAxisOffset: offset,
-        maxValue: max === 0 ? 100 : max - offset + 20,
+        yAxisOffset: 0,
+        maxValue: max === 0 ? 100 : Math.abs(max) * 1.3,
       };
     }
 
-    const offset = Math.max(0, min - range * 0.2);
+    const padding = range * 0.15;
     return {
-      yAxisOffset: offset,
-      maxValue: max - offset + range * 0.2,
+      yAxisOffset: Math.max(0, min - padding),
+      maxValue: max + padding,
     };
   }, [chartData]);
 
@@ -124,7 +123,7 @@ export default function AccountDetailsScreen() {
   const isPositiveTrend = balanceChangePercent >= 0;
 
   const screenWidth = Dimensions.get('window').width;
-  const chartWidth = screenWidth - 80;
+  const chartWidth = screenWidth - 88;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -148,7 +147,7 @@ export default function AccountDetailsScreen() {
                   <Text style={styles.menuItemText}>Edit Account</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
-                  <MaterialIcons name="delete-outline" size={20} color={colors.error} />
+                  <MaterialIcons name="delete" size={20} color={colors.error} />
                   <Text style={[styles.menuItemText, { color: colors.error }]}>Delete Account</Text>
                 </TouchableOpacity>
               </View>
@@ -157,122 +156,119 @@ export default function AccountDetailsScreen() {
         }
       />
 
-      {!account && !isLoading && !isDeleting ? (
-        <View style={styles.loaderContainer}>
-          <Text style={{ color: colors.onSurfaceVariant }}>Account not found.</Text>
-        </View>
+      {isLoading || !account ? (
+        <DetailSkeleton />
       ) : (
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
           showsVerticalScrollIndicator={false}
         >
-          {isLoading || isDeleting ? (
-            <Loader />
-          ) : (
-            <>
-              {account && (
-                <>
-                  /* Main Details Card */
-                  <View style={styles.card}>
-                    <View style={styles.cardHeader}>
-                      <View>
-                        <Text style={styles.accountLabel}>{account.name.toUpperCase()}</Text>
-                        <Text style={styles.balanceText}>{formatCurrency(account.balance)}</Text>
-                        {account.institution && (
-                          <Text style={styles.institutionText}>{account.institution}</Text>
-                        )}
-                      </View>
-                      <View style={styles.accountIconBox}>
-                        <MaterialIcons
-                          name={getAccountTypeIcon(account.type)}
-                          size={24}
-                          color={colors.primary}
-                        />
-                      </View>
-                    </View>
+          <View style={{ gap: 24 }}>
+            {/* Account Overview Card */}
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.accountLabel}>{account.name.toUpperCase()}</Text>
+                  <Text style={styles.balanceText}>{formatCurrency(account.balance)}</Text>
+                  {account.institution && (
+                    <Text style={styles.institutionText}>{account.institution}</Text>
+                  )}
+                </View>
+                <View style={styles.accountIconBox}>
+                  <MaterialIcons
+                    name={getAccountTypeIcon(account.type)}
+                    size={24}
+                    color={colors.primary}
+                  />
+                </View>
+              </View>
 
-                    {/* Stats Grid */}
-                    <View style={styles.statsGrid}>
-                      <View style={styles.statBox}>
-                        <Text style={styles.statLabel}>Type</Text>
-                        <Text style={styles.statValue}>
-                          {account.type.charAt(0).toUpperCase() + account.type.slice(1)}
-                        </Text>
-                      </View>
-                      <View style={styles.statBox}>
-                        <Text style={styles.statLabel}>Last 4</Text>
-                        <Text style={styles.statValue}>{account.lastFour || '—'}</Text>
-                      </View>
-                      <View style={styles.statBox}>
-                        <Text style={styles.statLabel}>Added</Text>
-                        <Text style={styles.statValue}>
-                          {formatDate(account.createdAt, 'month-year')}
-                        </Text>
-                      </View>
-                    </View>
+              {/* Stats Grid */}
+              <View style={styles.statsGrid}>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>Type</Text>
+                  <Text style={styles.statValue}>
+                    {account.type.charAt(0).toUpperCase() + account.type.slice(1)}
+                  </Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>Last 4</Text>
+                  <Text style={styles.statValue}>{account.lastFour || '—'}</Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>Added</Text>
+                  <Text style={styles.statValue}>
+                    {formatDate(account.createdAt, 'month-year')}
+                  </Text>
+                </View>
+              </View>
 
-                    {/* Balance Trend LineChart */}
-                    <View style={{ marginTop: 16, alignItems: 'center', justifyContent: 'center' }}>
-                      <LineChart
-                        data={chartData}
-                        width={chartWidth}
-                        height={140}
-                        yAxisOffset={chartConfig.yAxisOffset}
-                        maxValue={chartConfig.maxValue}
-                        hideDataPoints
-                        color={isPositiveTrend ? colors.primary : colors.error}
-                        thickness={3}
-                        initialSpacing={0}
-                        endSpacing={0}
-                        areaChart
-                        startFillColor={isPositiveTrend ? colors.primary : colors.error}
-                        startOpacity={0.3}
-                        endFillColor={isPositiveTrend ? colors.primary : colors.error}
-                        endOpacity={0.05}
-                        curved
-                        hideRules
-                        hideYAxisText
-                        hideAxesAndRules
-                        pointerConfig={{
-                          pointerStripHeight: 140,
-                          pointerStripColor: colors.outline,
-                          pointerStripWidth: 2,
-                          pointerColor: colors.primary,
-                          radius: 6,
-                          pointerLabelWidth: 80,
-                          pointerLabelHeight: 30,
-                          activatePointersOnLongPress: true,
-                          autoAdjustPointerLabelPosition: true,
-                          pointerLabelComponent: (items: any) => {
-                            return (
-                              <View
-                                style={{
-                                  height: 30,
-                                  width: 80,
-                                  justifyContent: 'center',
-                                  backgroundColor: colors.surfaceContainerHighest,
-                                  borderRadius: 8,
-                                  padding: 4,
-                                }}
-                              >
-                                <Text
-                                  style={{
-                                    color: colors.onSurface,
-                                    fontSize: 12,
-                                    fontWeight: 'bold',
-                                    textAlign: 'center',
-                                  }}
-                                >
-                                  {items[0].dataPointText}
-                                </Text>
-                              </View>
-                            );
-                          },
-                        }}
-                      />
-                    </View>
-                  </View>
+              {/* Balance Trend LineChart */}
+              <View style={{ marginTop: 16, alignItems: 'center', justifyContent: 'center' }}>
+                <LineChart
+                  data={chartData}
+                  width={chartWidth}
+                  height={140}
+                  spacing={
+                    chartData.length > 1 ? chartWidth / (chartData.length - 1) : chartWidth
+                  }
+                  adjustToWidth={true}
+                  yAxisOffset={chartConfig.yAxisOffset}
+                  maxValue={chartConfig.maxValue}
+                  hideDataPoints
+                  color={isPositiveTrend ? colors.primary : colors.error}
+                  thickness={3}
+                  initialSpacing={0}
+                  endSpacing={0}
+                  areaChart
+                  startFillColor={isPositiveTrend ? colors.primary : colors.error}
+                  startOpacity={0.3}
+                  endFillColor={isPositiveTrend ? colors.primary : colors.error}
+                  endOpacity={0.05}
+                  curved
+                  hideRules
+                  hideYAxisText
+                  hideAxesAndRules
+                  pointerConfig={{
+                    pointerStripHeight: 140,
+                    pointerStripColor: colors.outline,
+                    pointerStripWidth: 2,
+                    pointerColor: colors.primary,
+                    radius: 6,
+                    pointerLabelWidth: 80,
+                    pointerLabelHeight: 30,
+                    activatePointersOnLongPress: true,
+                    autoAdjustPointerLabelPosition: true,
+                    pointerLabelComponent: (items: any) => {
+                      return (
+                        <View
+                          style={{
+                            height: 30,
+                            width: 80,
+                            justifyContent: 'center',
+                            backgroundColor: colors.surfaceContainerHighest,
+                            borderRadius: 8,
+                            padding: 4,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: colors.onSurface,
+                              fontSize: 12,
+                              fontWeight: 'bold',
+                              textAlign: 'center',
+                            }}
+                          >
+                            {items[0].dataPointText}
+                          </Text>
+                        </View>
+                      );
+                    },
+                  }}
+                />
+              </View>
+            </View>
                   {/* Recent Activity */}
                   <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Recent Activity</Text>
@@ -356,15 +352,12 @@ export default function AccountDetailsScreen() {
                       </View>
                     )}
                   </View>
-                </>
-              )}
-            </>
-          )}
-        </ScrollView>
-      )}
-    </View>
-  );
-}
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        );
+      }
 
 const getStyles = (colors: ThemeColors) => {
   const styles = StyleSheet.create({
@@ -400,11 +393,6 @@ const getStyles = (colors: ThemeColors) => {
     },
     menuItemText: {
       ...typography.bodyLg,
-    },
-    loaderContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
     },
     scrollContent: {
       padding: 20,

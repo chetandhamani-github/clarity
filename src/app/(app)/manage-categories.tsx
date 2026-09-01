@@ -8,7 +8,7 @@ import {
   Alert,
   TextInput,
 } from 'react-native';
-import { Text, Header, Loader } from '@/components/ui';
+import { Text, Header, FormSkeleton } from '@/components/ui';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -64,12 +64,12 @@ export default function ManageCategoriesScreen() {
 
   const handleSaveCategory = () => {
     if (!newCatName.trim()) {
-      showAlert('Validation Error', 'Please enter a category name.');
+      showToast('Please enter a category name', 'error');
       return;
     }
     const limit = parseFloat(newCatLimit);
     if (isNaN(limit) || limit < 0) {
-      showAlert('Validation Error', 'Please enter a valid budget limit.');
+      showToast('Please enter a valid budget limit', 'error');
       return;
     }
 
@@ -141,7 +141,7 @@ export default function ManageCategoriesScreen() {
         showsVerticalScrollIndicator={false}
       >
         {isLoading ? (
-          <Loader />
+          <FormSkeleton />
         ) : (
           <>
             {/* Mobile Action Section */}

@@ -18,6 +18,7 @@ import {
   getActiveRecurringTransactions,
   deleteRecurringTransaction,
 } from '@/services/database/recurring-dao';
+import { queueAutoBackup } from '@/services/cloud/google-drive-service';
 import type {
   MonthlyTotals,
   Transaction,
@@ -51,6 +52,7 @@ export function useCreateTransaction() {
       queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
       queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
       queryClient.invalidateQueries({ queryKey: ['goals'] });
+      queueAutoBackup('create-transaction');
     },
   });
 
@@ -74,6 +76,7 @@ export function useUpdateTransaction() {
       queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
       queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
       queryClient.invalidateQueries({ queryKey: ['goals'] });
+      queueAutoBackup('update-transaction');
     },
   });
 
@@ -110,6 +113,7 @@ export function useDeleteTransaction() {
       queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
       queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
       queryClient.invalidateQueries({ queryKey: ['goals'] });
+      queueAutoBackup('delete-transaction');
     },
   });
 

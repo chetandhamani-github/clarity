@@ -1,4 +1,4 @@
-import { Header, Loader, Text, useAlert } from '@/components/ui';
+import { Header, FormSkeleton, Text, useAlert, useToast } from '@/components/ui';
 import { useBudgetPlan, useUpdateBudgetPlan } from '@/hooks/use-budget';
 import { ThemeColors, typography, useTheme } from '@/theme';
 import { formatCurrencyWhole, getCurrencySymbol } from '@/utils/format';
@@ -18,7 +18,7 @@ export default function BudgetSetupScreen() {
 
   const { plan, isLoading } = useBudgetPlan();
   const { mutate: updatePlan, isPending } = useUpdateBudgetPlan();
-  const { showAlert } = useAlert();
+  const { showToast } = useToast();
 
   const [income, setIncome] = useState('5000');
   const [needsPct, setNeedsPct] = useState('50');
@@ -34,7 +34,7 @@ export default function BudgetSetupScreen() {
     }
   }, [plan]);
 
-  const parsedIncome = parseFloat(income.replace(/,/g, '')) || 0;
+  const parsedIncome = parseFloat(income.replace(/[^0-9.]/g, '')) || 0;
   const needsNum = parseInt(needsPct) || 0;
   const wantsNum = parseInt(wantsPct) || 0;
   const savingsNum = parseInt(savingsPct) || 0;
@@ -47,11 +47,11 @@ export default function BudgetSetupScreen() {
 
   const handleSave = () => {
     if (totalPct !== 100) {
-      showAlert('Validation Error', 'Total allocation must equal 100%.');
+      showToast('Total allocation must equal 100%', 'error');
       return;
     }
     if (parsedIncome <= 0) {
-      showAlert('Validation Error', 'Please enter a valid monthly income.');
+      showToast('Please enter a valid monthly income', 'error');
       return;
     }
 
@@ -95,7 +95,7 @@ export default function BudgetSetupScreen() {
         extraScrollHeight={200}
       >
         {isLoading ? (
-          <Loader />
+          <FormSkeleton />
         ) : (
           <>
             {/* Header Text */}

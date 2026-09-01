@@ -3,6 +3,7 @@ import { getDatabase } from '@/services/database';
 import { insertNotification } from '@/services/database/notification-dao';
 import { getGoalById } from '@/services/database/goal-dao';
 import { getMonthlyTotals } from '@/services/database/transaction-dao';
+import { formatCurrency } from '@/utils/format';
 import type { Transaction } from '@/types';
 
 export async function evaluateTransactionBudgetAlerts(
@@ -38,7 +39,7 @@ export async function evaluateTransactionBudgetAlerts(
       if (percentage >= 100) {
         await insertNotification({
           title: `Budget Exceeded: ${transaction.category}`,
-          description: `You have spent ₹${Math.round(totalSpent)} which exceeds your ₹${limit} limit for ${transaction.category}.`,
+          description: `You have spent ${formatCurrency(totalSpent)} which exceeds your ${formatCurrency(limit)} limit for ${transaction.category}.`,
           type: 'alert',
           actionUrl: '/(app)/(tabs)/plan',
         });
@@ -46,7 +47,7 @@ export async function evaluateTransactionBudgetAlerts(
       } else if (percentage >= 80) {
         await insertNotification({
           title: `Budget Alert: ${transaction.category}`,
-          description: `You have used ${Math.round(percentage)}% of your ₹${limit} budget for ${transaction.category}.`,
+          description: `You have used ${Math.round(percentage)}% of your ${formatCurrency(limit)} budget for ${transaction.category}.`,
           type: 'alert',
           actionUrl: '/(app)/(tabs)/plan',
         });
@@ -67,7 +68,7 @@ export async function evaluateTransactionBudgetAlerts(
       if (!existingAlert) {
         await insertNotification({
           title: 'Spending Exceeds Income',
-          description: `Total expenses this month (₹${Math.round(totals.expenses)}) have exceeded your income (₹${Math.round(totals.income)}).`,
+          description: `Total expenses this month (${formatCurrency(totals.expenses)}) have exceeded your income (${formatCurrency(totals.income)}).`,
           type: 'alert',
           actionUrl: '/(app)/(tabs)/plan',
         });
@@ -94,7 +95,7 @@ export async function evaluateGoalMilestoneAlerts(
     if (prevPct < 100 && newPct >= 100) {
       await insertNotification({
         title: 'Goal Achieved! 🎉',
-        description: `Congratulations! You reached your savings target of ₹${goal.targetAmount} for "${goal.name}".`,
+        description: `Congratulations! You reached your savings target of ${formatCurrency(goal.targetAmount)} for "${goal.name}".`,
         type: 'milestone',
         actionUrl: `/(app)/goal-details?id=${goal.id}`,
       });
@@ -102,7 +103,7 @@ export async function evaluateGoalMilestoneAlerts(
     } else if (prevPct < 75 && newPct >= 75) {
       await insertNotification({
         title: '75% Milestone Reached 🚀',
-        description: `You are 75% of the way to "${goal.name}" (₹${Math.round(newAmount)} of ₹${goal.targetAmount}).`,
+        description: `You are 75% of the way to "${goal.name}" (${formatCurrency(newAmount)} of ${formatCurrency(goal.targetAmount)}).`,
         type: 'milestone',
         actionUrl: `/(app)/goal-details?id=${goal.id}`,
       });
@@ -154,7 +155,7 @@ export async function checkUpcomingBillReminders(): Promise<void> {
       if (!existing) {
         await insertNotification({
           title: `Upcoming Bill: ${bill.merchant}`,
-          description: `Scheduled ₹${bill.amount} due on ${bill.next_process_date}.`,
+          description: `Scheduled ${formatCurrency(bill.amount)} due on ${bill.next_process_date}.`,
           type: 'default',
           actionUrl: '/(app)/(tabs)/transactions',
         });

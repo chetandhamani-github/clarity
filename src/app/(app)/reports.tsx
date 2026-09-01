@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Text, Header, Loader } from '@/components/ui';
+import { Text, Header, ListSkeleton } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -42,7 +42,7 @@ export default function ReportsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {isLoading ? (
-          <Loader />
+          <ListSkeleton />
         ) : (
           <>
             <View style={styles.introSection}>

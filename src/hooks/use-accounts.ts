@@ -8,6 +8,7 @@ import {
   deleteAccount as deleteAccountDao,
   getTotalBalance,
 } from '@/services/database/account-dao';
+import { queueAutoBackup } from '@/services/cloud/google-drive-service';
 
 export function useAccounts() {
   const { data, isLoading, refetch } = useQuery({
@@ -44,6 +45,7 @@ export function useCreateAccount() {
     mutationFn: (data: Omit<Account, 'id' | 'createdAt'>) => insertAccount(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queueAutoBackup('create-account');
     },
   });
 
@@ -62,6 +64,8 @@ export function useDeleteAccount() {
     mutationFn: (id: string) => deleteAccountDao(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queueAutoBackup('delete-account');
     },
   });
 
@@ -81,6 +85,7 @@ export function useUpdateAccount() {
       updateAccountDao(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queueAutoBackup('update-account');
     },
   });
 

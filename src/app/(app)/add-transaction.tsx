@@ -121,26 +121,26 @@ export default function AddTransactionScreen() {
 
   const handleSave = () => {
     if (!accountId) {
-      showAlert('Validation Error', 'Please select an account.');
+      showToast('Please select an account', 'error');
       return;
     }
     if (type === 'transfer' && !toAccountId) {
-      showAlert('Validation Error', 'Please select a destination account.');
+      showToast('Please select a destination account', 'error');
       return;
     }
     if (type === 'transfer' && accountId === toAccountId) {
-      showAlert('Validation Error', 'Source and destination accounts must be different.');
+      showToast('Source and destination accounts must be different', 'error');
       return;
     }
     const amount = parseFloat(amountStr);
     if (isNaN(amount) || amount <= 0) {
-      showAlert('Validation Error', 'Please enter a valid amount greater than 0.');
+      showToast('Please enter a valid amount greater than 0', 'error');
       return;
     }
     // Merchant description is optional
     // Basic date validation
     if (!date.trim() || date.length !== 10) {
-      showAlert('Validation Error', 'Please enter date in YYYY-MM-DD format.');
+      showToast('Please enter date in YYYY-MM-DD format', 'error');
       return;
     }
 
@@ -314,7 +314,7 @@ export default function AddTransactionScreen() {
               <>
                 {/* Merchant */}
                 <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Merchant / Description</Text>
+                  <Text style={styles.inputLabel}>Merchant / Description <Text style={{ color: colors.outline, fontWeight: '400' }}>(Optional)</Text></Text>
                   <View style={styles.textInputWrapper}>
                     <MaterialIcons
                       name="storefront"
@@ -835,17 +835,22 @@ const getStyles = (colors: ThemeColors) => {
     amountInputRow: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'center',
     },
     currencySymbol: {
       ...typography.dataLg,
       color: colors.onSurface,
-      marginRight: 4,
+      marginRight: 6,
     },
     amountInput: {
       ...typography.displayLg,
       color: colors.onSurface,
-      minWidth: 120,
-      textAlign: 'center',
+      textAlign: 'left',
+      padding: 0,
+      paddingVertical: 0,
+      paddingHorizontal: 0,
+      margin: 0,
+      includeFontPadding: false,
     },
     formGroup: {
       gap: 16,

@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
   TextInput,
 } from 'react-native';
-import { Text, Header, useToast, useAlert, Loader } from '@/components/ui';
+import { Text, Header, useToast, useAlert, DetailSkeleton } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -31,6 +31,7 @@ export default function GoalDetailsScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { showAlert } = useAlert();
+  const { showToast } = useToast();
 
   const { goal, isLoading: goalLoading, refetch: refetchGoal } = useGoal(id as string);
   const {
@@ -60,7 +61,7 @@ export default function GoalDetailsScreen() {
   const handleAddContribution = () => {
     const amt = parseFloat(amount);
     if (isNaN(amt) || amt <= 0) {
-      showAlert('Validation Error', 'Please enter a valid contribution amount.');
+      showToast('Please enter a valid contribution amount', 'error');
       return;
     }
 
@@ -141,7 +142,7 @@ export default function GoalDetailsScreen() {
           showsVerticalScrollIndicator={false}
         >
           {isLoading ? (
-            <Loader />
+            <DetailSkeleton />
           ) : (
             <>
               {/* Header Section */}

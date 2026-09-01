@@ -57,7 +57,8 @@
         {
           "faceIDPermission": "Allow Clarity to use Face ID to authenticate you."
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true,

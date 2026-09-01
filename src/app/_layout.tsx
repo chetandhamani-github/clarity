@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import React, { useEffect, useState, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import {
   useFonts,
   Manrope_400Regular,
@@ -11,6 +12,7 @@ import {
 import * as SplashScreen from 'expo-splash-screen';
 import { initDatabase } from '@/services/database';
 import { ToastProvider, AlertProvider, AppLockModal } from '@/components/ui';
+import { GoogleDrivePromptModal } from '@/components/modals/GoogleDrivePromptModal';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme/useTheme';
@@ -24,11 +26,14 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const [dbReady, setDbReady] = useState(false);
   const [isAppLocked, setIsAppLocked] = useState(false);
+  const [showDrivePrompt, setShowDrivePrompt] = useState(false);
   const lastBackgroundTime = useRef<number | null>(null);
 
   const biometricEnabled = useAppStore((state) => state.biometricEnabled);
   const timeoutSetting = useAppStore((state) => state.timeoutSetting);
   const hasHydrated = useAppStore((state) => state._hasHydrated);
+  const hasSeenDrivePrompt = useAppStore((state) => state.hasSeenDrivePrompt);
+  const googleDriveConnected = useAppStore((state) => state.googleDriveConnected);
   const { expoPushToken } = usePushNotifications();
   const { theme } = useTheme();
 
@@ -39,7 +44,18 @@ export default function RootLayout() {
     }
   }, [hasHydrated]);
 
+  // First-time launch Google Drive backup prompt
+  useEffect(() => {
+    if (hasHydrated && dbReady && !hasSeenDrivePrompt && !googleDriveConnected) {
+      const timer = setTimeout(() => {
+        setShowDrivePrompt(true);
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [hasHydrated, dbReady, hasSeenDrivePrompt, googleDriveConnected]);
+
   const [fontsLoaded, fontsError] = useFonts({
+    ...MaterialIcons.font,
     Manrope_400Regular,
     Manrope_500Medium,
     Manrope_600SemiBold,
@@ -54,6 +70,12 @@ export default function RootLayout() {
             await import('@/services/database/recurring-dao');
           await processDueRecurringTransactions();
           await checkUpcomingBillReminders();
+
+          // Silent cloud backup sync on app launch
+          const { syncDatabaseToDriveSilently } = await import(
+            '@/services/cloud/google-drive-service'
+          );
+          syncDatabaseToDriveSilently('app-launch').catch(() => {});
         } catch (e) {
           console.error('Failed to process recurring transactions / bills:', e);
         }
@@ -113,6 +135,10 @@ export default function RootLayout() {
               <Stack.Screen name="(auth)" options={{ headerShown: false }} />
             </Stack>
             <AppLockModal visible={isAppLocked} onUnlock={() => setIsAppLocked(false)} />
+            <GoogleDrivePromptModal
+              visible={showDrivePrompt && !isAppLocked}
+              onDismiss={() => setShowDrivePrompt(false)}
+            />
           </AlertProvider>
         </ToastProvider>
       </QueryClientProvider>

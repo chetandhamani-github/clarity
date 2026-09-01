@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { Text, Header, Loader } from '@/components/ui';
+import { Text, Header, ListSkeleton } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -122,7 +122,7 @@ export default function SearchScreen() {
           enableOnAndroid={true}
         >
           {isLoading ? (
-            <Loader />
+            <ListSkeleton />
           ) : (
             <>
               <View style={styles.resultsHeader}>

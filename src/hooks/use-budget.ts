@@ -9,6 +9,7 @@ import {
   deleteCategory,
   getSpentByCategory,
 } from '@/services/database/budget-dao';
+import { queueAutoBackup } from '@/services/cloud/google-drive-service';
 
 export function useBudgetPlan() {
   const { data, isLoading, refetch } = useQuery({
@@ -26,6 +27,7 @@ export function useUpdateBudgetPlan() {
     mutationFn: (data: Omit<BudgetPlan, 'id'>) => upsertBudgetPlan(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
+      queueAutoBackup('update-budget');
     },
   });
 
@@ -54,6 +56,7 @@ export function useCreateCategory() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+      queueAutoBackup('create-category');
     },
   });
 
@@ -74,6 +77,7 @@ export function useUpdateCategory() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+      queueAutoBackup('update-category');
     },
   });
 
@@ -97,6 +101,7 @@ export function useDeleteCategory() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+      queueAutoBackup('delete-category');
     },
   });
 

@@ -13,6 +13,7 @@ import {
   getSpentByCategory,
 } from '@/services/database/budget-dao';
 import { getGoals } from '@/services/database/goal-dao';
+import { getCurrencySymbol } from '@/utils/format';
 
 export interface ExportStats {
   transactionCount: number;
@@ -173,6 +174,7 @@ export async function exportFinancialSummaryReport(
     const spending = await getSpentByCategory(m, y);
     const topMerchants = await getTopMerchants(m, y, 10);
     const goals = await getGoals();
+    const sym = getCurrencySymbol();
 
     const netWorth = accounts.reduce((sum, a) => sum + a.balance, 0);
     const cashFlow = totals.income - totals.expenses;
@@ -185,16 +187,16 @@ export async function exportFinancialSummaryReport(
 
     report += `1. EXECUTIVE SNAPSHOT\n`;
     report += `-------------------------------------------------\n`;
-    report += `Total Net Worth : ₹${netWorth.toLocaleString()}\n`;
-    report += `Monthly Income  : ₹${totals.income.toLocaleString()}\n`;
-    report += `Monthly Expenses: ₹${totals.expenses.toLocaleString()}\n`;
-    report += `Net Cash Flow   : ${cashFlow >= 0 ? '+' : ''}₹${cashFlow.toLocaleString()}\n`;
+    report += `Total Net Worth : ${sym}${netWorth.toLocaleString()}\n`;
+    report += `Monthly Income  : ${sym}${totals.income.toLocaleString()}\n`;
+    report += `Monthly Expenses: ${sym}${totals.expenses.toLocaleString()}\n`;
+    report += `Net Cash Flow   : ${cashFlow >= 0 ? '+' : ''}${sym}${cashFlow.toLocaleString()}\n`;
     report += `Savings Rate    : ${savingsRate}%\n\n`;
 
     report += `2. ACCOUNTS SUMMARY\n`;
     report += `-------------------------------------------------\n`;
     for (const acc of accounts) {
-      report += `- ${acc.name} (${acc.type}): ₹${acc.balance.toLocaleString()} ${acc.institution ? `[${acc.institution}]` : ''}\n`;
+      report += `- ${acc.name} (${acc.type}): ${sym}${acc.balance.toLocaleString()} ${acc.institution ? `[${acc.institution}]` : ''}\n`;
     }
     report += `\n`;
 
@@ -205,7 +207,7 @@ export async function exportFinancialSummaryReport(
       report += `No expense records for this month.\n`;
     } else {
       for (const [cat, amt] of sortedCategories) {
-        report += `- ${cat.padEnd(20)}: ₹${amt.toLocaleString()}\n`;
+        report += `- ${cat.padEnd(20)}: ${sym}${amt.toLocaleString()}\n`;
       }
     }
     report += `\n`;
@@ -216,7 +218,7 @@ export async function exportFinancialSummaryReport(
       report += `No merchant records for this month.\n`;
     } else {
       for (const tm of topMerchants) {
-        report += `- ${tm.merchant.padEnd(20)}: ₹${tm.total.toLocaleString()}\n`;
+        report += `- ${tm.merchant.padEnd(20)}: ${sym}${tm.total.toLocaleString()}\n`;
       }
     }
     report += `\n`;
@@ -225,7 +227,7 @@ export async function exportFinancialSummaryReport(
     report += `-------------------------------------------------\n`;
     for (const g of goals) {
       const pct = g.targetAmount > 0 ? ((g.currentAmount / g.targetAmount) * 100).toFixed(0) : '0';
-      report += `- ${g.name}: ₹${g.currentAmount.toLocaleString()} / ₹${g.targetAmount.toLocaleString()} (${pct}%)\n`;
+      report += `- ${g.name}: ${sym}${g.currentAmount.toLocaleString()} / ${sym}${g.targetAmount.toLocaleString()} (${pct}%)\n`;
     }
     report += `\n=================================================\n`;
     report += `Generated on ${new Date().toLocaleString()} by Clarity\n`;

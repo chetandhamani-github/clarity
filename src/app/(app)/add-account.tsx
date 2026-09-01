@@ -50,12 +50,12 @@ export default function AddAccountScreen() {
 
   const handleSave = () => {
     if (!name.trim()) {
-      showAlert('Validation Error', 'Account name is required.');
+      showToast('Account name is required', 'error');
       return;
     }
     const balance = parseFloat(balanceStr);
     if (isNaN(balance)) {
-      showAlert('Validation Error', 'Please enter a valid balance.');
+      showToast('Please enter a valid balance', 'error');
       return;
     }
 

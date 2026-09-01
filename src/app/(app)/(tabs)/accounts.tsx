@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
-import { Text, Header, Loader } from '@/components/ui';
+import { Text, Header, AccountsSkeleton } from '@/components/ui';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -80,7 +80,7 @@ export default function AccountsScreen() {
           showsVerticalScrollIndicator={false}
         >
           {isLoading ? (
-            <Loader />
+            <AccountsSkeleton />
           ) : (
             <>
               <View style={{ gap: 24 }}>

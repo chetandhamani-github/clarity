@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
-import { Text, Header, useAlert } from '@/components/ui';
+import { Text, Header, useAlert, useToast } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +19,7 @@ export default function ExportSuccessScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { showAlert } = useAlert();
+  const { showToast } = useToast();
 
   const [selectedFormat, setSelectedFormat] = useState<'csv' | 'json' | 'summary'>('csv');
   const [isExporting, setIsExporting] = useState(false);
@@ -44,12 +45,16 @@ export default function ExportSuccessScreen() {
         result = await exportFinancialSummaryReport();
       }
 
-      if (!result.success) {
-        showAlert('Export Failed', result.message || 'Could not complete file export.');
+      if (
+        !result.success &&
+        !result.message?.toLowerCase().includes('cancel') &&
+        !result.message?.toLowerCase().includes('dismiss')
+      ) {
+        showToast(result.message || 'Could not complete file export', 'error');
       }
     } catch (err: any) {
       console.error('Export error:', err);
-      showAlert('Error', err?.message || 'An unexpected error occurred during export.');
+      showToast(err?.message || 'An unexpected error occurred during export', 'error');
     } finally {
       setIsExporting(false);
     }

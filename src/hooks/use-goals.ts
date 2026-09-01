@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as goalDao from '@/services/database/goal-dao';
+import { queueAutoBackup } from '@/services/cloud/google-drive-service';
 import type { Goal, GoalContribution } from '@/types';
 
 export function useGoals() {
@@ -39,6 +40,7 @@ export function useCreateGoal() {
       goalDao.createGoal(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['goals'] });
+      queueAutoBackup('create-goal');
     },
   });
 
@@ -60,6 +62,7 @@ export function useDeleteGoal() {
     mutationFn: (id: string) => goalDao.deleteGoal(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['goals'] });
+      queueAutoBackup('delete-goal');
     },
   });
 
@@ -75,16 +78,24 @@ export function useAddGoalContribution() {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
-    mutationFn: ({ data, accountId }: { data: Omit<GoalContribution, 'id'>; accountId?: string }) =>
-      goalDao.addGoalContribution(data, accountId),
+    mutationFn: ({
+      data,
+      accountId,
+    }: {
+      data: Omit<GoalContribution, 'id'>;
+      accountId?: string;
+    }) => goalDao.addGoalContribution(data, accountId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['goals'] });
-      queryClient.invalidateQueries({ queryKey: ['goalContributions', variables.data.goalId] });
+      queryClient.invalidateQueries({
+        queryKey: ['goalContributions', variables.data.goalId],
+      });
       if (variables.accountId) {
         queryClient.invalidateQueries({ queryKey: ['accounts'] });
         queryClient.invalidateQueries({ queryKey: ['transactions'] });
         queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
       }
+      queueAutoBackup('contribute-goal');
     },
   });
 

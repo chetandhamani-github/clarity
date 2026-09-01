@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Text, Header, Loader } from '@/components/ui';
+import { Text, Header, PlanSkeleton } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -75,19 +75,7 @@ export default function PlanScreen() {
           }
           rightNode={<View style={styles.iconButton} />}
         />
-        {true ? (
-          <Loader />
-        ) : (
-          <>
-            <View style={{ height: 40, width: '100%', marginBottom: 20, borderRadius: 8 }} />
-            <View style={{ flexDirection: 'row', gap: 16, marginBottom: 24 }}>
-              <View style={{ flex: 1, height: 100, borderRadius: 12 }} />
-              <View style={{ flex: 1, height: 100, borderRadius: 12 }} />
-            </View>
-            <View style={{ height: 120, width: '100%', borderRadius: 12, marginBottom: 16 }} />
-            <View style={{ height: 120, width: '100%', borderRadius: 12, marginBottom: 16 }} />
-          </>
-        )}
+        <PlanSkeleton />
       </View>
     );
   }
@@ -166,7 +154,7 @@ export default function PlanScreen() {
         showsVerticalScrollIndicator={false}
       >
         {isLoading ? (
-          <Loader />
+          <PlanSkeleton />
         ) : (
           <>
             {/* Section Header */}

@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Text, Header, Loader } from '@/components/ui';
+import { Text, Header, TransactionsSkeleton } from '@/components/ui';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -109,7 +109,7 @@ export default function TransactionsScreen() {
         </View>
 
         {isLoading ? (
-          <Loader />
+          <TransactionsSkeleton />
         ) : (
           <>
             {transactions.length === 0 ? (

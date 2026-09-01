@@ -135,7 +135,7 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
                             isDefault && styles.defaultText,
                           ]}
                         >
-                          Ok
+                          {btn.text}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -214,21 +214,24 @@ const getStyles = (colors: ThemeColors) => {
       backgroundColor: colors.primary,
     },
     defaultText: {
-      ...typography.labelMd,
+      ...typography.bodyMd,
+      fontWeight: '600',
       color: colors.onPrimary,
     },
     cancelButton: {
       backgroundColor: colors.surfaceContainer,
     },
     cancelText: {
-      ...typography.labelMd,
+      ...typography.bodyMd,
+      fontWeight: '600',
       color: colors.onSurface,
     },
     destructiveButton: {
       backgroundColor: colors.errorContainer,
     },
     destructiveText: {
-      ...typography.labelMd,
+      ...typography.bodyMd,
+      fontWeight: '600',
       color: colors.onErrorContainer,
     },
   });

@@ -1,15 +1,14 @@
-import { Header, ProgressBar, Text, Loader } from '@/components/ui';
+import { Header, HomeSkeleton, ProgressBar, Text } from '@/components/ui';
 import { radius, ThemeColors, typography, useTheme } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import {
-  ActivityIndicator,
   Dimensions,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { LineChart, PieChart } from 'react-native-gifted-charts';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -220,7 +219,7 @@ export default function DashboardScreen() {
       >
         <View style={{ flex: 1 }}>
           {isLoading ? (
-            <Loader />
+            <HomeSkeleton />
           ) : (
             <>
               {/* Main Card: Net Worth */}

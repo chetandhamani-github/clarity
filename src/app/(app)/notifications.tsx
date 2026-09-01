@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   Pressable,
 } from 'react-native';
-import { Text, Header, Loader, useToast } from '@/components/ui';
+import { Text, Header, ListSkeleton, useToast } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -150,7 +150,7 @@ export default function NotificationsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {isLoading ? (
-          <Loader />
+          <ListSkeleton />
         ) : (
           <>
             {unreadCount > 0 && (

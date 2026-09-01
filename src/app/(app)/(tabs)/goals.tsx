@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   TextInput,
 } from 'react-native';
-import { Text, Header, Loader } from '@/components/ui';
+import { Text, Header, GoalsSkeleton } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,12 +43,12 @@ export default function GoalsScreen() {
 
   const handleAddGoal = () => {
     if (!newGoalName.trim()) {
-      showAlert('Validation Error', 'Please enter a goal name.');
+      showToast('Please enter a goal name', 'error');
       return;
     }
     const targetAmt = parseFloat(newGoalTarget);
     if (isNaN(targetAmt) || targetAmt <= 0) {
-      showAlert('Validation Error', 'Please enter a valid target amount.');
+      showToast('Please enter a valid target amount', 'error');
       return;
     }
 
@@ -97,7 +97,7 @@ export default function GoalsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {isLoading ? (
-          <Loader />
+          <GoalsSkeleton />
         ) : (
           <>
             {showAdd && (

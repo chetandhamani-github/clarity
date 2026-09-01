@@ -1,18 +1,25 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert } from 'react-native';
-import { Text, Header } from '@/components/ui';
-import { typography, useTheme, ThemeColors } from '@/theme';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { useAppStore } from '@/store/use-app-store';
-import { clearDatabase } from '@/services/database';
-import { useNotifications } from '@/hooks/use-notifications';
-import { useGoals } from '@/hooks/use-goals';
+import { Header, Text, useAlert, useToast } from '@/components/ui';
 import { useCategorySpending } from '@/hooks/use-budget';
+import { useGoals } from '@/hooks/use-goals';
+import { useGoogleDrive } from '@/hooks/use-google-drive';
+import { useNotifications } from '@/hooks/use-notifications';
+import { clearDatabase } from '@/services/database';
+import { useAppStore } from '@/store/use-app-store';
+import { ThemeColors, typography, useTheme } from '@/theme';
 import { formatCurrency } from '@/utils/format';
-import { useAlert } from '@/components/ui';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
+import { useState } from 'react';
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
@@ -26,7 +33,24 @@ export default function SettingsScreen() {
   const biometricsEnabled = useAppStore((state) => state.biometricEnabled);
   const [isResetting, setIsResetting] = useState(false);
   const { showAlert } = useAlert();
+  const { showToast } = useToast();
   const queryClient = useQueryClient();
+
+  const {
+    isConnected: isDriveConnected,
+    userEmail: driveUserEmail,
+    lastBackupTime: driveLastBackupTime,
+    isConnecting: isConnectingDrive,
+    isBackingUp: isBackingUpDrive,
+    isRestoring: isRestoringDrive,
+    isAutoSyncing,
+    autoBackupEnabled,
+    setAutoBackupEnabled,
+    connect: connectDrive,
+    disconnect: disconnectDrive,
+    backupNow: backupDriveNow,
+    restoreFromDrive,
+  } = useGoogleDrive();
 
   const now = new Date();
   const { notifications } = useNotifications();
@@ -50,6 +74,38 @@ export default function SettingsScreen() {
     else setCurrency('INR');
   };
 
+  const handleRestoreFromDrive = async () => {
+    showAlert(
+      'Restore from Google Drive',
+      'This will restore accounts, transactions, and goals from Google Drive and update your local database. Would you like to proceed?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Restore',
+          style: 'default',
+          onPress: async () => {
+            await restoreFromDrive();
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDisconnectDrive = () => {
+    showAlert(
+      'Disconnect Google Drive',
+      'Are you sure you want to disconnect your Google Drive account? Local data will not be affected.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: disconnectDrive,
+        },
+      ]
+    );
+  };
+
   const handleResetData = () => {
     showAlert(
       'Reset App Data',
@@ -64,10 +120,10 @@ export default function SettingsScreen() {
               setIsResetting(true);
               await clearDatabase();
               queryClient.clear();
-              showAlert('Success', 'App data has been reset to defaults. Please restart the app.');
+              showToast('App data has been reset to defaults', 'success');
             } catch (error) {
               console.error(error);
-              showAlert('Error', 'Failed to reset app data.');
+              showToast('Failed to reset app data', 'error');
             } finally {
               setIsResetting(false);
             }
@@ -243,6 +299,148 @@ export default function SettingsScreen() {
               </View>
               <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
             </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Google Drive Cloud Backup */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Google Drive Cloud Backup</Text>
+          <View style={[styles.card, { minHeight: 'auto', gap: 16 }]}>
+            {isDriveConnected ? (
+              <>
+                <View style={styles.driveStatusRow}>
+                  <View
+                    style={[
+                      styles.driveIconBox,
+                      { backgroundColor: colors.primaryContainer },
+                    ]}
+                  >
+                    <MaterialIcons name="cloud-done" size={24} color={colors.onPrimaryContainer} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.driveStatusTitle}>Connected to Google Drive</Text>
+                    <Text style={styles.driveStatusEmail} numberOfLines={1}>
+                      {driveUserEmail || 'Personal Cloud Vault'}
+                    </Text>
+                    <Text style={styles.driveLastBackupText}>
+                      Last Backup:{' '}
+                      {driveLastBackupTime
+                        ? new Date(driveLastBackupTime).toLocaleString()
+                        : 'Not backed up yet'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Automatic Cloud Sync Toggle */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    backgroundColor: colors.surfaceContainer,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: colors.surfaceVariant,
+                  }}
+                >
+                  <View style={{ flex: 1, marginRight: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.settingTitle}>Automatic Cloud Sync</Text>
+                      {isAutoSyncing && (
+                        <ActivityIndicator size="small" color={colors.primary} />
+                      )}
+                    </View>
+                    <Text style={styles.settingSub}>
+                      Auto-syncs changes & updates silently in background.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={autoBackupEnabled}
+                    onValueChange={(val) => setAutoBackupEnabled(val)}
+                    trackColor={{ false: colors.surfaceContainerHighest, true: colors.primary }}
+                    thumbColor={colors.onPrimary}
+                  />
+                </View>
+
+                <View style={{ gap: 8 }}>
+                  <TouchableOpacity
+                    style={styles.btnPrimary}
+                    onPress={backupDriveNow}
+                    disabled={isBackingUpDrive || isRestoringDrive}
+                  >
+                    {isBackingUpDrive ? (
+                      <ActivityIndicator size="small" color={colors.onPrimary} />
+                    ) : (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <MaterialIcons name="cloud-upload" size={18} color={colors.onPrimary} />
+                        <Text style={styles.btnPrimaryText}>BACKUP NOW</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.btnSecondary}
+                    onPress={handleRestoreFromDrive}
+                    disabled={isBackingUpDrive || isRestoringDrive}
+                  >
+                    {isRestoringDrive ? (
+                      <ActivityIndicator size="small" color={colors.onSurface} />
+                    ) : (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <MaterialIcons name="cloud-download" size={18} color={colors.onSurface} />
+                        <Text style={styles.btnSecondaryText}>RESTORE FROM DRIVE</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.btnSecondary, { borderColor: colors.error, borderWidth: 1 }]}
+                    onPress={handleDisconnectDrive}
+                    disabled={isBackingUpDrive || isRestoringDrive}
+                  >
+                    <Text style={[styles.btnSecondaryText, { color: colors.error }]}>
+                      DISCONNECT DRIVE
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.driveStatusRow}>
+                  <View
+                    style={[
+                      styles.driveIconBox,
+                      { backgroundColor: colors.surfaceContainerHighest },
+                    ]}
+                  >
+                    <MaterialIcons name="cloud-queue" size={24} color={colors.onSurfaceVariant} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.driveStatusTitle}>Cloud Backup Not Connected</Text>
+                    <Text style={styles.driveStatusEmail}>
+                      Connect Google Drive to safely synchronize accounts, transactions, and goals.
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.btnPrimary}
+                  onPress={() => connectDrive()}
+                  disabled={isConnectingDrive}
+                >
+                  {isConnectingDrive ? (
+                    <ActivityIndicator size="small" color={colors.onPrimary} />
+                  ) : (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <MaterialIcons name="add-to-drive" size={18} color={colors.onPrimary} />
+                      <Text style={styles.btnPrimaryText}>CONNECT GOOGLE DRIVE</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
 
@@ -433,6 +631,36 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       color: colors.onSurface,
       textAlign: 'center',
+    },
+    driveStatusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+    },
+    driveIconBox: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    driveStatusTitle: {
+      ...typography.bodyLg,
+      fontWeight: '600',
+      color: colors.onSurface,
+    },
+    driveStatusEmail: {
+      ...typography.bodyMd,
+      color: colors.onSurfaceVariant,
+      fontSize: 13,
+      marginTop: 2,
+    },
+    driveLastBackupText: {
+      ...typography.bodyMd,
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '500',
+      marginTop: 4,
     },
   });
   return styles;

@@ -1,6 +1,7 @@
 import { getDatabase } from './index';
 import { insertTransaction } from './transaction-dao';
 import { insertNotification } from './notification-dao';
+import { formatCurrency } from '@/utils/format';
 import type {
   RecurringTransaction,
   RecurringTransactionWithAccount,
@@ -129,39 +130,43 @@ export async function processDueRecurringTransactions(): Promise<void> {
 
   for (const rt of dueTransactions) {
     try {
-      // Create the actual transaction
-      await insertTransaction({
-        accountId: rt.account_id,
-        toAccountId: rt.to_account_id,
-        amount: rt.amount,
-        type: rt.type as TransactionType,
-        merchant: rt.merchant,
-        category: rt.category,
-        date: rt.next_process_date,
-        isRecurring: true,
-        note: 'Auto-generated recurring transaction',
-      });
+      let currentDate = rt.next_process_date;
+      let lastProcessed = rt.last_processed_date || currentDate;
+      let count = 0;
+      const MAX_CYCLES = 24; // safety guard
 
-      // Insert notification
+      while (currentDate <= today && count < MAX_CYCLES) {
+        // Create the transaction for each due period
+        await insertTransaction({
+          accountId: rt.account_id,
+          toAccountId: rt.to_account_id,
+          amount: rt.amount,
+          type: rt.type as TransactionType,
+          merchant: rt.merchant,
+          category: rt.category,
+          date: currentDate,
+          isRecurring: true,
+          note: 'Auto-generated recurring transaction',
+        });
+
+        lastProcessed = currentDate;
+        currentDate = calculateNextDate(currentDate, rt.frequency as RecurringFrequency);
+        count++;
+      }
+
+      // Insert single summary notification
       await insertNotification({
         title: 'Recurring Transaction Processed',
-        description: `Scheduled ${rt.type} of ₹${rt.amount} for "${rt.merchant}" was automatically recorded.`,
+        description: `Scheduled ${rt.type} of ${formatCurrency(rt.amount)} for "${rt.merchant}" was automatically recorded${count > 1 ? ` (${count} cycles)` : ''}.`,
         type: 'default',
         actionUrl: '/(app)/(tabs)/transactions',
       });
-
-      // Advance the date
-      let nextDateStr = rt.next_process_date;
-      // Loop just in case they haven't opened the app in a long time and multiple periods have passed
-      while (nextDateStr <= today) {
-        nextDateStr = calculateNextDate(nextDateStr, rt.frequency as RecurringFrequency);
-      }
 
       await db.runAsync(
         `UPDATE recurring_transactions 
          SET last_processed_date = ?, next_process_date = ? 
          WHERE id = ?`,
-        [rt.next_process_date, nextDateStr, rt.id]
+        [lastProcessed, currentDate, rt.id]
       );
     } catch (error) {
       console.error(`Failed to process recurring transaction ${rt.id}:`, error);

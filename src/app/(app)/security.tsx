@@ -73,11 +73,11 @@ export default function SecurityPrivacyScreen() {
         setBiometricEnabled(true);
         showToast('Biometric unlock enabled', 'success');
       } else {
-        showAlert('Authentication Failed', 'Could not verify biometrics.');
+        showToast('Could not verify biometrics', 'error');
       }
     } catch (error: any) {
       console.error(error);
-      showAlert('Error', 'Failed to enable biometrics.');
+      showToast('Failed to enable biometrics', 'error');
     }
   };
 
@@ -85,8 +85,12 @@ export default function SecurityPrivacyScreen() {
     setIsExporting(true);
     try {
       const result = await exportFullBackupToJSON();
-      if (!result.success) {
-        showAlert('Export Failed', result.message || 'Could not export data.');
+      if (
+        !result.success &&
+        !result.message?.toLowerCase().includes('cancel') &&
+        !result.message?.toLowerCase().includes('dismiss')
+      ) {
+        showToast(result.message || 'Could not export data', 'error');
       }
     } finally {
       setIsExporting(false);
@@ -109,7 +113,7 @@ export default function SecurityPrivacyScreen() {
               router.replace('/(app)/(tabs)/dashboard' as any);
             } catch (err) {
               console.error(err);
-              showAlert('Error', 'Failed to clear local data.');
+              showToast('Failed to clear local data', 'error');
             }
           },
         },
