@@ -8,13 +8,14 @@ export interface Account {
   createdAt: string;
 }
 
-export type AccountType = 'checking' | 'savings' | 'credit' | 'investment';
+export type AccountType = 'savings' | 'current' | 'credit' | 'investment' | 'wallet' | 'checking';
 
 export const ACCOUNT_TYPES: { label: string; value: AccountType }[] = [
-  { label: 'Checking', value: 'checking' },
-  { label: 'Savings', value: 'savings' },
+  { label: 'Savings Account', value: 'savings' },
+  { label: 'Current Account', value: 'current' },
   { label: 'Credit Card', value: 'credit' },
   { label: 'Investment', value: 'investment' },
+  { label: 'Cash / Wallet', value: 'wallet' },
 ];
 
 export interface Transaction {

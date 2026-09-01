@@ -1,75 +1,88 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { Text, Header } from '@/components/ui';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { Text, Header, useAlert } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import {
+  getExportStats,
+  exportTransactionsToCSV,
+  exportFullBackupToJSON,
+  exportFinancialSummaryReport,
+  type ExportStats,
+} from '@/services/export/export-service';
 
 export default function ExportSuccessScreen() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [selectedFormat, setSelectedFormat] = useState('pdf');
+  const { showAlert } = useAlert();
+
+  const [selectedFormat, setSelectedFormat] = useState<'csv' | 'json' | 'summary'>('csv');
   const [isExporting, setIsExporting] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [stats, setStats] = useState<ExportStats>({
+    transactionCount: 0,
+    accountCount: 0,
+    goalCount: 0,
+  });
 
-  const handleExport = () => {
+  useEffect(() => {
+    getExportStats().then(setStats).catch(console.error);
+  }, []);
+
+  const handleExport = async () => {
     setIsExporting(true);
-    // Simulate network delay
-    setTimeout(() => {
-      setIsExporting(false);
-      setIsSuccess(true);
-    }, 1500);
-  };
+    try {
+      let result;
+      if (selectedFormat === 'csv') {
+        result = await exportTransactionsToCSV();
+      } else if (selectedFormat === 'json') {
+        result = await exportFullBackupToJSON();
+      } else {
+        result = await exportFinancialSummaryReport();
+      }
 
-  if (isSuccess) {
-    return (
-      <View style={[styles.container, styles.centeredContainer]}>
-        <View style={styles.successIconBox}>
-          <MaterialIcons name="check-circle" size={40} color={colors.onPrimaryContainer} />
-        </View>
-        <Text style={styles.successTitle}>Export Successful</Text>
-        <Text style={styles.successBody}>
-          Your financial report has been exported successfully and is ready for download.
-        </Text>
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => router.back()}>
-          <Text style={styles.primaryBtnText}>Return to Dashboard</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+      if (!result.success) {
+        showAlert('Export Failed', result.message || 'Could not complete file export.');
+      }
+    } catch (err: any) {
+      console.error('Export error:', err);
+      showAlert('Error', err?.message || 'An unexpected error occurred during export.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <Header
-        showBack
-        title="Export Report"
-      />
+      <Header showBack title="Export Data" />
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 24 }]}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.subtitle}>
-          Select a format to download your customized financial summary.
+          Export your financial records. Data is generated directly from your local vault.
         </Text>
 
-        <View style={styles.optionsList}>
-          {/* PDF Option */}
-          <TouchableOpacity
-            style={[styles.optionCard, selectedFormat === 'pdf' && styles.optionCardSelected]}
-            onPress={() => setSelectedFormat('pdf')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.radioOuter}>
-              {selectedFormat === 'pdf' && <View style={styles.radioInner} />}
-            </View>
-            <View style={styles.optionContent}>
-              <Text style={styles.optionTitle}>PDF Document</Text>
-              <Text style={styles.optionSub}>Best for printing and sharing</Text>
-            </View>
-            <MaterialIcons name="picture-as-pdf" size={24} color={colors.secondary} />
-          </TouchableOpacity>
+        {/* Data Stats Badge */}
+        <View style={styles.statsCard}>
+          <MaterialIcons name="storage" size={20} color={colors.primary} />
+          <Text style={styles.statsText}>
+            Ready to export:{' '}
+            <Text style={{ fontWeight: '700', color: colors.onSurface }}>
+              {stats.transactionCount}
+            </Text>{' '}
+            transactions across{' '}
+            <Text style={{ fontWeight: '700', color: colors.onSurface }}>{stats.accountCount}</Text>{' '}
+            accounts
+          </Text>
+        </View>
 
+        <View style={styles.optionsList}>
           {/* CSV Option */}
           <TouchableOpacity
             style={[styles.optionCard, selectedFormat === 'csv' && styles.optionCardSelected]}
@@ -81,9 +94,29 @@ export default function ExportSuccessScreen() {
             </View>
             <View style={styles.optionContent}>
               <Text style={styles.optionTitle}>CSV Spreadsheet</Text>
-              <Text style={styles.optionSub}>Raw data for Excel or Numbers</Text>
+              <Text style={styles.optionSub}>
+                All transactions for Excel, Numbers, or Google Sheets
+              </Text>
             </View>
             <MaterialIcons name="table-chart" size={24} color={colors.secondary} />
+          </TouchableOpacity>
+
+          {/* Summary Report */}
+          <TouchableOpacity
+            style={[styles.optionCard, selectedFormat === 'summary' && styles.optionCardSelected]}
+            onPress={() => setSelectedFormat('summary')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.radioOuter}>
+              {selectedFormat === 'summary' && <View style={styles.radioInner} />}
+            </View>
+            <View style={styles.optionContent}>
+              <Text style={styles.optionTitle}>Financial Summary Report</Text>
+              <Text style={styles.optionSub}>
+                Formatted executive overview of income, spending & goals
+              </Text>
+            </View>
+            <MaterialIcons name="assessment" size={24} color={colors.secondary} />
           </TouchableOpacity>
 
           {/* JSON Option */}
@@ -96,8 +129,8 @@ export default function ExportSuccessScreen() {
               {selectedFormat === 'json' && <View style={styles.radioInner} />}
             </View>
             <View style={styles.optionContent}>
-              <Text style={styles.optionTitle}>JSON Data</Text>
-              <Text style={styles.optionSub}>Structured data for developers</Text>
+              <Text style={styles.optionTitle}>Full JSON Backup</Text>
+              <Text style={styles.optionSub}>Complete structured database snapshot</Text>
             </View>
             <MaterialIcons name="data-object" size={24} color={colors.secondary} />
           </TouchableOpacity>
@@ -105,7 +138,7 @@ export default function ExportSuccessScreen() {
       </ScrollView>
 
       {/* Footer */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom || 20 }]}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>
         <TouchableOpacity
           style={styles.cancelBtn}
           onPress={() => router.back()}
@@ -118,7 +151,11 @@ export default function ExportSuccessScreen() {
           onPress={handleExport}
           disabled={isExporting}
         >
-          <Text style={styles.primaryBtnText}>{isExporting ? 'Exporting...' : 'Export Now'}</Text>
+          {isExporting ? (
+            <ActivityIndicator size="small" color={colors.onPrimary} />
+          ) : (
+            <Text style={styles.primaryBtnText}>Export Now</Text>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -131,19 +168,29 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.surfaceContainerLowest, // acting like a modal surface
     },
-    centeredContainer: {
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: 24,
-    },
 
     scrollContent: {
       padding: 20,
     },
+    statsCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: colors.surfaceContainerLow,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderRadius: 12,
+      marginBottom: 20,
+    },
+    statsText: {
+      ...typography.bodyMd,
+      color: colors.onSurfaceVariant,
+      flex: 1,
+    },
     subtitle: {
       ...typography.bodyMd,
       color: colors.onSurfaceVariant,
-      marginBottom: 24,
+      marginBottom: 16,
     },
     optionsList: {
       gap: 16,
@@ -194,6 +241,9 @@ const getStyles = (colors: ThemeColors) => {
       gap: 16,
       paddingHorizontal: 20,
       paddingTop: 16,
+      borderTopWidth: 1,
+      borderTopColor: colors.outlineVariant + '40',
+      backgroundColor: colors.surfaceContainerLowest,
     },
     cancelBtn: {
       flex: 1,
@@ -214,36 +264,9 @@ const getStyles = (colors: ThemeColors) => {
       backgroundColor: colors.primary,
       alignItems: 'center',
     },
-    primaryBtn: {
-      width: '100%',
-      paddingVertical: 14,
-      borderRadius: 24,
-      backgroundColor: colors.primary,
-      alignItems: 'center',
-    },
     primaryBtnText: {
       ...typography.labelMd,
       color: colors.onPrimary,
-    },
-    successIconBox: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      backgroundColor: colors.primaryContainer,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 24,
-    },
-    successTitle: {
-      ...typography.headlineMd,
-      color: colors.onSurface,
-      marginBottom: 12,
-    },
-    successBody: {
-      ...typography.bodyLg,
-      color: colors.onSurfaceVariant,
-      textAlign: 'center',
-      marginBottom: 32,
     },
   });
   return styles;

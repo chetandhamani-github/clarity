@@ -19,11 +19,15 @@ export default function PlanScreen() {
   const currentYear = now.getFullYear();
   const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
   const daysRemaining = daysInMonth - now.getDate();
-  
+
   const monthName = now.toLocaleString('default', { month: 'long' });
 
   const { plan, isLoading: planLoading, refetch: refetchPlan } = useBudgetPlan();
-  const { spending, isLoading: spendingLoading, refetch: refetchSpending } = useCategorySpending(currentMonth, currentYear);
+  const {
+    spending,
+    isLoading: spendingLoading,
+    refetch: refetchSpending,
+  } = useCategorySpending(currentMonth, currentYear);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -37,22 +41,22 @@ export default function PlanScreen() {
   // Calculate totals from spending
   const totals = useMemo(() => {
     if (!plan) return { needsSpent: 0, wantsSpent: 0, savingsSpent: 0, totalSpent: 0 };
-    
+
     let needsSpent = 0;
     let wantsSpent = 0;
     let savingsSpent = 0;
-    
-    spending.forEach(cat => {
+
+    spending.forEach((cat) => {
       if (cat.bucketType === 'needs') needsSpent += cat.spent;
       if (cat.bucketType === 'wants') wantsSpent += cat.spent;
       if (cat.bucketType === 'savings') savingsSpent += cat.spent;
     });
-    
+
     return {
       needsSpent,
       wantsSpent,
       savingsSpent,
-      totalSpent: needsSpent + wantsSpent + savingsSpent
+      totalSpent: needsSpent + wantsSpent + savingsSpent,
     };
   }, [plan, spending]);
 
@@ -71,15 +75,19 @@ export default function PlanScreen() {
           }
           rightNode={<View style={styles.iconButton} />}
         />
-        { true ? <Loader /> : (<>
-          <View style={{ height: 40, width: '100%', marginBottom: 20, borderRadius: 8 }} />
-          <View style={{ flexDirection: 'row', gap: 16, marginBottom: 24 }}>
-            <View style={{ flex: 1, height: 100, borderRadius: 12 }} />
-            <View style={{ flex: 1, height: 100, borderRadius: 12 }} />
-          </View>
-          <View style={{ height: 120, width: '100%', borderRadius: 12, marginBottom: 16 }} />
-          <View style={{ height: 120, width: '100%', borderRadius: 12, marginBottom: 16 }} />
-        </>)}
+        {true ? (
+          <Loader />
+        ) : (
+          <>
+            <View style={{ height: 40, width: '100%', marginBottom: 20, borderRadius: 8 }} />
+            <View style={{ flexDirection: 'row', gap: 16, marginBottom: 24 }}>
+              <View style={{ flex: 1, height: 100, borderRadius: 12 }} />
+              <View style={{ flex: 1, height: 100, borderRadius: 12 }} />
+            </View>
+            <View style={{ height: 120, width: '100%', borderRadius: 12, marginBottom: 16 }} />
+            <View style={{ height: 120, width: '100%', borderRadius: 12, marginBottom: 16 }} />
+          </>
+        )}
       </View>
     );
   }
@@ -100,16 +108,19 @@ export default function PlanScreen() {
           }
           rightNode={<View style={styles.iconButton} />}
         />
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, gap: 16 }}>
+        <View
+          style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, gap: 16 }}
+        >
           <MaterialIcons name="account-balance-wallet" size={64} color={colors.primaryContainer} />
-          <Text style={{ ...typography.headlineSm, color: colors.onSurface }}>No Budget Plan Set</Text>
-          <Text style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, textAlign: 'center' }}>
+          <Text style={{ ...typography.headlineSm, color: colors.onSurface }}>
+            No Budget Plan Set
+          </Text>
+          <Text
+            style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, textAlign: 'center' }}
+          >
             Set up your monthly income and allocation to start tracking your budget.
           </Text>
-          <TouchableOpacity 
-            style={styles.editBtn} 
-            onPress={() => router.push('/budget-setup')}
-          >
+          <TouchableOpacity style={styles.editBtn} onPress={() => router.push('/budget-setup')}>
             <Text style={styles.editBtnText}>Set Up Budget</Text>
           </TouchableOpacity>
         </View>
@@ -121,7 +132,7 @@ export default function PlanScreen() {
     monthlyIncome: 0,
     needsPercent: 50,
     wantsPercent: 30,
-    savingsPercent: 20
+    savingsPercent: 20,
   };
 
   const needsLimit = safePlan.monthlyIncome * (safePlan.needsPercent / 100);
@@ -149,115 +160,152 @@ export default function PlanScreen() {
         }
       />
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
-      { isLoading ? <Loader /> : (<>
-        {/* Section Header */}
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionTitle}>{monthName} Plan</Text>
-            <Text style={styles.sectionSubtitle}>{daysRemaining} days remaining</Text>
-          </View>
-          <TouchableOpacity style={styles.editBtn} onPress={() => router.push('/budget-setup')}>
-            <Text style={styles.editBtnText}>Edit Allocation</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Summary Cards Grid */}
-        <View style={styles.summaryGrid}>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Monthly Income</Text>
-            <Text style={styles.summaryValue}>{formatCurrency(safePlan.monthlyIncome)}</Text>
-          </View>
-
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Allocated</Text>
-            <Text style={styles.summaryValue}>{formatCurrency(safePlan.monthlyIncome)}</Text>
-          </View>
-
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Spent / Saved</Text>
-            <Text style={styles.summaryValue}>{formatCurrency(totals.totalSpent)}</Text>
-          </View>
-
-          <View style={[styles.summaryCard, styles.summaryCardHighlight]}>
-            <View style={styles.highlightBackground} />
-            <Text style={styles.summaryLabel}>Remaining</Text>
-            <Text style={[styles.summaryValue, { color: colors.primary }]}>{formatCurrency(Math.max(0, remaining))}</Text>
-          </View>
-        </View>
-
-        {/* Allocation Sections */}
-        <View style={styles.allocationSections}>
-          {/* Needs */}
-          <TouchableOpacity
-            style={styles.allocationCard}
-            onPress={() => router.push('/manage-categories')}
-          >
-            <View style={styles.allocationHeader}>
-              <View style={styles.allocationHeaderLeft}>
-                <MaterialIcons name="home" size={24} color={colors.primary} />
-                <Text style={styles.allocationTitle}>Needs</Text>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {isLoading ? (
+          <Loader />
+        ) : (
+          <>
+            {/* Section Header */}
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>{monthName} Plan</Text>
+                <Text style={styles.sectionSubtitle}>{daysRemaining} days remaining</Text>
               </View>
-              <Text style={styles.allocationPercent}>{safePlan.needsPercent}%</Text>
+              <TouchableOpacity style={styles.editBtn} onPress={() => router.push('/budget-setup')}>
+                <Text style={styles.editBtnText}>Edit Allocation</Text>
+              </TouchableOpacity>
             </View>
-            <View style={styles.progressSection}>
-              <View style={styles.progressTextRow}>
-                <Text style={styles.progressLabel}>Spent</Text>
-                <Text style={styles.progressValue}>{formatCurrency(totals.needsSpent)} / {formatCurrency(needsLimit)}</Text>
+
+            {/* Summary Cards Grid */}
+            <View style={styles.summaryGrid}>
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryLabel}>Monthly Income</Text>
+                <Text style={styles.summaryValue}>{formatCurrency(safePlan.monthlyIncome)}</Text>
               </View>
-              <View style={styles.progressBarTrack}>
-                <View style={[styles.progressBarFill, { width: `${Math.min(100, (totals.needsSpent / Math.max(1, needsLimit)) * 100)}%` }]} />
+
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryLabel}>Allocated</Text>
+                <Text style={styles.summaryValue}>{formatCurrency(safePlan.monthlyIncome)}</Text>
+              </View>
+
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryLabel}>Spent / Saved</Text>
+                <Text style={styles.summaryValue}>{formatCurrency(totals.totalSpent)}</Text>
+              </View>
+
+              <View style={[styles.summaryCard, styles.summaryCardHighlight]}>
+                <View style={styles.highlightBackground} />
+                <Text style={styles.summaryLabel}>Remaining</Text>
+                <Text style={[styles.summaryValue, { color: colors.primary }]}>
+                  {formatCurrency(Math.max(0, remaining))}
+                </Text>
               </View>
             </View>
-          </TouchableOpacity>
 
-          {/* Wants */}
-          <TouchableOpacity
-            style={styles.allocationCard}
-            onPress={() => router.push('/manage-categories')}
-          >
-            <View style={styles.allocationHeader}>
-              <View style={styles.allocationHeaderLeft}>
-                <MaterialIcons name="shopping-bag" size={24} color={colors.primary} />
-                <Text style={styles.allocationTitle}>Wants</Text>
-              </View>
-              <Text style={styles.allocationPercent}>{safePlan.wantsPercent}%</Text>
-            </View>
-            <View style={styles.progressSection}>
-              <View style={styles.progressTextRow}>
-                <Text style={styles.progressLabel}>Spent</Text>
-                <Text style={styles.progressValue}>{formatCurrency(totals.wantsSpent)} / {formatCurrency(wantsLimit)}</Text>
-              </View>
-              <View style={styles.progressBarTrack}>
-                <View style={[styles.progressBarFill, { width: `${Math.min(100, (totals.wantsSpent / Math.max(1, wantsLimit)) * 100)}%` }]} />
-              </View>
-            </View>
-          </TouchableOpacity>
+            {/* Allocation Sections */}
+            <View style={styles.allocationSections}>
+              {/* Needs */}
+              <TouchableOpacity
+                style={styles.allocationCard}
+                onPress={() => router.push('/manage-categories')}
+              >
+                <View style={styles.allocationHeader}>
+                  <View style={styles.allocationHeaderLeft}>
+                    <MaterialIcons name="home" size={24} color={colors.primary} />
+                    <Text style={styles.allocationTitle}>Needs</Text>
+                  </View>
+                  <Text style={styles.allocationPercent}>{safePlan.needsPercent}%</Text>
+                </View>
+                <View style={styles.progressSection}>
+                  <View style={styles.progressTextRow}>
+                    <Text style={styles.progressLabel}>Spent</Text>
+                    <Text style={styles.progressValue}>
+                      {formatCurrency(totals.needsSpent)} / {formatCurrency(needsLimit)}
+                    </Text>
+                  </View>
+                  <View style={styles.progressBarTrack}>
+                    <View
+                      style={[
+                        styles.progressBarFill,
+                        {
+                          width: `${Math.min(100, (totals.needsSpent / Math.max(1, needsLimit)) * 100)}%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
+              </TouchableOpacity>
 
-          {/* Savings */}
-          <TouchableOpacity
-            style={styles.allocationCard}
-            onPress={() => router.push('/manage-categories')}
-          >
-            <View style={styles.allocationHeader}>
-              <View style={styles.allocationHeaderLeft}>
-                <MaterialIcons name="savings" size={24} color={colors.primary} />
-                <Text style={styles.allocationTitle}>Savings</Text>
-              </View>
-              <Text style={styles.allocationPercent}>{safePlan.savingsPercent}%</Text>
+              {/* Wants */}
+              <TouchableOpacity
+                style={styles.allocationCard}
+                onPress={() => router.push('/manage-categories')}
+              >
+                <View style={styles.allocationHeader}>
+                  <View style={styles.allocationHeaderLeft}>
+                    <MaterialIcons name="shopping-bag" size={24} color={colors.primary} />
+                    <Text style={styles.allocationTitle}>Wants</Text>
+                  </View>
+                  <Text style={styles.allocationPercent}>{safePlan.wantsPercent}%</Text>
+                </View>
+                <View style={styles.progressSection}>
+                  <View style={styles.progressTextRow}>
+                    <Text style={styles.progressLabel}>Spent</Text>
+                    <Text style={styles.progressValue}>
+                      {formatCurrency(totals.wantsSpent)} / {formatCurrency(wantsLimit)}
+                    </Text>
+                  </View>
+                  <View style={styles.progressBarTrack}>
+                    <View
+                      style={[
+                        styles.progressBarFill,
+                        {
+                          width: `${Math.min(100, (totals.wantsSpent / Math.max(1, wantsLimit)) * 100)}%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
+              </TouchableOpacity>
+
+              {/* Savings */}
+              <TouchableOpacity
+                style={styles.allocationCard}
+                onPress={() => router.push('/manage-categories')}
+              >
+                <View style={styles.allocationHeader}>
+                  <View style={styles.allocationHeaderLeft}>
+                    <MaterialIcons name="savings" size={24} color={colors.primary} />
+                    <Text style={styles.allocationTitle}>Savings</Text>
+                  </View>
+                  <Text style={styles.allocationPercent}>{safePlan.savingsPercent}%</Text>
+                </View>
+                <View style={styles.progressSection}>
+                  <View style={styles.progressTextRow}>
+                    <Text style={styles.progressLabel}>Saved</Text>
+                    <Text style={styles.progressValue}>
+                      {formatCurrency(totals.savingsSpent)} / {formatCurrency(savingsLimit)}
+                    </Text>
+                  </View>
+                  <View style={styles.progressBarTrack}>
+                    <View
+                      style={[
+                        styles.progressBarFill,
+                        {
+                          width: `${Math.min(100, (totals.savingsSpent / Math.max(1, savingsLimit)) * 100)}%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
+              </TouchableOpacity>
             </View>
-            <View style={styles.progressSection}>
-              <View style={styles.progressTextRow}>
-                <Text style={styles.progressLabel}>Saved</Text>
-                <Text style={styles.progressValue}>{formatCurrency(totals.savingsSpent)} / {formatCurrency(savingsLimit)}</Text>
-              </View>
-              <View style={styles.progressBarTrack}>
-                <View style={[styles.progressBarFill, { width: `${Math.min(100, (totals.savingsSpent / Math.max(1, savingsLimit)) * 100)}%` }]} />
-              </View>
-            </View>
-          </TouchableOpacity>
-        </View>
-      </>)}
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -301,11 +349,6 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       color: colors.onPrimary,
     },
-    daysRemainingText: {
-      ...typography.bodyMd,
-      color: colors.onSurfaceVariant,
-      marginTop: 2,
-    },
     scrollContent: {
       padding: 20,
       gap: 24,
@@ -331,7 +374,7 @@ const getStyles = (colors: ThemeColors) => {
       gap: 16,
     },
     summaryCard: {
-      width: '47%', 
+      width: '47%',
       backgroundColor: colors.surfaceContainerLowest,
       borderWidth: 1,
       borderColor: colors.surfaceVariant,
@@ -357,7 +400,7 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.dataLg,
       color: colors.onSurface,
       marginTop: 8,
-      fontSize: 22, 
+      fontSize: 22,
     },
     allocationSections: {
       gap: 16,

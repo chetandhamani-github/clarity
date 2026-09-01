@@ -49,18 +49,17 @@ async function registerForPushNotificationsAsync() {
     }
     const projectId =
       Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
-    if (!projectId) {
-      console.log('Project ID not found in app config');
-    }
-    try {
-      const pushTokenString = (
-        await Notifications.getExpoPushTokenAsync({
-          projectId,
-        })
-      ).data;
-      token = pushTokenString;
-    } catch (e: unknown) {
-      console.log('Error getting push token', e);
+    if (projectId) {
+      try {
+        const pushTokenString = (
+          await Notifications.getExpoPushTokenAsync({
+            projectId,
+          })
+        ).data;
+        token = pushTokenString;
+      } catch (e: unknown) {
+        console.log('Error getting push token', e);
+      }
     }
   } else {
     console.log('Must use physical device for Push Notifications or missing Notifications module');
@@ -83,41 +82,49 @@ export function usePushNotifications() {
       .then((token) => setExpoPushToken(token))
       .catch((err) => console.log('registerForPushNotificationsAsync error:', err));
 
-    notificationListener.current = Notifications.addNotificationReceivedListener((notification: any) => {
-      setNotification(notification);
-      
-      const payload = notification.request.content;
-      const data = payload.data as { type?: string; actionUrl?: string };
+    notificationListener.current = Notifications.addNotificationReceivedListener(
+      (notification: any) => {
+        setNotification(notification);
 
-      insertNotification({
-        title: payload.title || 'Notification',
-        description: payload.body || '',
-        type: (data?.type as any) || 'default',
-        actionUrl: data?.actionUrl || '',
-      }).then(() => {
-        DeviceEventEmitter.emit('notificationsUpdated');
-      }).catch((err) => console.error('Failed to insert push notification into DB:', err));
-    });
+        const payload = notification.request.content;
+        const data = payload.data as { type?: string; actionUrl?: string };
 
-    responseListener.current = Notifications.addNotificationResponseReceivedListener((response: any) => {
-      const payload = response.notification.request.content;
-      const data = payload.data as { type?: string; actionUrl?: string };
-      
-      insertNotification({
-        title: payload.title || 'Notification',
-        description: payload.body || '',
-        type: (data?.type as any) || 'default',
-        actionUrl: data?.actionUrl || '',
-      }).then(() => {
-        DeviceEventEmitter.emit('notificationsUpdated');
-      }).catch((err) => console.error('Failed to insert push notification into DB:', err));
-
-      if (data?.actionUrl) {
-        router.push(data.actionUrl as any);
-      } else {
-        router.push('/notifications');
+        insertNotification({
+          title: payload.title || 'Notification',
+          description: payload.body || '',
+          type: (data?.type as any) || 'default',
+          actionUrl: data?.actionUrl || '',
+        })
+          .then(() => {
+            DeviceEventEmitter.emit('notificationsUpdated');
+          })
+          .catch((err) => console.error('Failed to insert push notification into DB:', err));
       }
-    });
+    );
+
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(
+      (response: any) => {
+        const payload = response.notification.request.content;
+        const data = payload.data as { type?: string; actionUrl?: string };
+
+        insertNotification({
+          title: payload.title || 'Notification',
+          description: payload.body || '',
+          type: (data?.type as any) || 'default',
+          actionUrl: data?.actionUrl || '',
+        })
+          .then(() => {
+            DeviceEventEmitter.emit('notificationsUpdated');
+          })
+          .catch((err) => console.error('Failed to insert push notification into DB:', err));
+
+        if (data?.actionUrl) {
+          router.push(data.actionUrl as any);
+        } else {
+          router.push('/notifications');
+        }
+      }
+    );
 
     return () => {
       if (notificationListener.current) {

@@ -14,12 +14,12 @@ export default function EmptyStatesScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <Header
-        showBack
-        title="Empty States Demo"
-      />
+      <Header showBack title="Empty States Demo" />
 
-      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 60 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 60 }]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Empty Dashboard */}
         <View style={styles.card}>
           <View style={styles.iconCircle}>
@@ -30,7 +30,7 @@ export default function EmptyStatesScreen() {
             Your financial picture begins here. Link your accounts to gain absolute clarity over
             your wealth, seamlessly and securely.
           </Text>
-          <TouchableOpacity style={styles.primaryBtn}>
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => router.push('/add-account')}>
             <Text style={styles.primaryBtnText}>Link Your First Account</Text>
           </TouchableOpacity>
         </View>
@@ -46,11 +46,14 @@ export default function EmptyStatesScreen() {
             elegantly categorize themselves here.
           </Text>
           <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.primaryBtn}>
-              <Text style={styles.primaryBtnText}>Sync Your Bank</Text>
+            <TouchableOpacity style={styles.primaryBtn} onPress={() => router.push('/add-account')}>
+              <Text style={styles.primaryBtnText}>Add Account</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryBtn}>
-              <Text style={styles.secondaryBtnText}>Add Manually</Text>
+            <TouchableOpacity
+              style={styles.secondaryBtn}
+              onPress={() => router.push('/add-transaction')}
+            >
+              <Text style={styles.secondaryBtnText}>Add Transaction</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -67,6 +70,7 @@ export default function EmptyStatesScreen() {
           </Text>
           <TouchableOpacity
             style={[styles.primaryBtn, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}
+            onPress={() => router.push('/goals')}
           >
             <MaterialIcons name="add" size={20} color={colors.onPrimary} />
             <Text style={styles.primaryBtnText}>Create Your First Goal</Text>

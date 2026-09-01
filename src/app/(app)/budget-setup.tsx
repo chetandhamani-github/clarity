@@ -1,4 +1,4 @@
-import { Text, useAlert, Header, Loader } from '@/components/ui';
+import { Header, Loader, Text, useAlert } from '@/components/ui';
 import { useBudgetPlan, useUpdateBudgetPlan } from '@/hooks/use-budget';
 import { ThemeColors, typography, useTheme } from '@/theme';
 import { formatCurrencyWhole, getCurrencySymbol } from '@/utils/format';
@@ -6,10 +6,9 @@ import { MaterialIcons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { formatCurrency } from '@/utils/format';
 
 export default function BudgetSetupScreen() {
   const { colors } = useTheme();
@@ -95,197 +94,201 @@ export default function BudgetSetupScreen() {
         enableOnAndroid={true}
         extraScrollHeight={200}
       >
-      { isLoading ? <Loader /> : (<>
-        {/* Header Text */}
-        <View style={styles.introSection}>
-          <Text style={styles.titleText}>Design your foundation</Text>
-          <Text style={styles.subtitleText}>
-            Set your monthly income and we'll help structure a balanced allocation.
-          </Text>
-        </View>
-
-        {/* Income Input Section */}
-        <View style={styles.incomeCard}>
-          <Text style={styles.incomeLabel}>MONTHLY AFTER-TAX INCOME</Text>
-          <View style={styles.incomeInputRow}>
-            <Text style={styles.incomeCurrency}>{getCurrencySymbol()}</Text>
-            <TextInput
-              style={styles.incomeInput}
-              keyboardType="numeric"
-              value={income}
-              onChangeText={setIncome}
-              placeholder="0.00"
-              placeholderTextColor={colors.onSurfaceVariant}
-            />
-          </View>
-          {/* Decorative element */}
-          <View style={styles.decorativeCircle} />
-        </View>
-
-        {/* Allocation Section */}
-        <View style={styles.allocationSection}>
-          <View style={styles.allocationHeader}>
-            <Text style={styles.allocationTitle}>Allocation Strategy</Text>
-            <View style={styles.strategyBadge}>
-              <Text style={styles.strategyBadgeText}>Standard 50/30/20</Text>
-            </View>
-          </View>
-
-          {/* Visual Allocation Bar */}
-          <View style={styles.allocationBarContainer}>
-            <View
-              style={[
-                styles.allocationSegment,
-                { backgroundColor: colors.primary, flex: needsNum },
-              ]}
-            />
-            <View
-              style={[
-                styles.allocationSegment,
-                { backgroundColor: colors.tertiary, flex: wantsNum },
-              ]}
-            />
-            <View
-              style={[
-                styles.allocationSegment,
-                { backgroundColor: colors.secondary, flex: savingsNum },
-              ]}
-            />
-          </View>
-
-          {totalPct !== 100 && (
-            <Text style={styles.warningText}>
-              Total allocation is {totalPct}%. It must equal 100%.
-            </Text>
-          )}
-
-          {/* Bento Grid */}
-          <View style={styles.bentoGrid}>
-            {/* Needs */}
-            <View style={styles.bentoCard}>
-              <View style={styles.bentoCardHeader}>
-                <View style={styles.bentoCardTitleRow}>
-                  <View style={[styles.colorDot, { backgroundColor: colors.primary }]} />
-                  <Text style={styles.bentoCardTitle}>NEEDS</Text>
-                </View>
-                <MaterialIcons
-                  name="home"
-                  size={18}
-                  color={colors.onSurfaceVariant}
-                  style={{ opacity: 0.5 }}
-                />
-              </View>
-              <Text style={styles.bentoAmount}>{formatCurrencyWhole(needsAmt)}</Text>
-
-              <View style={styles.inputControlsRow}>
-                <Slider
-                  style={{ flex: 1, height: 40, marginHorizontal: -8 }}
-                  minimumValue={0}
-                  maximumValue={100}
-                  step={1}
-                  value={needsNum}
-                  onValueChange={(val) => setNeedsPct(val.toString())}
-                  minimumTrackTintColor={colors.primary}
-                  maximumTrackTintColor={colors.surfaceVariant}
-                  thumbTintColor={colors.primary}
-                />
-                <View style={styles.percentageInputBox}>
-                  <TextInput
-                    style={styles.percentageInput}
-                    keyboardType="numeric"
-                    value={needsPct}
-                    onChangeText={setNeedsPct}
-                    maxLength={3}
-                  />
-                  <Text style={styles.percentageSymbol}>%</Text>
-                </View>
-              </View>
+        {isLoading ? (
+          <Loader />
+        ) : (
+          <>
+            {/* Header Text */}
+            <View style={styles.introSection}>
+              <Text style={styles.titleText}>Design your foundation</Text>
+              <Text style={styles.subtitleText}>
+                Set your monthly income and we'll help structure a balanced allocation.
+              </Text>
             </View>
 
-            {/* Wants */}
-            <View style={styles.bentoCard}>
-              <View style={styles.bentoCardHeader}>
-                <View style={styles.bentoCardTitleRow}>
-                  <View style={[styles.colorDot, { backgroundColor: colors.tertiary }]} />
-                  <Text style={styles.bentoCardTitle}>WANTS</Text>
-                </View>
-                <MaterialIcons
-                  name="local-cafe"
-                  size={18}
-                  color={colors.onSurfaceVariant}
-                  style={{ opacity: 0.5 }}
+            {/* Income Input Section */}
+            <View style={styles.incomeCard}>
+              <Text style={styles.incomeLabel}>MONTHLY AFTER-TAX INCOME</Text>
+              <View style={styles.incomeInputRow}>
+                <Text style={styles.incomeCurrency}>{getCurrencySymbol()}</Text>
+                <TextInput
+                  style={styles.incomeInput}
+                  keyboardType="numeric"
+                  value={income}
+                  onChangeText={setIncome}
+                  placeholder="0.00"
+                  placeholderTextColor={colors.onSurfaceVariant}
                 />
               </View>
-              <Text style={styles.bentoAmount}>{formatCurrencyWhole(wantsAmt)}</Text>
+              {/* Decorative element */}
+              <View style={styles.decorativeCircle} />
+            </View>
 
-              <View style={styles.inputControlsRow}>
-                <Slider
-                  style={{ flex: 1, height: 40, marginHorizontal: -8 }}
-                  minimumValue={0}
-                  maximumValue={100}
-                  step={1}
-                  value={wantsNum}
-                  onValueChange={(val) => setWantsPct(val.toString())}
-                  minimumTrackTintColor={colors.tertiary}
-                  maximumTrackTintColor={colors.surfaceVariant}
-                  thumbTintColor={colors.tertiary}
+            {/* Allocation Section */}
+            <View style={styles.allocationSection}>
+              <View style={styles.allocationHeader}>
+                <Text style={styles.allocationTitle}>Allocation Strategy</Text>
+                <View style={styles.strategyBadge}>
+                  <Text style={styles.strategyBadgeText}>Standard 50/30/20</Text>
+                </View>
+              </View>
+
+              {/* Visual Allocation Bar */}
+              <View style={styles.allocationBarContainer}>
+                <View
+                  style={[
+                    styles.allocationSegment,
+                    { backgroundColor: colors.primary, flex: needsNum },
+                  ]}
                 />
-                <View style={styles.percentageInputBox}>
-                  <TextInput
-                    style={styles.percentageInput}
-                    keyboardType="numeric"
-                    value={wantsPct}
-                    onChangeText={setWantsPct}
-                    maxLength={3}
-                  />
-                  <Text style={styles.percentageSymbol}>%</Text>
+                <View
+                  style={[
+                    styles.allocationSegment,
+                    { backgroundColor: colors.tertiary, flex: wantsNum },
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.allocationSegment,
+                    { backgroundColor: colors.secondary, flex: savingsNum },
+                  ]}
+                />
+              </View>
+
+              {totalPct !== 100 && (
+                <Text style={styles.warningText}>
+                  Total allocation is {totalPct}%. It must equal 100%.
+                </Text>
+              )}
+
+              {/* Bento Grid */}
+              <View style={[styles.bentoGrid, styles.extraSpace]}>
+                {/* Needs */}
+                <View style={styles.bentoCard}>
+                  <View style={styles.bentoCardHeader}>
+                    <View style={styles.bentoCardTitleRow}>
+                      <View style={[styles.colorDot, { backgroundColor: colors.primary }]} />
+                      <Text style={styles.bentoCardTitle}>NEEDS</Text>
+                    </View>
+                    <MaterialIcons
+                      name="home"
+                      size={18}
+                      color={colors.onSurfaceVariant}
+                      style={{ opacity: 0.5 }}
+                    />
+                  </View>
+                  <Text style={styles.bentoAmount}>{formatCurrencyWhole(needsAmt)}</Text>
+
+                  <View style={styles.inputControlsRow}>
+                    <Slider
+                      style={{ flex: 1, height: 40, marginHorizontal: -8 }}
+                      minimumValue={0}
+                      maximumValue={100}
+                      step={1}
+                      value={needsNum}
+                      onValueChange={(val) => setNeedsPct(val.toString())}
+                      minimumTrackTintColor={colors.primary}
+                      maximumTrackTintColor={colors.surfaceVariant}
+                      thumbTintColor={colors.primary}
+                    />
+                    <View style={styles.percentageInputBox}>
+                      <TextInput
+                        style={styles.percentageInput}
+                        keyboardType="numeric"
+                        value={needsPct}
+                        onChangeText={setNeedsPct}
+                        maxLength={3}
+                      />
+                      <Text style={styles.percentageSymbol}>%</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Wants */}
+                <View style={styles.bentoCard}>
+                  <View style={styles.bentoCardHeader}>
+                    <View style={styles.bentoCardTitleRow}>
+                      <View style={[styles.colorDot, { backgroundColor: colors.tertiary }]} />
+                      <Text style={styles.bentoCardTitle}>WANTS</Text>
+                    </View>
+                    <MaterialIcons
+                      name="local-cafe"
+                      size={18}
+                      color={colors.onSurfaceVariant}
+                      style={{ opacity: 0.5 }}
+                    />
+                  </View>
+                  <Text style={styles.bentoAmount}>{formatCurrencyWhole(wantsAmt)}</Text>
+
+                  <View style={styles.inputControlsRow}>
+                    <Slider
+                      style={{ flex: 1, height: 40, marginHorizontal: -8 }}
+                      minimumValue={0}
+                      maximumValue={100}
+                      step={1}
+                      value={wantsNum}
+                      onValueChange={(val) => setWantsPct(val.toString())}
+                      minimumTrackTintColor={colors.tertiary}
+                      maximumTrackTintColor={colors.surfaceVariant}
+                      thumbTintColor={colors.tertiary}
+                    />
+                    <View style={styles.percentageInputBox}>
+                      <TextInput
+                        style={styles.percentageInput}
+                        keyboardType="numeric"
+                        value={wantsPct}
+                        onChangeText={setWantsPct}
+                        maxLength={3}
+                      />
+                      <Text style={styles.percentageSymbol}>%</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Savings */}
+                <View style={styles.bentoCard}>
+                  <View style={styles.bentoCardHeader}>
+                    <View style={styles.bentoCardTitleRow}>
+                      <View style={[styles.colorDot, { backgroundColor: colors.secondary }]} />
+                      <Text style={styles.bentoCardTitle}>SAVINGS</Text>
+                    </View>
+                    <MaterialIcons
+                      name="account-balance"
+                      size={18}
+                      color={colors.onSurfaceVariant}
+                      style={{ opacity: 0.5 }}
+                    />
+                  </View>
+                  <Text style={styles.bentoAmount}>{formatCurrencyWhole(savingsAmt)}</Text>
+
+                  <View style={styles.inputControlsRow}>
+                    <Slider
+                      style={{ flex: 1, height: 40, marginHorizontal: -8 }}
+                      minimumValue={0}
+                      maximumValue={100}
+                      step={1}
+                      value={savingsNum}
+                      onValueChange={(val) => setSavingsPct(val.toString())}
+                      minimumTrackTintColor={colors.secondary}
+                      maximumTrackTintColor={colors.surfaceVariant}
+                      thumbTintColor={colors.secondary}
+                    />
+                    <View style={styles.percentageInputBox}>
+                      <TextInput
+                        style={styles.percentageInput}
+                        keyboardType="numeric"
+                        value={savingsPct}
+                        onChangeText={setSavingsPct}
+                        maxLength={3}
+                      />
+                      <Text style={styles.percentageSymbol}>%</Text>
+                    </View>
+                  </View>
                 </View>
               </View>
             </View>
-
-            {/* Savings */}
-            <View style={styles.bentoCard}>
-              <View style={styles.bentoCardHeader}>
-                <View style={styles.bentoCardTitleRow}>
-                  <View style={[styles.colorDot, { backgroundColor: colors.secondary }]} />
-                  <Text style={styles.bentoCardTitle}>SAVINGS</Text>
-                </View>
-                <MaterialIcons
-                  name="account-balance"
-                  size={18}
-                  color={colors.onSurfaceVariant}
-                  style={{ opacity: 0.5 }}
-                />
-              </View>
-              <Text style={styles.bentoAmount}>{formatCurrencyWhole(savingsAmt)}</Text>
-
-              <View style={styles.inputControlsRow}>
-                <Slider
-                  style={{ flex: 1, height: 40, marginHorizontal: -8 }}
-                  minimumValue={0}
-                  maximumValue={100}
-                  step={1}
-                  value={savingsNum}
-                  onValueChange={(val) => setSavingsPct(val.toString())}
-                  minimumTrackTintColor={colors.secondary}
-                  maximumTrackTintColor={colors.surfaceVariant}
-                  thumbTintColor={colors.secondary}
-                />
-                <View style={styles.percentageInputBox}>
-                  <TextInput
-                    style={styles.percentageInput}
-                    keyboardType="numeric"
-                    value={savingsPct}
-                    onChangeText={setSavingsPct}
-                    maxLength={3}
-                  />
-                  <Text style={styles.percentageSymbol}>%</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        </View>
-      </>)}
+          </>
+        )}
       </KeyboardAwareScrollView>
 
       {/* Fixed Bottom Action Area */}
@@ -469,28 +472,6 @@ const getStyles = (colors: ThemeColors) => {
       borderColor: colors.outlineVariant + '4D',
       marginTop: 'auto',
     },
-    mockSliderTrack: {
-      flex: 1,
-      height: 4,
-      backgroundColor: colors.surfaceVariant,
-      borderRadius: 2,
-      position: 'relative',
-      justifyContent: 'center',
-    },
-    mockSliderThumb: {
-      width: 24,
-      height: 24,
-      borderRadius: 12,
-      backgroundColor: colors.onPrimary,
-      borderWidth: 2,
-      borderColor: colors.primary,
-      position: 'absolute',
-      shadowColor: colors.onSurface,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.1,
-      shadowRadius: 12,
-      elevation: 2,
-    },
     percentageInputBox: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -540,6 +521,9 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       color: colors.onPrimary,
       letterSpacing: 1,
+    },
+    extraSpace: {
+      marginBottom: 30,
     },
   });
   return styles;

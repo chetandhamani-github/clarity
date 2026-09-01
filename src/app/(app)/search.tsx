@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  ActivityIndicator,
+} from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Text, Header, Loader } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
@@ -32,17 +39,28 @@ export default function SearchScreen() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<string>('all');
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
-  const { transactions, isLoading } = useTransactions({ search: debouncedSearchQuery });
+  const typeFilter =
+    activeFilter === 'all' ? undefined : (activeFilter as 'expense' | 'income' | 'transfer');
+
+  const { transactions, isLoading } = useTransactions({
+    search: debouncedSearchQuery,
+    type: typeFilter,
+  });
   const groupedTransactions = groupTransactionsByDate(transactions);
+
+  const FILTERS = [
+    { id: 'all', label: 'All' },
+    { id: 'expense', label: 'Expenses' },
+    { id: 'income', label: 'Income' },
+    { id: 'transfer', label: 'Transfers' },
+  ];
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <Header
-        showBack
-        title="Search"
-      />
+      <Header showBack title="Search" />
 
       <View style={styles.content}>
         {/* Search Input Section */}
@@ -72,88 +90,128 @@ export default function SearchScreen() {
               </TouchableOpacity>
             )}
           </View>
+
+          {/* Quick Filter Chips */}
+          <View style={styles.filterChipsRow}>
+            {FILTERS.map((f) => {
+              const isSelected = activeFilter === f.id;
+              return (
+                <TouchableOpacity
+                  key={f.id}
+                  style={[styles.chip, isSelected && styles.chipSelected]}
+                  onPress={() => setActiveFilter(f.id)}
+                >
+                  <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                    {f.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
 
         {/* Search Results */}
         <KeyboardAwareScrollView
           style={styles.resultsContainer}
-          contentContainerStyle={[styles.resultsScrollContent, { paddingBottom: insets.bottom + 120 }]}
+          contentContainerStyle={[
+            styles.resultsScrollContent,
+            { paddingBottom: insets.bottom + 120 },
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           enableOnAndroid={true}
         >
-        { isLoading ? <Loader /> : (<>
-          <View style={styles.resultsHeader}>
-            <Text style={styles.resultsTitle}>
-              {searchQuery ? 'Matching Results' : 'Recent Activity'}
-            </Text>
-            <Text style={styles.resultsCount}>{transactions.length} Transactions</Text>
-          </View>
-
-          {transactions.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <MaterialIcons name="search-off" size={48} color={colors.outline} />
-              <Text style={styles.emptyText}>No results found.</Text>
-            </View>
+          {isLoading ? (
+            <Loader />
           ) : (
-            <View style={styles.transactionsList}>
-              {groupedTransactions.map((group, groupIndex) => (
-                <React.Fragment key={group.date}>
-                  <View style={styles.dateHeader}>
-                    <Text style={styles.dateHeaderText}>{group.label}</Text>
-                  </View>
+            <>
+              <View style={styles.resultsHeader}>
+                <Text style={styles.resultsTitle}>
+                  {searchQuery ? 'Matching Results' : 'Recent Activity'}
+                </Text>
+                <Text style={styles.resultsCount}>{transactions.length} Transactions</Text>
+              </View>
 
-                  {group.items.map((tx, txIndex) => {
-                    const isLast = groupIndex === groupedTransactions.length - 1 && txIndex === group.items.length - 1;
-                    const sign = getTransactionSign(tx.type);
-                    
-                    return (
-                      <TouchableOpacity
-                        key={tx.id}
-                        style={[styles.transactionItem, isLast && { borderBottomWidth: 0 }]}
-                        onPress={() => {
-                          // TODO: Open detail modal
-                        }}
-                      >
-                        <View style={styles.txLeft}>
-                          <View style={[
-                            styles.txIconBox,
-                            tx.type === 'income' ? { backgroundColor: colors.primaryContainer } : undefined
-                          ]}>
-                            <MaterialIcons 
-                              name={getCategoryIcon(tx.category)} 
-                              size={20} 
-                              color={tx.type === 'income' ? colors.onPrimaryContainer : colors.primary} 
-                            />
-                          </View>
-                          <View style={styles.txTextContent}>
-                            <Text style={styles.txTitle}>
-                              {tx.type === 'transfer' ? `Transfer` : tx.merchant}
-                            </Text>
-                            <Text style={styles.txSubtitle}>
-                              {tx.type === 'transfer' ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}` : tx.accountName}
-                            </Text>
-                          </View>
-                        </View>
-                        <View style={styles.txRight}>
-                          <Text style={[
-                            styles.txAmount,
-                            tx.type === 'income' ? { color: colors.primary } : undefined
-                          ]}>
-                            {sign}{formatCurrency(tx.amount)}
-                          </Text>
-                          <View style={styles.categoryBadge}>
-                            <Text style={styles.categoryBadgeText}>{tx.category}</Text>
-                          </View>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </React.Fragment>
-              ))}
-            </View>
+              {transactions.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <MaterialIcons name="search-off" size={48} color={colors.outline} />
+                  <Text style={styles.emptyText}>No results found.</Text>
+                </View>
+              ) : (
+                <View style={styles.transactionsList}>
+                  {groupedTransactions.map((group, groupIndex) => (
+                    <React.Fragment key={group.date}>
+                      <View style={styles.dateHeader}>
+                        <Text style={styles.dateHeaderText}>{group.label}</Text>
+                      </View>
+
+                      {group.items.map((tx, txIndex) => {
+                        const isLast =
+                          groupIndex === groupedTransactions.length - 1 &&
+                          txIndex === group.items.length - 1;
+                        const sign = getTransactionSign(tx.type);
+
+                        return (
+                          <TouchableOpacity
+                            key={tx.id}
+                            style={[styles.transactionItem, isLast && { borderBottomWidth: 0 }]}
+                            onPress={() => {
+                              router.push(`/(app)/add-transaction?id=${tx.id}`);
+                            }}
+                          >
+                            <View style={styles.txLeft}>
+                              <View
+                                style={[
+                                  styles.txIconBox,
+                                  tx.type === 'income'
+                                    ? { backgroundColor: colors.primaryContainer }
+                                    : undefined,
+                                ]}
+                              >
+                                <MaterialIcons
+                                  name={getCategoryIcon(tx.category)}
+                                  size={20}
+                                  color={
+                                    tx.type === 'income'
+                                      ? colors.onPrimaryContainer
+                                      : colors.primary
+                                  }
+                                />
+                              </View>
+                              <View style={styles.txTextContent}>
+                                <Text style={styles.txTitle}>
+                                  {tx.type === 'transfer' ? `Transfer` : tx.merchant}
+                                </Text>
+                                <Text style={styles.txSubtitle}>
+                                  {tx.type === 'transfer'
+                                    ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}`
+                                    : tx.accountName}
+                                </Text>
+                              </View>
+                            </View>
+                            <View style={styles.txRight}>
+                              <Text
+                                style={[
+                                  styles.txAmount,
+                                  tx.type === 'income' ? { color: colors.primary } : undefined,
+                                ]}
+                              >
+                                {sign}
+                                {formatCurrency(tx.amount)}
+                              </Text>
+                              <View style={styles.categoryBadge}>
+                                <Text style={styles.categoryBadgeText}>{tx.category}</Text>
+                              </View>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </React.Fragment>
+                  ))}
+                </View>
+              )}
+            </>
           )}
-        </>)}
         </KeyboardAwareScrollView>
       </View>
     </View>
@@ -189,6 +247,31 @@ const getStyles = (colors: ThemeColors) => {
       borderColor: colors.primary,
       borderWidth: 1.5,
     },
+    filterChipsRow: {
+      flexDirection: 'row',
+      gap: 8,
+      paddingHorizontal: 20,
+    },
+    chip: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 20,
+      backgroundColor: colors.surfaceContainerLow,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+    },
+    chipSelected: {
+      backgroundColor: colors.primaryContainer,
+      borderColor: colors.primary,
+    },
+    chipText: {
+      ...typography.labelMd,
+      color: colors.onSurfaceVariant,
+    },
+    chipTextSelected: {
+      color: colors.onPrimaryContainer,
+      fontWeight: '700',
+    },
     searchIcon: {
       marginRight: 12,
     },
@@ -222,10 +305,6 @@ const getStyles = (colors: ThemeColors) => {
     resultsCount: {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
-    },
-    loaderContainer: {
-      paddingVertical: 40,
-      alignItems: 'center',
     },
     emptyContainer: {
       paddingVertical: 60,

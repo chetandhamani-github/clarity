@@ -27,69 +27,112 @@ export default function ReportsScreen() {
         showBack
         title="Reports History"
         rightNode={
-          <TouchableOpacity style={styles.iconButton}>
-            <MaterialIcons name="search" size={24} color={colors.onSurface} />
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => router.push('/export-success')}
+          >
+            <MaterialIcons name="download" size={24} color={colors.onSurface} />
           </TouchableOpacity>
         }
       />
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
-      { isLoading ? <Loader /> : (<>
-          <View style={styles.introSection}>
-            <Text style={styles.introText}>Review your past monthly financial performance.</Text>
-          </View>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {isLoading ? (
+          <Loader />
+        ) : (
+          <>
+            <View style={styles.introSection}>
+              <Text style={styles.introText}>Review your past monthly financial performance.</Text>
+            </View>
 
-          <View style={styles.reportsList}>
-            {reports.map((report) => {
-              const savingsRate = report.income > 0 
-                ? ((report.income - report.expenses) / report.income) * 100 
-                : 0;
+            <View style={styles.reportsList}>
+              {reports.map((report) => {
+                const savingsRate =
+                  report.income > 0 ? ((report.income - report.expenses) / report.income) * 100 : 0;
+                const [y, m] = report.datePrefix.split('-');
 
-              return (
-                <TouchableOpacity 
-                  key={report.datePrefix} 
-                  style={styles.reportCard}
-                  onPress={() => router.push('/analytics')}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.reportHeader}>
-                    <View>
-                      <Text style={styles.reportTitle}>{getMonthName(report.datePrefix)}</Text>
-                      <Text style={styles.reportSubtitle}>MONTHLY SUMMARY</Text>
+                return (
+                  <TouchableOpacity
+                    key={report.datePrefix}
+                    style={styles.reportCard}
+                    onPress={() =>
+                      router.push({ pathname: '/analytics', params: { month: m, year: y } })
+                    }
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.reportHeader}>
+                      <View>
+                        <Text style={styles.reportTitle}>{getMonthName(report.datePrefix)}</Text>
+                        <Text style={styles.reportSubtitle}>MONTHLY SUMMARY</Text>
+                      </View>
+                      <MaterialIcons
+                        name="chevron-right"
+                        size={24}
+                        color={colors.onSurfaceVariant}
+                      />
                     </View>
-                    <MaterialIcons name="chevron-right" size={24} color={colors.onSurfaceVariant} />
-                  </View>
-                  <View style={styles.reportGrid}>
-                    <View style={styles.gridItem}>
-                      <Text style={styles.gridLabel}>Income</Text>
-                      <Text style={styles.gridValue} numberOfLines={1} adjustsFontSizeToFit>{formatCurrency(report.income)}</Text>
+                    <View style={styles.reportGrid}>
+                      <View style={styles.gridItem}>
+                        <Text style={styles.gridLabel}>Income</Text>
+                        <Text style={styles.gridValue} numberOfLines={1} adjustsFontSizeToFit>
+                          {formatCurrency(report.income)}
+                        </Text>
+                      </View>
+                      <View style={styles.gridItem}>
+                        <Text style={styles.gridLabel}>Expenses</Text>
+                        <Text style={styles.gridValue} numberOfLines={1} adjustsFontSizeToFit>
+                          {formatCurrency(report.expenses)}
+                        </Text>
+                      </View>
+                      <View style={styles.gridItem}>
+                        <Text style={styles.gridLabel}>Savings Rate</Text>
+                        <Text
+                          style={[
+                            styles.gridValue,
+                            { color: savingsRate > 0 ? colors.primary : colors.onSurface },
+                          ]}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                        >
+                          {savingsRate.toFixed(1)}%
+                        </Text>
+                      </View>
                     </View>
-                    <View style={styles.gridItem}>
-                      <Text style={styles.gridLabel}>Expenses</Text>
-                      <Text style={styles.gridValue} numberOfLines={1} adjustsFontSizeToFit>{formatCurrency(report.expenses)}</Text>
-                    </View>
-                    <View style={styles.gridItem}>
-                      <Text style={styles.gridLabel}>Savings Rate</Text>
-                      <Text style={[styles.gridValue, { color: savingsRate > 0 ? colors.primary : colors.onSurface }]} numberOfLines={1} adjustsFontSizeToFit>
-                        {savingsRate.toFixed(1)}%
-                      </Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+                  </TouchableOpacity>
+                );
+              })}
 
-            {reports.length === 0 && (
-              <View style={{ padding: 40, alignItems: 'center' }}>
-                <MaterialIcons name="insert-chart-outlined" size={64} color={colors.surfaceVariant} />
-                <Text style={{ ...typography.headlineSm, color: colors.onSurface, marginTop: 16 }}>No Reports Yet</Text>
-                <Text style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, textAlign: 'center', marginTop: 8 }}>
-                  Your monthly summaries will appear here as you add transactions.
-                </Text>
-              </View>
-            )}
-          </View>
-        </>)}
+              {reports.length === 0 && (
+                <View style={{ padding: 40, alignItems: 'center' }}>
+                  <MaterialIcons
+                    name="insert-chart-outlined"
+                    size={64}
+                    color={colors.surfaceVariant}
+                  />
+                  <Text
+                    style={{ ...typography.headlineSm, color: colors.onSurface, marginTop: 16 }}
+                  >
+                    No Reports Yet
+                  </Text>
+                  <Text
+                    style={{
+                      ...typography.bodyMd,
+                      color: colors.onSurfaceVariant,
+                      textAlign: 'center',
+                      marginTop: 8,
+                    }}
+                  >
+                    Your monthly summaries will appear here as you add transactions.
+                  </Text>
+                </View>
+              )}
+            </View>
+          </>
+        )}
       </ScrollView>
     </View>
   );

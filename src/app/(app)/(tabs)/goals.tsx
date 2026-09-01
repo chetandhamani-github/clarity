@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Pressable, Image, ActivityIndicator, TextInput } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Pressable,
+  Image,
+  ActivityIndicator,
+  TextInput,
+} from 'react-native';
 import { Text, Header, Loader } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -43,23 +52,25 @@ export default function GoalsScreen() {
       return;
     }
 
-    createGoal({
-      name: newGoalName.trim(),
-      icon: 'star',
-      targetAmount: targetAmt,
-      currentAmount: 0,
-      category: 'Savings',
-      targetDate: ''
-    }, {
-      onSuccess: () => {
-        setNewGoalName('');
-        setNewGoalTarget('');
-        setShowAdd(false);
-        refetch();
+    createGoal(
+      {
+        name: newGoalName.trim(),
+        icon: 'star',
+        targetAmount: targetAmt,
+        currentAmount: 0,
+        category: 'Savings',
+        targetDate: '',
+      },
+      {
+        onSuccess: () => {
+          setNewGoalName('');
+          setNewGoalTarget('');
+          setShowAdd(false);
+          refetch();
+        },
       }
-    });
+    );
   };
-
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -75,91 +86,118 @@ export default function GoalsScreen() {
         }
         rightNode={
           <TouchableOpacity style={styles.iconButton} onPress={() => setShowAdd(!showAdd)}>
-            <MaterialIcons name={showAdd ? "close" : "add"} size={24} color={colors.onSurface} />
+            <MaterialIcons name={showAdd ? 'close' : 'add'} size={24} color={colors.onSurface} />
           </TouchableOpacity>
         }
       />
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
-      { isLoading ? <Loader /> : (<>
-        
-        {showAdd && (
-          <View style={styles.addFormCard}>
-            <Text style={styles.addFormTitle}>Create New Goal</Text>
-            
-            <TextInput
-              style={styles.input}
-              placeholder="Goal Name (e.g. New Laptop)"
-              placeholderTextColor={colors.outline}
-              value={newGoalName}
-              onChangeText={setNewGoalName}
-            />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {isLoading ? (
+          <Loader />
+        ) : (
+          <>
+            {showAdd && (
+              <View style={styles.addFormCard}>
+                <Text style={styles.addFormTitle}>Create New Goal</Text>
 
-            <View style={styles.currencyInputRow}>
-              <Text style={styles.currencySymbol}>{getCurrencySymbol()}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Target Amount"
-                placeholderTextColor={colors.outline}
-                keyboardType="decimal-pad"
-                value={newGoalTarget}
-                onChangeText={setNewGoalTarget}
-              />
-            </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Goal Name (e.g. New Laptop)"
+                  placeholderTextColor={colors.outline}
+                  value={newGoalName}
+                  onChangeText={setNewGoalName}
+                />
 
-            <TouchableOpacity 
-              style={styles.saveBtn}
-              onPress={handleAddGoal}
-              disabled={isPending}
-            >
-              {isPending ? (
-                 <ActivityIndicator size="small" color={colors.onPrimary} />
-              ) : (
-                <Text style={styles.saveBtnText}>Create Goal</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {goals.length === 0 && !showAdd && (
-           <View style={{ padding: 40, alignItems: 'center' }}>
-             <MaterialIcons name="flag" size={64} color={colors.surfaceVariant} />
-             <Text style={{ ...typography.headlineSm, color: colors.onSurface, marginTop: 16 }}>No Goals Yet</Text>
-             <Text style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, textAlign: 'center', marginTop: 8 }}>
-               Tap the + button to create a savings goal.
-             </Text>
-           </View>
-        )}
-
-        {goals.map((goal: Goal) => {
-          const progress = goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
-          return (
-            <Pressable key={goal.id} style={styles.goalCard} onPress={() => router.push(`/goal-details?id=${goal.id}`)}>
-              <View style={styles.goalCardTop}>
-                <View style={styles.goalCardLeft}>
-                  <View style={styles.iconBox}>
-                    <MaterialIcons name={goal.icon as any} size={24} color={colors.primary} />
-                  </View>
-                  <View>
-                    <Text style={styles.goalTitle}>{goal.name}</Text>
-                    <Text style={styles.goalAmounts}>{formatCurrency(goal.currentAmount)} / {formatCurrency(goal.targetAmount)}</Text>
-                  </View>
+                <View style={styles.currencyInputRow}>
+                  <Text style={styles.currencySymbol}>{getCurrencySymbol()}</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Target Amount"
+                    placeholderTextColor={colors.outline}
+                    keyboardType="decimal-pad"
+                    value={newGoalTarget}
+                    onChangeText={setNewGoalTarget}
+                  />
                 </View>
-                <Text style={styles.goalPercent}>{progress.toFixed(0)}%</Text>
-              </View>
 
-              <View style={styles.goalCardBottom}>
-                <View style={styles.progressBarTrack}>
-                  <View style={[styles.progressBarFill, { width: `${Math.min(100, progress)}%` }]} />
-                </View>
-                {goal.targetDate && (
-                   <Text style={styles.goalTargetDate}>Target: {new Date(goal.targetDate).toLocaleDateString()}</Text>
-                )}
+                <TouchableOpacity
+                  style={styles.saveBtn}
+                  onPress={handleAddGoal}
+                  disabled={isPending}
+                >
+                  {isPending ? (
+                    <ActivityIndicator size="small" color={colors.onPrimary} />
+                  ) : (
+                    <Text style={styles.saveBtnText}>Create Goal</Text>
+                  )}
+                </TouchableOpacity>
               </View>
-            </Pressable>
-          );
-        })}
-      </>)}
+            )}
+
+            {goals.length === 0 && !showAdd && (
+              <View style={{ padding: 40, alignItems: 'center' }}>
+                <MaterialIcons name="flag" size={64} color={colors.surfaceVariant} />
+                <Text style={{ ...typography.headlineSm, color: colors.onSurface, marginTop: 16 }}>
+                  No Goals Yet
+                </Text>
+                <Text
+                  style={{
+                    ...typography.bodyMd,
+                    color: colors.onSurfaceVariant,
+                    textAlign: 'center',
+                    marginTop: 8,
+                  }}
+                >
+                  Tap the + button to create a savings goal.
+                </Text>
+              </View>
+            )}
+
+            {goals.map((goal: Goal) => {
+              const progress =
+                goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
+              return (
+                <Pressable
+                  key={goal.id}
+                  style={styles.goalCard}
+                  onPress={() => router.push(`/goal-details?id=${goal.id}`)}
+                >
+                  <View style={styles.goalCardTop}>
+                    <View style={styles.goalCardLeft}>
+                      <View style={styles.iconBox}>
+                        <MaterialIcons name={goal.icon as any} size={24} color={colors.primary} />
+                      </View>
+                      <View>
+                        <Text style={styles.goalTitle}>{goal.name}</Text>
+                        <Text style={styles.goalAmounts}>
+                          {formatCurrency(goal.currentAmount)} / {formatCurrency(goal.targetAmount)}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.goalPercent}>{progress.toFixed(0)}%</Text>
+                  </View>
+
+                  <View style={styles.goalCardBottom}>
+                    <View style={styles.progressBarTrack}>
+                      <View
+                        style={[styles.progressBarFill, { width: `${Math.min(100, progress)}%` }]}
+                      />
+                    </View>
+                    {goal.targetDate && (
+                      <Text style={styles.goalTargetDate}>
+                        Target: {new Date(goal.targetDate).toLocaleDateString()}
+                      </Text>
+                    )}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </>
+        )}
       </ScrollView>
     </View>
   );

@@ -1,5 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Dimensions } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+} from 'react-native';
 import { Text, Header, Loader } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -34,8 +42,8 @@ export default function AccountDetailsScreen() {
       'Are you sure you want to delete this account? All associated transactions will be removed.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
+        {
+          text: 'Delete',
           style: 'destructive',
           onPress: () => {
             if (accountId) {
@@ -43,7 +51,7 @@ export default function AccountDetailsScreen() {
                 onSuccess: () => {
                   showToast('Account deleted', 'success');
                   router.back();
-                }
+                },
               });
             }
           },
@@ -60,43 +68,47 @@ export default function AccountDetailsScreen() {
   // Format history for LineChart
   const chartData = useMemo(() => {
     let data = history;
-    if (!data || data.length === 0) data = [{ date: new Date().toISOString().split('T')[0], value: account?.balance || 0 }, { date: new Date().toISOString().split('T')[0], value: account?.balance || 0 }];
+    if (!data || data.length === 0)
+      data = [
+        { date: new Date().toISOString().split('T')[0], value: account?.balance || 0 },
+        { date: new Date().toISOString().split('T')[0], value: account?.balance || 0 },
+      ];
     else if (data.length === 1) data = [data[0], data[0]];
-    
+
     return data.map((point, index) => {
       const isStart = index === 0;
       const isEnd = index === data.length - 1;
       const isMid = index === Math.floor(data.length / 2);
-      
+
       const dateParts = point.date.split('-');
-      const label = (isStart || isEnd || isMid) ? `${dateParts[1]}/${dateParts[2]}` : '';
+      const label = isStart || isEnd || isMid ? `${dateParts[1]}/${dateParts[2]}` : '';
 
       return {
         value: point.value,
         label,
-        dataPointText: formatCurrency(point.value)
+        dataPointText: formatCurrency(point.value),
       };
     });
   }, [history, account]);
 
   const chartConfig = useMemo(() => {
-    const vals = chartData.map(d => d.value);
+    const vals = chartData.map((d) => d.value);
     const min = Math.min(...vals);
     const max = Math.max(...vals);
     const range = max - min;
-    
+
     if (range === 0) {
       const offset = Math.max(0, min - 10);
-      return { 
-        yAxisOffset: offset, 
-        maxValue: max === 0 ? 100 : (max - offset + 20) 
+      return {
+        yAxisOffset: offset,
+        maxValue: max === 0 ? 100 : max - offset + 20,
       };
     }
-    
-    const offset = Math.max(0, min - (range * 0.2));
+
+    const offset = Math.max(0, min - range * 0.2);
     return {
       yAxisOffset: offset,
-      maxValue: (max - offset) + (range * 0.2),
+      maxValue: max - offset + range * 0.2,
     };
   }, [chartData]);
 
@@ -108,7 +120,7 @@ export default function AccountDetailsScreen() {
     if (start === 0) return end > 0 ? 100 : 0;
     return ((end - start) / start) * 100;
   }, [history]);
-  
+
   const isPositiveTrend = balanceChangePercent >= 0;
 
   const screenWidth = Dimensions.get('window').width;
@@ -121,14 +133,14 @@ export default function AccountDetailsScreen() {
         title="Account Details"
         rightNode={
           <View style={{ position: 'relative' }}>
-            <TouchableOpacity 
-              style={styles.iconButton} 
+            <TouchableOpacity
+              style={styles.iconButton}
               onPress={() => setShowMenu(!showMenu)}
               disabled={!account}
             >
               <MaterialIcons name="more-vert" size={24} color={colors.onSurfaceVariant} />
             </TouchableOpacity>
-            
+
             {showMenu && (
               <View style={styles.menuPopup}>
                 <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
@@ -150,166 +162,204 @@ export default function AccountDetailsScreen() {
           <Text style={{ color: colors.onSurfaceVariant }}>Account not found.</Text>
         </View>
       ) : (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
-        { isLoading || isDeleting ? <Loader /> : (<>
-        {account && (
-          <>
-          /* Main Details Card */
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View>
-                <Text style={styles.accountLabel}>{account.name.toUpperCase()}</Text>
-                <Text style={styles.balanceText}>{formatCurrency(account.balance)}</Text>
-                {account.institution && (
-                  <Text style={styles.institutionText}>{account.institution}</Text>
-                )}
-              </View>
-              <View style={styles.accountIconBox}>
-                <MaterialIcons name={getAccountTypeIcon(account.type)} size={24} color={colors.primary} />
-              </View>
-            </View>
-
-            {/* Stats Grid */}
-            <View style={styles.statsGrid}>
-              <View style={styles.statBox}>
-                <Text style={styles.statLabel}>Type</Text>
-                <Text style={styles.statValue}>
-                  {account.type.charAt(0).toUpperCase() + account.type.slice(1)}
-                </Text>
-              </View>
-              <View style={styles.statBox}>
-                <Text style={styles.statLabel}>Last 4</Text>
-                <Text style={styles.statValue}>{account.lastFour || '—'}</Text>
-              </View>
-              <View style={styles.statBox}>
-                <Text style={styles.statLabel}>Added</Text>
-                <Text style={styles.statValue}>{formatDate(account.createdAt, 'month-year')}</Text>
-              </View>
-            </View>
-            
-            {/* Balance Trend LineChart */}
-            <View style={{ marginTop: 16, alignItems: 'center', justifyContent: 'center' }}>
-            <LineChart
-              data={chartData}
-              width={chartWidth}
-              height={140}
-              yAxisOffset={chartConfig.yAxisOffset}
-              maxValue={chartConfig.maxValue}
-              hideDataPoints
-              color={isPositiveTrend ? colors.primary : colors.error}
-              thickness={3}
-              initialSpacing={0}
-              endSpacing={0}
-              areaChart
-              startFillColor={isPositiveTrend ? colors.primary : colors.error}
-              startOpacity={0.3}
-              endFillColor={isPositiveTrend ? colors.primary : colors.error}
-              endOpacity={0.05}
-              curved
-              hideRules
-              hideYAxisText
-              hideAxesAndRules
-              pointerConfig={{
-                pointerStripHeight: 140,
-                pointerStripColor: colors.outline,
-                pointerStripWidth: 2,
-                pointerColor: colors.primary,
-                radius: 6,
-                pointerLabelWidth: 80,
-                pointerLabelHeight: 30,
-                activatePointersOnLongPress: true,
-                autoAdjustPointerLabelPosition: true,
-                pointerLabelComponent: (items: any) => {
-                  return (
-                    <View
-                      style={{
-                        height: 30,
-                        width: 80,
-                        justifyContent: 'center',
-                        backgroundColor: colors.surfaceContainerHighest,
-                        borderRadius: 8,
-                        padding: 4,
-                      }}>
-                      <Text style={{ color: colors.onSurface, fontSize: 12, fontWeight: 'bold', textAlign: 'center' }}>
-                        {items[0].dataPointText}
-                      </Text>
-                    </View>
-                  );
-                },
-              }}
-            />
-            </View>
-          </View>
-
-          {/* Recent Activity */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Recent Activity</Text>
-            
-            {isTxLoading ? (
-              <View style={styles.emptyActivityBox}>
-                <ActivityIndicator size="small" color={colors.primary} />
-              </View>
-            ) : transactions.length === 0 ? (
-              <View style={styles.emptyActivityBox}>
-                <MaterialIcons name="receipt-long" size={32} color={colors.outline} />
-                <Text style={styles.emptyActivityText}>
-                  No transactions found for this account.
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.transactionsList}>
-                {transactions.slice(0, 5).map((tx, index) => {
-                  const isLast = index === Math.min(transactions.length, 5) - 1;
-                  const sign = getTransactionSign(tx.type);
-                  
-                  return (
-                    <TouchableOpacity
-                      key={tx.id}
-                      style={[styles.transactionItem, isLast && { borderBottomWidth: 0 }]}
-                    >
-                      <View style={styles.txLeft}>
-                        <View style={[
-                          styles.txIconBox,
-                          tx.type === 'income' ? { backgroundColor: colors.primaryContainer } : undefined
-                        ]}>
-                          <MaterialIcons 
-                            name={getCategoryIcon(tx.category)} 
-                            size={20} 
-                            color={tx.type === 'income' ? colors.onPrimaryContainer : colors.primary} 
-                          />
-                        </View>
-                        <View>
-                          <Text style={styles.txTitle}>
-                            {tx.type === 'transfer' ? (tx.accountId === account?.id ? `Transfer to ${tx.toAccountName || 'Unknown'}` : `Transfer from ${tx.accountName}`) : tx.merchant}
-                          </Text>
-                          <Text style={styles.txSubtitle}>{formatDate(tx.date)}</Text>
-                        </View>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {isLoading || isDeleting ? (
+            <Loader />
+          ) : (
+            <>
+              {account && (
+                <>
+                  /* Main Details Card */
+                  <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                      <View>
+                        <Text style={styles.accountLabel}>{account.name.toUpperCase()}</Text>
+                        <Text style={styles.balanceText}>{formatCurrency(account.balance)}</Text>
+                        {account.institution && (
+                          <Text style={styles.institutionText}>{account.institution}</Text>
+                        )}
                       </View>
-                      <View style={styles.txRight}>
-                        <Text style={[
-                          styles.txAmount,
-                          tx.type === 'income' ? { color: colors.primary } : undefined
-                        ]}>
-                          {sign}{formatCurrency(tx.amount)}
+                      <View style={styles.accountIconBox}>
+                        <MaterialIcons
+                          name={getAccountTypeIcon(account.type)}
+                          size={24}
+                          color={colors.primary}
+                        />
+                      </View>
+                    </View>
+
+                    {/* Stats Grid */}
+                    <View style={styles.statsGrid}>
+                      <View style={styles.statBox}>
+                        <Text style={styles.statLabel}>Type</Text>
+                        <Text style={styles.statValue}>
+                          {account.type.charAt(0).toUpperCase() + account.type.slice(1)}
                         </Text>
                       </View>
-                    </TouchableOpacity>
-                  );
-                })}
-                {transactions.length > 5 && (
-                  <TouchableOpacity 
-                    style={styles.viewAllBtn}
-                    onPress={() => router.push('/(app)/(tabs)/transactions')}
-                  >
-                    <Text style={{ color: colors.primary, fontWeight: '500' }}>View All</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-          </View>
-          </>
-        )}
-        </>)}
+                      <View style={styles.statBox}>
+                        <Text style={styles.statLabel}>Last 4</Text>
+                        <Text style={styles.statValue}>{account.lastFour || '—'}</Text>
+                      </View>
+                      <View style={styles.statBox}>
+                        <Text style={styles.statLabel}>Added</Text>
+                        <Text style={styles.statValue}>
+                          {formatDate(account.createdAt, 'month-year')}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Balance Trend LineChart */}
+                    <View style={{ marginTop: 16, alignItems: 'center', justifyContent: 'center' }}>
+                      <LineChart
+                        data={chartData}
+                        width={chartWidth}
+                        height={140}
+                        yAxisOffset={chartConfig.yAxisOffset}
+                        maxValue={chartConfig.maxValue}
+                        hideDataPoints
+                        color={isPositiveTrend ? colors.primary : colors.error}
+                        thickness={3}
+                        initialSpacing={0}
+                        endSpacing={0}
+                        areaChart
+                        startFillColor={isPositiveTrend ? colors.primary : colors.error}
+                        startOpacity={0.3}
+                        endFillColor={isPositiveTrend ? colors.primary : colors.error}
+                        endOpacity={0.05}
+                        curved
+                        hideRules
+                        hideYAxisText
+                        hideAxesAndRules
+                        pointerConfig={{
+                          pointerStripHeight: 140,
+                          pointerStripColor: colors.outline,
+                          pointerStripWidth: 2,
+                          pointerColor: colors.primary,
+                          radius: 6,
+                          pointerLabelWidth: 80,
+                          pointerLabelHeight: 30,
+                          activatePointersOnLongPress: true,
+                          autoAdjustPointerLabelPosition: true,
+                          pointerLabelComponent: (items: any) => {
+                            return (
+                              <View
+                                style={{
+                                  height: 30,
+                                  width: 80,
+                                  justifyContent: 'center',
+                                  backgroundColor: colors.surfaceContainerHighest,
+                                  borderRadius: 8,
+                                  padding: 4,
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    color: colors.onSurface,
+                                    fontSize: 12,
+                                    fontWeight: 'bold',
+                                    textAlign: 'center',
+                                  }}
+                                >
+                                  {items[0].dataPointText}
+                                </Text>
+                              </View>
+                            );
+                          },
+                        }}
+                      />
+                    </View>
+                  </View>
+                  {/* Recent Activity */}
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Recent Activity</Text>
+
+                    {isTxLoading ? (
+                      <View style={styles.emptyActivityBox}>
+                        <ActivityIndicator size="small" color={colors.primary} />
+                      </View>
+                    ) : transactions.length === 0 ? (
+                      <View style={styles.emptyActivityBox}>
+                        <MaterialIcons name="receipt-long" size={32} color={colors.outline} />
+                        <Text style={styles.emptyActivityText}>
+                          No transactions found for this account.
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={styles.transactionsList}>
+                        {transactions.slice(0, 5).map((tx, index) => {
+                          const isLast = index === Math.min(transactions.length, 5) - 1;
+                          const sign = getTransactionSign(tx.type);
+
+                          return (
+                            <TouchableOpacity
+                              key={tx.id}
+                              style={[styles.transactionItem, isLast && { borderBottomWidth: 0 }]}
+                            >
+                              <View style={styles.txLeft}>
+                                <View
+                                  style={[
+                                    styles.txIconBox,
+                                    tx.type === 'income'
+                                      ? { backgroundColor: colors.primaryContainer }
+                                      : undefined,
+                                  ]}
+                                >
+                                  <MaterialIcons
+                                    name={getCategoryIcon(tx.category)}
+                                    size={20}
+                                    color={
+                                      tx.type === 'income'
+                                        ? colors.onPrimaryContainer
+                                        : colors.primary
+                                    }
+                                  />
+                                </View>
+                                <View>
+                                  <Text style={styles.txTitle}>
+                                    {tx.type === 'transfer'
+                                      ? tx.accountId === account?.id
+                                        ? `Transfer to ${tx.toAccountName || 'Unknown'}`
+                                        : `Transfer from ${tx.accountName}`
+                                      : tx.merchant}
+                                  </Text>
+                                  <Text style={styles.txSubtitle}>{formatDate(tx.date)}</Text>
+                                </View>
+                              </View>
+                              <View style={styles.txRight}>
+                                <Text
+                                  style={[
+                                    styles.txAmount,
+                                    tx.type === 'income' ? { color: colors.primary } : undefined,
+                                  ]}
+                                >
+                                  {sign}
+                                  {formatCurrency(tx.amount)}
+                                </Text>
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
+                        {transactions.length > 5 && (
+                          <TouchableOpacity
+                            style={styles.viewAllBtn}
+                            onPress={() => router.push('/(app)/(tabs)/transactions')}
+                          >
+                            <Text style={{ color: colors.primary, fontWeight: '500' }}>
+                              View All
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                </>
+              )}
+            </>
+          )}
         </ScrollView>
       )}
     </View>
@@ -504,7 +554,7 @@ const getStyles = (colors: ThemeColors) => {
       alignItems: 'center',
       borderTopWidth: 1,
       borderTopColor: colors.surfaceContainer,
-    }
+    },
   });
   return styles;
 };

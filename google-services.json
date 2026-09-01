@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "777785160447",
+    "project_id": "clarity-8c1e2",
+    "storage_bucket": "clarity-8c1e2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:777785160447:android:b62f6310b0eca118f792ca",
+        "android_client_info": {
+          "package_name": "com.homerun.clarity"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDfcAxPZVl93TakLMCtjMBVoZU0kOblRNY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

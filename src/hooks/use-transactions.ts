@@ -16,7 +16,7 @@ import {
 import {
   createRecurringTransaction,
   getActiveRecurringTransactions,
-  deleteRecurringTransaction
+  deleteRecurringTransaction,
 } from '@/services/database/recurring-dao';
 import type {
   MonthlyTotals,
@@ -28,7 +28,7 @@ import type {
 export function useTransactions(filters?: TransactionFilters) {
   // Stringify filters to use safely in the queryKey
   const filtersString = JSON.stringify(filters || {});
-  
+
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['transactions', 'list', filtersString],
     queryFn: () => {
@@ -48,15 +48,17 @@ export function useCreateTransaction() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['budget'] });
+      queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+      queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
+      queryClient.invalidateQueries({ queryKey: ['goals'] });
     },
   });
 
-  return { 
+  return {
     mutate: (data: Omit<Transaction, 'id'>, options?: { onSuccess?: () => void }) => {
       mutation.mutate(data, { onSuccess: options?.onSuccess });
-    }, 
-    isPending: mutation.isPending 
+    },
+    isPending: mutation.isPending,
   };
 }
 
@@ -64,20 +66,26 @@ export function useUpdateTransaction() {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Omit<Transaction, 'id'>> }) => 
+    mutationFn: ({ id, data }: { id: string; data: Partial<Omit<Transaction, 'id'>> }) =>
       updateTransactionDao(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['budget'] });
+      queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+      queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
+      queryClient.invalidateQueries({ queryKey: ['goals'] });
     },
   });
 
-  return { 
-    mutate: (id: string, data: Partial<Omit<Transaction, 'id'>>, options?: { onSuccess?: () => void }) => {
+  return {
+    mutate: (
+      id: string,
+      data: Partial<Omit<Transaction, 'id'>>,
+      options?: { onSuccess?: () => void }
+    ) => {
       mutation.mutate({ id, data }, { onSuccess: options?.onSuccess });
-    }, 
-    isPending: mutation.isPending 
+    },
+    isPending: mutation.isPending,
   };
 }
 
@@ -99,15 +107,17 @@ export function useDeleteTransaction() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['budget'] });
+      queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+      queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
+      queryClient.invalidateQueries({ queryKey: ['goals'] });
     },
   });
 
-  return { 
+  return {
     mutate: (id: string, options?: { onSuccess?: () => void }) => {
       mutation.mutate(id, { onSuccess: options?.onSuccess });
-    }, 
-    isPending: mutation.isPending 
+    },
+    isPending: mutation.isPending,
   };
 }
 
@@ -157,11 +167,11 @@ export function useCreateRecurringTransaction() {
     },
   });
 
-  return { 
+  return {
     mutate: (data: any, options?: { onSuccess?: () => void }) => {
       mutation.mutate(data, { onSuccess: options?.onSuccess });
-    }, 
-    isPending: mutation.isPending 
+    },
+    isPending: mutation.isPending,
   };
 }
 

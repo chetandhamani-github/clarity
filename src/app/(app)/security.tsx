@@ -1,36 +1,130 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Switch } from 'react-native';
-import { Text, Button, Header } from '@/components/ui';
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Switch,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
+import * as LocalAuthentication from 'expo-local-authentication';
+import { Text, Button, Header, useToast, useAlert } from '@/components/ui';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-type TimeoutOption = 'immediate' | '1min' | '5min' | 'never';
-
 import { useAppStore } from '@/store/use-app-store';
+import { clearDatabase } from '@/services/database';
+import { exportFullBackupToJSON } from '@/services/export/export-service';
+import { useAccounts } from '@/hooks/use-accounts';
 
 export default function SecurityPrivacyScreen() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { showToast } = useToast();
+  const { showAlert } = useAlert();
+  const { accounts } = useAccounts();
 
-  const biometricEnabled = useAppStore(state => state.biometricEnabled);
-  const twoFaEnabled = useAppStore(state => state.twoFaEnabled);
-  const timeoutSetting = useAppStore(state => state.timeoutSetting);
-  const setBiometricEnabled = useAppStore(state => state.setBiometricEnabled);
-  const setTwoFaEnabled = useAppStore(state => state.setTwoFaEnabled);
-  const setTimeoutSetting = useAppStore(state => state.setTimeoutSetting);
+  const biometricEnabled = useAppStore((state) => state.biometricEnabled);
+  const timeoutSetting = useAppStore((state) => state.timeoutSetting);
+  const setBiometricEnabled = useAppStore((state) => state.setBiometricEnabled);
+  const setTimeoutSetting = useAppStore((state) => state.setTimeoutSetting);
+
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleToggleBiometrics = async (value: boolean) => {
+    if (!value) {
+      setBiometricEnabled(false);
+      showToast('Biometric unlock disabled', 'info');
+      return;
+    }
+
+    try {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      const enrolledLevel = await LocalAuthentication.getEnrolledLevelAsync();
+
+      if (!hasHardware && enrolledLevel === LocalAuthentication.SecurityLevel.NONE) {
+        showAlert(
+          'Hardware Unavailable',
+          'This device does not support biometric hardware or lock authentication.'
+        );
+        return;
+      }
+
+      if (!isEnrolled && enrolledLevel === LocalAuthentication.SecurityLevel.NONE) {
+        showAlert(
+          'Not Enrolled',
+          'Please set up Face ID / Fingerprint or a device passcode in your device settings.'
+        );
+        return;
+      }
+
+      const authResult = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Verify Biometrics to Enable',
+        fallbackLabel: 'Use Device Passcode',
+        disableDeviceFallback: false,
+      });
+
+      if (authResult.success) {
+        setBiometricEnabled(true);
+        showToast('Biometric unlock enabled', 'success');
+      } else {
+        showAlert('Authentication Failed', 'Could not verify biometrics.');
+      }
+    } catch (error: any) {
+      console.error(error);
+      showAlert('Error', 'Failed to enable biometrics.');
+    }
+  };
+
+  const handleDownloadArchive = async () => {
+    setIsExporting(true);
+    try {
+      const result = await exportFullBackupToJSON();
+      if (!result.success) {
+        showAlert('Export Failed', result.message || 'Could not export data.');
+      }
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleDeleteAllData = () => {
+    showAlert(
+      'Reset All Data',
+      'Are you sure you want to permanently delete all accounts, transactions, and categories from this device? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Everything',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await clearDatabase();
+              showToast('All local data was permanently cleared', 'success');
+              router.replace('/(app)/(tabs)/dashboard' as any);
+            } catch (err) {
+              console.error(err);
+              showAlert('Error', 'Failed to clear local data.');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <Header
-        showBack
-        title="Security & Privacy"
-      />
+      <Header showBack title="Security & Privacy" />
 
-      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 60 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 60 }]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.introSection}>
           <Text style={styles.introText}>
             Manage your authentication methods and control how your data is handled within Clarity.
@@ -59,28 +153,7 @@ export default function SecurityPrivacyScreen() {
                 </View>
                 <Switch
                   value={biometricEnabled}
-                  onValueChange={setBiometricEnabled}
-                  trackColor={{ false: colors.surfaceVariant, true: colors.primary }}
-                  thumbColor="#FFFFFF"
-                />
-              </View>
-            </View>
-
-            {/* 2FA */}
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={styles.cardHeaderLeft}>
-                  <View style={styles.iconBox}>
-                    <MaterialIcons name="phonelink-lock" size={20} color={colors.primary} />
-                  </View>
-                  <View style={styles.cardTextContent}>
-                    <Text style={styles.cardTitle}>Two-Factor Auth</Text>
-                    <Text style={styles.cardSubtitle}>Require a code for new devices.</Text>
-                  </View>
-                </View>
-                <Switch
-                  value={twoFaEnabled}
-                  onValueChange={setTwoFaEnabled}
+                  onValueChange={handleToggleBiometrics}
                   trackColor={{ false: colors.surfaceVariant, true: colors.primary }}
                   thumbColor="#FFFFFF"
                 />
@@ -159,7 +232,7 @@ export default function SecurityPrivacyScreen() {
                       timeoutSetting === 'never' && styles.radioPillTextActive,
                     ]}
                   >
-                    Never (Not Recommended)
+                    Never
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -171,34 +244,48 @@ export default function SecurityPrivacyScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialIcons name="data-usage" size={20} color={colors.outline} />
-            <Text style={styles.sectionTitle}>Data Privacy</Text>
+            <Text style={styles.sectionTitle}>Data Privacy & Control</Text>
           </View>
 
           <View style={styles.listContainer}>
             {/* Linked Accounts */}
             <View style={styles.listItem}>
               <View style={styles.listItemTextContent}>
-                <Text style={styles.cardTitle}>Third-Party Connections</Text>
+                <Text style={styles.cardTitle}>Institutions & Linked Accounts</Text>
                 <Text style={styles.cardSubtitle}>
-                  Manage banks and services linked to your account.
+                  {accounts.length} active {accounts.length === 1 ? 'account' : 'accounts'} stored
+                  securely on this device.
                 </Text>
               </View>
-              <TouchableOpacity style={styles.outlineBtn}>
-                <Text style={styles.outlineBtnText}>Manage Links</Text>
+              <TouchableOpacity
+                style={styles.outlineBtn}
+                onPress={() => router.push('/(app)/(tabs)/accounts')}
+              >
+                <Text style={styles.outlineBtnText}>Manage</Text>
               </TouchableOpacity>
             </View>
 
             {/* Download Data */}
             <View style={styles.listItem}>
               <View style={styles.listItemTextContent}>
-                <Text style={styles.cardTitle}>Download Personal Data</Text>
+                <Text style={styles.cardTitle}>Download Personal Archive</Text>
                 <Text style={styles.cardSubtitle}>
-                  Get a complete archive of your transaction history and profile data.
+                  Export complete encrypted JSON package of transactions and balance history.
                 </Text>
               </View>
-              <TouchableOpacity style={styles.textBtn}>
-                <MaterialIcons name="download" size={18} color={colors.primary} />
-                <Text style={styles.textBtnText}>Request Archive</Text>
+              <TouchableOpacity
+                style={styles.textBtn}
+                onPress={handleDownloadArchive}
+                disabled={isExporting}
+              >
+                {isExporting ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <>
+                    <MaterialIcons name="download" size={18} color={colors.primary} />
+                    <Text style={styles.textBtnText}>Export JSON</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
 
@@ -211,13 +298,15 @@ export default function SecurityPrivacyScreen() {
               ]}
             >
               <View style={styles.listItemTextContent}>
-                <Text style={[styles.cardTitle, { color: colors.error }]}>Delete Account</Text>
+                <Text style={[styles.cardTitle, { color: colors.error }]}>
+                  Reset All Local Data
+                </Text>
                 <Text style={styles.cardSubtitle}>
-                  Permanently remove your account and all associated data.
+                  Permanently wipe all accounts, transactions, and categories from this device.
                 </Text>
               </View>
-              <TouchableOpacity style={styles.errorBtn}>
-                <Text style={styles.errorBtnText}>Delete Account</Text>
+              <TouchableOpacity style={styles.errorBtn} onPress={handleDeleteAllData}>
+                <Text style={styles.errorBtnText}>Reset Data</Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -1,5 +1,13 @@
 import React, { useCallback, useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Dimensions } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  ActivityIndicator,
+  Dimensions,
+} from 'react-native';
 import { Text, Header, Loader } from '@/components/ui';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -23,7 +31,7 @@ export default function AccountsScreen() {
   useFocusEffect(
     useCallback(() => {
       refetch();
-    }, [refetch]),
+    }, [refetch])
   );
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId) ?? accounts[0] ?? null;
@@ -48,7 +56,6 @@ export default function AccountsScreen() {
         }
       />
 
-
       {accounts.length === 0 ? (
         <View style={styles.emptyContainer}>
           <View style={[styles.emptyIconCircle, { backgroundColor: colors.surfaceContainerLow }]}>
@@ -63,9 +70,7 @@ export default function AccountsScreen() {
             onPress={() => router.push('/add-account')}
           >
             <MaterialIcons name="add" size={20} color={colors.onPrimary} />
-            <Text style={[styles.emptyButtonText, { color: colors.onPrimary }]}>
-              Add Account
-            </Text>
+            <Text style={[styles.emptyButtonText, { color: colors.onPrimary }]}>Add Account</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -74,76 +79,87 @@ export default function AccountsScreen() {
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
           showsVerticalScrollIndicator={false}
         >
-        { isLoading ? <Loader /> : (<>
-          <View style={{ gap: 24 }}>
-          {/* Total Balance Card */}
-          <View style={styles.contentPadding}>
-            <View style={styles.totalCard}>
-              <Text style={styles.totalLabel}>TOTAL BALANCE</Text>
-              <Text style={styles.totalBalance}>{formatCurrency(totalBalance)}</Text>
-              <Text style={styles.totalAccountCount}>
-                {accounts.length} {accounts.length === 1 ? 'account' : 'accounts'}
-              </Text>
-            </View>
+          {isLoading ? (
+            <Loader />
+          ) : (
+            <>
+              <View style={{ gap: 24 }}>
+                {/* Total Balance Card */}
+                <View style={styles.contentPadding}>
+                  <View style={styles.totalCard}>
+                    <Text style={styles.totalLabel}>TOTAL BALANCE</Text>
+                    <Text style={styles.totalBalance}>{formatCurrency(totalBalance)}</Text>
+                    <Text style={styles.totalAccountCount}>
+                      {accounts.length} {accounts.length === 1 ? 'account' : 'accounts'}
+                    </Text>
+                  </View>
 
-            {/* Active Accounts List */}
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionHeaderLabel}>ACTIVE ACCOUNTS</Text>
-              <View style={styles.accountList}>
-                {accounts.map((account) => {
-                  const isSelected = selectedAccount?.id === account.id;
-                  return (
-                    <TouchableOpacity
-                      key={account.id}
-                      style={isSelected ? styles.accountItemActive : styles.accountItemInactive}
-                      onPress={() => setSelectedAccountId(account.id)}
-                    >
-                      <View style={styles.accountItemLeft}>
-                        <View
-                          style={[
-                            styles.accountIconContainer,
-                            {
-                              backgroundColor: isSelected
-                                ? colors.primaryContainer
-                                : colors.surfaceVariant,
-                            },
-                          ]}
-                        >
-                          <MaterialIcons
-                            name={getAccountTypeIcon(account.type)}
-                            size={24}
-                            color={isSelected ? colors.onPrimaryContainer : colors.secondary}
-                          />
-                        </View>
-                        <View>
-                          <Text style={styles.accountName}>{account.name}</Text>
-                          <Text style={styles.accountType}>
-                            {account.type.charAt(0).toUpperCase() + account.type.slice(1)}
-                            {account.lastFour ? ` • ${account.lastFour}` : ''}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text style={styles.accountBalanceActive}>
-                        {formatCurrencyWhole(account.balance)}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                  {/* Active Accounts List */}
+                  <View style={styles.sectionCard}>
+                    <Text style={styles.sectionHeaderLabel}>ACTIVE ACCOUNTS</Text>
+                    <View style={styles.accountList}>
+                      {accounts.map((account) => {
+                        const isSelected = selectedAccount?.id === account.id;
+                        return (
+                          <TouchableOpacity
+                            key={account.id}
+                            style={
+                              isSelected ? styles.accountItemActive : styles.accountItemInactive
+                            }
+                            onPress={() => setSelectedAccountId(account.id)}
+                          >
+                            <View style={styles.accountItemLeft}>
+                              <View
+                                style={[
+                                  styles.accountIconContainer,
+                                  {
+                                    backgroundColor: isSelected
+                                      ? colors.primaryContainer
+                                      : colors.surfaceVariant,
+                                  },
+                                ]}
+                              >
+                                <MaterialIcons
+                                  name={getAccountTypeIcon(account.type)}
+                                  size={24}
+                                  color={isSelected ? colors.onPrimaryContainer : colors.secondary}
+                                />
+                              </View>
+                              <View>
+                                <Text style={styles.accountName}>{account.name}</Text>
+                                <Text style={styles.accountType}>
+                                  {account.type.charAt(0).toUpperCase() + account.type.slice(1)}
+                                  {account.lastFour ? ` • ${account.lastFour}` : ''}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={styles.accountBalanceActive}>
+                              {formatCurrencyWhole(account.balance)}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* Selected Account Details */}
+                  {selectedAccount && (
+                    <AccountDetailCard
+                      account={selectedAccount}
+                      colors={colors}
+                      styles={styles}
+                      onViewDetails={() =>
+                        router.push({
+                          pathname: '/account-details',
+                          params: { accountId: selectedAccount.id },
+                        })
+                      }
+                    />
+                  )}
+                </View>
               </View>
-            </View>
-
-            {/* Selected Account Details */}
-            {selectedAccount && (
-              <AccountDetailCard
-                account={selectedAccount}
-                colors={colors}
-                styles={styles}
-                onViewDetails={() => router.push({ pathname: '/account-details', params: { accountId: selectedAccount.id } })}
-              />
-            )}
-          </View>
-          </View>
-        </>)}
+            </>
+          )}
         </ScrollView>
       )}
     </View>
@@ -162,31 +178,41 @@ function AccountDetailCard({
   onViewDetails: () => void;
 }) {
   const { history, isLoading } = useAccountHistory(account.id, 30);
-  
+
   const chartData = React.useMemo(() => {
     let data = history;
-    if (data.length === 0) data = [{ date: new Date().toISOString().split('T')[0], value: 0 }, { date: new Date().toISOString().split('T')[0], value: 0 }];
-    else if (data.length === 1) data = [data[0], data[0]];
-    
-    return data.map((point) => ({ 
+    if (!data || data.length === 0) {
+      data = [
+        { date: new Date().toISOString().split('T')[0], value: account.balance },
+        { date: new Date().toISOString().split('T')[0], value: account.balance },
+      ];
+    } else if (data.length === 1) {
+      data = [data[0], data[0]];
+    }
+
+    return data.map((point) => ({
       value: point.value,
-      dataPointText: formatCurrency(point.value) 
+      dataPointText: formatCurrency(point.value),
     }));
-  }, [history]);
+  }, [history, account.balance]);
 
   const chartConfig = React.useMemo(() => {
-    const vals = chartData.map(d => d.value);
+    const vals = chartData.map((d) => d.value);
     const min = Math.min(...vals);
     const max = Math.max(...vals);
     const range = max - min;
-    
+
     if (range === 0) {
-      return { yAxisOffset: min - 10, maxValue: 20 };
+      return {
+        yAxisOffset: 0,
+        maxValue: max === 0 ? 100 : Math.abs(max) * 1.3,
+      };
     }
-    
+
+    const padding = range * 0.15;
     return {
-      yAxisOffset: min - (range * 0.2),
-      maxValue: range * 1.4,
+      yAxisOffset: Math.max(0, min - padding),
+      maxValue: max + padding,
     };
   }, [chartData]);
 
@@ -216,11 +242,25 @@ function AccountDetailCard({
             <ActivityIndicator size="small" color={colors.primary} />
           </View>
         ) : (
-          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}>
+          <View
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              overflow: 'hidden',
+              justifyContent: 'flex-end',
+            }}
+          >
             <LineChart
               data={chartData}
               width={chartWidth}
-              height={60}
+              height={140}
+              spacing={
+                chartData.length > 1 ? chartWidth / (chartData.length - 1) : chartWidth
+              }
+              adjustToWidth={true}
               yAxisOffset={chartConfig.yAxisOffset}
               maxValue={chartConfig.maxValue}
               hideDataPoints
@@ -228,17 +268,17 @@ function AccountDetailCard({
               hideYAxisText
               hideAxesAndRules
               color={colors.primary}
-              thickness={2}
+              thickness={2.5}
               initialSpacing={0}
               endSpacing={0}
               areaChart
               startFillColor={colors.primary}
-              startOpacity={0.15}
+              startOpacity={0.25}
               endFillColor={colors.primary}
-              endOpacity={0}
+              endOpacity={0.02}
               curved
               pointerConfig={{
-                pointerStripHeight: 60,
+                pointerStripHeight: 140,
                 pointerStripColor: colors.outline,
                 pointerStripWidth: 2,
                 pointerColor: colors.primary,
@@ -250,13 +290,21 @@ function AccountDetailCard({
                     <View
                       style={{
                         height: 30,
-                        width: 80,
+                        width: 90,
                         justifyContent: 'center',
                         backgroundColor: colors.surfaceContainerHighest,
-                        borderRadius: 4,
+                        borderRadius: 8,
                         padding: 4,
-                      }}>
-                      <Text style={{ color: colors.onSurface, fontSize: 10, fontWeight: 'bold', textAlign: 'center' }}>
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: colors.onSurface,
+                          fontSize: 11,
+                          fontWeight: 'bold',
+                          textAlign: 'center',
+                        }}
+                      >
                         {items[0].dataPointText}
                       </Text>
                     </View>
@@ -313,11 +361,6 @@ const getStyles = (colors: ThemeColors) => {
       height: 40,
       alignItems: 'center',
       justifyContent: 'center',
-    },
-    loaderContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
     },
     emptyContainer: {
       flex: 1,

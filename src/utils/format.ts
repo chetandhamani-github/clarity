@@ -1,9 +1,6 @@
 import { useAppStore } from '@/store/use-app-store';
 
-export function formatCurrency(
-  amount: number,
-  compact: boolean = false,
-): string {
+export function formatCurrency(amount: number, compact: boolean = false): string {
   const currency = useAppStore.getState().currency || 'INR';
   const locale = currency === 'INR' ? 'en-IN' : 'en-US';
 
@@ -43,7 +40,7 @@ export function getCurrencySymbol(): string {
     style: 'currency',
     currency: currency,
   }).formatToParts(0);
-  return parts.find(part => part.type === 'currency')?.value || '$';
+  return parts.find((part) => part.type === 'currency')?.value || '$';
 }
 
 export function formatPercentage(value: number, decimals: number = 1): string {
@@ -52,7 +49,7 @@ export function formatPercentage(value: number, decimals: number = 1): string {
 
 export function formatDate(
   dateString: string,
-  style: 'short' | 'full' | 'month-day' | 'month-year' = 'short',
+  style: 'short' | 'full' | 'month-day' | 'month-year' = 'short'
 ): string {
   const date = new Date(dateString);
 
@@ -131,7 +128,7 @@ export function getTransactionSign(type: 'expense' | 'income' | 'transfer'): str
 }
 
 export function groupTransactionsByDate<T extends { date: string }>(
-  transactions: T[],
+  transactions: T[]
 ): { date: string; label: string; items: T[] }[] {
   const groups = new Map<string, T[]>();
 

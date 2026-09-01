@@ -23,16 +23,17 @@ export default function TransactionsScreen() {
   const router = useRouter();
 
   const [activeFilter, setActiveFilter] = useState<string>('all');
-  
+
   // Convert filter string to type expected by useTransactions
-  const typeFilter = activeFilter === 'all' ? undefined : activeFilter as 'expense' | 'income' | 'transfer';
-  
+  const typeFilter =
+    activeFilter === 'all' ? undefined : (activeFilter as 'expense' | 'income' | 'transfer');
+
   const { transactions, isLoading, refetch } = useTransactions({ type: typeFilter });
 
   useFocusEffect(
     useCallback(() => {
       refetch();
-    }, [refetch]),
+    }, [refetch])
   );
 
   const groupedTransactions = groupTransactionsByDate(transactions);
@@ -54,21 +55,22 @@ export default function TransactionsScreen() {
             <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/search')}>
               <MaterialIcons name="search" size={24} color={colors.onSurface} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/add-transaction')}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => router.push('/add-transaction')}
+            >
               <MaterialIcons name="add" size={24} color={colors.onSurface} />
             </TouchableOpacity>
           </View>
         }
       />
 
-      <ScrollView style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} 
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
-        <TouchableOpacity 
-          style={styles.searchBar}
-          onPress={() => router.push('/search')}
-        >
+        <TouchableOpacity style={styles.searchBar} onPress={() => router.push('/search')}>
           <MaterialIcons name="search" size={20} color={colors.primary} />
           <Text style={styles.searchPlaceholder}>Search transactions...</Text>
         </TouchableOpacity>
@@ -79,18 +81,18 @@ export default function TransactionsScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.filtersContainer}
           >
-            {FILTERS.map(filter => {
+            {FILTERS.map((filter) => {
               const isActive = activeFilter === filter.id;
               return (
-                <TouchableOpacity 
+                <TouchableOpacity
                   key={filter.id}
                   style={isActive ? styles.activeFilter : styles.inactiveFilter}
                   onPress={() => setActiveFilter(filter.id)}
                 >
-                  <MaterialIcons 
-                    name={filter.icon as any} 
-                    size={16} 
-                    color={isActive ? colors.primary : colors.onSurfaceVariant} 
+                  <MaterialIcons
+                    name={filter.icon as any}
+                    size={16}
+                    color={isActive ? colors.primary : colors.onSurfaceVariant}
                   />
                   <Text style={isActive ? styles.activeFilterText : styles.inactiveFilterText}>
                     {filter.label}
@@ -106,69 +108,86 @@ export default function TransactionsScreen() {
           <Text style={styles.resultsCount}>{transactions.length} Transactions</Text>
         </View>
 
-        { isLoading ? <Loader /> : (<>
-        {transactions.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No transactions found</Text>
-          </View>
+        {isLoading ? (
+          <Loader />
         ) : (
-          <View style={styles.listCard}>
-            {groupedTransactions.map((group, groupIndex) => (
-              <React.Fragment key={group.date}>
-                <View style={styles.dateGroupHeader}>
-                  <Text style={styles.dateGroupText}>{group.label}</Text>
-                </View>
-                {group.items.map((tx, txIndex) => {
-                  const isLast = groupIndex === groupedTransactions.length - 1 && txIndex === group.items.length - 1;
-                  const sign = getTransactionSign(tx.type);
-                  
-                  return (
-                    <TouchableOpacity
-                      key={tx.id}
-                      style={[styles.transactionItem, isLast && { borderBottomWidth: 0 }]}
-                      onPress={() => {
-                        router.push(`/(app)/add-transaction?id=${tx.id}`);
-                      }}
-                    >
-                      <View style={styles.transactionLeft}>
-                        <View style={[
-                          styles.transactionIconBox,
-                          tx.type === 'income' ? { backgroundColor: colors.primaryContainer } : undefined
-                        ]}>
-                          <MaterialIcons 
-                            name={getCategoryIcon(tx.category)} 
-                            size={20} 
-                            color={tx.type === 'income' ? colors.onPrimaryContainer : colors.primary} 
-                          />
-                        </View>
-                        <View>
-                          <Text style={styles.transactionName}>
-                            {tx.type === 'transfer' ? `Transfer` : tx.merchant}
-                          </Text>
-                          <Text style={styles.transactionMeta}>
-                            {tx.type === 'transfer' ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}` : tx.accountName}
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={styles.transactionRight}>
-                        <Text style={[
-                          styles.transactionAmount,
-                          tx.type === 'income' ? { color: colors.primary } : undefined
-                        ]}>
-                          {sign}{formatCurrency(tx.amount)}
-                        </Text>
-                        <View style={styles.categoryBadge}>
-                          <Text style={styles.categoryBadgeText}>{tx.category}</Text>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </React.Fragment>
-            ))}
-          </View>
+          <>
+            {transactions.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No transactions found</Text>
+              </View>
+            ) : (
+              <View style={styles.listCard}>
+                {groupedTransactions.map((group, groupIndex) => (
+                  <React.Fragment key={group.date}>
+                    <View style={styles.dateGroupHeader}>
+                      <Text style={styles.dateGroupText}>{group.label}</Text>
+                    </View>
+                    {group.items.map((tx, txIndex) => {
+                      const isLast =
+                        groupIndex === groupedTransactions.length - 1 &&
+                        txIndex === group.items.length - 1;
+                      const sign = getTransactionSign(tx.type);
+
+                      return (
+                        <TouchableOpacity
+                          key={tx.id}
+                          style={[styles.transactionItem, isLast && { borderBottomWidth: 0 }]}
+                          onPress={() => {
+                            router.push(`/(app)/add-transaction?id=${tx.id}`);
+                          }}
+                        >
+                          <View style={styles.transactionLeft}>
+                            <View
+                              style={[
+                                styles.transactionIconBox,
+                                tx.type === 'income'
+                                  ? { backgroundColor: colors.primaryContainer }
+                                  : undefined,
+                              ]}
+                            >
+                              <MaterialIcons
+                                name={getCategoryIcon(tx.category)}
+                                size={20}
+                                color={
+                                  tx.type === 'income' ? colors.onPrimaryContainer : colors.primary
+                                }
+                              />
+                            </View>
+                            <View>
+                              <Text style={styles.transactionName}>
+                                {tx.type === 'transfer' ? `Transfer` : tx.merchant}
+                              </Text>
+                              <Text style={styles.transactionMeta}>
+                                {tx.type === 'transfer'
+                                  ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}`
+                                  : tx.accountName}
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={styles.transactionRight}>
+                            <Text
+                              style={[
+                                styles.transactionAmount,
+                                tx.type === 'income' ? { color: colors.primary } : undefined,
+                              ]}
+                            >
+                              {sign}
+                              {formatCurrency(tx.amount)}
+                            </Text>
+                            <View style={styles.categoryBadge}>
+                              <Text style={styles.categoryBadgeText}>{tx.category}</Text>
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
+              </View>
+            )}
+          </>
         )}
-        </>)}
       </ScrollView>
     </View>
   );
@@ -274,10 +293,6 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
     },
-    loaderContainer: {
-      paddingVertical: 40,
-      alignItems: 'center',
-    },
     emptyContainer: {
       paddingVertical: 60,
       alignItems: 'center',
@@ -287,12 +302,6 @@ const getStyles = (colors: ThemeColors) => {
     emptyText: {
       ...typography.bodyLg,
       color: colors.onSurfaceVariant,
-    },
-    emptyButton: {
-      paddingHorizontal: 20,
-      paddingVertical: 10,
-      borderRadius: 20,
-      marginTop: 8,
     },
     listCard: {
       backgroundColor: colors.surfaceContainerLowest,

@@ -33,19 +33,23 @@ export function useGoalContributions(goalId: string) {
 
 export function useCreateGoal() {
   const queryClient = useQueryClient();
-  
+
   const mutation = useMutation({
-    mutationFn: (data: Omit<Goal, 'id' | 'createdAt' | 'autoSaveAmount'>) => goalDao.createGoal(data),
+    mutationFn: (data: Omit<Goal, 'id' | 'createdAt' | 'autoSaveAmount'>) =>
+      goalDao.createGoal(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['goals'] });
     },
   });
 
-  return { 
-    mutate: (data: Omit<Goal, 'id' | 'createdAt' | 'autoSaveAmount'>, options?: { onSuccess?: () => void }) => {
+  return {
+    mutate: (
+      data: Omit<Goal, 'id' | 'createdAt' | 'autoSaveAmount'>,
+      options?: { onSuccess?: () => void }
+    ) => {
       mutation.mutate(data, { onSuccess: options?.onSuccess });
-    }, 
-    isPending: mutation.isPending 
+    },
+    isPending: mutation.isPending,
   };
 }
 
@@ -59,11 +63,11 @@ export function useDeleteGoal() {
     },
   });
 
-  return { 
+  return {
     mutate: (id: string, options?: { onSuccess?: () => void }) => {
       mutation.mutate(id, { onSuccess: options?.onSuccess });
-    }, 
-    isPending: mutation.isPending 
+    },
+    isPending: mutation.isPending,
   };
 }
 
@@ -71,7 +75,7 @@ export function useAddGoalContribution() {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
-    mutationFn: ({ data, accountId }: { data: Omit<GoalContribution, 'id'>; accountId?: string }) => 
+    mutationFn: ({ data, accountId }: { data: Omit<GoalContribution, 'id'>; accountId?: string }) =>
       goalDao.addGoalContribution(data, accountId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['goals'] });
@@ -79,14 +83,18 @@ export function useAddGoalContribution() {
       if (variables.accountId) {
         queryClient.invalidateQueries({ queryKey: ['accounts'] });
         queryClient.invalidateQueries({ queryKey: ['transactions'] });
+        queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
       }
     },
   });
 
-  return { 
-    mutate: (variables: { data: Omit<GoalContribution, 'id'>; accountId?: string }, options?: { onSuccess?: () => void }) => {
+  return {
+    mutate: (
+      variables: { data: Omit<GoalContribution, 'id'>; accountId?: string },
+      options?: { onSuccess?: () => void }
+    ) => {
       mutation.mutate(variables, { onSuccess: options?.onSuccess });
-    }, 
-    isPending: mutation.isPending 
+    },
+    isPending: mutation.isPending,
   };
 }

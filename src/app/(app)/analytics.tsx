@@ -1,11 +1,16 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Text, Header, Loader } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMonthlyTotals, useTopMerchants, useRecurringTransactions, useMonthlyReports } from '@/hooks/use-transactions';
+import {
+  useMonthlyTotals,
+  useTopMerchants,
+  useRecurringTransactions,
+  useMonthlyReports,
+} from '@/hooks/use-transactions';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useCategorySpending } from '@/hooks/use-budget';
 import { formatCurrency } from '@/utils/format';
@@ -16,33 +21,78 @@ export default function AnalyticsScreen() {
   const styles = getStyles(colors);
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
+  const params = useLocalSearchParams<{ month?: string; year?: string }>();
 
-  const { totals, isLoading: loadingTotals } = useMonthlyTotals(month, year);
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState<number>(
+    params.month ? parseInt(params.month, 10) : now.getMonth() + 1
+  );
+  const [selectedYear, setSelectedYear] = useState<number>(
+    params.year ? parseInt(params.year, 10) : now.getFullYear()
+  );
+
+  useEffect(() => {
+    if (params.month) setSelectedMonth(parseInt(params.month, 10));
+    if (params.year) setSelectedYear(parseInt(params.year, 10));
+  }, [params.month, params.year]);
+
+  const { totals, isLoading: loadingTotals } = useMonthlyTotals(selectedMonth, selectedYear);
   const { accounts, isLoading: loadingAccounts } = useAccounts();
-  const { spending, isLoading: loadingSpending } = useCategorySpending(month, year);
-  const { merchants, isLoading: loadingMerchants } = useTopMerchants(month, year, 5);
+  const { spending, isLoading: loadingSpending } = useCategorySpending(selectedMonth, selectedYear);
+  const { merchants, isLoading: loadingMerchants } = useTopMerchants(
+    selectedMonth,
+    selectedYear,
+    5
+  );
   const { transactions: recurring, isLoading: loadingRecurring } = useRecurringTransactions();
   const { reports, isLoading: loadingReports } = useMonthlyReports();
 
-  const isLoading = loadingTotals || loadingAccounts || loadingSpending || loadingMerchants || loadingRecurring || loadingReports;
+  const isLoading =
+    loadingTotals ||
+    loadingAccounts ||
+    loadingSpending ||
+    loadingMerchants ||
+    loadingRecurring ||
+    loadingReports;
 
   const netCashFlow = totals.income - totals.expenses;
   const savingsRate = totals.income > 0 ? (netCashFlow / totals.income) * 100 : 0;
-  
-  const assets = accounts.filter(a => a.balance > 0).reduce((sum, a) => sum + a.balance, 0);
-  const liabilities = accounts.filter(a => a.balance < 0).reduce((sum, a) => sum + Math.abs(a.balance), 0);
+
+  const assets = accounts.filter((a) => a.balance > 0).reduce((sum, a) => sum + a.balance, 0);
+  const liabilities = accounts
+    .filter((a) => a.balance < 0)
+    .reduce((sum, a) => sum + Math.abs(a.balance), 0);
   const netWorth = assets - liabilities;
 
   // For Net Worth bars
   const totalAssetsLiabilities = assets + liabilities;
   const assetsPercent = totalAssetsLiabilities > 0 ? (assets / totalAssetsLiabilities) * 100 : 0;
-  const liabilitiesPercent = totalAssetsLiabilities > 0 ? (liabilities / totalAssetsLiabilities) * 100 : 0;
+  const liabilitiesPercent =
+    totalAssetsLiabilities > 0 ? (liabilities / totalAssetsLiabilities) * 100 : 0;
 
-  const currentMonthName = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+  const selectedDateObj = new Date(selectedYear, selectedMonth - 1, 1);
+  const currentMonthName = selectedDateObj.toLocaleString('default', {
+    month: 'long',
+    year: 'numeric',
+  });
+
+  const handlePrevMonth = () => {
+    if (selectedMonth === 1) {
+      setSelectedMonth(12);
+      setSelectedYear((y) => y - 1);
+    } else {
+      setSelectedMonth((m) => m - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (selectedMonth === 12) {
+      setSelectedMonth(1);
+      setSelectedYear((y) => y + 1);
+    } else {
+      setSelectedMonth((m) => m + 1);
+    }
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -50,8 +100,11 @@ export default function AnalyticsScreen() {
         showBack
         title="Analytics Overview"
         rightNode={
-          <TouchableOpacity style={styles.iconButton} onPress={() => {}}>
-            <MaterialIcons name="more-vert" size={24} color={colors.primary} />
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => router.push('/export-success')}
+          >
+            <MaterialIcons name="download" size={24} color={colors.primary} />
           </TouchableOpacity>
         }
       />
@@ -61,217 +114,318 @@ export default function AnalyticsScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
-      { isLoading ? <Loader /> : (<>
-        <View style={{ gap: 24 }}>
-        {/* Page Header */}
-        <View style={styles.pageHeader}>
-          <Text style={styles.dateInsightsText}>{currentMonthName} insights</Text>
-          <TouchableOpacity style={styles.exportButton} onPress={() => router.push('/export-success')}>
-            <Text style={styles.exportButtonText}>Export Report</Text>
-            <MaterialIcons name="download" size={16} color={colors.onPrimary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Bento Grid: Key Metrics & Cash Flow */}
-        <View style={styles.bentoGrid}>
-          {/* Cash Flow Card */}
-          <View style={styles.cashFlowCard}>
-            <View style={styles.cashFlowHeader}>
-              <Text style={styles.cashFlowLabel}>NET CASH FLOW</Text>
-              <View style={[styles.cashFlowBadge, { backgroundColor: netCashFlow >= 0 ? colors.primaryContainer : colors.errorContainer }]}>
-                <Text style={[styles.cashFlowBadgeText, { color: netCashFlow >= 0 ? colors.onPrimaryContainer : colors.onErrorContainer }]}>
-                  {netCashFlow >= 0 ? '+' : ''}{formatCurrency(netCashFlow)}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.inOutRow}>
-              <Text style={styles.inOutAmount} numberOfLines={1} adjustsFontSizeToFit>{formatCurrency(totals.income)}</Text>
-              <Text style={styles.inOutLabel}>In</Text>
-              <Text style={styles.inOutDivider}>/</Text>
-              <Text style={styles.inOutAmountOut} numberOfLines={1} adjustsFontSizeToFit>{formatCurrency(totals.expenses)}</Text>
-              <Text style={styles.inOutLabel}>Out</Text>
-            </View>
-            <Text style={styles.savedMessage}>You saved {savingsRate.toFixed(1)}% of your income this month.</Text>
-
-            {/* Simplified Bar Chart Representation */}
-            <View style={styles.barChartContainer}>
-              {reports.slice(0, 6).reverse().map((report, idx, arr) => {
-                const isLast = idx === arr.length - 1;
-                // Calculate height based on max expenses to give a relative sense of scale
-                const maxExpenses = arr.length > 0 ? Math.max(...arr.map(r => r.expenses), 1) : 1;
-                const heightPct = Math.max((report.expenses / maxExpenses) * 100, 10); // min 10% height
-                
-                let monthShort = '';
-                try {
-                  const parts = report.datePrefix.split('-');
-                  const reportDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1);
-                  monthShort = reportDate.toLocaleString('default', { month: 'short' });
-                } catch (e) {
-                  monthShort = '';
-                }
-
-                return (
-                  <View style={styles.barColumn} key={report.datePrefix}>
-                    <View style={[isLast ? styles.barValueActive : styles.barValue, { height: `${heightPct}%` }]} />
-                    {isLast && (
-                      <View style={styles.tooltip}>
-                        <Text style={styles.tooltipText}>{monthShort}</Text>
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-              
-              {/* Fill remaining with empty bars if less than 6 months of data */}
-              {Array.from({ length: Math.max(0, 6 - reports.length) }).map((_, idx) => (
-                <View style={styles.barColumn} key={`empty-${idx}`}>
-                  <View style={[styles.barValue, { height: '10%' }]} />
+        {isLoading ? (
+          <Loader />
+        ) : (
+          <>
+            <View style={{ gap: 24 }}>
+              {/* Month Selector & Export Header */}
+              <View style={styles.pageHeader}>
+                <View style={styles.monthSelectorContainer}>
+                  <TouchableOpacity style={styles.arrowBtn} onPress={handlePrevMonth}>
+                    <MaterialIcons name="chevron-left" size={24} color={colors.onSurface} />
+                  </TouchableOpacity>
+                  <Text style={styles.dateInsightsText}>{currentMonthName}</Text>
+                  <TouchableOpacity style={styles.arrowBtn} onPress={handleNextMonth}>
+                    <MaterialIcons name="chevron-right" size={24} color={colors.onSurface} />
+                  </TouchableOpacity>
                 </View>
-              ))}
-            </View>
-          </View>
-
-          {/* Net Worth Card */}
-          <View style={styles.netWorthCard}>
-            <View>
-              <Text style={styles.netWorthLabel}>NET WORTH</Text>
-              <Text style={styles.netWorthAmount}>{formatCurrency(netWorth)}</Text>
-            </View>
-
-            <View style={styles.netWorthBars}>
-              <View style={styles.netWorthBarRow}>
-                <View style={styles.netWorthBarTextRow}>
-                  <Text style={styles.netWorthBarLabel}>Assets</Text>
-                  <Text style={styles.netWorthBarValue}>{formatCurrency(assets)}</Text>
-                </View>
-                <View style={styles.progressBarTrack}>
-                  <View
-                    style={[
-                      styles.progressBarFill,
-                      { backgroundColor: colors.primary, width: `${Math.max(2, assetsPercent)}%` },
-                    ]}
-                  />
-                </View>
+                <TouchableOpacity
+                  style={styles.exportButton}
+                  onPress={() => router.push('/export-success')}
+                >
+                  <Text style={styles.exportButtonText}>Export</Text>
+                  <MaterialIcons name="download" size={16} color={colors.onPrimary} />
+                </TouchableOpacity>
               </View>
 
-              <View style={styles.netWorthBarRow}>
-                <View style={styles.netWorthBarTextRow}>
-                  <Text style={styles.netWorthBarLabel}>Liabilities</Text>
-                  <Text style={styles.netWorthBarValue}>{formatCurrency(liabilities)}</Text>
-                </View>
-                <View style={styles.progressBarTrack}>
-                  <View
-                    style={[
-                      styles.progressBarFill,
-                      { backgroundColor: colors.outlineVariant, width: `${Math.max(2, liabilitiesPercent)}%` },
-                    ]}
-                  />
-                </View>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Spending by Category */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Spending by Category</Text>
-          <View style={styles.categoryList}>
-            {spending.filter(s => s.spent > 0).sort((a,b) => b.spent - a.spent).slice(0, 5).map((cat, i) => {
-              const maxSpent = Math.max(...spending.map(s => s.spent), 1);
-              const pct = (cat.spent / maxSpent) * 100;
-              return (
-                <View style={styles.categoryItem} key={i}>
-                  <View style={styles.categoryRowTop}>
-                    <View style={styles.categoryRowLeft}>
-                      <View style={styles.categoryIconBox}>
-                        <MaterialIcons name={getCategoryIcon(cat.category)} size={20} color={colors.onSurface} />
-                      </View>
-                      <Text style={styles.categoryName}>{cat.category}</Text>
-                    </View>
-                    <Text style={styles.categoryAmount}>{formatCurrency(cat.spent)}</Text>
-                  </View>
-                  <View style={styles.progressBarTrack}>
+              {/* Bento Grid: Key Metrics & Cash Flow */}
+              <View style={styles.bentoGrid}>
+                {/* Cash Flow Card */}
+                <View style={styles.cashFlowCard}>
+                  <View style={styles.cashFlowHeader}>
+                    <Text style={styles.cashFlowLabel}>NET CASH FLOW</Text>
                     <View
                       style={[
-                        styles.progressBarFill,
-                        { backgroundColor: i === 0 ? colors.primary : colors.outlineVariant, width: `${Math.max(2, pct)}%` },
+                        styles.cashFlowBadge,
+                        {
+                          backgroundColor:
+                            netCashFlow >= 0 ? colors.primaryContainer : colors.errorContainer,
+                        },
                       ]}
-                    />
+                    >
+                      <Text
+                        style={[
+                          styles.cashFlowBadgeText,
+                          {
+                            color:
+                              netCashFlow >= 0
+                                ? colors.onPrimaryContainer
+                                : colors.onErrorContainer,
+                          },
+                        ]}
+                      >
+                        {netCashFlow >= 0 ? '+' : ''}
+                        {formatCurrency(netCashFlow)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.inOutRow}>
+                    <Text style={styles.inOutAmount} numberOfLines={1} adjustsFontSizeToFit>
+                      {formatCurrency(totals.income)}
+                    </Text>
+                    <Text style={styles.inOutLabel}>In</Text>
+                    <Text style={styles.inOutDivider}>/</Text>
+                    <Text style={styles.inOutAmountOut} numberOfLines={1} adjustsFontSizeToFit>
+                      {formatCurrency(totals.expenses)}
+                    </Text>
+                    <Text style={styles.inOutLabel}>Out</Text>
+                  </View>
+                  <Text style={styles.savedMessage}>
+                    You saved {savingsRate.toFixed(1)}% of your income this month.
+                  </Text>
+
+                  {/* Simplified Bar Chart Representation */}
+                  <View style={styles.barChartContainer}>
+                    {reports
+                      .slice(0, 6)
+                      .reverse()
+                      .map((report, idx, arr) => {
+                        const isLast = idx === arr.length - 1;
+                        // Calculate height based on max expenses to give a relative sense of scale
+                        const maxExpenses =
+                          arr.length > 0 ? Math.max(...arr.map((r) => r.expenses), 1) : 1;
+                        const heightPct = Math.max((report.expenses / maxExpenses) * 100, 10); // min 10% height
+
+                        let monthShort = '';
+                        try {
+                          const parts = report.datePrefix.split('-');
+                          const reportDate = new Date(
+                            parseInt(parts[0]),
+                            parseInt(parts[1]) - 1,
+                            1
+                          );
+                          monthShort = reportDate.toLocaleString('default', { month: 'short' });
+                        } catch (e) {
+                          monthShort = '';
+                        }
+
+                        return (
+                          <View style={styles.barColumn} key={report.datePrefix}>
+                            <View
+                              style={[
+                                isLast ? styles.barValueActive : styles.barValue,
+                                { height: `${heightPct}%` },
+                              ]}
+                            />
+                            {isLast && (
+                              <View style={styles.tooltip}>
+                                <Text style={styles.tooltipText}>{monthShort}</Text>
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })}
+
+                    {/* Fill remaining with empty bars if less than 6 months of data */}
+                    {Array.from({ length: Math.max(0, 6 - reports.length) }).map((_, idx) => (
+                      <View style={styles.barColumn} key={`empty-${idx}`}>
+                        <View style={[styles.barValue, { height: '10%' }]} />
+                      </View>
+                    ))}
                   </View>
                 </View>
-              );
-            })}
-            
-            {spending.every(s => s.spent === 0) && (
-              <Text style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, textAlign: 'center' }}>
-                No spending data for this month.
-              </Text>
-            )}
-          </View>
-        </View>
 
-        {/* Bottom Lists */}
-        <View style={styles.listsGrid}>
-          {/* Top Merchants */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Top Merchants</Text>
-            {merchants.length > 0 ? merchants.map((m, i) => (
-              <View style={styles.listItem} key={i}>
-                <View style={styles.listItemLeft}>
-                  <View style={styles.avatarBox}>
-                    <Text style={styles.avatarText}>{m.merchant.substring(0, 2).toUpperCase()}</Text>
-                  </View>
+                {/* Net Worth Card */}
+                <View style={styles.netWorthCard}>
                   <View>
-                    <Text style={styles.listItemTitle}>{m.merchant}</Text>
-                    <Text style={styles.listItemSubtitle}>Expense</Text>
+                    <Text style={styles.netWorthLabel}>NET WORTH</Text>
+                    <Text style={styles.netWorthAmount}>{formatCurrency(netWorth)}</Text>
+                  </View>
+
+                  <View style={styles.netWorthBars}>
+                    <View style={styles.netWorthBarRow}>
+                      <View style={styles.netWorthBarTextRow}>
+                        <Text style={styles.netWorthBarLabel}>Assets</Text>
+                        <Text style={styles.netWorthBarValue}>{formatCurrency(assets)}</Text>
+                      </View>
+                      <View style={styles.progressBarTrack}>
+                        <View
+                          style={[
+                            styles.progressBarFill,
+                            {
+                              backgroundColor: colors.primary,
+                              width: `${Math.max(2, assetsPercent)}%`,
+                            },
+                          ]}
+                        />
+                      </View>
+                    </View>
+
+                    <View style={styles.netWorthBarRow}>
+                      <View style={styles.netWorthBarTextRow}>
+                        <Text style={styles.netWorthBarLabel}>Liabilities</Text>
+                        <Text style={styles.netWorthBarValue}>{formatCurrency(liabilities)}</Text>
+                      </View>
+                      <View style={styles.progressBarTrack}>
+                        <View
+                          style={[
+                            styles.progressBarFill,
+                            {
+                              backgroundColor: colors.outlineVariant,
+                              width: `${Math.max(2, liabilitiesPercent)}%`,
+                            },
+                          ]}
+                        />
+                      </View>
+                    </View>
                   </View>
                 </View>
-                <Text style={styles.listItemAmount}>{formatCurrency(m.total)}</Text>
               </View>
-            )) : (
-              <Text style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, textAlign: 'center', padding: 16 }}>
-                No merchants found.
-              </Text>
-            )}
-          </View>
 
-          {/* Recurring */}
-          <View style={styles.card}>
-            <View style={styles.recurringHeader}>
-              <Text style={styles.cardTitle}>Recurring</Text>
-              <TouchableOpacity style={styles.addRecurringBtn} onPress={() => router.push('/add-transaction')}>
-                <Text style={styles.addRecurringText}>Add</Text>
-                <MaterialIcons name="add" size={16} color={colors.primary} />
-              </TouchableOpacity>
+              {/* Spending by Category */}
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Spending by Category</Text>
+                <View style={styles.categoryList}>
+                  {spending
+                    .filter((s) => s.spent > 0)
+                    .sort((a, b) => b.spent - a.spent)
+                    .slice(0, 5)
+                    .map((cat, i) => {
+                      const maxSpent = Math.max(...spending.map((s) => s.spent), 1);
+                      const pct = (cat.spent / maxSpent) * 100;
+                      return (
+                        <View style={styles.categoryItem} key={i}>
+                          <View style={styles.categoryRowTop}>
+                            <View style={styles.categoryRowLeft}>
+                              <View style={styles.categoryIconBox}>
+                                <MaterialIcons
+                                  name={getCategoryIcon(cat.category)}
+                                  size={20}
+                                  color={colors.onSurface}
+                                />
+                              </View>
+                              <Text style={styles.categoryName}>{cat.category}</Text>
+                            </View>
+                            <Text style={styles.categoryAmount}>{formatCurrency(cat.spent)}</Text>
+                          </View>
+                          <View style={styles.progressBarTrack}>
+                            <View
+                              style={[
+                                styles.progressBarFill,
+                                {
+                                  backgroundColor: i === 0 ? colors.primary : colors.outlineVariant,
+                                  width: `${Math.max(2, pct)}%`,
+                                },
+                              ]}
+                            />
+                          </View>
+                        </View>
+                      );
+                    })}
+
+                  {spending.every((s) => s.spent === 0) && (
+                    <Text
+                      style={{
+                        ...typography.bodyMd,
+                        color: colors.onSurfaceVariant,
+                        textAlign: 'center',
+                      }}
+                    >
+                      No spending data for this month.
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              {/* Bottom Lists */}
+              <View style={styles.listsGrid}>
+                {/* Top Merchants */}
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Top Merchants</Text>
+                  {merchants.length > 0 ? (
+                    merchants.map((m, i) => (
+                      <View style={styles.listItem} key={i}>
+                        <View style={styles.listItemLeft}>
+                          <View style={styles.avatarBox}>
+                            <Text style={styles.avatarText}>
+                              {m.merchant.substring(0, 2).toUpperCase()}
+                            </Text>
+                          </View>
+                          <View>
+                            <Text style={styles.listItemTitle}>{m.merchant}</Text>
+                            <Text style={styles.listItemSubtitle}>Expense</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.listItemAmount}>{formatCurrency(m.total)}</Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text
+                      style={{
+                        ...typography.bodyMd,
+                        color: colors.onSurfaceVariant,
+                        textAlign: 'center',
+                        padding: 16,
+                      }}
+                    >
+                      No merchants found.
+                    </Text>
+                  )}
+                </View>
+
+                {/* Recurring */}
+                <View style={styles.card}>
+                  <View style={styles.recurringHeader}>
+                    <Text style={styles.cardTitle}>Recurring</Text>
+                    <TouchableOpacity
+                      style={styles.addRecurringBtn}
+                      onPress={() => router.push('/add-transaction')}
+                    >
+                      <Text style={styles.addRecurringText}>Add</Text>
+                      <MaterialIcons name="add" size={16} color={colors.primary} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {recurring.length > 0 ? (
+                    recurring.map((tx, i) => (
+                      <View style={styles.listItem} key={tx.id}>
+                        <View style={styles.listItemLeft}>
+                          <View style={styles.avatarBox}>
+                            <MaterialIcons name="autorenew" size={20} color={colors.onSurface} />
+                          </View>
+                          <View>
+                            <Text style={styles.listItemTitle}>
+                              {tx.type === 'transfer' ? `Transfer` : tx.merchant}
+                            </Text>
+                            <Text style={styles.listItemSubtitle}>
+                              {tx.type === 'transfer'
+                                ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'} • ${tx.frequency}`
+                                : `${tx.category} • ${tx.frequency}`}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={styles.listItemAmount}>{formatCurrency(tx.amount)}</Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text
+                      style={{
+                        ...typography.bodyMd,
+                        color: colors.onSurfaceVariant,
+                        textAlign: 'center',
+                        padding: 16,
+                      }}
+                    >
+                      No recurring transactions.
+                    </Text>
+                  )}
+                </View>
+              </View>
             </View>
-
-            {recurring.length > 0 ? recurring.map((tx, i) => (
-              <View style={styles.listItem} key={tx.id}>
-                <View style={styles.listItemLeft}>
-                  <View style={styles.avatarBox}>
-                    <MaterialIcons name="autorenew" size={20} color={colors.onSurface} />
-                  </View>
-                  <View>
-                    <Text style={styles.listItemTitle}>
-                      {tx.type === 'transfer' ? `Transfer` : tx.merchant}
-                    </Text>
-                    <Text style={styles.listItemSubtitle}>
-                      {tx.type === 'transfer' ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'} • ${tx.frequency}` : `${tx.category} • ${tx.frequency}`}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.listItemAmount}>{formatCurrency(tx.amount)}</Text>
-              </View>
-            )) : (
-              <Text style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, textAlign: 'center', padding: 16 }}>
-                No recurring transactions.
-              </Text>
-            )}
-          </View>
-        </View>
-        </View>
-      </>)}
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -296,11 +450,25 @@ const getStyles = (colors: ThemeColors) => {
     pageHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      alignItems: 'flex-end',
+      alignItems: 'center',
+    },
+    monthSelectorContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: colors.surfaceContainerLow,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    arrowBtn: {
+      padding: 4,
+      borderRadius: 8,
     },
     dateInsightsText: {
-      ...typography.bodyMd,
-      color: colors.onSurfaceVariant,
+      ...typography.headlineSm,
+      color: colors.onSurface,
+      fontSize: 16,
     },
     exportButton: {
       backgroundColor: colors.primary,

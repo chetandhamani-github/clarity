@@ -29,11 +29,11 @@ export function useUpdateBudgetPlan() {
     },
   });
 
-  return { 
+  return {
     mutate: (data: Omit<BudgetPlan, 'id'>, options?: { onSuccess?: () => void }) => {
       mutation.mutate(data, { onSuccess: options?.onSuccess });
-    }, 
-    isPending: mutation.isPending 
+    },
+    isPending: mutation.isPending,
   };
 }
 
@@ -57,11 +57,11 @@ export function useCreateCategory() {
     },
   });
 
-  return { 
+  return {
     mutate: (data: Omit<BudgetCategory, 'id'>, options?: { onSuccess?: () => void }) => {
       mutation.mutate(data, { onSuccess: options?.onSuccess });
-    }, 
-    isPending: mutation.isPending 
+    },
+    isPending: mutation.isPending,
   };
 }
 
@@ -69,7 +69,7 @@ export function useUpdateCategory() {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Omit<BudgetCategory, 'id'>> }) => 
+    mutationFn: ({ id, data }: { id: string; data: Partial<Omit<BudgetCategory, 'id'>> }) =>
       updateCategory(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
@@ -77,11 +77,15 @@ export function useUpdateCategory() {
     },
   });
 
-  return { 
-    mutate: (id: string, data: Partial<Omit<BudgetCategory, 'id'>>, options?: { onSuccess?: () => void }) => {
+  return {
+    mutate: (
+      id: string,
+      data: Partial<Omit<BudgetCategory, 'id'>>,
+      options?: { onSuccess?: () => void }
+    ) => {
       mutation.mutate({ id, data }, { onSuccess: options?.onSuccess });
-    }, 
-    isPending: mutation.isPending 
+    },
+    isPending: mutation.isPending,
   };
 }
 
@@ -96,11 +100,11 @@ export function useDeleteCategory() {
     },
   });
 
-  return { 
+  return {
     mutate: (id: string, options?: { onSuccess?: () => void }) => {
       mutation.mutate(id, { onSuccess: options?.onSuccess });
-    }, 
-    isPending: mutation.isPending 
+    },
+    isPending: mutation.isPending,
   };
 }
 
@@ -110,14 +114,29 @@ export function useCategorySpending(month: number, year: number) {
     queryFn: async () => {
       const categories = await getAllCategories();
       const spentDict = await getSpentByCategory(month, year);
+      const categoryNamesSet = new Set(categories.map((c) => c.name));
 
-      const spendingData: CategorySpending[] = categories.map(cat => ({
+      const spendingData: CategorySpending[] = categories.map((cat) => ({
         category: cat.name,
         icon: cat.icon,
         limit: cat.limit,
         spent: spentDict[cat.name] || 0,
         bucketType: cat.bucketType,
       }));
+
+      // Include any spending logged under categories not in predefined categories
+      for (const [catName, spentAmount] of Object.entries(spentDict)) {
+        if (!categoryNamesSet.has(catName) && spentAmount > 0) {
+          spendingData.push({
+            category: catName,
+            icon: 'category',
+            limit: 0,
+            spent: spentAmount,
+            bucketType: 'wants',
+          });
+        }
+      }
+
       return spendingData;
     },
   });

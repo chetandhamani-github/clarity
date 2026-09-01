@@ -23,8 +23,7 @@ export default function SettingsScreen() {
   const setTheme = useAppStore((state) => state.setTheme);
   const currencySetting = useAppStore((state) => state.currency);
   const setCurrency = useAppStore((state) => state.setCurrency);
-  const biometricsEnabled = useAppStore(state => state.biometricEnabled);
-  const setBiometricsEnabled = useAppStore(state => state.setBiometricEnabled);
+  const biometricsEnabled = useAppStore((state) => state.biometricEnabled);
   const [isResetting, setIsResetting] = useState(false);
   const { showAlert } = useAlert();
   const queryClient = useQueryClient();
@@ -35,8 +34,8 @@ export default function SettingsScreen() {
   const { spending } = useCategorySpending(now.getMonth() + 1, now.getFullYear());
 
   const topGoal = goals?.[0];
-  const topSpending = spending?.filter(s => s.spent > 0).sort((a, b) => b.spent - a.spent)[0];
-  const recentAlerts = notifications.filter(n => n.type === 'alert').slice(0, 2);
+  const topSpending = spending?.filter((s) => s.spent > 0).sort((a, b) => b.spent - a.spent)[0];
+  const recentAlerts = notifications.filter((n) => n.type === 'alert').slice(0, 2);
 
   const cycleTheme = () => {
     if (themeSetting === 'system') setTheme('light');
@@ -57,8 +56,8 @@ export default function SettingsScreen() {
       'Are you sure you want to delete all data and reset the app? This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Reset', 
+        {
+          text: 'Reset',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -72,8 +71,8 @@ export default function SettingsScreen() {
             } finally {
               setIsResetting(false);
             }
-          }
-        }
+          },
+        },
       ]
     );
   };
@@ -105,7 +104,7 @@ export default function SettingsScreen() {
                 </View>
                 <Text style={styles.cardLabel}>TOP SPENDING</Text>
                 <Text style={styles.cardBody}>
-                  {topSpending 
+                  {topSpending
                     ? `You've spent ${formatCurrency(topSpending.spent)} on ${topSpending.category} this month.`
                     : 'No spending data yet this month.'}
                 </Text>
@@ -119,14 +118,21 @@ export default function SettingsScreen() {
                 </View>
                 <Text style={styles.cardLabel}>GOAL STATUS</Text>
                 <Text style={styles.cardBody}>
-                  {topGoal 
+                  {topGoal
                     ? `On track for "${topGoal.name}". ${formatCurrency(topGoal.targetAmount - topGoal.currentAmount)} left to target.`
                     : 'Create a savings goal to track progress here.'}
                 </Text>
               </View>
               {topGoal && (
                 <View style={styles.progressBarTrack}>
-                  <View style={[styles.progressBarFill, { width: `${Math.min(100, (topGoal.currentAmount / topGoal.targetAmount) * 100)}%` }]} />
+                  <View
+                    style={[
+                      styles.progressBarFill,
+                      {
+                        width: `${Math.min(100, (topGoal.currentAmount / topGoal.targetAmount) * 100)}%`,
+                      },
+                    ]}
+                  />
                 </View>
               )}
             </View>
@@ -142,16 +148,29 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </View>
           <View style={styles.listCard}>
-            {recentAlerts.length > 0 ? recentAlerts.map(alert => (
-              <TouchableOpacity key={alert.id} style={styles.listItem} onPress={() => router.push('/notifications')}>
-                <View style={[styles.dot, { backgroundColor: alert.isRead ? 'transparent' : colors.error }]} />
-                <View style={styles.listItemContent}>
-                  <Text style={styles.listItemTitle}>{alert.title}</Text>
-                  <Text style={styles.listItemBody} numberOfLines={1}>{alert.description}</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-              </TouchableOpacity>
-            )) : (
+            {recentAlerts.length > 0 ? (
+              recentAlerts.map((alert) => (
+                <TouchableOpacity
+                  key={alert.id}
+                  style={styles.listItem}
+                  onPress={() => router.push('/notifications')}
+                >
+                  <View
+                    style={[
+                      styles.dot,
+                      { backgroundColor: alert.isRead ? 'transparent' : colors.error },
+                    ]}
+                  />
+                  <View style={styles.listItemContent}>
+                    <Text style={styles.listItemTitle}>{alert.title}</Text>
+                    <Text style={styles.listItemBody} numberOfLines={1}>
+                      {alert.description}
+                    </Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+                </TouchableOpacity>
+              ))
+            ) : (
               <View style={[styles.listItem, { justifyContent: 'center' }]}>
                 <Text style={styles.listItemBody}>No recent alerts.</Text>
               </View>
@@ -185,10 +204,15 @@ export default function SettingsScreen() {
                 <View>
                   <Text style={styles.settingTitle}>Currency</Text>
                   <Text style={styles.settingSub}>
-                    {currencySetting === 'INR' ? 'Indian Rupee (₹)' : 
-                     currencySetting === 'USD' ? 'US Dollar ($)' : 
-                     currencySetting === 'EUR' ? 'Euro (€)' : 
-                     currencySetting === 'GBP' ? 'British Pound (£)' : currencySetting}
+                    {currencySetting === 'INR'
+                      ? 'Indian Rupee (₹)'
+                      : currencySetting === 'USD'
+                        ? 'US Dollar ($)'
+                        : currencySetting === 'EUR'
+                          ? 'Euro (€)'
+                          : currencySetting === 'GBP'
+                            ? 'British Pound (£)'
+                            : currencySetting}
                   </Text>
                 </View>
               </View>
@@ -198,18 +222,18 @@ export default function SettingsScreen() {
               <View style={styles.settingItemLeft}>
                 <MaterialIcons name="lock" size={24} color={colors.secondary} />
                 <View>
-                  <Text style={styles.settingTitle}>Security</Text>
-                  <Text style={styles.settingSub}>Biometrics Enabled</Text>
+                  <Text style={styles.settingTitle}>Security & Privacy</Text>
+                  <Text style={styles.settingSub}>
+                    {biometricsEnabled ? 'Biometrics Enabled' : 'Biometrics Disabled'}
+                  </Text>
                 </View>
               </View>
-              <Switch
-                value={biometricsEnabled}
-                onValueChange={setBiometricsEnabled}
-                trackColor={{ false: colors.surfaceVariant, true: colors.primary }}
-                thumbColor={colors.surfaceContainerLowest}
-              />
+              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/manage-categories')}>
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => router.push('/manage-categories')}
+            >
               <View style={styles.settingItemLeft}>
                 <MaterialIcons name="category" size={24} color={colors.secondary} />
                 <View>
@@ -232,22 +256,18 @@ export default function SettingsScreen() {
             <View style={{ gap: 8 }}>
               <TouchableOpacity
                 style={styles.btnSecondary}
-                onPress={() => router.push('/empty-states')}
-              >
-                <Text style={styles.btnSecondaryText}>VIEW ONBOARDING</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.btnSecondary}
                 onPress={() => router.push('/export-success')}
               >
-                <Text style={styles.btnSecondaryText}>EXPORT CSV</Text>
+                <Text style={styles.btnSecondaryText}>EXPORT DATA</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btnPrimary, { backgroundColor: colors.error }]}
                 onPress={handleResetData}
                 disabled={isResetting}
               >
-                <Text style={styles.btnPrimaryText}>{isResetting ? 'RESETTING...' : 'RESET APP DATA'}</Text>
+                <Text style={styles.btnPrimaryText}>
+                  {isResetting ? 'RESETTING...' : 'RESET APP DATA'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -4,7 +4,7 @@ import type { Notification } from '@/types';
 export async function getNotifications(): Promise<Notification[]> {
   const db = getDatabase();
   const rows = await db.getAllAsync<any>('SELECT * FROM notifications ORDER BY created_at DESC;');
-  return rows.map(r => ({
+  return rows.map((r) => ({
     id: r.id,
     title: r.title,
     description: r.description,
@@ -23,6 +23,11 @@ export async function markNotificationAsRead(id: string): Promise<void> {
 export async function markAllNotificationsAsRead(): Promise<void> {
   const db = getDatabase();
   await db.runAsync('UPDATE notifications SET is_read = 1 WHERE is_read = 0;');
+}
+
+export async function clearAllNotifications(): Promise<void> {
+  const db = getDatabase();
+  await db.runAsync('DELETE FROM notifications;');
 }
 
 function generateId(): string {

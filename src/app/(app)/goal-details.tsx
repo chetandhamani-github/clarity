@@ -1,14 +1,27 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  TextInput,
+} from 'react-native';
 import { Text, Header, useToast, useAlert, Loader } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import { useGoal, useGoalContributions, useAddGoalContribution, useDeleteGoal } from '@/hooks/use-goals';
+import {
+  useGoal,
+  useGoalContributions,
+  useAddGoalContribution,
+  useDeleteGoal,
+} from '@/hooks/use-goals';
 import { useAccounts } from '@/hooks/use-accounts';
 import { formatCurrency, getCurrencySymbol } from '@/utils/format';
+import { evaluateGoalMilestoneAlerts } from '@/services/notifications/alert-engine';
 import type { GoalContribution } from '@/types';
 
 export default function GoalDetailsScreen() {
@@ -20,7 +33,11 @@ export default function GoalDetailsScreen() {
   const { showAlert } = useAlert();
 
   const { goal, isLoading: goalLoading, refetch: refetchGoal } = useGoal(id as string);
-  const { contributions, isLoading: contribLoading, refetch: refetchContribs } = useGoalContributions(id as string);
+  const {
+    contributions,
+    isLoading: contribLoading,
+    refetch: refetchContribs,
+  } = useGoalContributions(id as string);
   const { mutate: addContrib, isPending } = useAddGoalContribution();
   const { mutate: deleteGoal, isPending: isDeleting } = useDeleteGoal();
   const { accounts } = useAccounts();
@@ -47,48 +64,52 @@ export default function GoalDetailsScreen() {
       return;
     }
 
-    addContrib({
-      data: {
-        goalId: goal?.id || '',
-        amount: amt,
-        date: new Date().toISOString().split('T')[0],
-        description: notes.trim() || ''
-      },
-      accountId: selectedAccountId || undefined,
-    }, {
-      onSuccess: () => {
-        setAmount('');
-        setNotes('');
-        setShowAdd(false);
-        setSelectedAccountId(null);
-        refetchGoal();
-        refetchContribs();
-      }
-    });
-  };
+    const prevAmount = goal?.currentAmount || 0;
+    const goalId = goal?.id || '';
 
-  const handleDeleteGoal = () => {
-    showAlert(
-      'Delete Goal',
-      'Are you sure you want to delete this goal? This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            deleteGoal(goal?.id || '', {
-              onSuccess: () => {
-                router.replace('/goals');
-              }
-            });
-          }
-        }
-      ]
+    addContrib(
+      {
+        data: {
+          goalId,
+          amount: amt,
+          date: new Date().toISOString().split('T')[0],
+          description: notes.trim() || '',
+        },
+        accountId: selectedAccountId || undefined,
+      },
+      {
+        onSuccess: () => {
+          evaluateGoalMilestoneAlerts(goalId, prevAmount, prevAmount + amt);
+          setAmount('');
+          setNotes('');
+          setShowAdd(false);
+          setSelectedAccountId(null);
+          refetchGoal();
+          refetchContribs();
+        },
+      }
     );
   };
 
-  const progress = goal && goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
+  const handleDeleteGoal = () => {
+    showAlert('Delete Goal', 'Are you sure you want to delete this goal? This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          deleteGoal(goal?.id || '', {
+            onSuccess: () => {
+              router.replace('/goals');
+            },
+          });
+        },
+      },
+    ]);
+  };
+
+  const progress =
+    goal && goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
   // Map progress to dash array (max 100 circumference is roughly `42` in this SVG)
   // Or rather, the path total length for r=15.9155 is exactly 100. So we can use `progress` directly!
   const strokeDash = `${progress}, 100`;
@@ -99,7 +120,11 @@ export default function GoalDetailsScreen() {
         showBack
         title={goal?.name ?? 'Goal Details'}
         rightNode={
-          <TouchableOpacity style={styles.iconButton} onPress={handleDeleteGoal} disabled={isDeleting}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={handleDeleteGoal}
+            disabled={isDeleting}
+          >
             {isDeleting ? (
               <ActivityIndicator size="small" color={colors.error} />
             ) : (
@@ -110,153 +135,192 @@ export default function GoalDetailsScreen() {
       />
 
       {goal && (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
-        { isLoading ? <Loader /> : (<>
-        {/* Header Section */}
-        <View style={styles.heroSection}>
-          <View>
-            <View style={styles.categoryRow}>
-              <MaterialIcons name={goal.icon as any} size={20} color={colors.primary} />
-              <Text style={styles.categoryText}>{goal.category}</Text>
-            </View>
-            <Text style={styles.heroDescription}>Track your savings progress.</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.addContributionBtn}
-            onPress={() => setShowAdd(!showAdd)}
-          >
-            <MaterialIcons name={showAdd ? "close" : "add"} size={18} color={colors.onPrimary} />
-            <Text style={styles.addContributionBtnText}>{showAdd ? 'Cancel' : 'Add Contribution'}</Text>
-          </TouchableOpacity>
-        </View>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {isLoading ? (
+            <Loader />
+          ) : (
+            <>
+              {/* Header Section */}
+              <View style={styles.heroSection}>
+                <View>
+                  <View style={styles.categoryRow}>
+                    <MaterialIcons name={goal.icon as any} size={20} color={colors.primary} />
+                    <Text style={styles.categoryText}>{goal.category}</Text>
+                  </View>
+                  <Text style={styles.heroDescription}>Track your savings progress.</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.addContributionBtn}
+                  onPress={() => setShowAdd(!showAdd)}
+                >
+                  <MaterialIcons
+                    name={showAdd ? 'close' : 'add'}
+                    size={18}
+                    color={colors.onPrimary}
+                  />
+                  <Text style={styles.addContributionBtnText}>
+                    {showAdd ? 'Cancel' : 'Add Contribution'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
-        {showAdd && (
-          <View style={styles.addFormCard}>
-            <Text style={styles.addFormTitle}>Add Contribution</Text>
-            <View style={styles.currencyInputRow}>
-              <Text style={styles.currencySymbol}>{getCurrencySymbol()}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Amount"
-                placeholderTextColor={colors.outline}
-                keyboardType="decimal-pad"
-                value={amount}
-                onChangeText={setAmount}
-              />
-            </View>
-            <TextInput
-              style={styles.input}
-              placeholder="Notes (optional)"
-              placeholderTextColor={colors.outline}
-              value={notes}
-              onChangeText={setNotes}
-            />
-            <View style={styles.accountSelector}>
-              <Text style={styles.accountSelectorTitle}>Deduct from account (optional)</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 8 }}>
-                {accounts.map(acc => (
+              {showAdd && (
+                <View style={styles.addFormCard}>
+                  <Text style={styles.addFormTitle}>Add Contribution</Text>
+                  <View style={styles.currencyInputRow}>
+                    <Text style={styles.currencySymbol}>{getCurrencySymbol()}</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Amount"
+                      placeholderTextColor={colors.outline}
+                      keyboardType="decimal-pad"
+                      value={amount}
+                      onChangeText={setAmount}
+                    />
+                  </View>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Notes (optional)"
+                    placeholderTextColor={colors.outline}
+                    value={notes}
+                    onChangeText={setNotes}
+                  />
+                  <View style={styles.accountSelector}>
+                    <Text style={styles.accountSelectorTitle}>Deduct from account (optional)</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{ gap: 8, paddingVertical: 8 }}
+                    >
+                      {accounts.map((acc) => (
+                        <TouchableOpacity
+                          key={acc.id}
+                          style={[
+                            styles.accountChip,
+                            selectedAccountId === acc.id && {
+                              backgroundColor: colors.primary,
+                              borderColor: colors.primary,
+                            },
+                          ]}
+                          onPress={() =>
+                            setSelectedAccountId(selectedAccountId === acc.id ? null : acc.id)
+                          }
+                        >
+                          <Text
+                            style={[
+                              styles.accountChipText,
+                              selectedAccountId === acc.id && { color: colors.onPrimary },
+                            ]}
+                          >
+                            {acc.name} ({formatCurrency(acc.balance)})
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
                   <TouchableOpacity
-                    key={acc.id}
-                    style={[
-                      styles.accountChip,
-                      selectedAccountId === acc.id && { backgroundColor: colors.primary, borderColor: colors.primary }
-                    ]}
-                    onPress={() => setSelectedAccountId(selectedAccountId === acc.id ? null : acc.id)}
+                    style={styles.saveBtn}
+                    onPress={handleAddContribution}
+                    disabled={isPending}
                   >
-                    <Text style={[
-                      styles.accountChipText,
-                      selectedAccountId === acc.id && { color: colors.onPrimary }
-                    ]}>
-                      {acc.name} ({formatCurrency(acc.balance)})
-                    </Text>
+                    {isPending ? (
+                      <ActivityIndicator size="small" color={colors.onPrimary} />
+                    ) : (
+                      <Text style={styles.saveBtnText}>Save Contribution</Text>
+                    )}
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-            <TouchableOpacity 
-              style={styles.saveBtn}
-              onPress={handleAddContribution}
-              disabled={isPending}
-            >
-              {isPending ? (
-                 <ActivityIndicator size="small" color={colors.onPrimary} />
-              ) : (
-                <Text style={styles.saveBtnText}>Save Contribution</Text>
+                </View>
               )}
-            </TouchableOpacity>
-          </View>
-        )}
 
-        {/* Progress Card (Chart & Stats) */}
-        <View style={styles.card}>
-          <View style={styles.chartContainer}>
-            {/* SVG Donut Chart */}
-            <View style={styles.svgWrapper}>
-              <Svg viewBox="0 0 36 36" style={styles.svgChart}>
-                <Path
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                  fill="none"
-                  stroke={colors.surfaceVariant}
-                  strokeWidth="2.5"
-                />
-                <Path
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                  fill="none"
-                  stroke={colors.primary}
-                  strokeWidth="2.5"
-                  strokeDasharray={strokeDash}
-                  strokeLinecap="round"
-                />
-              </Svg>
-              <View style={styles.chartCenterTextContainer}>
-                <Text style={styles.chartPercentage}>{progress.toFixed(0)}%</Text>
-                <Text style={styles.chartSubtitle}>Funded</Text>
-              </View>
-            </View>
-
-            <View style={styles.amountsRow}>
-              <View>
-                <Text style={styles.amountLabel}>Current</Text>
-                <Text style={styles.amountCurrent}>{formatCurrency(goal.currentAmount)}</Text>
-              </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.amountLabel}>Target</Text>
-                <Text style={styles.amountTarget}>{formatCurrency(goal.targetAmount)}</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Timeline Card */}
-        <View style={styles.timelineCard}>
-          <View style={styles.timelineHeader}>
-            <Text style={styles.timelineTitle}>Contribution History</Text>
-          </View>
-
-          <View style={styles.transactionList}>
-            {contributions.length === 0 ? (
-               <Text style={{ padding: 16, color: colors.onSurfaceVariant }}>No contributions yet.</Text>
-            ) : (
-              contributions.map((contrib: GoalContribution, idx: number) => (
-                <View key={contrib.id} style={[styles.transactionItem, idx === contributions.length - 1 && styles.transactionItemLast]}>
-                  <View style={styles.transactionItemLeft}>
-                    <View style={styles.transactionIconBox}>
-                      <MaterialIcons name="south-east" size={20} color={colors.onSurfaceVariant} />
-                    </View>
-                    <View style={styles.transactionTextContent}>
-                      <Text style={styles.transactionDesc} numberOfLines={1}>
-                        {contrib.description || 'Contribution'}
-                      </Text>
-                      <Text style={styles.transactionDate}>{contrib.date}</Text>
+              {/* Progress Card (Chart & Stats) */}
+              <View style={styles.card}>
+                <View style={styles.chartContainer}>
+                  {/* SVG Donut Chart */}
+                  <View style={styles.svgWrapper}>
+                    <Svg viewBox="0 0 36 36" style={styles.svgChart}>
+                      <Path
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                        fill="none"
+                        stroke={colors.surfaceVariant}
+                        strokeWidth="2.5"
+                      />
+                      <Path
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                        fill="none"
+                        stroke={colors.primary}
+                        strokeWidth="2.5"
+                        strokeDasharray={strokeDash}
+                        strokeLinecap="round"
+                      />
+                    </Svg>
+                    <View style={styles.chartCenterTextContainer}>
+                      <Text style={styles.chartPercentage}>{progress.toFixed(0)}%</Text>
+                      <Text style={styles.chartSubtitle}>Funded</Text>
                     </View>
                   </View>
-                  <Text style={styles.transactionAmount}>+{formatCurrency(contrib.amount)}</Text>
+
+                  <View style={styles.amountsRow}>
+                    <View>
+                      <Text style={styles.amountLabel}>Current</Text>
+                      <Text style={styles.amountCurrent}>{formatCurrency(goal.currentAmount)}</Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.amountLabel}>Target</Text>
+                      <Text style={styles.amountTarget}>{formatCurrency(goal.targetAmount)}</Text>
+                    </View>
+                  </View>
                 </View>
-              ))
-            )}
-          </View>
-        </View>
-        </>)}
+              </View>
+
+              {/* Timeline Card */}
+              <View style={styles.timelineCard}>
+                <View style={styles.timelineHeader}>
+                  <Text style={styles.timelineTitle}>Contribution History</Text>
+                </View>
+
+                <View style={styles.transactionList}>
+                  {contributions.length === 0 ? (
+                    <Text style={{ padding: 16, color: colors.onSurfaceVariant }}>
+                      No contributions yet.
+                    </Text>
+                  ) : (
+                    contributions.map((contrib: GoalContribution, idx: number) => (
+                      <View
+                        key={contrib.id}
+                        style={[
+                          styles.transactionItem,
+                          idx === contributions.length - 1 && styles.transactionItemLast,
+                        ]}
+                      >
+                        <View style={styles.transactionItemLeft}>
+                          <View style={styles.transactionIconBox}>
+                            <MaterialIcons
+                              name="south-east"
+                              size={20}
+                              color={colors.onSurfaceVariant}
+                            />
+                          </View>
+                          <View style={styles.transactionTextContent}>
+                            <Text style={styles.transactionDesc} numberOfLines={1}>
+                              {contrib.description || 'Contribution'}
+                            </Text>
+                            <Text style={styles.transactionDate}>{contrib.date}</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.transactionAmount}>
+                          +{formatCurrency(contrib.amount)}
+                        </Text>
+                      </View>
+                    ))
+                  )}
+                </View>
+              </View>
+            </>
+          )}
         </ScrollView>
       )}
     </View>

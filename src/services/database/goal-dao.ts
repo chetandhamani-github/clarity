@@ -8,7 +8,7 @@ import type { Goal, GoalContribution } from '@/types';
 export async function getGoals(): Promise<Goal[]> {
   const db = getDatabase();
   const rows = await db.getAllAsync<any>('SELECT * FROM goals ORDER BY target_date ASC;');
-  return rows.map(r => ({
+  return rows.map((r) => ({
     id: r.id,
     name: r.name,
     icon: r.icon,
@@ -39,7 +39,7 @@ export async function getGoalById(id: string): Promise<Goal | null> {
 }
 
 export async function createGoal(
-  goal: Omit<Goal, 'id' | 'createdAt' | 'autoSaveAmount'>,
+  goal: Omit<Goal, 'id' | 'createdAt' | 'autoSaveAmount'>
 ): Promise<string> {
   const db = getDatabase();
   const id = Math.random().toString(36).substring(2, 9);
@@ -59,7 +59,7 @@ export async function createGoal(
       goal.targetDate || '',
       goal.category,
       now,
-    ],
+    ]
   );
 
   return id;
@@ -69,10 +69,7 @@ export async function updateGoalAmount(id: string, newAmount: number): Promise<v
   const db = getDatabase();
   const now = new Date().toISOString();
   // We can also auto-update status to completed if current >= target, but for now we'll just update amount
-  await db.runAsync(
-    'UPDATE goals SET current_amount = ? WHERE id = ?;',
-    [newAmount, id],
-  );
+  await db.runAsync('UPDATE goals SET current_amount = ? WHERE id = ?;', [newAmount, id]);
 }
 
 export async function deleteGoal(id: string): Promise<void> {
@@ -87,9 +84,9 @@ export async function getGoalContributions(goalId: string): Promise<GoalContribu
   const db = getDatabase();
   const rows = await db.getAllAsync<any>(
     'SELECT * FROM goal_contributions WHERE goal_id = ? ORDER BY date DESC;',
-    [goalId],
+    [goalId]
   );
-  return rows.map(r => ({
+  return rows.map((r) => ({
     id: r.id,
     goalId: r.goal_id,
     amount: r.amount,
@@ -112,7 +109,9 @@ export async function addGoalContribution(
 
     // Insert transaction if accountId is provided
     if (accountId && goal) {
-      const account = await db.getFirstAsync<any>('SELECT balance FROM accounts WHERE id = ?;', [accountId]);
+      const account = await db.getFirstAsync<any>('SELECT balance FROM accounts WHERE id = ?;', [
+        accountId,
+      ]);
       if (account) {
         transId = Math.random().toString(36).substring(2, 9);
         await db.runAsync(
@@ -127,7 +126,7 @@ export async function addGoalContribution(
             'Savings',
             contribution.date,
             0,
-            contribution.description || 'Goal Contribution'
+            contribution.description || 'Goal Contribution',
           ]
         );
         const newBalance = account.balance - contribution.amount;
@@ -139,16 +138,23 @@ export async function addGoalContribution(
     await db.runAsync(
       `INSERT INTO goal_contributions (id, goal_id, amount, date, description, transaction_id)
        VALUES (?, ?, ?, ?, ?, ?);`,
-      [id, contribution.goalId, contribution.amount, contribution.date, contribution.description || '', transId],
+      [
+        id,
+        contribution.goalId,
+        contribution.amount,
+        contribution.date,
+        contribution.description || '',
+        transId,
+      ]
     );
 
     // Update goal amount
     if (goal) {
       const newAmount = goal.currentAmount + contribution.amount;
-      await db.runAsync(
-        'UPDATE goals SET current_amount = ? WHERE id = ?;',
-        [newAmount, contribution.goalId],
-      );
+      await db.runAsync('UPDATE goals SET current_amount = ? WHERE id = ?;', [
+        newAmount,
+        contribution.goalId,
+      ]);
     }
   });
 

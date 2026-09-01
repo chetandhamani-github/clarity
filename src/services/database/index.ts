@@ -10,7 +10,7 @@ export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
   db = await SQLite.openDatabaseAsync('clarity.db');
   await db.execAsync('PRAGMA journal_mode = WAL;');
   await db.execAsync('PRAGMA foreign_keys = ON;');
-  
+
   await runMigrations(db);
   await seedDatabase(db);
 
@@ -19,9 +19,7 @@ export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
 
 export function getDatabase(): SQLite.SQLiteDatabase {
   if (!db) {
-    throw new Error(
-      'Database not initialized. Call initDatabase() first.',
-    );
+    throw new Error('Database not initialized. Call initDatabase() first.');
   }
   return db;
 }

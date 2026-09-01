@@ -1,11 +1,21 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Pressable, ActivityIndicator } from 'react-native';
-import { Text, Header, Loader } from '@/components/ui';
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Pressable,
+} from 'react-native';
+import { Text, Header, Loader, useToast } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useNotifications, useMarkNotificationAsRead, useMarkAllNotificationsAsRead } from '@/hooks/use-notifications';
+import {
+  useNotifications,
+  useMarkNotificationAsRead,
+  useMarkAllNotificationsAsRead,
+} from '@/hooks/use-notifications';
 import { formatTime } from '@/utils/format';
 
 export default function NotificationsScreen() {
@@ -13,27 +23,41 @@ export default function NotificationsScreen() {
   const styles = getStyles(colors);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { showToast } = useToast();
 
-  const { notifications, isLoading, refetch } = useNotifications();
+  const { notifications, setNotifications, isLoading, refetch } = useNotifications();
   const { mutate: markAsRead } = useMarkNotificationAsRead();
   const { mutate: markAllAsRead, isPending: markingAll } = useMarkAllNotificationsAsRead();
 
-  const handleMarkAllRead = () => {
-    markAllAsRead({ onSuccess: refetch });
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  const handleMarkAllRead = async () => {
+    if (unreadCount === 0 || markingAll) return;
+    // Optimistic update
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    try {
+      await markAllAsRead();
+      showToast('All notifications marked as read', 'success');
+    } catch {
+      refetch();
+    }
   };
 
   const handlePressNotification = (id: string, isRead: boolean, url?: string) => {
     if (!isRead) {
-      markAsRead(id, { onSuccess: refetch });
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
+      );
+      markAsRead(id);
     }
     if (url) {
       router.push(url as any);
     }
   };
 
-  const alerts = notifications.filter(n => n.type === 'alert');
-  const milestones = notifications.filter(n => n.type === 'milestone');
-  const other = notifications.filter(n => n.type !== 'alert' && n.type !== 'milestone');
+  const alerts = notifications.filter((n) => n.type === 'alert');
+  const milestones = notifications.filter((n) => n.type === 'milestone');
+  const other = notifications.filter((n) => n.type !== 'alert' && n.type !== 'milestone');
 
   const renderNotification = (n: any) => {
     let iconName = 'notifications';
@@ -41,22 +65,41 @@ export default function NotificationsScreen() {
     if (n.type === 'milestone') iconName = 'emoji-events';
 
     return (
-      <Pressable 
-        key={n.id} 
+      <Pressable
+        key={n.id}
         style={[styles.notificationCard, n.isRead && styles.notificationCardRead]}
         onPress={() => handlePressNotification(n.id, n.isRead, n.actionUrl)}
       >
         {!n.isRead && (
-          <View style={[styles.unreadIndicator, { backgroundColor: n.type === 'alert' ? colors.error : colors.primary }]} />
+          <View
+            style={[
+              styles.unreadIndicator,
+              { backgroundColor: n.type === 'alert' ? colors.error : colors.primary },
+            ]}
+          />
         )}
-        <View style={[
-          styles.iconBox, 
-          { backgroundColor: n.isRead ? colors.surfaceContainerHighest : (n.type === 'alert' ? colors.errorContainer : colors.primaryContainer) }
-        ]}>
-          <MaterialIcons 
-            name={iconName as any} 
-            size={20} 
-            color={n.isRead ? colors.onSurfaceVariant : (n.type === 'alert' ? colors.onErrorContainer : colors.onPrimaryContainer)} 
+        <View
+          style={[
+            styles.iconBox,
+            {
+              backgroundColor: n.isRead
+                ? colors.surfaceContainerHighest
+                : n.type === 'alert'
+                  ? colors.errorContainer
+                  : colors.primaryContainer,
+            },
+          ]}
+        >
+          <MaterialIcons
+            name={iconName as any}
+            size={20}
+            color={
+              n.isRead
+                ? colors.onSurfaceVariant
+                : n.type === 'alert'
+                  ? colors.onErrorContainer
+                  : colors.onPrimaryContainer
+            }
           />
         </View>
         <View style={styles.cardContent}>
@@ -86,69 +129,104 @@ export default function NotificationsScreen() {
         showBack
         title="Notifications"
         rightNode={
-          <TouchableOpacity style={styles.iconButton}>
-            <MaterialIcons name="more-vert" size={24} color={colors.primary} />
-          </TouchableOpacity>
+          unreadCount > 0 ? (
+            <TouchableOpacity
+              style={styles.headerMarkReadBtn}
+              onPress={handleMarkAllRead}
+              disabled={markingAll}
+            >
+              <MaterialIcons name="done-all" size={20} color={colors.primary} />
+              <Text style={styles.headerMarkReadText}>Mark all</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.headerPlaceholder} />
+          )
         }
       />
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
-      { isLoading ? <Loader /> : (<>
-        <View style={styles.topActions}>
-          <TouchableOpacity style={styles.markReadBtn} onPress={handleMarkAllRead} disabled={markingAll}>
-            <Text style={styles.markReadBtnText}>{markingAll ? 'MARKING...' : 'MARK ALL AS READ'}</Text>
-          </TouchableOpacity>
-        </View>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {isLoading ? (
+          <Loader />
+        ) : (
+          <>
+            {unreadCount > 0 && (
+              <View style={styles.topActions}>
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadBadgeText}>
+                    {unreadCount} unread
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.markReadBtn}
+                  onPress={handleMarkAllRead}
+                  disabled={markingAll}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="done-all" size={16} color={colors.primary} />
+                  <Text style={styles.markReadBtnText}>
+                    {markingAll ? 'MARKING...' : 'MARK ALL AS READ'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
-        {notifications.length === 0 && (
-          <View style={{ padding: 40, alignItems: 'center' }}>
-            <MaterialIcons name="notifications-none" size={64} color={colors.surfaceVariant} />
-            <Text style={{ ...typography.headlineSm, color: colors.onSurface, marginTop: 16 }}>All Caught Up!</Text>
-            <Text style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, textAlign: 'center', marginTop: 8 }}>
-              You don't have any new notifications at this time.
-            </Text>
-          </View>
-        )}
+            {notifications.length === 0 && (
+              <View style={{ padding: 40, alignItems: 'center' }}>
+                <MaterialIcons name="notifications-none" size={64} color={colors.surfaceVariant} />
+                <Text style={{ ...typography.headlineSm, color: colors.onSurface, marginTop: 16 }}>
+                  All Caught Up!
+                </Text>
+                <Text
+                  style={{
+                    ...typography.bodyMd,
+                    color: colors.onSurfaceVariant,
+                    textAlign: 'center',
+                    marginTop: 8,
+                  }}
+                >
+                  You don't have any new notifications at this time.
+                </Text>
+              </View>
+            )}
 
-        {/* Alerts Section */}
-        {alerts.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialIcons name="warning" size={16} color={colors.error} />
-              <Text style={styles.sectionTitle}>ALERTS</Text>
-            </View>
-            <View style={styles.listContainer}>
-              {alerts.map(renderNotification)}
-            </View>
-          </View>
-        )}
+            {/* Alerts Section */}
+            {alerts.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <MaterialIcons name="warning" size={16} color={colors.error} />
+                  <Text style={styles.sectionTitle}>ALERTS</Text>
+                </View>
+                <View style={styles.listContainer}>{alerts.map(renderNotification)}</View>
+              </View>
+            )}
 
-        {/* Milestones Section */}
-        {milestones.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialIcons name="star" size={16} color={colors.primary} />
-              <Text style={styles.sectionTitle}>MILESTONES</Text>
-            </View>
-            <View style={styles.listContainer}>
-              {milestones.map(renderNotification)}
-            </View>
-          </View>
-        )}
+            {/* Milestones Section */}
+            {milestones.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <MaterialIcons name="star" size={16} color={colors.primary} />
+                  <Text style={styles.sectionTitle}>MILESTONES</Text>
+                </View>
+                <View style={styles.listContainer}>{milestones.map(renderNotification)}</View>
+              </View>
+            )}
 
-        {/* Other Section */}
-        {other.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialIcons name="info" size={16} color={colors.onSurfaceVariant} />
-              <Text style={styles.sectionTitle}>OTHER</Text>
-            </View>
-            <View style={styles.listContainer}>
-              {other.map(renderNotification)}
-            </View>
-          </View>
+            {/* Other Section */}
+            {other.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <MaterialIcons name="info" size={16} color={colors.onSurfaceVariant} />
+                  <Text style={styles.sectionTitle}>OTHER</Text>
+                </View>
+                <View style={styles.listContainer}>{other.map(renderNotification)}</View>
+              </View>
+            )}
+          </>
         )}
-      </>)}
       </ScrollView>
     </View>
   );
@@ -160,28 +238,53 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.surfaceContainerLow,
     },
-
-    iconButton: {
-      padding: 8,
+    headerMarkReadBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingVertical: 6,
+      paddingHorizontal: 8,
+    },
+    headerMarkReadText: {
+      ...typography.labelMd,
+      color: colors.primary,
+    },
+    headerPlaceholder: {
+      width: 44,
     },
     scrollContent: {
       padding: 20,
       paddingBottom: 40,
     },
     topActions: {
-      alignItems: 'flex-end',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
       marginBottom: 16,
+    },
+    unreadBadge: {
+      backgroundColor: colors.primaryContainer,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    unreadBadgeText: {
+      ...typography.labelMd,
+      color: colors.onPrimaryContainer,
+      fontSize: 11,
+      fontWeight: '600',
     },
     markReadBtn: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 8,
-      paddingHorizontal: 4,
+      gap: 6,
+      paddingVertical: 6,
+      paddingHorizontal: 8,
     },
     markReadBtnText: {
       ...typography.labelMd,
       color: colors.primary,
-      letterSpacing: 1,
+      letterSpacing: 0.5,
     },
     section: {
       marginBottom: 32,
@@ -223,7 +326,7 @@ const getStyles = (colors: ThemeColors) => {
       height: 32,
       borderTopRightRadius: 4,
       borderBottomRightRadius: 4,
-      transform: [{ translateY: -4 }], 
+      transform: [{ translateY: -4 }],
     },
     iconBox: {
       width: 40,
@@ -235,7 +338,7 @@ const getStyles = (colors: ThemeColors) => {
     },
     cardContent: {
       flex: 1,
-      minWidth: 0, 
+      minWidth: 0,
     },
     cardHeaderRow: {
       flexDirection: 'row',
@@ -246,7 +349,7 @@ const getStyles = (colors: ThemeColors) => {
     },
     cardTitle: {
       ...typography.bodyLg,
-      fontWeight: '600', 
+      fontWeight: '600',
       color: colors.onSurface,
       flex: 1,
     },

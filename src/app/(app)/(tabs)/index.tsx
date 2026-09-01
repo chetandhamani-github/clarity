@@ -9,7 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
 import { LineChart, PieChart } from 'react-native-gifted-charts';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -138,23 +138,22 @@ export default function DashboardScreen() {
     const range = max - min;
 
     if (range === 0) {
-      const offset = Math.max(0, min - 10);
       return {
-        yAxisOffset: offset,
-        maxValue: max === 0 ? 100 : max - offset + 20,
+        yAxisOffset: 0,
+        maxValue: max === 0 ? 100 : Math.abs(max) * 1.3,
       };
     }
 
-    const offset = Math.max(0, min - range * 0.2);
+    const padding = range * 0.15;
     return {
-      yAxisOffset: offset,
-      maxValue: max - offset + range * 0.2,
+      yAxisOffset: Math.max(0, min - padding),
+      maxValue: max + padding,
     };
   }, [chartData]);
 
   const screenWidth = Dimensions.get('window').width;
-  const chartWidth = screenWidth - 80;
-
+  // screen padding 20*2 = 40, card padding 24*2 = 48 -> chartWidth approx screenWidth - 88
+  const chartWidth = screenWidth - 88;
 
   // Savings calculation: Income - Expenses (from transactions)
   const savedAmount = Math.max(0, monthlyTotals.income - monthlyTotals.expenses);
@@ -205,7 +204,10 @@ export default function DashboardScreen() {
             <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/analytics')}>
               <MaterialIcons name="insights" size={24} color={colors.onSurface} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/notifications')}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => router.push('/notifications')}
+            >
               <MaterialIcons name="notifications-none" size={24} color={colors.onSurface} />
             </TouchableOpacity>
           </View>
@@ -217,261 +219,292 @@ export default function DashboardScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={{ flex: 1 }}>
-        { isLoading ? <Loader /> : (<>
-        {/* Main Card: Net Worth */}
-        <View style={styles.netWorthCard}>
-          <View style={styles.netWorthHeader}>
-            <Text style={styles.netWorthLabel}>TOTAL NET WORTH</Text>
-            <View
-              style={[
-                styles.netWorthBadge,
-                { backgroundColor: isPositiveTrend ? colors.primary + '1A' : colors.error + '1A' },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.netWorthBadgeText,
-                  { color: isPositiveTrend ? colors.primary : colors.error },
-                ]}
-              >
-                {nwTrendStr}
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.netWorthAmount}>{formatCurrency(netWorth)}</Text>
-
-          <View style={styles.chartContainer}>
-            <LineChart
-              data={chartData}
-              width={chartWidth}
-              height={140}
-              yAxisOffset={chartConfig.yAxisOffset}
-              maxValue={chartConfig.maxValue}
-              hideDataPoints
-              color={isPositiveTrend ? colors.primary : colors.error}
-              thickness={3}
-              initialSpacing={0}
-              endSpacing={0}
-              areaChart
-              startFillColor={isPositiveTrend ? colors.primary : colors.error}
-              startOpacity={0.3}
-              endFillColor={isPositiveTrend ? colors.primary : colors.error}
-              endOpacity={0.05}
-              curved
-              hideRules
-              hideYAxisText
-              hideAxesAndRules
-              pointerConfig={{
-                pointerStripHeight: 140,
-                pointerStripColor: colors.outline,
-                pointerStripWidth: 2,
-                pointerColor: colors.primary,
-                radius: 6,
-                pointerLabelWidth: 80,
-                pointerLabelHeight: 30,
-                activatePointersOnLongPress: true,
-                autoAdjustPointerLabelPosition: true,
-                pointerLabelComponent: (items: any) => {
-                  return (
-                    <View
-                      style={{
-                        height: 30,
-                        width: 80,
-                        justifyContent: 'center',
-                        backgroundColor: colors.surfaceContainerHighest,
-                        borderRadius: 8,
-                        padding: 4,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: colors.onSurface,
-                          fontSize: 12,
-                          fontWeight: 'bold',
-                          textAlign: 'center',
-                        }}
-                      >
-                        {items[0].dataPointText}
-                      </Text>
-                    </View>
-                  );
-                },
-              }}
-            />
-          </View>
-        </View>
-
-        {/* Snapshot Row */}
-        <View style={styles.snapshotRow}>
-          <View style={styles.snapshotCard}>
-            <Text style={styles.snapshotLabel}>INCOME</Text>
-            <Text style={styles.snapshotValue}>{formatCurrency(monthlyTotals.income)}</Text>
-          </View>
-          <View style={styles.snapshotCard}>
-            <Text style={styles.snapshotLabel}>EXPENSES</Text>
-            <Text style={styles.snapshotValue}>{formatCurrency(monthlyTotals.expenses)}</Text>
-          </View>
-          <View style={styles.snapshotCard}>
-            <Text style={styles.snapshotLabel}>SAVED</Text>
-            <Text style={[styles.snapshotValue, { color: colors.primary }]}>
-              {formatCurrency(savedAmount)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Spending by Category Donut */}
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Spending Summary</Text>
-          <View style={styles.budgetCard}>
-            <View style={{ alignItems: 'center', marginVertical: 10 }}>
-              <PieChart
-                data={pieData}
-                donut
-                radius={80}
-                innerRadius={55}
-                innerCircleColor={colors.surfaceContainerLowest}
-                centerLabelComponent={() => {
-                  return (
-                    <View style={{ justifyContent: 'center', alignItems: 'center' }}>
-                      <Text style={{ fontSize: 12, color: colors.onSurfaceVariant }}>Total</Text>
-                      <Text style={{ fontSize: 16, color: colors.onSurface, fontWeight: 'bold' }}>
-                        {formatCurrency(monthlyTotals.expenses)}
-                      </Text>
-                    </View>
-                  );
-                }}
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* Budget Allocation */}
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Budget Allocation</Text>
-          {plan ? (
-            <TouchableOpacity style={styles.budgetCard} onPress={() => router.push('/plan')}>
-              <View style={styles.budgetItem}>
-                <View style={styles.budgetRow}>
-                  <Text style={styles.budgetType}>Needs ({plan.needsPercent}%)</Text>
-                  <Text style={styles.budgetAmount}>
-                    {formatCurrency(budgetProgress.needsSpent)} / {formatCurrency(needsLimit)}
-                  </Text>
-                </View>
-                <ProgressBar
-                  progress={Math.min(1, budgetProgress.needsSpent / Math.max(1, needsLimit))}
-                  color={colors.onSurface}
-                  backgroundColor={colors.surfaceContainerHigh}
-                />
-              </View>
-
-              <View style={styles.budgetItem}>
-                <View style={styles.budgetRow}>
-                  <Text style={styles.budgetType}>Wants ({plan.wantsPercent}%)</Text>
-                  <Text style={styles.budgetAmount}>
-                    {formatCurrency(budgetProgress.wantsSpent)} / {formatCurrency(wantsLimit)}
-                  </Text>
-                </View>
-                <ProgressBar
-                  progress={Math.min(1, budgetProgress.wantsSpent / Math.max(1, wantsLimit))}
-                  color={colors.outline}
-                  backgroundColor={colors.surfaceContainerHigh}
-                />
-              </View>
-
-              <View style={styles.budgetItem}>
-                <View style={styles.budgetRow}>
-                  <Text style={styles.budgetType}>Savings ({plan.savingsPercent}%)</Text>
-                  <Text style={styles.budgetAmount}>
-                    {formatCurrency(budgetProgress.savingsSpent)} / {formatCurrency(savingsLimit)}
-                  </Text>
-                </View>
-                <ProgressBar
-                  progress={Math.min(1, budgetProgress.savingsSpent / Math.max(1, savingsLimit))}
-                  color={colors.primary}
-                  backgroundColor={colors.surfaceContainerHigh}
-                />
-              </View>
-            </TouchableOpacity>
+          {isLoading ? (
+            <Loader />
           ) : (
-            <TouchableOpacity
-              style={styles.budgetCard}
-              onPress={() => router.push('/budget-setup')}
-            >
-              <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-                <Text
-                  style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, marginBottom: 12 }}
-                >
-                  No budget plan set up yet.
-                </Text>
-                <Text style={{ ...typography.labelMd, color: colors.primary }}>SET UP BUDGET</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Recent Activity */}
-        <View style={styles.sectionContainer}>
-          <View style={styles.recentActivityHeader}>
-            <Text style={styles.sectionTitle}>Recent Activity</Text>
-            <TouchableOpacity onPress={() => router.push('/transactions')}>
-              <Text style={styles.viewAllText}>VIEW ALL</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.activityCard}>
-            {transactions.length === 0 ? (
-              <View style={{ padding: 24, alignItems: 'center' }}>
-                <Text style={{ color: colors.onSurfaceVariant }}>No recent transactions.</Text>
-              </View>
-            ) : (
-              transactions.map((tx, index) => {
-                const isLast = index === transactions.length - 1;
-                const sign = getTransactionSign(tx.type);
-                return (
-                  <TouchableOpacity
-                    key={tx.id}
-                    style={[styles.activityItem, isLast && styles.lastActivityItem]}
-                    onPress={() => router.push('/(app)/(tabs)/transactions')} // Could route to details if built
+            <>
+              {/* Main Card: Net Worth */}
+              <View style={styles.netWorthCard}>
+                <View style={styles.netWorthHeader}>
+                  <Text style={styles.netWorthLabel}>TOTAL NET WORTH</Text>
+                  <View
+                    style={[
+                      styles.netWorthBadge,
+                      {
+                        backgroundColor: isPositiveTrend
+                          ? colors.primary + '1A'
+                          : colors.error + '1A',
+                      },
+                    ]}
                   >
-                    <View
+                    <Text
                       style={[
-                        styles.activityIconContainer,
-                        tx.type === 'income'
-                          ? { backgroundColor: colors.primary + '1A' }
-                          : undefined,
+                        styles.netWorthBadgeText,
+                        { color: isPositiveTrend ? colors.primary : colors.error },
                       ]}
                     >
-                      <MaterialIcons
-                        name={getCategoryIcon(tx.category)}
-                        size={20}
-                        color={tx.type === 'income' ? colors.primary : colors.onSurface}
+                      {nwTrendStr}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.netWorthAmount}>{formatCurrency(netWorth)}</Text>
+
+                <View style={styles.chartContainer}>
+                  <LineChart
+                    data={chartData}
+                    width={chartWidth}
+                    height={140}
+                    spacing={
+                      chartData.length > 1 ? chartWidth / (chartData.length - 1) : chartWidth
+                    }
+                    adjustToWidth={true}
+                    yAxisOffset={chartConfig.yAxisOffset}
+                    maxValue={chartConfig.maxValue}
+                    hideDataPoints
+                    color={isPositiveTrend ? colors.primary : colors.error}
+                    thickness={3}
+                    initialSpacing={0}
+                    endSpacing={0}
+                    areaChart
+                    startFillColor={isPositiveTrend ? colors.primary : colors.error}
+                    startOpacity={0.3}
+                    endFillColor={isPositiveTrend ? colors.primary : colors.error}
+                    endOpacity={0.05}
+                    curved
+                    hideRules
+                    hideYAxisText
+                    hideAxesAndRules
+                    pointerConfig={{
+                      pointerStripHeight: 140,
+                      pointerStripColor: colors.outline,
+                      pointerStripWidth: 2,
+                      pointerColor: colors.primary,
+                      radius: 6,
+                      pointerLabelWidth: 80,
+                      pointerLabelHeight: 30,
+                      activatePointersOnLongPress: true,
+                      autoAdjustPointerLabelPosition: true,
+                      pointerLabelComponent: (items: any) => {
+                        return (
+                          <View
+                            style={{
+                              height: 30,
+                              width: 80,
+                              justifyContent: 'center',
+                              backgroundColor: colors.surfaceContainerHighest,
+                              borderRadius: 8,
+                              padding: 4,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color: colors.onSurface,
+                                fontSize: 12,
+                                fontWeight: 'bold',
+                                textAlign: 'center',
+                              }}
+                            >
+                              {items[0].dataPointText}
+                            </Text>
+                          </View>
+                        );
+                      },
+                    }}
+                  />
+                </View>
+              </View>
+
+              {/* Snapshot Row */}
+              <View style={styles.snapshotRow}>
+                <View style={styles.snapshotCard}>
+                  <Text style={styles.snapshotLabel}>INCOME</Text>
+                  <Text style={styles.snapshotValue}>{formatCurrency(monthlyTotals.income)}</Text>
+                </View>
+                <View style={styles.snapshotCard}>
+                  <Text style={styles.snapshotLabel}>EXPENSES</Text>
+                  <Text style={styles.snapshotValue}>{formatCurrency(monthlyTotals.expenses)}</Text>
+                </View>
+                <View style={styles.snapshotCard}>
+                  <Text style={styles.snapshotLabel}>SAVED</Text>
+                  <Text style={[styles.snapshotValue, { color: colors.primary }]}>
+                    {formatCurrency(savedAmount)}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Spending by Category Donut */}
+              <View style={styles.sectionContainer}>
+                <Text style={styles.sectionTitle}>Spending Summary</Text>
+                <View style={styles.budgetCard}>
+                  <View style={{ alignItems: 'center', marginVertical: 10 }}>
+                    <PieChart
+                      data={pieData}
+                      donut
+                      radius={80}
+                      innerRadius={55}
+                      innerCircleColor={colors.surfaceContainerLowest}
+                      centerLabelComponent={() => {
+                        return (
+                          <View style={{ justifyContent: 'center', alignItems: 'center' }}>
+                            <Text style={{ fontSize: 12, color: colors.onSurfaceVariant }}>
+                              Total
+                            </Text>
+                            <Text
+                              style={{ fontSize: 16, color: colors.onSurface, fontWeight: 'bold' }}
+                            >
+                              {formatCurrency(monthlyTotals.expenses)}
+                            </Text>
+                          </View>
+                        );
+                      }}
+                    />
+                  </View>
+                </View>
+              </View>
+
+              {/* Budget Allocation */}
+              <View style={styles.sectionContainer}>
+                <Text style={styles.sectionTitle}>Budget Allocation</Text>
+                {plan ? (
+                  <TouchableOpacity style={styles.budgetCard} onPress={() => router.push('/plan')}>
+                    <View style={styles.budgetItem}>
+                      <View style={styles.budgetRow}>
+                        <Text style={styles.budgetType}>Needs ({plan.needsPercent}%)</Text>
+                        <Text style={styles.budgetAmount}>
+                          {formatCurrency(budgetProgress.needsSpent)} / {formatCurrency(needsLimit)}
+                        </Text>
+                      </View>
+                      <ProgressBar
+                        progress={Math.min(1, budgetProgress.needsSpent / Math.max(1, needsLimit))}
+                        color={colors.onSurface}
+                        backgroundColor={colors.surfaceContainerHigh}
                       />
                     </View>
-                    <View style={styles.activityDetails}>
-                      <Text style={styles.activityName}>
-                        {tx.type === 'transfer' ? `Transfer` : tx.merchant}
+
+                    <View style={styles.budgetItem}>
+                      <View style={styles.budgetRow}>
+                        <Text style={styles.budgetType}>Wants ({plan.wantsPercent}%)</Text>
+                        <Text style={styles.budgetAmount}>
+                          {formatCurrency(budgetProgress.wantsSpent)} / {formatCurrency(wantsLimit)}
+                        </Text>
+                      </View>
+                      <ProgressBar
+                        progress={Math.min(1, budgetProgress.wantsSpent / Math.max(1, wantsLimit))}
+                        color={colors.outline}
+                        backgroundColor={colors.surfaceContainerHigh}
+                      />
+                    </View>
+
+                    <View style={styles.budgetItem}>
+                      <View style={styles.budgetRow}>
+                        <Text style={styles.budgetType}>Savings ({plan.savingsPercent}%)</Text>
+                        <Text style={styles.budgetAmount}>
+                          {formatCurrency(budgetProgress.savingsSpent)} /{' '}
+                          {formatCurrency(savingsLimit)}
+                        </Text>
+                      </View>
+                      <ProgressBar
+                        progress={Math.min(
+                          1,
+                          budgetProgress.savingsSpent / Math.max(1, savingsLimit)
+                        )}
+                        color={colors.primary}
+                        backgroundColor={colors.surfaceContainerHigh}
+                      />
+                    </View>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.budgetCard}
+                    onPress={() => router.push('/budget-setup')}
+                  >
+                    <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+                      <Text
+                        style={{
+                          ...typography.bodyMd,
+                          color: colors.onSurfaceVariant,
+                          marginBottom: 12,
+                        }}
+                      >
+                        No budget plan set up yet.
                       </Text>
-                      <Text style={styles.activityDate}>
-                        {tx.date} • {tx.type === 'transfer' ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}` : tx.category}
+                      <Text style={{ ...typography.labelMd, color: colors.primary }}>
+                        SET UP BUDGET
                       </Text>
                     </View>
-                    <Text
-                      style={
-                        tx.type === 'income'
-                          ? styles.activityAmountPositive
-                          : styles.activityAmountNegative
-                      }
-                    >
-                      {sign}
-                      {formatCurrency(tx.amount)}
-                    </Text>
                   </TouchableOpacity>
-                );
-              })
-            )}
-          </View>
-        </View>
-        </>)}
+                )}
+              </View>
+
+              {/* Recent Activity */}
+              <View style={styles.sectionContainer}>
+                <View style={styles.recentActivityHeader}>
+                  <Text style={styles.sectionTitle}>Recent Activity</Text>
+                  <TouchableOpacity onPress={() => router.push('/transactions')}>
+                    <Text style={styles.viewAllText}>VIEW ALL</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.activityCard}>
+                  {transactions.length === 0 ? (
+                    <View style={{ padding: 24, alignItems: 'center' }}>
+                      <Text style={{ color: colors.onSurfaceVariant }}>
+                        No recent transactions.
+                      </Text>
+                    </View>
+                  ) : (
+                    transactions.map((tx, index) => {
+                      const isLast = index === transactions.length - 1;
+                      const sign = getTransactionSign(tx.type);
+                      return (
+                        <TouchableOpacity
+                          key={tx.id}
+                          style={[styles.activityItem, isLast && styles.lastActivityItem]}
+                          onPress={() => router.push(`/(app)/add-transaction?id=${tx.id}`)}
+                        >
+                          <View
+                            style={[
+                              styles.activityIconContainer,
+                              tx.type === 'income'
+                                ? { backgroundColor: colors.primary + '1A' }
+                                : undefined,
+                            ]}
+                          >
+                            <MaterialIcons
+                              name={getCategoryIcon(tx.category)}
+                              size={20}
+                              color={tx.type === 'income' ? colors.primary : colors.onSurface}
+                            />
+                          </View>
+                          <View style={styles.activityDetails}>
+                            <Text style={styles.activityName}>
+                              {tx.type === 'transfer' ? `Transfer` : tx.merchant}
+                            </Text>
+                            <Text style={styles.activityDate}>
+                              {tx.date} •{' '}
+                              {tx.type === 'transfer'
+                                ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}`
+                                : tx.category}
+                            </Text>
+                          </View>
+                          <Text
+                            style={
+                              tx.type === 'income'
+                                ? styles.activityAmountPositive
+                                : styles.activityAmountNegative
+                            }
+                          >
+                            {sign}
+                            {formatCurrency(tx.amount)}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                </View>
+              </View>
+            </>
+          )}
         </View>
       </ScrollView>
     </View>

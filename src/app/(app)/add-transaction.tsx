@@ -1,5 +1,15 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput, Switch, ActivityIndicator, ScrollView, Platform } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  Switch,
+  ActivityIndicator,
+  ScrollView,
+  Platform,
+  Modal,
+} from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Text, Header } from '@/components/ui';
@@ -7,17 +17,36 @@ import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useCreateTransaction, useUpdateTransaction, useTransaction, useDeleteTransaction, useCreateRecurringTransaction } from '@/hooks/use-transactions';
+import {
+  useCreateTransaction,
+  useUpdateTransaction,
+  useTransaction,
+  useDeleteTransaction,
+  useCreateRecurringTransaction,
+} from '@/hooks/use-transactions';
 import { useAccounts } from '@/hooks/use-accounts';
+import { useCategories } from '@/hooks/use-budget';
 import { useToast, useAlert } from '@/components/ui';
 import type { TransactionType, RecurringFrequency } from '@/types';
-import { getAccountTypeIcon } from '@/utils/icons';
+import { getAccountTypeIcon, getCategoryIcon } from '@/utils/icons';
 import { getCurrencySymbol } from '@/utils/format';
+import { evaluateTransactionBudgetAlerts } from '@/services/notifications/alert-engine';
 
 const CATEGORIES = [
-  'Groceries', 'Dining', 'Rent', 'Utilities', 'Transport',
-  'Health', 'Shopping', 'Entertainment', 'Subscriptions',
-  'Travel', 'Salary', 'Transfer', 'Personal', 'Other'
+  'Groceries',
+  'Dining',
+  'Rent',
+  'Utilities',
+  'Transport',
+  'Health',
+  'Shopping',
+  'Entertainment',
+  'Subscriptions',
+  'Travel',
+  'Salary',
+  'Transfer',
+  'Personal',
+  'Other',
 ];
 
 export default function AddTransactionScreen() {
@@ -25,18 +54,28 @@ export default function AddTransactionScreen() {
   const styles = getStyles(colors);
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  
+
   const { id } = useLocalSearchParams<{ id?: string }>();
   const isEditing = !!id;
   const { transaction, isLoading: isTxLoading } = useTransaction(id);
   const { showToast } = useToast();
   const { showAlert } = useAlert();
-  
+
   const { accounts, isLoading: isLoadingAccounts } = useAccounts();
+  const { categories: dbCategories } = useCategories();
   const { mutate: createTransaction, isPending: isCreating } = useCreateTransaction();
   const { mutate: updateTransaction, isPending: isUpdating } = useUpdateTransaction();
   const { mutate: deleteTransaction, isPending: isDeleting } = useDeleteTransaction();
-  const { mutate: createRecurring, isPending: isCreatingRecurring } = useCreateRecurringTransaction();
+  const { mutate: createRecurring, isPending: isCreatingRecurring } =
+    useCreateRecurringTransaction();
+
+  const allCategories = useMemo(() => {
+    const names = new Set(CATEGORIES);
+    if (dbCategories) {
+      dbCategories.forEach((c) => names.add(c.name));
+    }
+    return Array.from(names);
+  }, [dbCategories]);
 
   const isPending = isCreating || isUpdating || isDeleting || isCreatingRecurring;
 
@@ -54,7 +93,6 @@ export default function AddTransactionScreen() {
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [showToAccountMenu, setShowToAccountMenu] = useState(false);
-  const [showFreqMenu, setShowFreqMenu] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
   // Pre-populate if editing
@@ -109,7 +147,7 @@ export default function AddTransactionScreen() {
     if (isRecurring && !isEditing) {
       const recData = {
         accountId,
-        toAccountId: type === 'transfer' ? (toAccountId || undefined) : undefined,
+        toAccountId: type === 'transfer' ? toAccountId || undefined : undefined,
         amount,
         type,
         merchant: type === 'transfer' ? 'Transfer' : merchant.trim(),
@@ -121,14 +159,14 @@ export default function AddTransactionScreen() {
         onSuccess: () => {
           showToast('Recurring transaction created', 'success');
           router.back();
-        }
+        },
       });
       return;
     }
 
     const txData = {
       accountId,
-      toAccountId: type === 'transfer' ? (toAccountId || undefined) : undefined,
+      toAccountId: type === 'transfer' ? toAccountId || undefined : undefined,
       amount,
       type,
       merchant: type === 'transfer' ? 'Transfer' : merchant.trim(),
@@ -141,13 +179,15 @@ export default function AddTransactionScreen() {
     if (isEditing && id) {
       updateTransaction(id, txData, {
         onSuccess: () => {
+          evaluateTransactionBudgetAlerts(txData);
           showToast('Transaction updated successfully', 'success');
           router.back();
-        }
+        },
       });
     } else {
       createTransaction(txData, {
         onSuccess: () => {
+          evaluateTransactionBudgetAlerts(txData);
           showToast('Transaction added successfully', 'success');
           router.back();
         },
@@ -157,36 +197,29 @@ export default function AddTransactionScreen() {
 
   const handleDelete = () => {
     if (isEditing && id) {
-      showAlert(
-        'Delete Transaction',
-        'Are you sure you want to delete this transaction?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => {
-              deleteTransaction(id, {
-                onSuccess: () => {
-                  showToast('Transaction deleted', 'success');
-                  router.back();
-                }
-              });
-            },
+      showAlert('Delete Transaction', 'Are you sure you want to delete this transaction?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            deleteTransaction(id, {
+              onSuccess: () => {
+                showToast('Transaction deleted', 'success');
+                router.back();
+              },
+            });
           },
-        ]
-      );
+        },
+      ]);
     }
   };
 
-  const selectedAccount = accounts.find(a => a.id === accountId);
+  const selectedAccount = accounts.find((a) => a.id === accountId);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <Header
-        showBack
-        title={isEditing ? 'Edit Transaction' : 'Add Transaction'}
-      />
+      <Header showBack title={isEditing ? 'Edit Transaction' : 'Add Transaction'} />
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
@@ -203,12 +236,7 @@ export default function AddTransactionScreen() {
                 style={[styles.typeButton, type === t && styles.typeButtonActive]}
                 onPress={() => setType(t)}
               >
-                <Text
-                  style={[
-                    styles.typeButtonText,
-                    type === t && styles.typeButtonTextActive,
-                  ]}
-                >
+                <Text style={[styles.typeButtonText, type === t && styles.typeButtonTextActive]}>
                   {t.charAt(0).toUpperCase() + t.slice(1)}
                 </Text>
               </TouchableOpacity>
@@ -234,9 +262,9 @@ export default function AddTransactionScreen() {
           {/* Form Fields */}
           <View style={styles.formGroup}>
             {type === 'transfer' ? (
-              <View style={[styles.inputContainer, { zIndex: 11 }]}>
+              <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>To Account</Text>
-                
+
                 {isLoadingAccounts ? (
                   <View style={styles.accountSelector}>
                     <ActivityIndicator size="small" color={colors.primary} />
@@ -246,52 +274,40 @@ export default function AddTransactionScreen() {
                     <Text style={{ color: colors.error }}>No accounts available.</Text>
                   </View>
                 ) : (
-                  <>
-                    <TouchableOpacity 
-                      style={styles.accountSelector}
-                      onPress={() => setShowToAccountMenu(!showToAccountMenu)}
-                    >
-                      {toAccountId && accounts.find(a => a.id === toAccountId) ? (
-                        <View style={styles.accountSelectorLeft}>
-                          <View style={styles.accountIconBox}>
-                            <MaterialIcons
-                              name={getAccountTypeIcon(accounts.find(a => a.id === toAccountId)!.type)}
-                              size={16}
-                              color={colors.onPrimaryContainer}
-                            />
-                          </View>
-                          <View>
-                            <Text style={styles.accountSelectorName}>{accounts.find(a => a.id === toAccountId)!.name}</Text>
-                            {accounts.find(a => a.id === toAccountId)!.lastFour && (
-                              <Text style={styles.accountSelectorNumber}>...{accounts.find(a => a.id === toAccountId)!.lastFour}</Text>
+                  <TouchableOpacity
+                    style={styles.accountSelector}
+                    onPress={() => setShowToAccountMenu(true)}
+                    activeOpacity={0.7}
+                  >
+                    {toAccountId && accounts.find((a) => a.id === toAccountId) ? (
+                      <View style={styles.accountSelectorLeft}>
+                        <View style={styles.accountIconBox}>
+                          <MaterialIcons
+                            name={getAccountTypeIcon(
+                              accounts.find((a) => a.id === toAccountId)!.type
                             )}
-                          </View>
+                            size={16}
+                            color={colors.onPrimaryContainer}
+                          />
                         </View>
-                      ) : (
-                        <Text style={{ color: colors.onSurfaceVariant }}>Select destination account</Text>
-                      )}
-                      <MaterialIcons name={showToAccountMenu ? "expand-less" : "expand-more"} size={24} color={colors.onSurfaceVariant} />
-                    </TouchableOpacity>
-                    
-                    {showToAccountMenu && (
-                      <View style={styles.dropdownMenu}>
-                        {accounts.map(acc => (
-                          <TouchableOpacity 
-                            key={acc.id} 
-                            style={styles.dropdownItem}
-                            onPress={() => {
-                              setToAccountId(acc.id);
-                              setShowToAccountMenu(false);
-                            }}
-                          >
-                            <Text style={{ color: acc.id === toAccountId ? colors.primary : colors.onSurface }}>
-                              {acc.name} {acc.lastFour ? `(...${acc.lastFour})` : ''}
+                        <View>
+                          <Text style={styles.accountSelectorName}>
+                            {accounts.find((a) => a.id === toAccountId)!.name}
+                          </Text>
+                          {accounts.find((a) => a.id === toAccountId)!.lastFour && (
+                            <Text style={styles.accountSelectorNumber}>
+                              ...{accounts.find((a) => a.id === toAccountId)!.lastFour}
                             </Text>
-                          </TouchableOpacity>
-                        ))}
+                          )}
+                        </View>
                       </View>
+                    ) : (
+                      <Text style={{ color: colors.onSurfaceVariant }}>
+                        Select destination account
+                      </Text>
                     )}
-                  </>
+                    <MaterialIcons name="expand-more" size={24} color={colors.onSurfaceVariant} />
+                  </TouchableOpacity>
                 )}
               </View>
             ) : (
@@ -317,14 +333,15 @@ export default function AddTransactionScreen() {
                 </View>
 
                 {/* Category */}
-                <View style={[styles.inputContainer, { zIndex: 10 }]}>
+                <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>Category</Text>
-                  <TouchableOpacity 
-                    style={styles.textInputWrapper} 
-                    onPress={() => setShowCategoryMenu(!showCategoryMenu)}
+                  <TouchableOpacity
+                    style={styles.textInputWrapper}
+                    onPress={() => setShowCategoryMenu(true)}
+                    activeOpacity={0.7}
                   >
                     <MaterialIcons
-                      name="category"
+                      name={getCategoryIcon(category)}
                       size={24}
                       color={colors.primary}
                       style={styles.inputIcon}
@@ -333,38 +350,19 @@ export default function AddTransactionScreen() {
                       <Text style={{ color: colors.onSurface }}>{category}</Text>
                     </View>
                     <MaterialIcons
-                      name={showCategoryMenu ? "expand-less" : "expand-more"}
+                      name="expand-more"
                       size={24}
                       color={colors.onSurfaceVariant}
                       style={styles.inputRightIcon}
                     />
                   </TouchableOpacity>
-                  
-                  {showCategoryMenu && (
-                    <View style={styles.dropdownMenu}>
-                      <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
-                        {CATEGORIES.map(cat => (
-                          <TouchableOpacity 
-                            key={cat} 
-                            style={styles.dropdownItem}
-                            onPress={() => {
-                              setCategory(cat);
-                              setShowCategoryMenu(false);
-                            }}
-                          >
-                            <Text style={{ color: cat === category ? colors.primary : colors.onSurface }}>{cat}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )}
                 </View>
               </>
             )}
 
             <View style={[styles.inputContainer, { zIndex: 1 }]}>
               <Text style={styles.inputLabel}>Date</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.textInputWrapper}
                 onPress={() => setShowDatePicker(true)}
               >
@@ -383,7 +381,7 @@ export default function AddTransactionScreen() {
                 display="default"
                 onChange={(event, selectedDate) => {
                   setShowDatePicker(false);
-                  if (selectedDate) {
+                  if (event.type === 'set' && selectedDate) {
                     setDate(selectedDate.toISOString().split('T')[0]);
                   }
                 }}
@@ -391,64 +389,48 @@ export default function AddTransactionScreen() {
             )}
 
             {/* Account Selector */}
-            <View style={[styles.inputContainer, { zIndex: 5 }]}>
+            <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Account</Text>
-              
+
               {isLoadingAccounts ? (
                 <View style={styles.accountSelector}>
                   <ActivityIndicator size="small" color={colors.primary} />
                 </View>
               ) : accounts.length === 0 ? (
                 <View style={styles.accountSelector}>
-                  <Text style={{ color: colors.error }}>No accounts available. Please add one first.</Text>
+                  <Text style={{ color: colors.error }}>
+                    No accounts available. Please add one first.
+                  </Text>
                 </View>
               ) : (
-                <>
-                  <TouchableOpacity 
-                    style={styles.accountSelector}
-                    onPress={() => setShowAccountMenu(!showAccountMenu)}
-                  >
-                    {selectedAccount ? (
-                      <View style={styles.accountSelectorLeft}>
-                        <View style={styles.accountIconBox}>
-                          <MaterialIcons
-                            name={getAccountTypeIcon(selectedAccount.type)}
-                            size={16}
-                            color={colors.onPrimaryContainer}
-                          />
-                        </View>
-                        <View>
-                          <Text style={styles.accountSelectorName}>{selectedAccount.name}</Text>
-                          {selectedAccount.lastFour && (
-                            <Text style={styles.accountSelectorNumber}>...{selectedAccount.lastFour}</Text>
-                          )}
-                        </View>
+                <TouchableOpacity
+                  style={styles.accountSelector}
+                  onPress={() => setShowAccountMenu(true)}
+                  activeOpacity={0.7}
+                >
+                  {selectedAccount ? (
+                    <View style={styles.accountSelectorLeft}>
+                      <View style={styles.accountIconBox}>
+                        <MaterialIcons
+                          name={getAccountTypeIcon(selectedAccount.type)}
+                          size={16}
+                          color={colors.onPrimaryContainer}
+                        />
                       </View>
-                    ) : (
-                      <Text style={{ color: colors.onSurfaceVariant }}>Select an account</Text>
-                    )}
-                    <MaterialIcons name={showAccountMenu ? "expand-less" : "expand-more"} size={24} color={colors.onSurfaceVariant} />
-                  </TouchableOpacity>
-                  
-                  {showAccountMenu && (
-                    <View style={styles.dropdownMenu}>
-                      {accounts.map(acc => (
-                        <TouchableOpacity 
-                          key={acc.id} 
-                          style={styles.dropdownItem}
-                          onPress={() => {
-                            setAccountId(acc.id);
-                            setShowAccountMenu(false);
-                          }}
-                        >
-                          <Text style={{ color: acc.id === accountId ? colors.primary : colors.onSurface }}>
-                            {acc.name} {acc.lastFour ? `(...${acc.lastFour})` : ''}
+                      <View>
+                        <Text style={styles.accountSelectorName}>{selectedAccount.name}</Text>
+                        {selectedAccount.lastFour && (
+                          <Text style={styles.accountSelectorNumber}>
+                            ...{selectedAccount.lastFour}
                           </Text>
-                        </TouchableOpacity>
-                      ))}
+                        )}
+                      </View>
                     </View>
+                  ) : (
+                    <Text style={{ color: colors.onSurfaceVariant }}>Select an account</Text>
                   )}
-                </>
+                  <MaterialIcons name="expand-more" size={24} color={colors.onSurfaceVariant} />
+                </TouchableOpacity>
               )}
             </View>
 
@@ -467,55 +449,38 @@ export default function AddTransactionScreen() {
             </View>
 
             {isRecurring && !isEditing && (
-              <View style={[styles.inputContainer, { zIndex: 4, marginTop: 16 }]}>
-                <Text style={styles.inputLabel}>Frequency</Text>
-                <TouchableOpacity 
-                  style={styles.textInputWrapper} 
-                  onPress={() => setShowFreqMenu(!showFreqMenu)}
-                >
-                  <MaterialIcons
-                    name="update"
-                    size={24}
-                    color={colors.primary}
-                    style={styles.inputIcon}
-                  />
-                  <View style={[styles.textInput, { justifyContent: 'center' }]}>
-                    <Text style={{ color: colors.onSurface }}>
-                      {recurringFreq.charAt(0).toUpperCase() + recurringFreq.slice(1)}
-                    </Text>
-                  </View>
-                  <MaterialIcons
-                    name={showFreqMenu ? "expand-less" : "expand-more"}
-                    size={24}
-                    color={colors.onSurfaceVariant}
-                    style={styles.inputRightIcon}
-                  />
-                </TouchableOpacity>
-                
-                {showFreqMenu && (
-                  <View style={styles.dropdownMenu}>
-                    {(['daily', 'weekly', 'monthly', 'yearly'] as RecurringFrequency[]).map(freq => (
-                      <TouchableOpacity 
-                        key={freq} 
-                        style={styles.dropdownItem}
-                        onPress={() => {
-                          setRecurringFreq(freq);
-                          setShowFreqMenu(false);
-                        }}
-                      >
-                        <Text style={{ color: freq === recurringFreq ? colors.primary : colors.onSurface }}>
-                          {freq.charAt(0).toUpperCase() + freq.slice(1)}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
+              <View style={styles.frequencySection}>
+                <Text style={styles.inputLabel}>Repeat Frequency</Text>
+                <View style={styles.freqPillRow}>
+                  {(['daily', 'weekly', 'monthly', 'yearly'] as RecurringFrequency[]).map(
+                    (freq) => {
+                      const isSelected = recurringFreq === freq;
+                      return (
+                        <TouchableOpacity
+                          key={freq}
+                          style={[styles.freqPill, isSelected && styles.freqPillActive]}
+                          onPress={() => setRecurringFreq(freq)}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={[styles.freqPillText, isSelected && styles.freqPillTextActive]}
+                          >
+                            {freq.charAt(0).toUpperCase() + freq.slice(1)}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    }
+                  )}
+                </View>
               </View>
             )}
           </View>
 
           <TouchableOpacity
-            style={[styles.submitButton, (isPending || isLoadingAccounts || accounts.length === 0) && { opacity: 0.5 }]}
+            style={[
+              styles.submitButton,
+              (isPending || isLoadingAccounts || accounts.length === 0) && { opacity: 0.5 },
+            ]}
             onPress={handleSave}
             disabled={isPending || isLoadingAccounts || accounts.length === 0}
           >
@@ -535,6 +500,274 @@ export default function AddTransactionScreen() {
           )}
         </View>
       </KeyboardAwareScrollView>
+
+      {/* Category Selection Bottom Sheet Modal */}
+      <Modal
+        visible={showCategoryMenu}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCategoryMenu(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowCategoryMenu(false)}
+        >
+          <View
+            style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderTitleRow}>
+                <View style={styles.categoryIconBoxHeader}>
+                  <MaterialIcons name="category" size={20} color={colors.primary} />
+                </View>
+                <Text style={styles.modalTitle}>Select Category</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setShowCategoryMenu(false)}
+              >
+                <MaterialIcons name="close" size={24} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              {allCategories.map((cat) => {
+                const isSelected = cat === category;
+                return (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[styles.categoryOption, isSelected && styles.categoryOptionSelected]}
+                    onPress={() => {
+                      setCategory(cat);
+                      setShowCategoryMenu(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.categoryOptionLeft}>
+                      <View
+                        style={[
+                          styles.categoryIconBox,
+                          isSelected && { backgroundColor: colors.primary },
+                        ]}
+                      >
+                        <MaterialIcons
+                          name={getCategoryIcon(cat)}
+                          size={20}
+                          color={isSelected ? colors.onPrimary : colors.primary}
+                        />
+                      </View>
+                      <Text
+                        style={[
+                          styles.categoryOptionText,
+                          isSelected && { color: colors.primary, fontWeight: '700' },
+                        ]}
+                      >
+                        {cat}
+                      </Text>
+                    </View>
+                    {isSelected && <MaterialIcons name="check" size={20} color={colors.primary} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+      {/* Account Selection Bottom Sheet Modal */}
+      <Modal
+        visible={showAccountMenu}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAccountMenu(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowAccountMenu(false)}
+        >
+          <View
+            style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderTitleRow}>
+                <View style={styles.categoryIconBoxHeader}>
+                  <MaterialIcons name="account-balance" size={20} color={colors.primary} />
+                </View>
+                <Text style={styles.modalTitle}>Select Account</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setShowAccountMenu(false)}
+              >
+                <MaterialIcons name="close" size={24} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              {accounts.map((acc) => {
+                const isSelected = acc.id === accountId;
+                return (
+                  <TouchableOpacity
+                    key={acc.id}
+                    style={[styles.categoryOption, isSelected && styles.categoryOptionSelected]}
+                    onPress={() => {
+                      setAccountId(acc.id);
+                      setShowAccountMenu(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.categoryOptionLeft}>
+                      <View
+                        style={[
+                          styles.categoryIconBox,
+                          isSelected && { backgroundColor: colors.primary },
+                        ]}
+                      >
+                        <MaterialIcons
+                          name={getAccountTypeIcon(acc.type)}
+                          size={20}
+                          color={isSelected ? colors.onPrimary : colors.primary}
+                        />
+                      </View>
+                      <View>
+                        <Text
+                          style={[
+                            styles.categoryOptionText,
+                            isSelected && { color: colors.primary, fontWeight: '700' },
+                          ]}
+                        >
+                          {acc.name}
+                        </Text>
+                        {acc.lastFour && (
+                          <Text
+                            style={{
+                              ...typography.labelMd,
+                              color: colors.onSurfaceVariant,
+                              fontSize: 11,
+                            }}
+                          >
+                            Account ending in ...{acc.lastFour}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                    {isSelected && <MaterialIcons name="check" size={20} color={colors.primary} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Destination Account Selection Bottom Sheet Modal */}
+      <Modal
+        visible={showToAccountMenu}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowToAccountMenu(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowToAccountMenu(false)}
+        >
+          <View
+            style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderTitleRow}>
+                <View style={styles.categoryIconBoxHeader}>
+                  <MaterialIcons name="account-balance" size={20} color={colors.primary} />
+                </View>
+                <Text style={styles.modalTitle}>Select Destination Account</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setShowToAccountMenu(false)}
+              >
+                <MaterialIcons name="close" size={24} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              {accounts.map((acc) => {
+                const isSelected = acc.id === toAccountId;
+                return (
+                  <TouchableOpacity
+                    key={acc.id}
+                    style={[styles.categoryOption, isSelected && styles.categoryOptionSelected]}
+                    onPress={() => {
+                      setToAccountId(acc.id);
+                      setShowToAccountMenu(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.categoryOptionLeft}>
+                      <View
+                        style={[
+                          styles.categoryIconBox,
+                          isSelected && { backgroundColor: colors.primary },
+                        ]}
+                      >
+                        <MaterialIcons
+                          name={getAccountTypeIcon(acc.type)}
+                          size={20}
+                          color={isSelected ? colors.onPrimary : colors.primary}
+                        />
+                      </View>
+                      <View>
+                        <Text
+                          style={[
+                            styles.categoryOptionText,
+                            isSelected && { color: colors.primary, fontWeight: '700' },
+                          ]}
+                        >
+                          {acc.name}
+                        </Text>
+                        {acc.lastFour && (
+                          <Text
+                            style={{
+                              ...typography.labelMd,
+                              color: colors.onSurfaceVariant,
+                              fontSize: 11,
+                            }}
+                          >
+                            Account ending in ...{acc.lastFour}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                    {isSelected && <MaterialIcons name="check" size={20} color={colors.primary} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -649,10 +882,6 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.bodyLg,
       color: colors.onSurface,
     },
-    row: {
-      flexDirection: 'row',
-      gap: 12,
-    },
     accountSelector: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -686,23 +915,6 @@ const getStyles = (colors: ThemeColors) => {
       fontSize: 10,
       lineHeight: 12,
     },
-    dropdownMenu: {
-      position: 'absolute',
-      top: 76,
-      left: 0,
-      right: 0,
-      backgroundColor: colors.surfaceContainerHigh,
-      borderRadius: 8,
-      borderWidth: 1,
-      borderColor: colors.surfaceVariant,
-      zIndex: 20,
-    },
-    dropdownItem: {
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.surfaceVariant,
-    },
     recurringContainer: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -720,6 +932,41 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
       fontSize: 10,
+    },
+    frequencySection: {
+      gap: 8,
+      marginTop: 8,
+    },
+    freqPillRow: {
+      flexDirection: 'row',
+      backgroundColor: colors.surfaceContainer,
+      borderRadius: 12,
+      padding: 4,
+      gap: 4,
+    },
+    freqPill: {
+      flex: 1,
+      paddingVertical: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 8,
+    },
+    freqPillActive: {
+      backgroundColor: colors.primary,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    freqPillText: {
+      ...typography.labelMd,
+      color: colors.onSurfaceVariant,
+      fontSize: 12,
+    },
+    freqPillTextActive: {
+      color: colors.onPrimary,
+      fontWeight: '700',
     },
     submitButton: {
       marginTop: 32,
@@ -746,7 +993,88 @@ const getStyles = (colors: ThemeColors) => {
     deleteButtonText: {
       ...typography.labelMd,
       color: colors.error,
-    }
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'flex-end',
+    },
+    modalSheet: {
+      backgroundColor: colors.surfaceContainerLowest,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      maxHeight: '75%',
+      paddingTop: 20,
+      paddingHorizontal: 20,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 16,
+      elevation: 8,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingBottom: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.surfaceVariant,
+    },
+    modalHeaderTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    categoryIconBoxHeader: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.primaryContainer,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    modalTitle: {
+      ...typography.headlineSm,
+      color: colors.onSurface,
+    },
+    modalCloseBtn: {
+      padding: 4,
+    },
+    modalScroll: {
+      maxHeight: 380,
+    },
+    modalScrollContent: {
+      paddingVertical: 12,
+      gap: 4,
+    },
+    categoryOption: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+    },
+    categoryOptionSelected: {
+      backgroundColor: colors.surfaceContainer,
+    },
+    categoryOptionLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    categoryIconBox: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.surfaceContainerHigh,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    categoryOptionText: {
+      ...typography.bodyLg,
+      color: colors.onSurface,
+    },
   });
   return styles;
 };

@@ -56,4 +56,3 @@ const styles = StyleSheet.create({
     ...typography.bodyLg,
   },
 });
-

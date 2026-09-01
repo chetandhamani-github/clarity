@@ -24,7 +24,7 @@ export default function AddAccountScreen() {
   const { showAlert } = useAlert();
 
   const [name, setName] = useState('');
-  const [type, setType] = useState<AccountType>('checking');
+  const [type, setType] = useState<AccountType>('savings');
   const [balanceStr, setBalanceStr] = useState('');
   const [institution, setInstitution] = useState('');
   const [lastFour, setLastFour] = useState('');
@@ -45,7 +45,7 @@ export default function AddAccountScreen() {
 
   const { mutate: createAccount, isPending: isCreating } = useCreateAccount();
   const { mutate: updateAccount, isPending: isUpdating } = useUpdateAccount();
-  
+
   const isPending = isCreating || isUpdating;
 
   const handleSave = () => {
@@ -72,7 +72,7 @@ export default function AddAccountScreen() {
         onSuccess: () => {
           showToast('Account updated successfully', 'success');
           router.back();
-        }
+        },
       });
     } else {
       createAccount(accountData, {
@@ -84,14 +84,12 @@ export default function AddAccountScreen() {
     }
   };
 
-  const selectedTypeLabel = ACCOUNT_TYPES.find((t) => t.value === type)?.label ?? 'Checking';
+  const selectedTypeLabel =
+    ACCOUNT_TYPES.find((t) => t.value === type)?.label ?? 'Savings Account';
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <Header
-        showBack
-        title={isEditing ? 'Edit Account' : 'Add Account'}
-      />
+      <Header showBack title={isEditing ? 'Edit Account' : 'Add Account'} />
 
       <KeyboardAwareScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 60 }]}
@@ -103,7 +101,7 @@ export default function AddAccountScreen() {
             <Text style={styles.label}>Account Name*</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g. Chase Checking"
+              placeholder="e.g. HDFC Salary, SBI, or Cash Wallet"
               placeholderTextColor={colors.outline}
               value={name}
               onChangeText={setName}
@@ -135,7 +133,11 @@ export default function AddAccountScreen() {
                       setShowTypeSelector(false);
                     }}
                   >
-                    <Text style={type === t.value ? styles.typeOptionTextSelected : styles.typeOptionText}>
+                    <Text
+                      style={
+                        type === t.value ? styles.typeOptionTextSelected : styles.typeOptionText
+                      }
+                    >
                       {t.label}
                     </Text>
                     {type === t.value && (
@@ -166,7 +168,7 @@ export default function AddAccountScreen() {
             <Text style={styles.label}>Institution (Optional)</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g. JPMorgan Chase"
+              placeholder="e.g. HDFC Bank, ICICI, SBI, Paytm"
               placeholderTextColor={colors.outline}
               value={institution}
               onChangeText={setInstitution}
@@ -207,10 +209,6 @@ const getStyles = (colors: ThemeColors) => {
     container: {
       flex: 1,
       backgroundColor: colors.background,
-    },
-
-    iconButton: {
-      padding: 8,
     },
     scrollContent: {
       padding: 20,

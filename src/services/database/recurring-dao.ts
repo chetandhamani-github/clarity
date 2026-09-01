@@ -1,6 +1,12 @@
 import { getDatabase } from './index';
-import { createTransaction } from './transaction-dao';
-import type { RecurringTransaction, RecurringTransactionWithAccount, TransactionType, RecurringFrequency } from '@/types';
+import { insertTransaction } from './transaction-dao';
+import { insertNotification } from './notification-dao';
+import type {
+  RecurringTransaction,
+  RecurringTransactionWithAccount,
+  TransactionType,
+  RecurringFrequency,
+} from '@/types';
 
 function generateId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -113,7 +119,7 @@ function calculateNextDate(currentDateStr: string, frequency: RecurringFrequency
 
 export async function processDueRecurringTransactions(): Promise<void> {
   const db = getDatabase();
-  
+
   const today = new Date().toISOString().split('T')[0];
   const dueTransactions = await db.getAllAsync<RecurringTransactionRow>(
     `SELECT * FROM recurring_transactions 
@@ -124,7 +130,7 @@ export async function processDueRecurringTransactions(): Promise<void> {
   for (const rt of dueTransactions) {
     try {
       // Create the actual transaction
-      await createTransaction({
+      await insertTransaction({
         accountId: rt.account_id,
         toAccountId: rt.to_account_id,
         amount: rt.amount,
@@ -133,7 +139,15 @@ export async function processDueRecurringTransactions(): Promise<void> {
         category: rt.category,
         date: rt.next_process_date,
         isRecurring: true,
-        note: 'Auto-generated recurring transaction'
+        note: 'Auto-generated recurring transaction',
+      });
+
+      // Insert notification
+      await insertNotification({
+        title: 'Recurring Transaction Processed',
+        description: `Scheduled ${rt.type} of ₹${rt.amount} for "${rt.merchant}" was automatically recorded.`,
+        type: 'default',
+        actionUrl: '/(app)/(tabs)/transactions',
       });
 
       // Advance the date
@@ -142,7 +156,7 @@ export async function processDueRecurringTransactions(): Promise<void> {
       while (nextDateStr <= today) {
         nextDateStr = calculateNextDate(nextDateStr, rt.frequency as RecurringFrequency);
       }
-      
+
       await db.runAsync(
         `UPDATE recurring_transactions 
          SET last_processed_date = ?, next_process_date = ? 

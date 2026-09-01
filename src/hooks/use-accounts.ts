@@ -47,11 +47,11 @@ export function useCreateAccount() {
     },
   });
 
-  return { 
+  return {
     mutate: (data: Omit<Account, 'id' | 'createdAt'>, options?: { onSuccess?: () => void }) => {
       mutation.mutate(data, { onSuccess: options?.onSuccess });
-    }, 
-    isPending: mutation.isPending 
+    },
+    isPending: mutation.isPending,
   };
 }
 
@@ -65,11 +65,11 @@ export function useDeleteAccount() {
     },
   });
 
-  return { 
+  return {
     mutate: (id: string, options?: { onSuccess?: () => void }) => {
       mutation.mutate(id, { onSuccess: options?.onSuccess });
-    }, 
-    isPending: mutation.isPending 
+    },
+    isPending: mutation.isPending,
   };
 }
 
@@ -77,17 +77,21 @@ export function useUpdateAccount() {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Omit<Account, 'id' | 'createdAt'>> }) => 
+    mutationFn: ({ id, data }: { id: string; data: Partial<Omit<Account, 'id' | 'createdAt'>> }) =>
       updateAccountDao(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
     },
   });
 
-  return { 
-    mutate: (id: string, data: Partial<Omit<Account, 'id' | 'createdAt'>>, options?: { onSuccess?: () => void }) => {
+  return {
+    mutate: (
+      id: string,
+      data: Partial<Omit<Account, 'id' | 'createdAt'>>,
+      options?: { onSuccess?: () => void }
+    ) => {
       mutation.mutate({ id, data }, { onSuccess: options?.onSuccess });
-    }, 
-    isPending: mutation.isPending 
+    },
+    isPending: mutation.isPending,
   };
 }

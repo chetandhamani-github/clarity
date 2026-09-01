@@ -61,7 +61,7 @@ export async function getCurrentBudgetPlan(): Promise<BudgetPlan | null> {
     'SELECT * FROM budget_plans WHERE month = ? AND year = ?',
     [month, year]
   );
-  
+
   if (row) return mapBudgetPlanRow(row);
 
   // If no plan for this month, see if they had one in previous months to roll forward
@@ -74,7 +74,7 @@ export async function getCurrentBudgetPlan(): Promise<BudgetPlan | null> {
 
 export async function upsertBudgetPlan(data: Omit<BudgetPlan, 'id'>): Promise<BudgetPlan> {
   const db = getDatabase();
-  
+
   const existingRow = await db.getFirstAsync<{ id: string }>(
     'SELECT id FROM budget_plans WHERE month = ? AND year = ?',
     [data.month, data.year]
@@ -90,7 +90,15 @@ export async function upsertBudgetPlan(data: Omit<BudgetPlan, 'id'>): Promise<Bu
        needs_percent = excluded.needs_percent,
        wants_percent = excluded.wants_percent,
        savings_percent = excluded.savings_percent`,
-    [id, data.monthlyIncome, data.needsPercent, data.wantsPercent, data.savingsPercent, data.month, data.year]
+    [
+      id,
+      data.monthlyIncome,
+      data.needsPercent,
+      data.wantsPercent,
+      data.savingsPercent,
+      data.month,
+      data.year,
+    ]
   );
 
   return { id, ...data };
@@ -131,14 +139,14 @@ export async function getAllCategories(): Promise<BudgetCategory[]> {
   let rows = await db.getAllAsync<BudgetCategoryRow>(
     'SELECT * FROM budget_categories ORDER BY bucket_type, sort_order'
   );
-  
+
   if (rows.length === 0) {
     await seedDefaultCategories(db);
     rows = await db.getAllAsync<BudgetCategoryRow>(
       'SELECT * FROM budget_categories ORDER BY bucket_type, sort_order'
     );
   }
-  
+
   return rows.map(mapBudgetCategoryRow);
 }
 
@@ -148,7 +156,7 @@ export async function getCategoriesByBucket(bucket: BucketType): Promise<BudgetC
     'SELECT * FROM budget_categories WHERE bucket_type = ? ORDER BY sort_order',
     [bucket]
   );
-  
+
   if (rows.length === 0) {
     // Just in case this is called first
     const all = await db.getAllAsync<BudgetCategoryRow>('SELECT id FROM budget_categories LIMIT 1');
@@ -160,7 +168,7 @@ export async function getCategoriesByBucket(bucket: BucketType): Promise<BudgetC
       );
     }
   }
-  
+
   return rows.map(mapBudgetCategoryRow);
 }
 
@@ -179,20 +187,35 @@ export async function insertCategory(data: Omit<BudgetCategory, 'id'>): Promise<
 
 export async function updateCategory(id: string, data: Partial<BudgetCategory>): Promise<void> {
   const db = getDatabase();
-  
+
   const sets: string[] = [];
   const params: any[] = [];
-  
-  if (data.name !== undefined) { sets.push('name = ?'); params.push(data.name); }
-  if (data.icon !== undefined) { sets.push('icon = ?'); params.push(data.icon); }
-  if (data.limit !== undefined) { sets.push('budget_limit = ?'); params.push(data.limit); }
-  if (data.bucketType !== undefined) { sets.push('bucket_type = ?'); params.push(data.bucketType); }
-  if (data.sortOrder !== undefined) { sets.push('sort_order = ?'); params.push(data.sortOrder); }
-  
+
+  if (data.name !== undefined) {
+    sets.push('name = ?');
+    params.push(data.name);
+  }
+  if (data.icon !== undefined) {
+    sets.push('icon = ?');
+    params.push(data.icon);
+  }
+  if (data.limit !== undefined) {
+    sets.push('budget_limit = ?');
+    params.push(data.limit);
+  }
+  if (data.bucketType !== undefined) {
+    sets.push('bucket_type = ?');
+    params.push(data.bucketType);
+  }
+  if (data.sortOrder !== undefined) {
+    sets.push('sort_order = ?');
+    params.push(data.sortOrder);
+  }
+
   if (sets.length === 0) return;
-  
+
   params.push(id);
-  
+
   await db.runAsync(`UPDATE budget_categories SET ${sets.join(', ')} WHERE id = ?`, params);
 }
 
@@ -201,13 +224,16 @@ export async function deleteCategory(id: string): Promise<void> {
   await db.runAsync('DELETE FROM budget_categories WHERE id = ?', [id]);
 }
 
-export async function getSpentByCategory(month: number, year: number): Promise<Record<string, number>> {
+export async function getSpentByCategory(
+  month: number,
+  year: number
+): Promise<Record<string, number>> {
   const db = getDatabase();
-  
+
   const monthStr = month.toString().padStart(2, '0');
   const datePrefix = `${year}-${monthStr}`;
 
-  const rows = await db.getAllAsync<{ category: string, total: number }>(
+  const rows = await db.getAllAsync<{ category: string; total: number }>(
     `SELECT category, SUM(amount) as total
      FROM transactions
      WHERE type = 'expense' AND date LIKE ?
@@ -219,6 +245,6 @@ export async function getSpentByCategory(month: number, year: number): Promise<R
   for (const row of rows) {
     result[row.category] = row.total;
   }
-  
+
   return result;
 }
