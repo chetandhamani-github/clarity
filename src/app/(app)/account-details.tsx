@@ -133,27 +133,37 @@ export default function AccountDetailsScreen() {
         showBack
         title="Account Details"
         rightNode={
-          <View style={{ position: 'relative' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <TouchableOpacity
               style={styles.iconButton}
-              onPress={() => setShowMenu(!showMenu)}
+              onPress={handleEdit}
               disabled={!account}
             >
-              <MaterialIcons name="more-vert" size={24} color={colors.onSurfaceVariant} />
+              <MaterialIcons name="edit" size={22} color={colors.onSurface} />
             </TouchableOpacity>
 
-            {showMenu && (
-              <View style={styles.menuPopup}>
-                <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
-                  <MaterialIcons name="edit" size={20} color={colors.onSurface} />
-                  <Text style={styles.menuItemText}>Edit Account</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
-                  <MaterialIcons name="delete" size={20} color={colors.error} />
-                  <Text style={[styles.menuItemText, { color: colors.error }]}>Delete Account</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+            <View style={{ position: 'relative' }}>
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={() => setShowMenu(!showMenu)}
+                disabled={!account}
+              >
+                <MaterialIcons name="more-vert" size={24} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+
+              {showMenu && (
+                <View style={styles.menuPopup}>
+                  <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
+                    <MaterialIcons name="edit" size={20} color={colors.onSurface} />
+                    <Text style={styles.menuItemText}>Edit Account</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
+                    <MaterialIcons name="delete" size={20} color={colors.error} />
+                    <Text style={[styles.menuItemText, { color: colors.error }]}>Delete Account</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
           </View>
         }
       />
@@ -205,6 +215,25 @@ export default function AccountDetailsScreen() {
                   </Text>
                 </View>
               </View>
+
+              {['credit', 'loan', 'borrowed'].includes(account.type) && account.balance < 0 && (
+                <TouchableOpacity
+                  style={styles.payBillBtn}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/(app)/add-transaction',
+                      params: {
+                        type: 'transfer',
+                        toAccountId: account.id,
+                        amount: Math.abs(account.balance).toString(),
+                      },
+                    })
+                  }
+                >
+                  <MaterialIcons name="payment" size={20} color={colors.onPrimary} />
+                  <Text style={styles.payBillBtnText}>Pay Bill / Settle Debt</Text>
+                </TouchableOpacity>
+              )}
 
               {/* Balance Trend LineChart */}
               <View
@@ -552,6 +581,21 @@ const getStyles = (colors: ThemeColors) => {
       alignItems: 'center',
       borderTopWidth: 1,
       borderTopColor: colors.surfaceContainer,
+    },
+    payBillBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      paddingVertical: 14,
+      marginTop: 16,
+    },
+    payBillBtnText: {
+      ...typography.labelMd,
+      color: colors.onPrimary,
+      fontWeight: '600',
     },
   });
   return styles;

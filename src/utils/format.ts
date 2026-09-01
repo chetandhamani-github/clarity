@@ -33,6 +33,24 @@ export function formatCurrencyWhole(amount: number): string {
   }).format(amount);
 }
 
+export function formatCurrencyPrivacy(
+  amount: number,
+  compact: boolean = false,
+  hideOverride?: boolean
+): string {
+  const hideBalances =
+    hideOverride !== undefined ? hideOverride : useAppStore.getState().hideBalances;
+  if (hideBalances) return '••••••';
+  return formatCurrency(amount, compact);
+}
+
+export function formatCurrencyWholePrivacy(amount: number, hideOverride?: boolean): string {
+  const hideBalances =
+    hideOverride !== undefined ? hideOverride : useAppStore.getState().hideBalances;
+  if (hideBalances) return '••••••';
+  return formatCurrencyWhole(amount);
+}
+
 export function getCurrencySymbol(): string {
   const currency = useAppStore.getState().currency || 'INR';
   const locale = currency === 'INR' ? 'en-IN' : 'en-US';

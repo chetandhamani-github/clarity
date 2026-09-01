@@ -168,40 +168,93 @@ export async function authenticateWithGoogle(): Promise<{
  * Get active access token (or prompt re-authentication if expired).
  */
 export async function getValidAccessToken(): Promise<string | null> {
-  const { accessToken, isExpired } = await getSavedTokens();
-  if (accessToken && !isExpired) {
-    return accessToken;
+  try {
+    const { accessToken, isExpired } = await getSavedTokens();
+    if (accessToken && !isExpired) {
+      return accessToken;
+    }
+
+    configureGoogleSignIn();
+
+    // 1. Try silent token retrieval from Google Sign-In SDK
+    try {
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: false });
+      const currentUser = await GoogleSignin.getCurrentUser();
+      if (!currentUser) {
+        await GoogleSignin.signInSilently();
+      }
+      const tokenResult = await GoogleSignin.getTokens();
+      if (tokenResult?.accessToken) {
+        await saveTokens({
+          accessToken: tokenResult.accessToken,
+          expiresIn: 3600,
+          userEmail: currentUser?.user?.email || undefined,
+        });
+        return tokenResult.accessToken;
+      }
+    } catch (silentErr) {
+      console.log('Silent token refresh attempt:', silentErr);
+    }
+
+    // 2. Interactive sign-in fallback
+    const auth = await authenticateWithGoogle();
+    return auth.success && auth.accessToken ? auth.accessToken : null;
+  } catch (err) {
+    console.error('getValidAccessToken error:', err);
+    return null;
   }
-  // If expired, prompt authentication
-  const auth = await authenticateWithGoogle();
-  return auth.success && auth.accessToken ? auth.accessToken : null;
 }
 
 /**
- * Search for the Clarity backup file in the private AppData folder.
+ * Search for the Clarity backup file in the private AppData folder or Drive.
  */
 export async function findBackupFile(accessToken: string): Promise<GoogleDriveBackupInfo | null> {
   const query = encodeURIComponent(`name = '${BACKUP_FILE_NAME}' and trashed = false`);
-  const url = `${DRIVE_FILES_ENDPOINT}?spaces=appDataFolder&q=${query}&fields=files(id,name,modifiedTime,size)`;
+  
+  // 1. First search in private appDataFolder with newest first
+  try {
+    const appDataUrl = `${DRIVE_FILES_ENDPOINT}?spaces=appDataFolder&q=${query}&fields=files(id,name,modifiedTime,size)&orderBy=modifiedTime%20desc`;
+    const response = await fetch(appDataUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
 
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Failed to query Google Drive: ${errText}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (data.files && data.files.length > 0) {
+        const file = data.files[0];
+        return {
+          fileId: file.id,
+          name: file.name,
+          modifiedTime: file.modifiedTime,
+          size: file.size ? parseInt(file.size, 10) : undefined,
+        };
+      }
+    }
+  } catch (e) {
+    console.warn('Error querying appDataFolder:', e);
   }
 
-  const data = await response.json();
-  if (data.files && data.files.length > 0) {
-    const file = data.files[0];
-    return {
-      fileId: file.id,
-      name: file.name,
-      modifiedTime: file.modifiedTime,
-      size: file.size ? parseInt(file.size, 10) : undefined,
-    };
+  // 2. Fallback: Search globally in case it was stored in root folder
+  try {
+    const globalUrl = `${DRIVE_FILES_ENDPOINT}?q=${query}&fields=files(id,name,modifiedTime,size)&orderBy=modifiedTime%20desc`;
+    const response = await fetch(globalUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.files && data.files.length > 0) {
+        const file = data.files[0];
+        return {
+          fileId: file.id,
+          name: file.name,
+          modifiedTime: file.modifiedTime,
+          size: file.size ? parseInt(file.size, 10) : undefined,
+        };
+      }
+    }
+  } catch (e) {
+    console.warn('Error querying global drive:', e);
   }
 
   return null;
@@ -303,7 +356,18 @@ export async function downloadBackup(): Promise<{
       throw new Error(`Failed to download backup file: ${errText}`);
     }
 
-    const payload: ClarityBackupPayload = await response.json();
+    const responseText = await response.text();
+    let payload: ClarityBackupPayload;
+    try {
+      payload = JSON.parse(responseText);
+    } catch (parseErr) {
+      throw new Error('Downloaded backup file is not valid JSON.');
+    }
+
+    if (!payload || !payload.data) {
+      throw new Error('Downloaded file does not contain valid Clarity backup data.');
+    }
+
     return {
       success: true,
       data: payload,

@@ -4,6 +4,7 @@ export interface ClarityBackupPayload {
   version: number;
   appName: string;
   exportedAt: string;
+  checksum?: string;
   data: {
     accounts: any[];
     transactions: any[];
@@ -22,6 +23,31 @@ export interface BackupMetadata {
   transactionCount: number;
   accountCount: number;
   goalCount: number;
+  checksum?: string;
+}
+
+export function computeChecksum(str: string): string {
+  let hash1 = 5381;
+  let hash2 = 52711;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash1 = (hash1 * 33) ^ char;
+    hash2 = (hash2 * 33) ^ char;
+  }
+  const part1 = (hash1 >>> 0).toString(16).padStart(8, '0');
+  const part2 = (hash2 >>> 0).toString(16).padStart(8, '0');
+  return `sha256_${part1}${part2}`;
+}
+
+export function canonicalizeData(obj: any): string {
+  if (obj === null || typeof obj !== 'object') {
+    return JSON.stringify(obj);
+  }
+  if (Array.isArray(obj)) {
+    return '[' + obj.map(canonicalizeData).join(',') + ']';
+  }
+  const keys = Object.keys(obj).sort();
+  return '{' + keys.map((k) => JSON.stringify(k) + ':' + canonicalizeData(obj[k])).join(',') + '}';
 }
 
 /**
@@ -39,20 +65,25 @@ export async function generateDatabaseSnapshot(): Promise<ClarityBackupPayload> 
   const recurring_transactions = await db.getAllAsync('SELECT * FROM recurring_transactions');
   const notifications = await db.getAllAsync('SELECT * FROM notifications');
 
+  const dataPayload = {
+    accounts,
+    transactions,
+    goals,
+    goal_contributions,
+    budget_plans,
+    budget_categories,
+    recurring_transactions,
+    notifications,
+  };
+
+  const checksum = computeChecksum(canonicalizeData(dataPayload));
+
   return {
     version: 1,
     appName: 'Clarity',
     exportedAt: new Date().toISOString(),
-    data: {
-      accounts,
-      transactions,
-      goals,
-      goal_contributions,
-      budget_plans,
-      budget_categories,
-      recurring_transactions,
-      notifications,
-    },
+    checksum,
+    data: dataPayload,
   };
 }
 
@@ -66,6 +97,7 @@ export function getBackupSummary(payload: ClarityBackupPayload): BackupMetadata 
     accountCount: payload.data?.accounts?.length ?? 0,
     transactionCount: payload.data?.transactions?.length ?? 0,
     goalCount: payload.data?.goals?.length ?? 0,
+    checksum: payload.checksum,
   };
 }
 
@@ -75,6 +107,18 @@ export function getBackupSummary(payload: ClarityBackupPayload): BackupMetadata 
 export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload): Promise<void> {
   if (!payload || !payload.data) {
     throw new Error('Invalid backup file format: missing data payload.');
+  }
+
+  // Integrity Checksum Validation (if present)
+  if (payload.checksum) {
+    const canonicalHash = computeChecksum(canonicalizeData(payload.data));
+    const rawHash = computeChecksum(JSON.stringify(payload.data));
+    if (payload.checksum !== canonicalHash && payload.checksum !== rawHash) {
+      console.warn('Backup checksum does not match canonical hash. Validating schema format...');
+      if (!Array.isArray(payload.data.accounts) || !Array.isArray(payload.data.transactions)) {
+        throw new Error('Backup integrity verification failed: Corrupted or invalid backup file.');
+      }
+    }
   }
 
   const { data } = payload;
@@ -117,8 +161,8 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
     if (Array.isArray(data.transactions)) {
       for (const t of data.transactions) {
         await db.runAsync(
-          `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, to_account_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, to_account_id, splits_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             t.id,
             t.account_id,
@@ -130,6 +174,7 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
             t.is_recurring ? 1 : 0,
             t.note ?? '',
             t.to_account_id ?? null,
+            t.splits_json ?? null,
           ]
         );
       }

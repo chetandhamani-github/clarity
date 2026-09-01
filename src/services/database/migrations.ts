@@ -5,7 +5,7 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
     CREATE TABLE IF NOT EXISTS accounts (
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
-      type TEXT NOT NULL CHECK(type IN ('savings', 'current', 'credit', 'investment', 'wallet', 'checking', 'loan', 'borrowed', 'other')),
+      type TEXT NOT NULL CHECK(type IN ('savings', 'current', 'credit', 'investment', 'wallet', 'checking', 'loan', 'borrowed', 'lent', 'other')),
       balance REAL NOT NULL DEFAULT 0,
       institution TEXT NOT NULL DEFAULT '',
       last_four TEXT NOT NULL DEFAULT '',
@@ -22,6 +22,7 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
       date TEXT NOT NULL,
       is_recurring INTEGER NOT NULL DEFAULT 0,
       note TEXT NOT NULL DEFAULT '',
+      splits_json TEXT,
       FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
     );
 
@@ -92,6 +93,12 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
 
   try {
     await db.execAsync('ALTER TABLE transactions ADD COLUMN to_account_id TEXT;');
+  } catch (e) {
+    // Column might already exist, ignore error
+  }
+
+  try {
+    await db.execAsync('ALTER TABLE transactions ADD COLUMN splits_json TEXT;');
   } catch (e) {
     // Column might already exist, ignore error
   }

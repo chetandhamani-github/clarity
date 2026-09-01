@@ -15,3 +15,4 @@ export * from './Header';
 export * from './AppLockModal';
 export * from './Skeleton';
 export * from './SkeletonScreens';
+export * from './DatePickerModal';

@@ -188,13 +188,12 @@ export function useGoogleDrive() {
       await restoreDatabaseFromSnapshot(downloadRes.data);
       const summary = getBackupSummary(downloadRes.data);
 
-      // Invalidate all query caches so UI updates instantly
-      queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
-      queryClient.invalidateQueries({ queryKey: ['goals'] });
-      queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      if (downloadRes.metadata?.modifiedTime) {
+        setLastCloudBackupTime(downloadRes.metadata.modifiedTime);
+      }
+
+      // Invalidate and refetch all query caches so UI updates instantly
+      await queryClient.invalidateQueries();
 
       showToast(
         `Data restored! (${summary.accountCount} accounts, ${summary.transactionCount} transactions)`,
@@ -209,7 +208,7 @@ export function useGoogleDrive() {
     } finally {
       setIsRestoring(false);
     }
-  }, [queryClient, showToast]);
+  }, [queryClient, setLastCloudBackupTime, showToast]);
 
   return {
     isConnected,

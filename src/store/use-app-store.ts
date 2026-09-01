@@ -27,6 +27,7 @@ interface AppState {
   lastCloudBackupTime: string | null;
   autoBackupEnabled: boolean;
   hasSeenDrivePrompt: boolean;
+  hideBalances: boolean;
   setHasHydrated: (value: boolean) => void;
   setOnboarded: (value: boolean) => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -37,6 +38,8 @@ interface AppState {
   setLastCloudBackupTime: (time: string | null) => void;
   setAutoBackupEnabled: (enabled: boolean) => void;
   setHasSeenDrivePrompt: (seen: boolean) => void;
+  setHideBalances: (value: boolean) => void;
+  toggleHideBalances: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -53,6 +56,7 @@ export const useAppStore = create<AppState>()(
       lastCloudBackupTime: null,
       autoBackupEnabled: true,
       hasSeenDrivePrompt: false,
+      hideBalances: false,
       setHasHydrated: (value) => set({ _hasHydrated: value }),
       setOnboarded: (value) => set({ hasOnboarded: value }),
       setTheme: (theme) => set({ theme }),
@@ -68,6 +72,8 @@ export const useAppStore = create<AppState>()(
       setLastCloudBackupTime: (time) => set({ lastCloudBackupTime: time }),
       setAutoBackupEnabled: (enabled) => set({ autoBackupEnabled: enabled }),
       setHasSeenDrivePrompt: (seen) => set({ hasSeenDrivePrompt: seen }),
+      setHideBalances: (value) => set({ hideBalances: value }),
+      toggleHideBalances: () => set((state) => ({ hideBalances: !state.hideBalances })),
     }),
     {
       name: 'app-storage',

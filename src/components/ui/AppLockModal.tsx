@@ -59,7 +59,10 @@ export function AppLockModal({ visible, onUnlock }: AppLockModalProps) {
 
   useEffect(() => {
     if (visible) {
-      handleAuthenticate();
+      const timer = setTimeout(() => {
+        handleAuthenticate();
+      }, 150);
+      return () => clearTimeout(timer);
     }
   }, [visible]);
 

@@ -63,6 +63,7 @@ const ACCOUNT_TYPE_ICON_MAP: Record<string, IconName> = {
   credit: 'credit-card',
   loan: 'handshake',
   borrowed: 'handshake',
+  lent: 'call-made',
   debt: 'handshake',
   investment: 'show-chart',
   wallet: 'account-balance-wallet',

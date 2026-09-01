@@ -42,7 +42,7 @@ export default function RootLayout() {
     if (hasHydrated && biometricEnabled && timeoutSetting !== 'never') {
       setIsAppLocked(true);
     }
-  }, [hasHydrated]);
+  }, [hasHydrated, biometricEnabled, timeoutSetting]);
 
   // First-time launch Google Drive backup prompt
   useEffect(() => {

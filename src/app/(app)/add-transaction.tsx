@@ -10,9 +10,8 @@ import {
   Platform,
   Modal,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { Text, Header } from '@/components/ui';
+import { Text, Header, DatePickerModal, useToast, useAlert } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -26,7 +25,6 @@ import {
 } from '@/hooks/use-transactions';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useCategories } from '@/hooks/use-budget';
-import { useToast, useAlert } from '@/components/ui';
 import type { TransactionType, RecurringFrequency } from '@/types';
 import { getAccountTypeIcon, getCategoryIcon } from '@/utils/icons';
 import { getCurrencySymbol } from '@/utils/format';
@@ -55,7 +53,14 @@ export default function AddTransactionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{
+    id?: string;
+    type?: TransactionType;
+    toAccountId?: string;
+    accountId?: string;
+    amount?: string;
+  }>();
+  const id = params.id;
   const isEditing = !!id;
   const { transaction, isLoading: isTxLoading } = useTransaction(id);
   const { showToast } = useToast();
@@ -79,16 +84,24 @@ export default function AddTransactionScreen() {
 
   const isPending = isCreating || isUpdating || isDeleting || isCreatingRecurring;
 
-  const [type, setType] = useState<TransactionType>('expense');
-  const [amountStr, setAmountStr] = useState('');
+  const [type, setType] = useState<TransactionType>(params.type || 'expense');
+  const [amountStr, setAmountStr] = useState(params.amount || '');
   const [merchant, setMerchant] = useState('');
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [accountId, setAccountId] = useState<string | null>(null);
-  const [toAccountId, setToAccountId] = useState<string | null>(null);
+  const [accountId, setAccountId] = useState<string | null>(params.accountId || null);
+  const [toAccountId, setToAccountId] = useState<string | null>(params.toAccountId || null);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringFreq, setRecurringFreq] = useState<RecurringFrequency>('monthly');
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Split Category states
+  const [isSplitMode, setIsSplitMode] = useState(false);
+  const [splitItems, setSplitItems] = useState<{ category: string; amount: string }[]>([
+    { category: CATEGORIES[0], amount: '' },
+    { category: CATEGORIES[1], amount: '' },
+  ]);
+  const [activeSplitCategoryIndex, setActiveSplitCategoryIndex] = useState<number | null>(null);
 
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
@@ -108,6 +121,15 @@ export default function AddTransactionScreen() {
         setToAccountId(transaction.toAccountId || null);
       }
       setIsRecurring(transaction.isRecurring);
+      if (transaction.splits && transaction.splits.length > 0) {
+        setIsSplitMode(true);
+        setSplitItems(
+          transaction.splits.map((s) => ({
+            category: s.category,
+            amount: s.amount.toString(),
+          }))
+        );
+      }
       setInitialized(true);
     }
   }, [isEditing, transaction, initialized]);
@@ -115,9 +137,9 @@ export default function AddTransactionScreen() {
   // Set default account once accounts load
   React.useEffect(() => {
     if (accounts.length > 0 && !accountId && !isEditing) {
-      setAccountId(accounts[0].id);
+      setAccountId(params.accountId || accounts[0].id);
     }
-  }, [accounts, accountId, isEditing]);
+  }, [accounts, accountId, isEditing, params.accountId]);
 
   const handleSave = () => {
     if (!accountId) {
@@ -142,6 +164,27 @@ export default function AddTransactionScreen() {
     if (!date.trim() || date.length !== 10) {
       showToast('Please enter date in YYYY-MM-DD format', 'error');
       return;
+    }
+
+    let splitsToSave: { category: string; amount: number }[] | undefined = undefined;
+    if (type === 'expense' && isSplitMode) {
+      const validSplits = splitItems.filter((s) => parseFloat(s.amount) > 0);
+      if (validSplits.length < 2) {
+        showToast('Please add at least 2 categories with amounts for split', 'error');
+        return;
+      }
+      const splitSum = validSplits.reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
+      if (Math.abs(splitSum - amount) > 0.01) {
+        showToast(
+          `Sum of split amounts (${splitSum}) must equal total amount (${amount})`,
+          'error'
+        );
+        return;
+      }
+      splitsToSave = validSplits.map((s) => ({
+        category: s.category,
+        amount: parseFloat(s.amount),
+      }));
     }
 
     if (isRecurring && !isEditing) {
@@ -173,7 +216,8 @@ export default function AddTransactionScreen() {
       category: type === 'transfer' ? 'Transfer' : category,
       date,
       isRecurring,
-      note: '', // Could add note field later
+      splits: splitsToSave,
+      note: '',
     };
 
     if (isEditing && id) {
@@ -257,6 +301,28 @@ export default function AddTransactionScreen() {
                 onChangeText={setAmountStr}
               />
             </View>
+
+            {/* Quick Amount Chips */}
+            <View style={styles.quickChipsRow}>
+              {[100, 500, 1000, 2000].map((delta) => (
+                <TouchableOpacity
+                  key={delta}
+                  style={styles.quickChip}
+                  onPress={() => {
+                    const curr = parseFloat(amountStr) || 0;
+                    setAmountStr((curr + delta).toString());
+                  }}
+                >
+                  <Text style={styles.quickChipText}>+{delta}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                style={[styles.quickChip, { borderColor: colors.error + '44' }]}
+                onPress={() => setAmountStr('')}
+              >
+                <Text style={[styles.quickChipText, { color: colors.error }]}>Clear</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Form Fields */}
@@ -266,47 +332,53 @@ export default function AddTransactionScreen() {
                 <Text style={styles.inputLabel}>To Account</Text>
 
                 {isLoadingAccounts ? (
-                  <View style={styles.accountSelector}>
+                  <View style={[styles.textInput, { justifyContent: 'center' }]}>
                     <ActivityIndicator size="small" color={colors.primary} />
                   </View>
                 ) : accounts.length === 0 ? (
-                  <View style={styles.accountSelector}>
+                  <View style={[styles.textInput, { justifyContent: 'center' }]}>
                     <Text style={{ color: colors.error }}>No accounts available.</Text>
                   </View>
                 ) : (
                   <TouchableOpacity
-                    style={styles.accountSelector}
+                    style={styles.textInputWrapper}
                     onPress={() => setShowToAccountMenu(true)}
                     activeOpacity={0.7}
                   >
-                    {toAccountId && accounts.find((a) => a.id === toAccountId) ? (
-                      <View style={styles.accountSelectorLeft}>
-                        <View style={styles.accountIconBox}>
-                          <MaterialIcons
-                            name={getAccountTypeIcon(
-                              accounts.find((a) => a.id === toAccountId)!.type
-                            )}
-                            size={16}
-                            color={colors.onPrimaryContainer}
-                          />
-                        </View>
-                        <View>
-                          <Text style={styles.accountSelectorName}>
-                            {accounts.find((a) => a.id === toAccountId)!.name}
-                          </Text>
-                          {accounts.find((a) => a.id === toAccountId)!.lastFour && (
-                            <Text style={styles.accountSelectorNumber}>
-                              ...{accounts.find((a) => a.id === toAccountId)!.lastFour}
-                            </Text>
-                          )}
-                        </View>
-                      </View>
-                    ) : (
-                      <Text style={{ color: colors.onSurfaceVariant }}>
-                        Select destination account
+                    <MaterialIcons
+                      name={
+                        toAccountId && accounts.find((a) => a.id === toAccountId)
+                          ? getAccountTypeIcon(accounts.find((a) => a.id === toAccountId)!.type)
+                          : 'account-balance'
+                      }
+                      size={24}
+                      color={colors.primary}
+                      style={styles.inputIcon}
+                    />
+                    <View style={[styles.textInput, { justifyContent: 'center' }]}>
+                      <Text
+                        style={{
+                          color:
+                            toAccountId && accounts.find((a) => a.id === toAccountId)
+                              ? colors.onSurface
+                              : colors.outline,
+                        }}
+                      >
+                        {toAccountId && accounts.find((a) => a.id === toAccountId)
+                          ? `${accounts.find((a) => a.id === toAccountId)!.name}${
+                              accounts.find((a) => a.id === toAccountId)!.lastFour
+                                ? ` (...${accounts.find((a) => a.id === toAccountId)!.lastFour})`
+                                : ''
+                            }`
+                          : 'Select destination account'}
                       </Text>
-                    )}
-                    <MaterialIcons name="expand-more" size={24} color={colors.onSurfaceVariant} />
+                    </View>
+                    <MaterialIcons
+                      name="expand-more"
+                      size={24}
+                      color={colors.onSurfaceVariant}
+                      style={styles.inputRightIcon}
+                    />
                   </TouchableOpacity>
                 )}
               </View>
@@ -314,7 +386,10 @@ export default function AddTransactionScreen() {
               <>
                 {/* Merchant */}
                 <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Merchant / Description <Text style={{ color: colors.outline, fontWeight: '400' }}>(Optional)</Text></Text>
+                  <Text style={styles.inputLabel}>
+                    Merchant / Description{' '}
+                    <Text style={{ color: colors.outline, fontWeight: '400' }}>(Optional)</Text>
+                  </Text>
                   <View style={styles.textInputWrapper}>
                     <MaterialIcons
                       name="storefront"
@@ -332,31 +407,151 @@ export default function AddTransactionScreen() {
                   </View>
                 </View>
 
-                {/* Category */}
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Category</Text>
-                  <TouchableOpacity
-                    style={styles.textInputWrapper}
-                    onPress={() => setShowCategoryMenu(true)}
-                    activeOpacity={0.7}
-                  >
-                    <MaterialIcons
-                      name={getCategoryIcon(category)}
-                      size={24}
-                      color={colors.primary}
-                      style={styles.inputIcon}
-                    />
-                    <View style={[styles.textInput, { justifyContent: 'center' }]}>
-                      <Text style={{ color: colors.onSurface }}>{category}</Text>
+                {/* Category or Split Categories */}
+                {type === 'expense' && (
+                  <View style={styles.splitToggleContainer}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.inputLabel}>Split across categories</Text>
+                      <Text style={styles.splitToggleSubtitle}>
+                        Divide expense into multiple budget buckets
+                      </Text>
                     </View>
-                    <MaterialIcons
-                      name="expand-more"
-                      size={24}
-                      color={colors.onSurfaceVariant}
-                      style={styles.inputRightIcon}
+                    <Switch
+                      value={isSplitMode}
+                      onValueChange={setIsSplitMode}
+                      trackColor={{ false: colors.surfaceVariant, true: colors.primary }}
                     />
-                  </TouchableOpacity>
-                </View>
+                  </View>
+                )}
+
+                {!isSplitMode || type !== 'expense' ? (
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Category</Text>
+                    <TouchableOpacity
+                      style={styles.textInputWrapper}
+                      onPress={() => {
+                        setActiveSplitCategoryIndex(null);
+                        setShowCategoryMenu(true);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <MaterialIcons
+                        name={getCategoryIcon(category)}
+                        size={24}
+                        color={colors.primary}
+                        style={styles.inputIcon}
+                      />
+                      <View style={[styles.textInput, { justifyContent: 'center' }]}>
+                        <Text style={{ color: colors.onSurface }}>{category}</Text>
+                      </View>
+                      <MaterialIcons
+                        name="expand-more"
+                        size={24}
+                        color={colors.onSurfaceVariant}
+                        style={styles.inputRightIcon}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.splitsCard}>
+                    <View style={styles.splitHeaderRow}>
+                      <Text style={styles.splitHeaderTitle}>Category Splits</Text>
+                      <Text
+                        style={[
+                          styles.splitSumText,
+                          {
+                            color:
+                              Math.abs(
+                                splitItems.reduce(
+                                  (sum, s) => sum + (parseFloat(s.amount) || 0),
+                                  0
+                                ) - (parseFloat(amountStr) || 0)
+                              ) < 0.01 && (parseFloat(amountStr) || 0) > 0
+                                ? colors.primary
+                                : colors.error,
+                          },
+                        ]}
+                      >
+                        Allocated:{' '}
+                        {getCurrencySymbol() +
+                          splitItems
+                            .reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0)
+                            .toFixed(2)}{' '}
+                        / {getCurrencySymbol() + (parseFloat(amountStr) || 0).toFixed(2)}
+                      </Text>
+                    </View>
+
+                    {splitItems.map((item, idx) => (
+                      <View key={idx} style={styles.splitRow}>
+                        <TouchableOpacity
+                          style={styles.splitCategoryBtn}
+                          onPress={() => {
+                            setActiveSplitCategoryIndex(idx);
+                            setShowCategoryMenu(true);
+                          }}
+                        >
+                          <MaterialIcons
+                            name={getCategoryIcon(item.category)}
+                            size={18}
+                            color={colors.primary}
+                          />
+                          <Text style={styles.splitCategoryText} numberOfLines={1}>
+                            {item.category}
+                          </Text>
+                          <MaterialIcons
+                            name="arrow-drop-down"
+                            size={18}
+                            color={colors.onSurfaceVariant}
+                          />
+                        </TouchableOpacity>
+
+                        <View style={styles.splitAmountInputWrapper}>
+                          <Text style={styles.splitCurrency}>{getCurrencySymbol()}</Text>
+                          <TextInput
+                            style={styles.splitAmountInput}
+                            placeholder="0.00"
+                            placeholderTextColor={colors.outline}
+                            keyboardType="decimal-pad"
+                            value={item.amount}
+                            onChangeText={(val) => {
+                              setSplitItems((prev) => {
+                                const updated = [...prev];
+                                updated[idx] = { ...updated[idx], amount: val };
+                                return updated;
+                              });
+                            }}
+                          />
+                        </View>
+
+                        {splitItems.length > 2 && (
+                          <TouchableOpacity
+                            style={styles.splitDeleteBtn}
+                            onPress={() => {
+                              setSplitItems((prev) => prev.filter((_, i) => i !== idx));
+                            }}
+                          >
+                            <MaterialIcons name="close" size={18} color={colors.error} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    ))}
+
+                    <TouchableOpacity
+                      style={styles.addSplitBtn}
+                      onPress={() => {
+                        const unusedCat =
+                          allCategories.find((c) => !splitItems.some((s) => s.category === c)) ||
+                          allCategories[0];
+                        setSplitItems((prev) => [...prev, { category: unusedCat, amount: '' }]);
+                      }}
+                    >
+                      <MaterialIcons name="add" size={18} color={colors.primary} />
+                      <Text style={[styles.addSplitBtnText, { color: colors.primary }]}>
+                        Add Category Split
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </>
             )}
 
@@ -365,71 +560,80 @@ export default function AddTransactionScreen() {
               <TouchableOpacity
                 style={styles.textInputWrapper}
                 onPress={() => setShowDatePicker(true)}
+                activeOpacity={0.7}
               >
-                <View style={[styles.textInput, { paddingLeft: 16, justifyContent: 'center' }]}>
+                <MaterialIcons
+                  name="event"
+                  size={24}
+                  color={colors.primary}
+                  style={styles.inputIcon}
+                />
+                <View style={[styles.textInput, { justifyContent: 'center' }]}>
                   <Text style={{ color: date ? colors.onSurface : colors.outline }}>
-                    {date || 'YYYY-MM-DD'}
+                    {date || 'Select Date'}
                   </Text>
                 </View>
+                <MaterialIcons
+                  name="expand-more"
+                  size={24}
+                  color={colors.onSurfaceVariant}
+                  style={styles.inputRightIcon}
+                />
               </TouchableOpacity>
             </View>
 
-            {showDatePicker && (
-              <DateTimePicker
-                value={new Date(date || new Date())}
-                mode="date"
-                display="default"
-                onChange={(event, selectedDate) => {
-                  setShowDatePicker(false);
-                  if (event.type === 'set' && selectedDate) {
-                    setDate(selectedDate.toISOString().split('T')[0]);
-                  }
-                }}
-              />
-            )}
+            <DatePickerModal
+              visible={showDatePicker}
+              value={date}
+              onChange={(newDate) => setDate(newDate)}
+              onClose={() => setShowDatePicker(false)}
+            />
 
             {/* Account Selector */}
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Account</Text>
 
               {isLoadingAccounts ? (
-                <View style={styles.accountSelector}>
+                <View style={[styles.textInput, { justifyContent: 'center' }]}>
                   <ActivityIndicator size="small" color={colors.primary} />
                 </View>
               ) : accounts.length === 0 ? (
-                <View style={styles.accountSelector}>
+                <View style={[styles.textInput, { justifyContent: 'center' }]}>
                   <Text style={{ color: colors.error }}>
                     No accounts available. Please add one first.
                   </Text>
                 </View>
               ) : (
                 <TouchableOpacity
-                  style={styles.accountSelector}
+                  style={styles.textInputWrapper}
                   onPress={() => setShowAccountMenu(true)}
                   activeOpacity={0.7}
                 >
-                  {selectedAccount ? (
-                    <View style={styles.accountSelectorLeft}>
-                      <View style={styles.accountIconBox}>
-                        <MaterialIcons
-                          name={getAccountTypeIcon(selectedAccount.type)}
-                          size={16}
-                          color={colors.onPrimaryContainer}
-                        />
-                      </View>
-                      <View>
-                        <Text style={styles.accountSelectorName}>{selectedAccount.name}</Text>
-                        {selectedAccount.lastFour && (
-                          <Text style={styles.accountSelectorNumber}>
-                            ...{selectedAccount.lastFour}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  ) : (
-                    <Text style={{ color: colors.onSurfaceVariant }}>Select an account</Text>
-                  )}
-                  <MaterialIcons name="expand-more" size={24} color={colors.onSurfaceVariant} />
+                  <MaterialIcons
+                    name={
+                      selectedAccount
+                        ? getAccountTypeIcon(selectedAccount.type)
+                        : 'account-balance'
+                    }
+                    size={24}
+                    color={colors.primary}
+                    style={styles.inputIcon}
+                  />
+                  <View style={[styles.textInput, { justifyContent: 'center' }]}>
+                    <Text style={{ color: selectedAccount ? colors.onSurface : colors.outline }}>
+                      {selectedAccount
+                        ? `${selectedAccount.name}${
+                            selectedAccount.lastFour ? ` (...${selectedAccount.lastFour})` : ''
+                          }`
+                        : 'Select an account'}
+                    </Text>
+                  </View>
+                  <MaterialIcons
+                    name="expand-more"
+                    size={24}
+                    color={colors.onSurfaceVariant}
+                    style={styles.inputRightIcon}
+                  />
                 </TouchableOpacity>
               )}
             </View>
@@ -540,13 +744,28 @@ export default function AddTransactionScreen() {
               keyboardShouldPersistTaps="handled"
             >
               {allCategories.map((cat) => {
-                const isSelected = cat === category;
+                const isSelected =
+                  activeSplitCategoryIndex !== null
+                    ? splitItems[activeSplitCategoryIndex]?.category === cat
+                    : cat === category;
                 return (
                   <TouchableOpacity
                     key={cat}
                     style={[styles.categoryOption, isSelected && styles.categoryOptionSelected]}
                     onPress={() => {
-                      setCategory(cat);
+                      if (activeSplitCategoryIndex !== null) {
+                        setSplitItems((prev) => {
+                          const updated = [...prev];
+                          updated[activeSplitCategoryIndex] = {
+                            ...updated[activeSplitCategoryIndex],
+                            category: cat,
+                          };
+                          return updated;
+                        });
+                        setActiveSplitCategoryIndex(null);
+                      } else {
+                        setCategory(cat);
+                      }
                       setShowCategoryMenu(false);
                     }}
                     activeOpacity={0.7}
@@ -577,6 +796,31 @@ export default function AddTransactionScreen() {
                   </TouchableOpacity>
                 );
               })}
+
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  paddingVertical: 14,
+                  marginTop: 8,
+                  marginBottom: 16,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.primary + '50',
+                  backgroundColor: colors.primaryContainer + '25',
+                }}
+                onPress={() => {
+                  setShowCategoryMenu(false);
+                  router.push('/manage-categories');
+                }}
+              >
+                <MaterialIcons name="add-circle-outline" size={20} color={colors.primary} />
+                <Text style={{ color: colors.primary, fontWeight: '600', fontSize: 14 }}>
+                  Manage / Add Custom Categories
+                </Text>
+              </TouchableOpacity>
             </ScrollView>
           </View>
         </TouchableOpacity>
@@ -1079,6 +1323,128 @@ const getStyles = (colors: ThemeColors) => {
     categoryOptionText: {
       ...typography.bodyLg,
       color: colors.onSurface,
+    },
+    quickChipsRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginTop: 12,
+      justifyContent: 'center',
+      flexWrap: 'wrap',
+    },
+    quickChip: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 16,
+      backgroundColor: colors.surfaceContainer,
+      borderWidth: 1,
+      borderColor: colors.surfaceVariant,
+    },
+    quickChipText: {
+      ...typography.labelMd,
+      color: colors.onSurface,
+      fontWeight: '600',
+    },
+    splitToggleContainer: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 12,
+      paddingHorizontal: 4,
+      borderTopWidth: 1,
+      borderBottomWidth: 1,
+      borderColor: colors.surfaceVariant,
+    },
+    splitToggleSubtitle: {
+      ...typography.labelMd,
+      color: colors.onSurfaceVariant,
+      fontSize: 11,
+      marginTop: 2,
+    },
+    splitsCard: {
+      backgroundColor: colors.surfaceContainerLow,
+      borderRadius: 12,
+      padding: 12,
+      gap: 12,
+      borderWidth: 1,
+      borderColor: colors.surfaceVariant,
+    },
+    splitHeaderRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    splitHeaderTitle: {
+      ...typography.labelMd,
+      fontWeight: '600',
+      color: colors.onSurface,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    splitSumText: {
+      ...typography.labelMd,
+      fontWeight: '600',
+      fontSize: 11,
+    },
+    splitRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    splitCategoryBtn: {
+      flex: 1.2,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: colors.surfaceContainer,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      height: 42,
+    },
+    splitCategoryText: {
+      ...typography.bodyMd,
+      color: colors.onSurface,
+      flex: 1,
+      fontSize: 13,
+    },
+    splitAmountInputWrapper: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surfaceContainer,
+      borderRadius: 8,
+      paddingHorizontal: 8,
+      height: 42,
+    },
+    splitCurrency: {
+      ...typography.bodyMd,
+      color: colors.onSurfaceVariant,
+      marginRight: 4,
+    },
+    splitAmountInput: {
+      flex: 1,
+      ...typography.bodyMd,
+      color: colors.onSurface,
+      padding: 0,
+    },
+    splitDeleteBtn: {
+      padding: 6,
+      borderRadius: 16,
+      backgroundColor: colors.errorContainer + '33',
+    },
+    addSplitBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingVertical: 8,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.primary + '44',
+      borderStyle: 'dashed',
+    },
+    addSplitBtnText: {
+      ...typography.labelMd,
+      fontWeight: '600',
     },
   });
   return styles;

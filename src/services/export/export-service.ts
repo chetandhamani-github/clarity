@@ -253,3 +253,223 @@ export async function exportFinancialSummaryReport(
     return { success: false, message: error?.message || 'Failed to export report' };
   }
 }
+
+import * as Print from 'expo-print';
+
+export interface StatementExportOptions {
+  format: 'pdf' | 'csv';
+  dateFrom?: string;
+  dateTo?: string;
+  accountId?: string;
+  category?: string;
+  action?: 'share' | 'print';
+}
+
+export async function exportCustomStatement(options: StatementExportOptions): Promise<{
+  success: boolean;
+  uri?: string;
+  message?: string;
+}> {
+  try {
+    const transactions = await getTransactions({
+      dateFrom: options.dateFrom,
+      dateTo: options.dateTo,
+      accountId: options.accountId,
+      category: options.category,
+    });
+
+    const accounts = await getAllAccounts();
+    const selectedAccount = options.accountId
+      ? accounts.find((a) => a.id === options.accountId)
+      : null;
+
+    const sym = getCurrencySymbol();
+    const totalIncome = transactions
+      .filter((t) => t.type === 'income')
+      .reduce((sum, t) => sum + t.amount, 0);
+    const totalExpense = transactions
+      .filter((t) => t.type === 'expense')
+      .reduce((sum, t) => sum + t.amount, 0);
+    const netCashFlow = totalIncome - totalExpense;
+
+    const dateRangeLabel =
+      options.dateFrom && options.dateTo
+        ? `${options.dateFrom} to ${options.dateTo}`
+        : options.dateFrom
+          ? `From ${options.dateFrom}`
+          : options.dateTo
+            ? `Up to ${options.dateTo}`
+            : 'All Time';
+
+    if (options.format === 'csv') {
+      const headers = [
+        'ID',
+        'Date',
+        'Type',
+        'Account',
+        'Destination Account',
+        'Category',
+        'Merchant',
+        'Amount',
+        'Recurring',
+        'Note',
+      ];
+      const rows = transactions.map((t) => {
+        const escape = (val: string | number | undefined | null) => {
+          if (val === undefined || val === null) return '""';
+          const str = String(val).replace(/"/g, '""');
+          return `"${str}"`;
+        };
+
+        return [
+          escape(t.id),
+          escape(t.date),
+          escape(t.type),
+          escape(t.accountName),
+          escape(t.toAccountName || ''),
+          escape(t.category),
+          escape(t.merchant),
+          t.amount,
+          t.isRecurring ? 'Yes' : 'No',
+          escape(t.note || ''),
+        ].join(',');
+      });
+
+      const csvContent = [headers.join(','), ...rows].join('\n');
+      const filename = `clarity_statement_${new Date().toISOString().split('T')[0]}.csv`;
+      const fileUri = `${FileSystem.cacheDirectory}${filename}`;
+
+      await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Export Clarity Statement (CSV)',
+          UTI: 'public.comma-separated-values-text',
+        });
+      }
+
+      return { success: true, uri: fileUri };
+    } else {
+      // Formatted HTML/PDF Statement
+      const rowsHtml = transactions
+        .map((t) => {
+          const isIncome = t.type === 'income';
+          const sign = isIncome ? '+' : t.type === 'expense' ? '-' : '';
+          const color = isIncome ? '#10B981' : '#111827';
+          return `
+            <tr>
+              <td>${t.date}</td>
+              <td>${t.type === 'transfer' ? 'Transfer' : t.merchant}</td>
+              <td><span class="badge">${t.category}</span></td>
+              <td>${t.accountName}${t.toAccountName ? ` → ${t.toAccountName}` : ''}</td>
+              <td style="text-align: right; color: ${color}; font-weight: 600;">${sign}${sym}${t.amount.toFixed(2)}</td>
+            </tr>
+          `;
+        })
+        .join('');
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Clarity Financial Statement</title>
+          <style>
+            @page { margin: 20mm; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #111827; margin: 0; padding: 24px; line-height: 1.5; }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #E5E7EB; padding-bottom: 20px; margin-bottom: 25px; }
+            .brand { font-size: 26px; font-weight: 800; color: #4F46E5; letter-spacing: -0.5px; }
+            .title { font-size: 13px; text-transform: uppercase; color: #6B7280; letter-spacing: 0.8px; margin-top: 4px; font-weight: 600; }
+            .meta { text-align: right; font-size: 13px; color: #4B5563; line-height: 1.6; }
+            .summary-cards { display: flex; gap: 15px; margin-bottom: 25px; }
+            .card { flex: 1; background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 10px; padding: 15px; }
+            .card-label { font-size: 11px; text-transform: uppercase; color: #6B7280; font-weight: 700; letter-spacing: 0.5px; }
+            .card-value { font-size: 20px; font-weight: 700; margin-top: 5px; color: #111827; }
+            table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
+            th { text-align: left; background: #F3F4F6; padding: 10px 12px; color: #374151; font-weight: 600; border-bottom: 1px solid #E5E7EB; }
+            td { padding: 10px 12px; border-bottom: 1px solid #F3F4F6; }
+            .badge { background: #E0E7FF; color: #4338CA; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+            .footer { margin-top: 40px; font-size: 11px; color: #9CA3AF; text-align: center; border-top: 1px solid #E5E7EB; padding-top: 15px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <div class="brand">CLARITY</div>
+              <div class="title">Official Financial Statement</div>
+            </div>
+            <div class="meta">
+              <div><strong>Period:</strong> ${dateRangeLabel}</div>
+              <div><strong>Account:</strong> ${selectedAccount ? `${selectedAccount.name} (${selectedAccount.type})` : 'All Accounts'}</div>
+              <div><strong>Generated:</strong> ${new Date().toLocaleDateString()}</div>
+            </div>
+          </div>
+
+          <div class="summary-cards">
+            <div class="card">
+              <div class="card-label">Total Income</div>
+              <div class="card-value" style="color: #10B981;">+${sym}${totalIncome.toFixed(2)}</div>
+            </div>
+            <div class="card">
+              <div class="card-label">Total Expenses</div>
+              <div class="card-value" style="color: #EF4444;">-${sym}${totalExpense.toFixed(2)}</div>
+            </div>
+            <div class="card">
+              <div class="card-label">Net Cash Flow</div>
+              <div class="card-value" style="color: ${netCashFlow >= 0 ? '#10B981' : '#EF4444'};">
+                ${netCashFlow >= 0 ? '+' : ''}${sym}${netCashFlow.toFixed(2)}
+              </div>
+            </div>
+          </div>
+
+          <div style="font-weight: 700; font-size: 15px; margin-bottom: 5px; color: #374151;">Transaction History (${transactions.length})</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description / Merchant</th>
+                <th>Category</th>
+                <th>Account</th>
+                <th style="text-align: right;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml || '<tr><td colspan="5" style="text-align: center; color: #9CA3AF;">No transactions in this period</td></tr>'}
+            </tbody>
+          </table>
+
+          <div class="footer">
+            Generated securely by Clarity Personal Finance App on ${new Date().toLocaleString()}
+          </div>
+        </body>
+        </html>
+      `;
+
+      if (options.action === 'print') {
+        await Print.printAsync({ html: htmlContent });
+        return { success: true };
+      }
+
+      // Convert HTML into actual binary PDF file
+      const { uri: pdfUri } = await Print.printToFileAsync({
+        html: htmlContent,
+      });
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(pdfUri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Clarity Statement (PDF)',
+          UTI: 'com.adobe.pdf',
+        });
+      }
+
+      return { success: true, uri: pdfUri };
+    }
+  } catch (error: any) {
+    console.error('Failed to export statement:', error);
+    return { success: false, message: error?.message || 'Failed to export statement' };
+  }
+}

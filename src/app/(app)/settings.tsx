@@ -454,9 +454,21 @@ export default function SettingsScreen() {
             <View style={{ gap: 8 }}>
               <TouchableOpacity
                 style={styles.btnSecondary}
+                onPress={() => router.push('/export-statement')}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  <MaterialIcons name="description" size={18} color={colors.onSurface} />
+                  <Text style={styles.btnSecondaryText}>EXPORT STATEMENT (PDF / CSV)</Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.btnSecondary}
                 onPress={() => router.push('/export-success')}
               >
-                <Text style={styles.btnSecondaryText}>EXPORT DATA</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  <MaterialIcons name="backup" size={18} color={colors.onSurface} />
+                  <Text style={styles.btnSecondaryText}>FULL BACKUP & EXPORT</Text>
+                </View>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btnPrimary, { backgroundColor: colors.error }]}

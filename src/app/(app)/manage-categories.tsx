@@ -4,590 +4,618 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
-  Alert,
   TextInput,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
-import { Text, Header, FormSkeleton } from '@/components/ui';
-import { spacing, typography, useTheme, ThemeColors } from '@/theme';
+import { Text, Header, useToast, useAlert } from '@/components/ui';
+import { spacing, typography, radius, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import {
-  useBudgetPlan,
   useCategories,
   useCreateCategory,
   useUpdateCategory,
   useDeleteCategory,
 } from '@/hooks/use-budget';
-import { useToast, useAlert } from '@/components/ui';
-import { formatCurrency, getCurrencySymbol } from '@/utils/format';
+import { formatCurrency } from '@/utils/format';
 import type { BudgetCategory, BucketType } from '@/types';
+
+type MaterialIconName = keyof typeof MaterialIcons.glyphMap;
+
+const ICON_PALETTE: MaterialIconName[] = [
+  'shopping-cart',
+  'restaurant',
+  'directions-car',
+  'home',
+  'flash-on',
+  'local-gas-station',
+  'fitness-center',
+  'movie',
+  'local-mall',
+  'pets',
+  'flight',
+  'school',
+  'medical-services',
+  'sports-esports',
+  'subscriptions',
+  'delivery-dining',
+  'favorite',
+  'card-giftcard',
+  'work',
+  'laptop',
+  'savings',
+  'trending-up',
+  'build',
+  'payments',
+  'receipt',
+  'security',
+  'category',
+];
+
+const BUCKET_OPTIONS: { label: string; value: BucketType; color: string }[] = [
+  { label: 'Needs (50%)', value: 'needs', color: '#3B82F6' },
+  { label: 'Wants (30%)', value: 'wants', color: '#EC4899' },
+  { label: 'Savings (20%)', value: 'savings', color: '#10B981' },
+];
 
 export default function ManageCategoriesScreen() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
-  const router = useRouter();
   const insets = useSafeAreaInsets();
-
-  const { plan, isLoading: planLoading } = useBudgetPlan();
-  const { categories, isLoading: catLoading } = useCategories();
-  const { mutate: createCategory, isPending: isCreating } = useCreateCategory();
-  const { mutate: updateCategory, isPending: isUpdating } = useUpdateCategory();
-  const { mutate: deleteCategory, isPending: isDeleting } = useDeleteCategory();
+  const router = useRouter();
   const { showToast } = useToast();
   const { showAlert } = useAlert();
 
-  const isPending = isCreating || isUpdating || isDeleting;
-  const isLoading = planLoading || catLoading;
+  const { categories, isLoading } = useCategories();
+  const createCategoryMutation = useCreateCategory();
+  const updateCategoryMutation = useUpdateCategory();
+  const deleteCategoryMutation = useDeleteCategory();
 
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [editCatId, setEditCatId] = useState<string | null>(null);
-  const [newCatName, setNewCatName] = useState('');
-  const [newCatLimit, setNewCatLimit] = useState('');
-  const [newCatBucket, setNewCatBucket] = useState<BucketType>('needs');
+  const [activeFilter, setActiveFilter] = useState<'all' | BucketType>('all');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<BudgetCategory | null>(null);
 
-  const resetForm = () => {
-    setNewCatName('');
-    setNewCatLimit('');
-    setEditCatId(null);
-    setShowAddForm(false);
+  // Form states
+  const [name, setName] = useState('');
+  const [bucketType, setBucketType] = useState<BucketType>('needs');
+  const [limit, setLimit] = useState('');
+  const [selectedIcon, setSelectedIcon] = useState<MaterialIconName>('category');
+
+  const filteredCategories = categories.filter((cat) => {
+    if (activeFilter === 'all') return true;
+    return cat.bucketType === activeFilter;
+  });
+
+  const openCreateModal = () => {
+    setEditingCategory(null);
+    setName('');
+    setBucketType('needs');
+    setLimit('');
+    setSelectedIcon('category');
+    setModalVisible(true);
   };
 
-  const handleCategoryPress = (cat: BudgetCategory) => {
-    setEditCatId(cat.id);
-    setNewCatName(cat.name);
-    setNewCatLimit(cat.limit.toString());
-    setNewCatBucket(cat.bucketType);
-    setShowAddForm(true);
+  const openEditModal = (cat: BudgetCategory) => {
+    setEditingCategory(cat);
+    setName(cat.name);
+    setBucketType(cat.bucketType);
+    setLimit(cat.limit > 0 ? cat.limit.toString() : '');
+    setSelectedIcon((cat.icon as MaterialIconName) || 'category');
+    setModalVisible(true);
   };
 
-  const handleSaveCategory = () => {
-    if (!newCatName.trim()) {
+  const handleSave = () => {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
       showToast('Please enter a category name', 'error');
       return;
     }
-    const limit = parseFloat(newCatLimit);
-    if (isNaN(limit) || limit < 0) {
-      showToast('Please enter a valid budget limit', 'error');
-      return;
-    }
 
-    const catData = {
-      name: newCatName.trim(),
-      icon: 'category', // Default icon for now
-      limit,
-      bucketType: newCatBucket,
-      sortOrder: categories.length,
-    };
+    const numLimit = parseFloat(limit) || 0;
 
-    if (editCatId) {
-      updateCategory(editCatId, catData, {
-        onSuccess: () => {
-          showToast('Category updated successfully', 'success');
-          resetForm();
-        },
-      });
-    } else {
-      createCategory(catData, {
-        onSuccess: () => {
-          showToast('Category added successfully', 'success');
-          resetForm();
-        },
-      });
-    }
-  };
-
-  const handleDeleteCategory = () => {
-    if (editCatId) {
-      showAlert('Delete Category', 'Are you sure you want to delete this category?', [
-        { text: 'Cancel', style: 'cancel' },
+    if (editingCategory) {
+      updateCategoryMutation.mutate(
+        editingCategory.id,
         {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            deleteCategory(editCatId, {
-              onSuccess: () => {
-                showToast('Category deleted', 'success');
-                resetForm();
-              },
-            });
-          },
+          name: trimmedName,
+          bucketType,
+          limit: numLimit,
+          icon: selectedIcon,
         },
-      ]);
+        {
+          onSuccess: () => {
+            showToast(`Updated "${trimmedName}"`, 'success');
+            setModalVisible(false);
+          },
+        }
+      );
+    } else {
+      createCategoryMutation.mutate(
+        {
+          name: trimmedName,
+          bucketType,
+          limit: numLimit,
+          icon: selectedIcon,
+          sortOrder: categories.length,
+        },
+        {
+          onSuccess: () => {
+            showToast(`Created "${trimmedName}"`, 'success');
+            setModalVisible(false);
+          },
+        }
+      );
     }
   };
 
-  // Calculate bucket totals
-  const needsCategories = categories.filter((c) => c.bucketType === 'needs');
-  const wantsCategories = categories.filter((c) => c.bucketType === 'wants');
-  const savingsCategories = categories.filter((c) => c.bucketType === 'savings');
-
-  const needsTotalLimit = needsCategories.reduce((sum, cat) => sum + cat.limit, 0);
-  const wantsTotalLimit = wantsCategories.reduce((sum, cat) => sum + cat.limit, 0);
-  const savingsTotalLimit = savingsCategories.reduce((sum, cat) => sum + cat.limit, 0);
-
-  const needsMax = plan ? plan.monthlyIncome * (plan.needsPercent / 100) : 0;
-  const wantsMax = plan ? plan.monthlyIncome * (plan.wantsPercent / 100) : 0;
-  const savingsMax = plan ? plan.monthlyIncome * (plan.savingsPercent / 100) : 0;
+  const handleDelete = (cat: BudgetCategory) => {
+    showAlert('Delete Category', `Are you sure you want to delete "${cat.name}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          deleteCategoryMutation.mutate(cat.id, {
+            onSuccess: () => showToast(`Deleted "${cat.name}"`, 'info'),
+          });
+        },
+      },
+    ]);
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <Header showBack title="Category Management" />
+      <Header
+        showBack
+        title="Manage Categories"
+        rightNode={
+          <TouchableOpacity style={styles.addIconButton} onPress={openCreateModal}>
+            <MaterialIcons name="add" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        }
+      />
+
+      {/* Filter Tabs */}
+      <View style={styles.tabBar}>
+        {(['all', 'needs', 'wants', 'savings'] as const).map((tab) => {
+          const isActive = activeFilter === tab;
+          return (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tabItem, isActive && styles.tabItemActive]}
+              onPress={() => setActiveFilter(tab)}
+            >
+              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                {tab.toUpperCase()}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
-        {isLoading ? (
-          <FormSkeleton />
+        {filteredCategories.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <MaterialIcons name="category" size={48} color={colors.onSurfaceVariant} />
+            <Text style={styles.emptyTitle}>No categories found</Text>
+            <Text style={styles.emptySubtitle}>Tap + above to add a custom category.</Text>
+          </View>
         ) : (
-          <>
-            {/* Mobile Action Section */}
-            <View style={styles.mobileActionSection}>
-              <Text style={styles.subtitleText}>
-                Organize your {plan?.needsPercent}/{plan?.wantsPercent}/{plan?.savingsPercent}{' '}
-                budget hierarchy.
+          <View style={styles.categoryList}>
+            {filteredCategories.map((cat) => {
+              const bucketColor =
+                cat.bucketType === 'needs'
+                  ? '#3B82F6'
+                  : cat.bucketType === 'wants'
+                    ? '#EC4899'
+                    : '#10B981';
+
+              return (
+                <View key={cat.id} style={styles.categoryCard}>
+                  <View style={styles.cardLeft}>
+                    <View
+                      style={[
+                        styles.iconCircle,
+                        { backgroundColor: colors.surfaceContainerHighest },
+                      ]}
+                    >
+                      <MaterialIcons
+                        name={(cat.icon as MaterialIconName) || 'category'}
+                        size={22}
+                        color={colors.primary}
+                      />
+                    </View>
+                    <View style={styles.cardDetails}>
+                      <Text style={styles.categoryName}>{cat.name}</Text>
+                      <View style={styles.badgeRow}>
+                        <View
+                          style={[
+                            styles.bucketBadge,
+                            { backgroundColor: bucketColor + '20', borderColor: bucketColor + '40' },
+                          ]}
+                        >
+                          <Text style={[styles.bucketBadgeText, { color: bucketColor }]}>
+                            {cat.bucketType.toUpperCase()}
+                          </Text>
+                        </View>
+                        {cat.limit > 0 && (
+                          <Text style={styles.limitText}>
+                            Limit: {formatCurrency(cat.limit)}/mo
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardActions}>
+                    <TouchableOpacity
+                      style={styles.actionBtn}
+                      onPress={() => openEditModal(cat)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <MaterialIcons name="edit" size={18} color={colors.onSurfaceVariant} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionBtn}
+                      onPress={() => handleDelete(cat)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <MaterialIcons name="delete-outline" size={18} color={colors.error} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Create / Edit Modal */}
+      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdrop}
+        >
+          <TouchableOpacity
+            style={styles.backdropTouch}
+            activeOpacity={1}
+            onPress={() => setModalVisible(false)}
+          />
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {editingCategory ? 'Edit Category' : 'New Category'}
               </Text>
-              <TouchableOpacity
-                style={styles.newCategoryBtn}
-                onPress={() => {
-                  if (showAddForm) {
-                    resetForm();
-                  } else {
-                    setEditCatId(null);
-                    setNewCatName('');
-                    setNewCatLimit('');
-                    setShowAddForm(true);
-                  }
-                }}
-              >
-                <MaterialIcons
-                  name={showAddForm ? 'close' : 'add'}
-                  size={18}
-                  color={colors.onPrimary}
-                />
-                <Text style={styles.newCategoryText}>
-                  {showAddForm ? 'Cancel' : 'New Category'}
-                </Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <MaterialIcons name="close" size={24} color={colors.onSurfaceVariant} />
               </TouchableOpacity>
             </View>
 
-            {showAddForm && (
-              <View style={styles.addFormCard}>
-                <Text style={styles.addFormTitle}>
-                  {editCatId ? 'Edit Category' : 'Add New Category'}
-                </Text>
-
-                <View style={styles.bucketSelector}>
-                  {(['needs', 'wants', 'savings'] as BucketType[]).map((b) => (
-                    <TouchableOpacity
-                      key={b}
-                      style={[
-                        styles.bucketOption,
-                        newCatBucket === b && { backgroundColor: colors.primary },
-                      ]}
-                      onPress={() => setNewCatBucket(b)}
-                    >
-                      <Text
-                        style={[
-                          styles.bucketOptionText,
-                          newCatBucket === b && { color: colors.onPrimary },
-                        ]}
-                      >
-                        {b.toUpperCase()}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Category Name */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Category Name*</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Category Name (e.g. Groceries)"
-                  placeholderTextColor={colors.outline}
-                  value={newCatName}
-                  onChangeText={setNewCatName}
+                  placeholder="e.g. Pet Care, Gaming, Books"
+                  placeholderTextColor={colors.onSurfaceVariant}
+                  value={name}
+                  onChangeText={setName}
                 />
-
-                <View style={styles.currencyInputRow}>
-                  <Text style={styles.currencySymbol}>{getCurrencySymbol()}</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Monthly Limit"
-                    placeholderTextColor={colors.outline}
-                    keyboardType="decimal-pad"
-                    value={newCatLimit}
-                    onChangeText={setNewCatLimit}
-                  />
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.saveBtn, isPending && { opacity: 0.7 }]}
-                  onPress={handleSaveCategory}
-                  disabled={isPending}
-                >
-                  {isPending ? (
-                    <ActivityIndicator size="small" color={colors.onPrimary} />
-                  ) : (
-                    <Text style={styles.saveBtnText}>
-                      {editCatId ? 'Save Changes' : 'Save Category'}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-
-                {editCatId && (
-                  <TouchableOpacity
-                    style={styles.deleteBtn}
-                    onPress={handleDeleteCategory}
-                    disabled={isPending}
-                  >
-                    <Text style={styles.deleteBtnText}>Delete Category</Text>
-                  </TouchableOpacity>
-                )}
               </View>
-            )}
 
-            <View style={styles.categoriesGrid}>
-              {/* Needs Column */}
-              <View style={styles.columnCard}>
-                <View style={styles.columnHeader}>
-                  <View style={styles.columnHeaderLeft}>
-                    <View
-                      style={[styles.columnIconBox, { backgroundColor: colors.primary + '1A' }]}
-                    >
-                      <MaterialIcons name="home" size={20} color={colors.primary} />
-                    </View>
-                    <View>
-                      <Text style={styles.columnTitle}>Needs ({plan?.needsPercent}%)</Text>
-                      <Text style={styles.columnSubtitle}>Essentials & fixed costs</Text>
-                    </View>
-                  </View>
-                  <View style={styles.columnTotals}>
-                    <Text style={styles.totalValue}>{formatCurrency(needsTotalLimit)}</Text>
-                    <Text style={styles.totalMax}>/ {formatCurrency(needsMax)}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.categoryList}>
-                  {needsCategories.length === 0 ? (
-                    <Text style={styles.emptyText}>No categories yet.</Text>
-                  ) : (
-                    needsCategories.map((cat) => (
+              {/* Bucket Selection */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Budget Bucket*</Text>
+                <View style={styles.bucketRow}>
+                  {BUCKET_OPTIONS.map((opt) => {
+                    const isSelected = bucketType === opt.value;
+                    return (
                       <TouchableOpacity
-                        key={cat.id}
-                        style={styles.categoryItem}
-                        onPress={() => handleCategoryPress(cat)}
+                        key={opt.value}
+                        style={[
+                          styles.bucketChoice,
+                          isSelected && {
+                            borderColor: opt.color,
+                            backgroundColor: opt.color + '15',
+                          },
+                        ]}
+                        onPress={() => setBucketType(opt.value)}
                       >
-                        <View style={styles.itemIconBox}>
-                          <MaterialIcons
-                            name={cat.icon as any}
-                            size={18}
-                            color={colors.onSurfaceVariant}
-                          />
-                        </View>
-                        <View style={styles.itemTextContent}>
-                          <Text style={styles.itemName}>{cat.name}</Text>
-                          <Text style={styles.itemLimit}>{formatCurrency(cat.limit)} limit</Text>
-                        </View>
+                        <Text
+                          style={[
+                            styles.bucketChoiceText,
+                            isSelected && { color: opt.color, fontWeight: '700' },
+                          ]}
+                        >
+                          {opt.label}
+                        </Text>
                       </TouchableOpacity>
-                    ))
-                  )}
+                    );
+                  })}
                 </View>
               </View>
 
-              {/* Wants Column */}
-              <View style={styles.columnCard}>
-                <View style={styles.columnHeader}>
-                  <View style={styles.columnHeaderLeft}>
-                    <View
-                      style={[styles.columnIconBox, { backgroundColor: colors.tertiary + '1A' }]}
-                    >
-                      <MaterialIcons name="local-cafe" size={20} color={colors.tertiary} />
-                    </View>
-                    <View>
-                      <Text style={styles.columnTitle}>Wants ({plan?.wantsPercent}%)</Text>
-                      <Text style={styles.columnSubtitle}>Lifestyle & discretionary</Text>
-                    </View>
-                  </View>
-                  <View style={styles.columnTotals}>
-                    <Text style={styles.totalValue}>{formatCurrency(wantsTotalLimit)}</Text>
-                    <Text style={styles.totalMax}>/ {formatCurrency(wantsMax)}</Text>
-                  </View>
-                </View>
+              {/* Monthly Limit */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Monthly Budget Limit (Optional)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="₹ 0.00"
+                  placeholderTextColor={colors.onSurfaceVariant}
+                  keyboardType="numeric"
+                  value={limit}
+                  onChangeText={setLimit}
+                />
+              </View>
 
-                <View style={styles.categoryList}>
-                  {wantsCategories.length === 0 ? (
-                    <Text style={styles.emptyText}>No categories yet.</Text>
-                  ) : (
-                    wantsCategories.map((cat) => (
+              {/* Icon Palette */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Choose Icon</Text>
+                <View style={styles.iconGrid}>
+                  {ICON_PALETTE.map((iconName) => {
+                    const isSelected = selectedIcon === iconName;
+                    return (
                       <TouchableOpacity
-                        key={cat.id}
-                        style={styles.categoryItem}
-                        onPress={() => handleCategoryPress(cat)}
+                        key={iconName}
+                        style={[
+                          styles.iconTile,
+                          isSelected && {
+                            backgroundColor: colors.primaryContainer,
+                            borderColor: colors.primary,
+                          },
+                        ]}
+                        onPress={() => setSelectedIcon(iconName)}
                       >
-                        <View style={styles.itemIconBox}>
-                          <MaterialIcons
-                            name={cat.icon as any}
-                            size={18}
-                            color={colors.onSurfaceVariant}
-                          />
-                        </View>
-                        <View style={styles.itemTextContent}>
-                          <Text style={styles.itemName}>{cat.name}</Text>
-                          <Text style={styles.itemLimit}>{formatCurrency(cat.limit)} limit</Text>
-                        </View>
+                        <MaterialIcons
+                          name={iconName}
+                          size={22}
+                          color={isSelected ? colors.onPrimaryContainer : colors.onSurfaceVariant}
+                        />
                       </TouchableOpacity>
-                    ))
-                  )}
+                    );
+                  })}
                 </View>
               </View>
 
-              {/* Savings Column */}
-              <View style={styles.columnCard}>
-                <View style={styles.columnHeader}>
-                  <View style={styles.columnHeaderLeft}>
-                    <View
-                      style={[styles.columnIconBox, { backgroundColor: colors.secondary + '1A' }]}
-                    >
-                      <MaterialIcons name="savings" size={20} color={colors.secondary} />
-                    </View>
-                    <View>
-                      <Text style={styles.columnTitle}>Savings ({plan?.savingsPercent}%)</Text>
-                      <Text style={styles.columnSubtitle}>Future & debt payoff</Text>
-                    </View>
-                  </View>
-                  <View style={styles.columnTotals}>
-                    <Text style={styles.totalValue}>{formatCurrency(savingsTotalLimit)}</Text>
-                    <Text style={styles.totalMax}>/ {formatCurrency(savingsMax)}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.categoryList}>
-                  {savingsCategories.length === 0 ? (
-                    <Text style={styles.emptyText}>No categories yet.</Text>
-                  ) : (
-                    savingsCategories.map((cat) => (
-                      <TouchableOpacity
-                        key={cat.id}
-                        style={styles.categoryItem}
-                        onPress={() => handleCategoryPress(cat)}
-                      >
-                        <View style={styles.itemIconBox}>
-                          <MaterialIcons
-                            name={cat.icon as any}
-                            size={18}
-                            color={colors.onSurfaceVariant}
-                          />
-                        </View>
-                        <View style={styles.itemTextContent}>
-                          <Text style={styles.itemName}>{cat.name}</Text>
-                          <Text style={styles.itemLimit}>{formatCurrency(cat.limit)} goal</Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))
-                  )}
-                </View>
-              </View>
-            </View>
-          </>
-        )}
-      </ScrollView>
+              {/* Save Button */}
+              <TouchableOpacity
+                style={[styles.saveButton, { backgroundColor: colors.primary }]}
+                onPress={handleSave}
+                disabled={createCategoryMutation.isPending || updateCategoryMutation.isPending}
+              >
+                <Text style={[styles.saveButtonText, { color: colors.onPrimary }]}>
+                  {editingCategory ? 'Update Category' : 'Create Category'}
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
 
-const getStyles = (colors: ThemeColors) => {
-  const styles = StyleSheet.create({
+const getStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
     },
-
-    scrollContent: {
-      padding: 20,
-      gap: 24,
-    },
-    mobileActionSection: {
-      gap: 16,
-    },
-    subtitleText: {
-      ...typography.bodyLg,
-      color: colors.secondary,
-    },
-    newCategoryBtn: {
-      backgroundColor: colors.primary,
-      borderRadius: 12,
-      paddingVertical: 12,
-      paddingHorizontal: 24,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-      shadowColor: colors.onSurface,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 2,
-    },
-    newCategoryText: {
-      ...typography.labelMd,
-      color: colors.onPrimary,
-    },
-    addFormCard: {
-      backgroundColor: colors.surfaceContainerLow,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: colors.outlineVariant,
-      padding: 20,
-      gap: 16,
-    },
-    addFormTitle: {
-      ...typography.headlineSm,
-      color: colors.onSurface,
-    },
-    bucketSelector: {
-      flexDirection: 'row',
-      backgroundColor: colors.surfaceContainer,
-      borderRadius: 8,
-      padding: 4,
-      gap: 4,
-    },
-    bucketOption: {
-      flex: 1,
-      paddingVertical: 8,
-      alignItems: 'center',
-      borderRadius: 4,
-    },
-    bucketOptionText: {
-      ...typography.labelMd,
-      color: colors.onSurfaceVariant,
-    },
-    input: {
-      backgroundColor: colors.surfaceContainer,
-      borderRadius: 8,
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      ...typography.bodyLg,
-      color: colors.onSurface,
-      flex: 1,
-    },
-    currencyInputRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-    },
-    currencySymbol: {
-      ...typography.dataLg,
-      color: colors.onSurface,
-    },
-    saveBtn: {
-      backgroundColor: colors.primary,
-      paddingVertical: 12,
-      borderRadius: 8,
-      alignItems: 'center',
-    },
-    saveBtnText: {
-      ...typography.labelMd,
-      color: colors.onPrimary,
-    },
-    deleteBtn: {
-      paddingVertical: 12,
-      alignItems: 'center',
-    },
-    deleteBtnText: {
-      ...typography.labelMd,
-      color: colors.error,
-    },
-    categoriesGrid: {
-      gap: 24,
-    },
-    columnCard: {
-      backgroundColor: colors.surfaceContainerLow,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: colors.outlineVariant,
-      padding: 24,
-    },
-    columnHeader: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      justifyContent: 'space-between',
-      paddingBottom: 16,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.outlineVariant,
-      marginBottom: 16,
-    },
-    columnHeaderLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-    },
-    columnIconBox: {
+    addIconButton: {
       width: 40,
       height: 40,
       borderRadius: 20,
       alignItems: 'center',
       justifyContent: 'center',
+      backgroundColor: colors.primaryContainer,
     },
-    columnTitle: {
+    tabBar: {
+      flexDirection: 'row',
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      gap: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.surfaceVariant,
+    },
+    tabItem: {
+      paddingHorizontal: 14,
+      paddingVertical: 6,
+      borderRadius: radius.full,
+      backgroundColor: colors.surfaceContainerLow,
+    },
+    tabItemActive: {
+      backgroundColor: colors.primary,
+    },
+    tabText: {
+      ...typography.labelMd,
+      color: colors.onSurfaceVariant,
+      fontWeight: '600',
+    },
+    tabTextActive: {
+      color: colors.onPrimary,
+    },
+    scrollContent: {
+      padding: 20,
+    },
+    emptyContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 60,
+      gap: 8,
+    },
+    emptyTitle: {
       ...typography.headlineSm,
       color: colors.onSurface,
+      fontWeight: '600',
     },
-    columnSubtitle: {
-      ...typography.labelMd,
-      color: colors.secondary,
-    },
-    columnTotals: {
-      alignItems: 'flex-end',
-    },
-    totalValue: {
-      ...typography.dataLg,
-      color: colors.onSurface,
-    },
-    totalMax: {
+    emptySubtitle: {
       ...typography.bodyMd,
-      color: colors.secondary,
+      color: colors.onSurfaceVariant,
     },
     categoryList: {
       gap: 12,
     },
-    categoryItem: {
+    categoryCard: {
       flexDirection: 'row',
       alignItems: 'center',
-      padding: 12,
-      backgroundColor: colors.surface,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.outlineVariant + '4D',
-      gap: 12,
-    },
-    itemIconBox: {
-      width: 32,
-      height: 32,
+      justifyContent: 'space-between',
+      backgroundColor: colors.surfaceContainerLowest,
       borderRadius: 16,
-      backgroundColor: colors.surfaceContainer,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.surfaceVariant,
+    },
+    cardLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      flex: 1,
+    },
+    iconCircle: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    itemTextContent: {
+    cardDetails: {
       flex: 1,
+      gap: 4,
     },
-    itemName: {
-      ...typography.labelMd,
+    categoryName: {
+      ...typography.bodyLg,
+      fontWeight: '600',
       color: colors.onSurface,
     },
-    itemLimit: {
-      ...typography.bodyMd,
-      fontSize: 12,
-      color: colors.secondary,
+    badgeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      flexWrap: 'wrap',
     },
-    emptyText: {
-      ...typography.bodyMd,
+    bucketBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 6,
+      borderWidth: 1,
+    },
+    bucketBadgeText: {
+      ...typography.labelMd,
+      fontSize: 10,
+      fontWeight: '700',
+    },
+    limitText: {
+      ...typography.labelMd,
+      fontSize: 11,
       color: colors.onSurfaceVariant,
-      textAlign: 'center',
+    },
+    cardActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    actionBtn: {
+      padding: 8,
+      borderRadius: 8,
+      backgroundColor: colors.surfaceContainerHigh,
+    },
+    modalBackdrop: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: 'rgba(0,0,0,0.6)',
+    },
+    backdropTouch: {
+      flex: 1,
+    },
+    modalContent: {
+      backgroundColor: colors.surfaceContainerLowest,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      padding: 24,
+      maxHeight: '85%',
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 20,
+    },
+    modalTitle: {
+      ...typography.headlineMd,
+      fontWeight: '700',
+      color: colors.onSurface,
+    },
+    formGroup: {
+      marginBottom: 18,
+    },
+    formLabel: {
+      ...typography.labelMd,
+      color: colors.onSurfaceVariant,
+      marginBottom: 8,
+      fontWeight: '500',
+    },
+    input: {
+      backgroundColor: colors.surfaceContainerLow,
+      borderWidth: 1,
+      borderColor: colors.surfaceVariant,
+      borderRadius: 12,
+      paddingHorizontal: 16,
       paddingVertical: 12,
+      ...typography.bodyLg,
+      color: colors.onSurface,
+    },
+    bucketRow: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    bucketChoice: {
+      flex: 1,
+      paddingVertical: 10,
+      paddingHorizontal: 6,
+      alignItems: 'center',
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.surfaceVariant,
+      backgroundColor: colors.surfaceContainerLow,
+    },
+    bucketChoiceText: {
+      ...typography.labelMd,
+      fontSize: 11,
+      color: colors.onSurfaceVariant,
+      fontWeight: '600',
+    },
+    iconGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    iconTile: {
+      width: 44,
+      height: 44,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.surfaceVariant,
+      backgroundColor: colors.surfaceContainerLow,
+    },
+    saveButton: {
+      borderRadius: 14,
+      paddingVertical: 16,
+      alignItems: 'center',
+      marginTop: 8,
+      marginBottom: 20,
+    },
+    saveButtonText: {
+      ...typography.bodyLg,
+      fontWeight: '700',
     },
   });
-  return styles;
-};

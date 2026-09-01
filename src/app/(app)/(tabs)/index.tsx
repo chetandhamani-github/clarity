@@ -17,8 +17,9 @@ import { useAccounts } from '@/hooks/use-accounts';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
 import { useMonthlyTotals, useNetWorthHistory, useTransactions } from '@/hooks/use-transactions';
 import { useDoubleBackToExit } from '@/hooks/use-double-back-to-exit';
-import { formatCurrency, getTransactionSign } from '@/utils/format';
+import { formatCurrency, formatCurrencyPrivacy, getTransactionSign } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
+import { useAppStore } from '@/store/use-app-store';
 
 export default function DashboardScreen() {
   useDoubleBackToExit();
@@ -27,6 +28,7 @@ export default function DashboardScreen() {
   const styles = getStyles(colors);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { hideBalances, toggleHideBalances } = useAppStore();
 
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
@@ -204,7 +206,7 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         }
         rightNode={
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
             <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/analytics')}>
               <MaterialIcons name="insights" size={24} color={colors.onSurface} />
             </TouchableOpacity>
@@ -230,7 +232,20 @@ export default function DashboardScreen() {
               {/* Main Card: Net Worth */}
               <View style={styles.netWorthCard}>
                 <View style={styles.netWorthHeader}>
-                  <Text style={styles.netWorthLabel}>TOTAL NET WORTH</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.netWorthLabel}>TOTAL NET WORTH</Text>
+                    <TouchableOpacity
+                      onPress={toggleHideBalances}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={styles.eyeIconButton}
+                    >
+                      <MaterialIcons
+                        name={hideBalances ? 'visibility-off' : 'visibility'}
+                        size={16}
+                        color={colors.onSurfaceVariant}
+                      />
+                    </TouchableOpacity>
+                  </View>
                   <View
                     style={[
                       styles.netWorthBadge,
@@ -251,7 +266,9 @@ export default function DashboardScreen() {
                     </Text>
                   </View>
                 </View>
-                <Text style={styles.netWorthAmount}>{formatCurrency(netWorth)}</Text>
+                <Text style={styles.netWorthAmount}>
+                  {formatCurrencyPrivacy(netWorth, false, hideBalances)}
+                </Text>
 
                 <View style={styles.chartContainer}>
                   <LineChart
@@ -322,16 +339,20 @@ export default function DashboardScreen() {
               <View style={styles.snapshotRow}>
                 <View style={styles.snapshotCard}>
                   <Text style={styles.snapshotLabel}>INCOME</Text>
-                  <Text style={styles.snapshotValue}>{formatCurrency(monthlyTotals.income)}</Text>
+                  <Text style={styles.snapshotValue}>
+                    {formatCurrencyPrivacy(monthlyTotals.income, hideBalances)}
+                  </Text>
                 </View>
                 <View style={styles.snapshotCard}>
                   <Text style={styles.snapshotLabel}>EXPENSES</Text>
-                  <Text style={styles.snapshotValue}>{formatCurrency(monthlyTotals.expenses)}</Text>
+                  <Text style={styles.snapshotValue}>
+                    {formatCurrencyPrivacy(monthlyTotals.expenses, hideBalances)}
+                  </Text>
                 </View>
                 <View style={styles.snapshotCard}>
                   <Text style={styles.snapshotLabel}>SAVED</Text>
                   <Text style={[styles.snapshotValue, { color: colors.primary }]}>
-                    {formatCurrency(savedAmount)}
+                    {formatCurrencyPrivacy(savedAmount, hideBalances)}
                   </Text>
                 </View>
               </View>
@@ -356,7 +377,7 @@ export default function DashboardScreen() {
                             <Text
                               style={{ fontSize: 16, color: colors.onSurface, fontWeight: 'bold' }}
                             >
-                              {formatCurrency(monthlyTotals.expenses)}
+                              {formatCurrencyPrivacy(monthlyTotals.expenses, hideBalances)}
                             </Text>
                           </View>
                         );
@@ -375,7 +396,8 @@ export default function DashboardScreen() {
                       <View style={styles.budgetRow}>
                         <Text style={styles.budgetType}>Needs ({plan.needsPercent}%)</Text>
                         <Text style={styles.budgetAmount}>
-                          {formatCurrency(budgetProgress.needsSpent)} / {formatCurrency(needsLimit)}
+                          {formatCurrencyPrivacy(budgetProgress.needsSpent, hideBalances)} /{' '}
+                          {formatCurrencyPrivacy(needsLimit, hideBalances)}
                         </Text>
                       </View>
                       <ProgressBar
@@ -389,7 +411,8 @@ export default function DashboardScreen() {
                       <View style={styles.budgetRow}>
                         <Text style={styles.budgetType}>Wants ({plan.wantsPercent}%)</Text>
                         <Text style={styles.budgetAmount}>
-                          {formatCurrency(budgetProgress.wantsSpent)} / {formatCurrency(wantsLimit)}
+                          {formatCurrencyPrivacy(budgetProgress.wantsSpent, hideBalances)} /{' '}
+                          {formatCurrencyPrivacy(wantsLimit, hideBalances)}
                         </Text>
                       </View>
                       <ProgressBar
@@ -403,8 +426,8 @@ export default function DashboardScreen() {
                       <View style={styles.budgetRow}>
                         <Text style={styles.budgetType}>Savings ({plan.savingsPercent}%)</Text>
                         <Text style={styles.budgetAmount}>
-                          {formatCurrency(budgetProgress.savingsSpent)} /{' '}
-                          {formatCurrency(savingsLimit)}
+                          {formatCurrencyPrivacy(budgetProgress.savingsSpent, hideBalances)} /{' '}
+                          {formatCurrencyPrivacy(savingsLimit, hideBalances)}
                         </Text>
                       </View>
                       <ProgressBar
@@ -443,8 +466,12 @@ export default function DashboardScreen() {
               {/* Recent Activity */}
               <View style={styles.sectionContainer}>
                 <View style={styles.recentActivityHeader}>
-                  <Text style={styles.sectionTitle}>Recent Activity</Text>
-                  <TouchableOpacity onPress={() => router.push('/transactions')}>
+                  <Text style={styles.recentActivityTitle}>Recent Activity</Text>
+                  <TouchableOpacity
+                    style={styles.viewAllButton}
+                    onPress={() => router.push('/transactions')}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
                     <Text style={styles.viewAllText}>VIEW ALL</Text>
                   </TouchableOpacity>
                 </View>
@@ -491,16 +518,35 @@ export default function DashboardScreen() {
                                 : tx.category}
                             </Text>
                           </View>
-                          <Text
-                            style={
-                              tx.type === 'income'
-                                ? styles.activityAmountPositive
-                                : styles.activityAmountNegative
-                            }
-                          >
-                            {sign}
-                            {formatCurrency(tx.amount)}
-                          </Text>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text
+                              style={
+                                tx.type === 'income'
+                                  ? styles.activityAmountPositive
+                                  : styles.activityAmountNegative
+                              }
+                            >
+                              {sign}
+                              {formatCurrencyPrivacy(tx.amount, false, hideBalances)}
+                            </Text>
+                            {tx.splits && tx.splits.length > 0 && (
+                              <View
+                                style={[
+                                  styles.splitMiniBadge,
+                                  { backgroundColor: colors.secondaryContainer },
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.splitMiniBadgeText,
+                                    { color: colors.onSecondaryContainer },
+                                  ]}
+                                >
+                                  Split ({tx.splits.length})
+                                </Text>
+                              </View>
+                            )}
+                          </View>
                         </TouchableOpacity>
                       );
                     })
@@ -565,6 +611,11 @@ const getStyles = (colors: ThemeColors) => {
     netWorthLabel: {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
+    },
+    eyeIconButton: {
+      padding: 2,
+      justifyContent: 'center',
+      alignItems: 'center',
     },
     netWorthBadge: {
       backgroundColor: colors.primary + '1A',
@@ -645,12 +696,22 @@ const getStyles = (colors: ThemeColors) => {
     recentActivityHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      alignItems: 'flex-end',
+      alignItems: 'center',
       marginBottom: 16,
+    },
+    recentActivityTitle: {
+      ...typography.headlineSm,
+      color: colors.onSurface,
+      marginBottom: 0,
+    },
+    viewAllButton: {
+      paddingVertical: 4,
+      paddingHorizontal: 4,
     },
     viewAllText: {
       ...typography.labelMd,
       color: colors.primary,
+      fontWeight: '700',
     },
     activityCard: {
       backgroundColor: colors.surfaceContainerLowest,
@@ -697,6 +758,18 @@ const getStyles = (colors: ThemeColors) => {
     activityAmountPositive: {
       ...typography.bodyLg,
       color: colors.primary,
+    },
+    splitMiniBadge: {
+      marginTop: 4,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+      alignSelf: 'flex-end',
+    },
+    splitMiniBadgeText: {
+      ...typography.labelMd,
+      fontSize: 10,
+      fontWeight: '600',
     },
   });
   return styles;

@@ -26,12 +26,22 @@ interface TransactionRow {
   date: string;
   is_recurring: number;
   note: string;
+  splits_json?: string;
   to_account_id?: string;
   account_name?: string; // from JOIN
   to_account_name?: string; // from JOIN
 }
 
 function mapRow(row: TransactionRow): TransactionWithAccount {
+  let splits;
+  if (row.splits_json) {
+    try {
+      splits = JSON.parse(row.splits_json);
+    } catch {
+      // ignore
+    }
+  }
+
   return {
     id: row.id,
     accountId: row.account_id,
@@ -43,6 +53,7 @@ function mapRow(row: TransactionRow): TransactionWithAccount {
     date: row.date,
     isRecurring: Boolean(row.is_recurring),
     note: row.note,
+    splits,
     accountName: row.account_name ?? 'Unknown Account',
     toAccountName: row.to_account_name,
   };
@@ -140,8 +151,8 @@ export async function insertTransaction(data: Omit<Transaction, 'id'>): Promise<
   await db.execAsync('BEGIN TRANSACTION');
   try {
     await db.runAsync(
-      `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, to_account_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, to_account_id, splits_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         data.accountId,
@@ -153,6 +164,7 @@ export async function insertTransaction(data: Omit<Transaction, 'id'>): Promise<
         data.isRecurring ? 1 : 0,
         data.note,
         data.toAccountId || null,
+        data.splits && data.splits.length > 0 ? JSON.stringify(data.splits) : null,
       ]
     );
 
@@ -296,6 +308,10 @@ export async function updateTransaction(
     if (data.note !== undefined) {
       sets.push('note = ?');
       params.push(data.note);
+    }
+    if (data.splits !== undefined) {
+      sets.push('splits_json = ?');
+      params.push(data.splits && data.splits.length > 0 ? JSON.stringify(data.splits) : null);
     }
 
     if (sets.length > 0) {

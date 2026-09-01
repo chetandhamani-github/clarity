@@ -233,17 +233,31 @@ export async function getSpentByCategory(
   const monthStr = month.toString().padStart(2, '0');
   const datePrefix = `${year}-${monthStr}`;
 
-  const rows = await db.getAllAsync<{ category: string; total: number }>(
-    `SELECT category, SUM(amount) as total
+  const rows = await db.getAllAsync<{ category: string; amount: number; splits_json?: string }>(
+    `SELECT category, amount, splits_json
      FROM transactions
-     WHERE type = 'expense' AND date LIKE ?
-     GROUP BY category`,
+     WHERE type = 'expense' AND date LIKE ?`,
     [`${datePrefix}%`]
   );
 
   const result: Record<string, number> = {};
   for (const row of rows) {
-    result[row.category] = row.total;
+    if (row.splits_json) {
+      try {
+        const splits = JSON.parse(row.splits_json);
+        if (Array.isArray(splits) && splits.length > 0) {
+          for (const s of splits) {
+            if (s.category && s.amount) {
+              result[s.category] = (result[s.category] || 0) + Number(s.amount);
+            }
+          }
+          continue;
+        }
+      } catch {
+        // Fallback to row.category
+      }
+    }
+    result[row.category] = (result[row.category] || 0) + row.amount;
   }
 
   return result;

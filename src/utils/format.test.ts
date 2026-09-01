@@ -26,4 +26,11 @@ describe('format utilities', () => {
     expect(groups[1].date).toBe('2026-08-30');
     expect(groups[1].items.length).toBe(1);
   });
+
+  it('masks currency when privacy mode is active', () => {
+    const { formatCurrencyPrivacy, formatCurrencyWholePrivacy } = require('./format');
+    expect(formatCurrencyPrivacy(1500, false, true)).toBe('••••••');
+    expect(formatCurrencyWholePrivacy(1500, true)).toBe('••••••');
+    expect(formatCurrencyPrivacy(1500, false, false)).not.toBe('••••••');
+  });
 });

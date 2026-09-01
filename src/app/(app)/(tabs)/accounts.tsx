@@ -16,9 +16,15 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { LineChart } from 'react-native-gifted-charts';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useAccountHistory } from '@/hooks/use-transactions';
-import { formatCurrency, formatCurrencyWhole } from '@/utils/format';
+import {
+  formatCurrency,
+  formatCurrencyWhole,
+  formatCurrencyPrivacy,
+  formatCurrencyWholePrivacy,
+} from '@/utils/format';
 import { getAccountTypeIcon } from '@/utils/icons';
 import type { Account } from '@/types';
+import { useAppStore } from '@/store/use-app-store';
 
 export default function AccountsScreen() {
   const { colors } = useTheme();
@@ -27,6 +33,7 @@ export default function AccountsScreen() {
   const router = useRouter();
   const { accounts, isLoading, refetch } = useAccounts();
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const { hideBalances, toggleHideBalances } = useAppStore();
 
   useFocusEffect(
     useCallback(() => {
@@ -35,7 +42,59 @@ export default function AccountsScreen() {
   );
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId) ?? accounts[0] ?? null;
+  const isLiabilityType = (type: string) => ['credit', 'loan', 'borrowed'].includes(type);
+
+  const assetAccounts = accounts.filter((a) => !isLiabilityType(a.type));
+  const liabilityAccounts = accounts.filter((a) => isLiabilityType(a.type));
+
+  const totalAssets = assetAccounts.reduce((sum, a) => sum + Math.max(0, a.balance), 0);
+  const totalLiabilities = liabilityAccounts.reduce((sum, a) => sum + Math.abs(a.balance), 0);
   const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
+
+  const renderAccountRow = (account: Account) => {
+    const isSelected = selectedAccount?.id === account.id;
+    const isDebt = isLiabilityType(account.type) && account.balance < 0;
+
+    return (
+      <TouchableOpacity
+        key={account.id}
+        style={isSelected ? styles.accountItemActive : styles.accountItemInactive}
+        onPress={() => setSelectedAccountId(account.id)}
+      >
+        <View style={styles.accountItemLeft}>
+          <View
+            style={[
+              styles.accountIconContainer,
+              {
+                backgroundColor: isSelected
+                  ? colors.primaryContainer
+                  : colors.surfaceVariant,
+              },
+            ]}
+          >
+            <MaterialIcons
+              name={getAccountTypeIcon(account.type)}
+              size={24}
+              color={isSelected ? colors.onPrimaryContainer : colors.secondary}
+            />
+          </View>
+          <View>
+            <Text style={styles.accountName}>{account.name}</Text>
+            <Text style={styles.accountType}>
+              {account.type.charAt(0).toUpperCase() + account.type.slice(1)}
+              {account.lastFour ? ` • ${account.lastFour}` : ''}
+            </Text>
+          </View>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={[styles.accountBalanceActive, isDebt && { color: colors.error }]}>
+            {formatCurrencyWholePrivacy(account.balance, hideBalances)}
+          </Text>
+          {isDebt && <Text style={[styles.owedBadge, { color: colors.error }]}>Due</Text>}
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -84,63 +143,81 @@ export default function AccountsScreen() {
           ) : (
             <>
               <View style={{ gap: 24 }}>
-                {/* Total Balance Card */}
+                {/* Total Balance / Net Worth Card */}
                 <View style={styles.contentPadding}>
                   <View style={styles.totalCard}>
-                    <Text style={styles.totalLabel}>TOTAL BALANCE</Text>
-                    <Text style={styles.totalBalance}>{formatCurrency(totalBalance)}</Text>
-                    <Text style={styles.totalAccountCount}>
-                      {accounts.length} {accounts.length === 1 ? 'account' : 'accounts'}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.totalLabel}>TOTAL NET WORTH</Text>
+                      <TouchableOpacity
+                        onPress={toggleHideBalances}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        style={{ padding: 2 }}
+                      >
+                        <MaterialIcons
+                          name={hideBalances ? 'visibility-off' : 'visibility'}
+                          size={16}
+                          color={colors.onPrimary}
+                          style={{ opacity: 0.8 }}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.totalBalance}>
+                      {formatCurrencyPrivacy(totalBalance, false, hideBalances)}
                     </Text>
-                  </View>
-
-                  {/* Active Accounts List */}
-                  <View style={styles.sectionCard}>
-                    <Text style={styles.sectionHeaderLabel}>ACTIVE ACCOUNTS</Text>
-                    <View style={styles.accountList}>
-                      {accounts.map((account) => {
-                        const isSelected = selectedAccount?.id === account.id;
-                        return (
-                          <TouchableOpacity
-                            key={account.id}
-                            style={
-                              isSelected ? styles.accountItemActive : styles.accountItemInactive
-                            }
-                            onPress={() => setSelectedAccountId(account.id)}
-                          >
-                            <View style={styles.accountItemLeft}>
-                              <View
-                                style={[
-                                  styles.accountIconContainer,
-                                  {
-                                    backgroundColor: isSelected
-                                      ? colors.primaryContainer
-                                      : colors.surfaceVariant,
-                                  },
-                                ]}
-                              >
-                                <MaterialIcons
-                                  name={getAccountTypeIcon(account.type)}
-                                  size={24}
-                                  color={isSelected ? colors.onPrimaryContainer : colors.secondary}
-                                />
-                              </View>
-                              <View>
-                                <Text style={styles.accountName}>{account.name}</Text>
-                                <Text style={styles.accountType}>
-                                  {account.type.charAt(0).toUpperCase() + account.type.slice(1)}
-                                  {account.lastFour ? ` • ${account.lastFour}` : ''}
-                                </Text>
-                              </View>
-                            </View>
-                            <Text style={styles.accountBalanceActive}>
-                              {formatCurrencyWhole(account.balance)}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
+                    <View style={styles.summaryPillRow}>
+                      <View
+                        style={[styles.summaryPill, { backgroundColor: colors.surfaceContainerLow }]}
+                      >
+                        <Text style={[styles.summaryPillLabel, { color: colors.primary }]}>
+                          Assets: {formatCurrencyWholePrivacy(totalAssets, hideBalances)}
+                        </Text>
+                      </View>
+                      {totalLiabilities > 0 && (
+                        <View
+                          style={[
+                            styles.summaryPill,
+                            { backgroundColor: colors.errorContainer + '33' },
+                          ]}
+                        >
+                          <Text style={[styles.summaryPillLabel, { color: colors.error }]}>
+                            Liabilities: -{formatCurrencyWholePrivacy(totalLiabilities, hideBalances)}
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   </View>
+
+                  {/* Assets Section */}
+                  {assetAccounts.length > 0 && (
+                    <View style={styles.sectionCard}>
+                      <View style={styles.sectionHeaderRow}>
+                        <Text style={styles.sectionHeaderLabel}>ASSETS</Text>
+                        <Text style={styles.sectionSubtotal}>
+                          {formatCurrencyWholePrivacy(totalAssets, hideBalances)}
+                        </Text>
+                      </View>
+                      <View style={styles.accountList}>
+                        {assetAccounts.map(renderAccountRow)}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Liabilities & Debt Section */}
+                  {liabilityAccounts.length > 0 && (
+                    <View style={[styles.sectionCard, { marginTop: assetAccounts.length > 0 ? 16 : 0 }]}>
+                      <View style={styles.sectionHeaderRow}>
+                        <Text style={[styles.sectionHeaderLabel, { color: colors.error }]}>
+                          LIABILITIES & DEBT
+                        </Text>
+                        <Text style={[styles.sectionSubtotal, { color: colors.error }]}>
+                          -{formatCurrencyWholePrivacy(totalLiabilities, hideBalances)}
+                        </Text>
+                      </View>
+                      <View style={styles.accountList}>
+                        {liabilityAccounts.map(renderAccountRow)}
+                      </View>
+                    </View>
+                  )}
 
                   {/* Selected Account Details */}
                   {selectedAccount && (
@@ -152,6 +229,16 @@ export default function AccountsScreen() {
                         router.push({
                           pathname: '/account-details',
                           params: { accountId: selectedAccount.id },
+                        })
+                      }
+                      onSettleDebt={() =>
+                        router.push({
+                          pathname: '/(app)/add-transaction',
+                          params: {
+                            type: 'transfer',
+                            toAccountId: selectedAccount.id,
+                            amount: Math.abs(selectedAccount.balance).toString(),
+                          },
                         })
                       }
                     />
@@ -171,12 +258,18 @@ function AccountDetailCard({
   colors,
   styles,
   onViewDetails,
+  onSettleDebt,
 }: {
   account: Account;
   colors: ThemeColors;
   styles: ReturnType<typeof getStyles>;
   onViewDetails: () => void;
+  onSettleDebt?: () => void;
 }) {
+  const router = useRouter();
+  const { hideBalances } = useAppStore();
+  const isLiability = ['credit', 'loan', 'borrowed'].includes(account.type);
+  const hasOutstandingDebt = isLiability && account.balance < 0;
   const { history, isLoading } = useAccountHistory(account.id, 30);
 
   const chartData = React.useMemo(() => {
@@ -223,16 +316,31 @@ function AccountDetailCard({
   return (
     <View style={styles.sectionCard}>
       <View style={styles.detailsHeader}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.detailsLabel}>{account.name.toUpperCase()}</Text>
-          <Text style={styles.detailsBalance}>{formatCurrency(account.balance)}</Text>
+          <Text style={styles.detailsBalance}>
+            {formatCurrencyPrivacy(account.balance, false, hideBalances)}
+          </Text>
           {account.institution ? (
             <Text style={styles.institutionText}>{account.institution}</Text>
           ) : null}
         </View>
-        <TouchableOpacity style={styles.moreButton} onPress={onViewDetails}>
-          <MaterialIcons name="more-horiz" size={20} color={colors.onSurface} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          <TouchableOpacity
+            style={styles.moreButton}
+            onPress={() =>
+              router.push({
+                pathname: '/add-account',
+                params: { id: account.id },
+              })
+            }
+          >
+            <MaterialIcons name="edit" size={18} color={colors.onSurface} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.moreButton} onPress={onViewDetails}>
+            <MaterialIcons name="more-horiz" size={20} color={colors.onSurface} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.chartArea}>
@@ -331,6 +439,13 @@ function AccountDetailCard({
           </Text>
         </View>
       </View>
+
+      {hasOutstandingDebt && onSettleDebt && (
+        <TouchableOpacity style={styles.payBillButton} onPress={onSettleDebt}>
+          <MaterialIcons name="payment" size={18} color={colors.onPrimary} />
+          <Text style={styles.payBillButtonText}>Pay Bill / Settle Debt</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -421,10 +536,54 @@ const getStyles = (colors: ThemeColors) => {
       color: colors.onPrimary,
       fontSize: 32,
     },
-    totalAccountCount: {
+    summaryPillRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginTop: 8,
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+    },
+    summaryPill: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 16,
+    },
+    summaryPillLabel: {
+      ...typography.labelMd,
+      fontWeight: '600',
+    },
+    sectionHeaderRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+      paddingHorizontal: 8,
+    },
+    sectionSubtotal: {
       ...typography.bodyMd,
+      fontWeight: '600',
+      color: colors.onSurface,
+    },
+    owedBadge: {
+      ...typography.labelMd,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      marginTop: 2,
+    },
+    payBillButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      paddingVertical: 12,
+      marginTop: 16,
+    },
+    payBillButtonText: {
+      ...typography.labelMd,
       color: colors.onPrimary,
-      opacity: 0.7,
+      fontWeight: '600',
     },
     sectionCard: {
       backgroundColor: colors.surfaceContainerLowest,
@@ -441,8 +600,6 @@ const getStyles = (colors: ThemeColors) => {
     sectionHeaderLabel: {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
-      paddingHorizontal: 8,
-      marginBottom: 8,
       textTransform: 'uppercase',
       letterSpacing: 0.6,
     },

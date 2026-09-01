@@ -161,7 +161,11 @@ export default function AddAccountScreen() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>
-              {isLiability ? 'Outstanding Due / Amount Owed*' : 'Current Balance*'}
+              {isLiability
+                ? 'Outstanding Due / Amount Owed*'
+                : type === 'lent'
+                  ? 'Amount Lent / Given*'
+                  : 'Current Balance*'}
             </Text>
             <View style={styles.currencyInputContainer}>
               <Text style={styles.currencySymbol}>{getCurrencySymbol()}</Text>
@@ -174,11 +178,15 @@ export default function AddAccountScreen() {
                 onChangeText={setBalanceStr}
               />
             </View>
-            {isLiability && (
+            {isLiability ? (
               <Text style={styles.helperText}>
                 Enter the amount you currently owe (leave 0 if all dues are cleared).
               </Text>
-            )}
+            ) : type === 'lent' ? (
+              <Text style={styles.helperText}>
+                Enter the amount you gave (money others owe you).
+              </Text>
+            ) : null}
           </View>
 
           <View style={styles.inputGroup}>

@@ -14,6 +14,7 @@ export type AccountType =
   | 'credit'
   | 'loan'
   | 'borrowed'
+  | 'lent'
   | 'investment'
   | 'wallet'
   | 'checking'
@@ -25,10 +26,17 @@ export const ACCOUNT_TYPES: { label: string; value: AccountType }[] = [
   { label: 'Credit Card', value: 'credit' },
   { label: 'Loan / Debt', value: 'loan' },
   { label: 'Borrowed / Money Owed', value: 'borrowed' },
+  { label: 'Lent / Money Given', value: 'lent' },
   { label: 'Investment', value: 'investment' },
   { label: 'Cash / Wallet', value: 'wallet' },
   { label: 'Other', value: 'other' },
 ];
+
+export interface TransactionSplit {
+  category: string;
+  amount: number;
+  note?: string;
+}
 
 export interface Transaction {
   id: string;
@@ -41,6 +49,7 @@ export interface Transaction {
   date: string;
   isRecurring: boolean;
   note: string;
+  splits?: TransactionSplit[];
 }
 
 export type TransactionType = 'expense' | 'income' | 'transfer';

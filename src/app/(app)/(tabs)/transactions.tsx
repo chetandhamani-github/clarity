@@ -175,8 +175,27 @@ export default function TransactionsScreen() {
                               {sign}
                               {formatCurrency(tx.amount)}
                             </Text>
-                            <View style={styles.categoryBadge}>
-                              <Text style={styles.categoryBadgeText}>{tx.category}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              {tx.splits && tx.splits.length > 0 && (
+                                <View
+                                  style={[
+                                    styles.categoryBadge,
+                                    { backgroundColor: colors.secondaryContainer },
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.categoryBadgeText,
+                                      { color: colors.onSecondaryContainer },
+                                    ]}
+                                  >
+                                    Split ({tx.splits.length})
+                                  </Text>
+                                </View>
+                              )}
+                              <View style={styles.categoryBadge}>
+                                <Text style={styles.categoryBadgeText}>{tx.category}</Text>
+                              </View>
                             </View>
                           </View>
                         </TouchableOpacity>
