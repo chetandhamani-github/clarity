@@ -13,6 +13,7 @@ export type AccountType =
   | 'current'
   | 'credit'
   | 'loan'
+  | 'borrowed'
   | 'investment'
   | 'wallet'
   | 'checking'
@@ -23,6 +24,7 @@ export const ACCOUNT_TYPES: { label: string; value: AccountType }[] = [
   { label: 'Current Account', value: 'current' },
   { label: 'Credit Card', value: 'credit' },
   { label: 'Loan / Debt', value: 'loan' },
+  { label: 'Borrowed / Money Owed', value: 'borrowed' },
   { label: 'Investment', value: 'investment' },
   { label: 'Cash / Wallet', value: 'wallet' },
   { label: 'Other', value: 'other' },

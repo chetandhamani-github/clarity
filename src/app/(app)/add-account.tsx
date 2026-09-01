@@ -31,12 +31,17 @@ export default function AddAccountScreen() {
   const [showTypeSelector, setShowTypeSelector] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
+  const isLiability = ['credit', 'loan', 'borrowed'].includes(type);
+
   // Pre-populate if editing
   React.useEffect(() => {
     if (isEditing && account && !initialized) {
       setName(account.name);
       setType(account.type);
-      setBalanceStr(account.balance.toString());
+      const isAccLiability = ['credit', 'loan', 'borrowed'].includes(account.type);
+      setBalanceStr(
+        isAccLiability ? Math.abs(account.balance).toString() : account.balance.toString()
+      );
       setInstitution(account.institution || '');
       setLastFour(account.lastFour || '');
       setInitialized(true);
@@ -53,11 +58,16 @@ export default function AddAccountScreen() {
       showToast('Account name is required', 'error');
       return;
     }
-    const balance = parseFloat(balanceStr);
-    if (isNaN(balance)) {
+    const rawBalance = parseFloat(balanceStr);
+    if (isNaN(rawBalance)) {
       showToast('Please enter a valid balance', 'error');
       return;
     }
+
+    // Auto-negate if account is a liability (handling both positive or negative user input)
+    const balance = isLiability
+      ? (rawBalance === 0 ? 0 : -Math.abs(rawBalance))
+      : rawBalance;
 
     const accountData = {
       name: name.trim(),
@@ -150,7 +160,9 @@ export default function AddAccountScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Current Balance*</Text>
+            <Text style={styles.label}>
+              {isLiability ? 'Outstanding Due / Amount Owed*' : 'Current Balance*'}
+            </Text>
             <View style={styles.currencyInputContainer}>
               <Text style={styles.currencySymbol}>{getCurrencySymbol()}</Text>
               <TextInput
@@ -162,6 +174,11 @@ export default function AddAccountScreen() {
                 onChangeText={setBalanceStr}
               />
             </View>
+            {isLiability && (
+              <Text style={styles.helperText}>
+                Enter the amount you currently owe (leave 0 if all dues are cleared).
+              </Text>
+            )}
           </View>
 
           <View style={styles.inputGroup}>
@@ -305,6 +322,11 @@ const getStyles = (colors: ThemeColors) => {
     submitBtnText: {
       ...typography.labelMd,
       color: colors.onPrimary,
+    },
+    helperText: {
+      ...typography.bodyMd,
+      color: colors.outline,
+      marginTop: 4,
     },
   });
   return styles;

@@ -9,7 +9,7 @@ function uuid(): string {
 }
 
 export async function seedDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
-  // 1. Seed 1 default primary account if none exist (Starts cleanly at ₹0.00)
+  // 1. Seed default accounts if none exist (Starts cleanly at ₹0.00)
   const accountResult = await db.getFirstAsync<{ count: number }>(
     'SELECT count(*) as count FROM accounts;'
   );
@@ -19,6 +19,13 @@ export async function seedDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
       `INSERT INTO accounts (id, name, type, balance, institution, last_four, created_at)
        VALUES (?, ?, ?, ?, ?, ?, datetime('now'));`,
       [defaultAccountId, 'Primary Bank Account', 'savings', 0, 'Bank / UPI', '']
+    );
+
+    const borrowedAccountId = uuid();
+    await db.runAsync(
+      `INSERT INTO accounts (id, name, type, balance, institution, last_four, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, datetime('now'));`,
+      [borrowedAccountId, 'Borrowed / Loan', 'borrowed', 0, 'Personal / Friend', '']
     );
   }
 

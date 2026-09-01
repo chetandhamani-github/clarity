@@ -5,7 +5,7 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
     CREATE TABLE IF NOT EXISTS accounts (
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
-      type TEXT NOT NULL CHECK(type IN ('savings', 'current', 'credit', 'investment', 'wallet', 'checking')),
+      type TEXT NOT NULL CHECK(type IN ('savings', 'current', 'credit', 'investment', 'wallet', 'checking', 'loan', 'borrowed', 'other')),
       balance REAL NOT NULL DEFAULT 0,
       institution TEXT NOT NULL DEFAULT '',
       last_four TEXT NOT NULL DEFAULT '',
