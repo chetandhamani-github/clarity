@@ -124,17 +124,18 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
   const { data } = payload;
   const db = getDatabase();
 
+  await db.execAsync('PRAGMA foreign_keys = OFF;');
   await db.execAsync('BEGIN TRANSACTION');
   try {
-    // 1. Wipe current tables
+    // 1. Wipe current tables in safe dependency order
     await db.execAsync(`
       DELETE FROM goal_contributions;
+      DELETE FROM recurring_transactions;
       DELETE FROM transactions;
-      DELETE FROM accounts;
       DELETE FROM goals;
+      DELETE FROM accounts;
       DELETE FROM budget_plans;
       DELETE FROM budget_categories;
-      DELETE FROM recurring_transactions;
       DELETE FROM notifications;
     `);
 
@@ -302,5 +303,11 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
   } catch (error) {
     await db.execAsync('ROLLBACK');
     throw error;
+  } finally {
+    try {
+      await db.execAsync('PRAGMA foreign_keys = ON;');
+    } catch {
+      // Ignore cleanup error
+    }
   }
 }

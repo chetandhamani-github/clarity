@@ -38,7 +38,7 @@ export function useGoogleDrive() {
   const [isAutoSyncing, setIsAutoSyncing] = useState(false);
 
   /**
-   * Connect with Google Drive OAuth and automatically perform initial sync.
+   * Connect with Google Drive OAuth and check for existing cloud backups safely.
    */
   const connect = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -57,15 +57,35 @@ export function useGoogleDrive() {
           showToast(`Connected to Google Drive (${auth.email})`, 'success');
         }
 
-        // Trigger automatic initial backup
+        // Check if an existing backup is already in Google Drive
+        // Critical: NEVER overwrite an existing cloud backup with fresh/empty local state
         try {
-          const snapshot = await generateDatabaseSnapshot();
-          const uploadRes = await uploadBackup(snapshot);
-          if (uploadRes.success && uploadRes.modifiedTime) {
-            setLastCloudBackupTime(uploadRes.modifiedTime);
+          if (auth.accessToken) {
+            const existingFile = await findBackupFile(auth.accessToken);
+            if (existingFile) {
+              setLastCloudBackupTime(existingFile.modifiedTime);
+              if (!options?.silent) {
+                const dateStr = new Date(existingFile.modifiedTime).toLocaleDateString();
+                showToast(`Cloud backup found from ${dateStr}. Restore from Settings anytime.`, 'info');
+              }
+              return true;
+            }
           }
-        } catch (uploadErr) {
-          console.error('Initial auto-backup warning:', uploadErr);
+
+          // If no cloud backup exists, only perform initial backup if local DB has data
+          const snapshot = await generateDatabaseSnapshot();
+          const hasLocalData =
+            (snapshot.data?.transactions?.length ?? 0) > 0 ||
+            (snapshot.data?.accounts?.length ?? 0) > 0;
+
+          if (hasLocalData) {
+            const uploadRes = await uploadBackup(snapshot);
+            if (uploadRes.success && uploadRes.modifiedTime) {
+              setLastCloudBackupTime(uploadRes.modifiedTime);
+            }
+          }
+        } catch (syncErr) {
+          console.error('[GoogleDrive] Initial sync check error:', syncErr);
         }
 
         return true;
@@ -112,7 +132,7 @@ export function useGoogleDrive() {
 
       const nowStr = result.modifiedTime || new Date().toISOString();
       setLastCloudBackupTime(nowStr);
-      showToast('Backup uploaded to Google Drive successfully!', 'success');
+      showToast('Backup saved to Google Drive successfully!', 'success');
       return true;
     } catch (error: any) {
       console.error('Backup error:', error);

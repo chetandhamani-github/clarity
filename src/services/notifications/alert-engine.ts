@@ -3,6 +3,7 @@ import { getDatabase } from '@/services/database';
 import { insertNotification } from '@/services/database/notification-dao';
 import { getGoalById } from '@/services/database/goal-dao';
 import { getMonthlyTotals } from '@/services/database/transaction-dao';
+import { getSpentByCategory } from '@/services/database/budget-dao';
 import { formatCurrency } from '@/utils/format';
 import type { Transaction } from '@/types';
 
@@ -13,41 +14,61 @@ export async function evaluateTransactionBudgetAlerts(
 
   try {
     const db = getDatabase();
-    const txDate = new Date(transaction.date);
-    const month = txDate.getMonth() + 1;
-    const year = txDate.getFullYear();
+
+    // Safely extract year and month without timezone drift
+    const dateParts = transaction.date.split('T')[0].split('-');
+    const year = parseInt(dateParts[0], 10);
+    const month = parseInt(dateParts[1], 10);
     const monthStr = month.toString().padStart(2, '0');
     const datePrefix = `${year}-${monthStr}`;
 
-    // 1. Check category budget limit
-    const categoryRow = await db.getFirstAsync<{ budget_limit: number }>(
-      'SELECT budget_limit FROM budget_categories WHERE name = ?',
+    // 1. Check category budget limit (case-insensitive & trimmed)
+    const categoryRow = await db.getFirstAsync<{ id: string; name: string; budget_limit: number }>(
+      'SELECT id, name, budget_limit FROM budget_categories WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))',
       [transaction.category]
     );
 
     if (categoryRow && categoryRow.budget_limit > 0) {
-      const spentRow = await db.getFirstAsync<{ total: number }>(
-        `SELECT SUM(amount) as total FROM transactions 
-         WHERE category = ? AND type = 'expense' AND date LIKE ?`,
-        [transaction.category, `${datePrefix}%`]
-      );
+      // Calculate true category spent (including splits and exact month transactions)
+      const spentDict = await getSpentByCategory(month, year);
 
-      const totalSpent = spentRow?.total ?? 0;
+      let totalSpent = 0;
+      for (const [catName, spent] of Object.entries(spentDict)) {
+        if (catName.trim().toLowerCase() === categoryRow.name.trim().toLowerCase()) {
+          totalSpent += spent;
+        }
+      }
+
       const limit = categoryRow.budget_limit;
       const percentage = (totalSpent / limit) * 100;
+      const categoryName = categoryRow.name;
+
+      // Clean up previous budget alert notifications for this category in current month
+      // so user always sees the up-to-date spent value rather than stale historical values
+      await db.runAsync(
+        `DELETE FROM notifications 
+         WHERE type = 'alert' 
+           AND (title = ? OR title = ?) 
+           AND created_at >= ?`,
+        [
+          `Budget Exceeded: ${categoryName}`,
+          `Budget Alert: ${categoryName}`,
+          `${datePrefix}-01`,
+        ]
+      );
 
       if (percentage >= 100) {
         await insertNotification({
-          title: `Budget Exceeded: ${transaction.category}`,
-          description: `You have spent ${formatCurrency(totalSpent)} which exceeds your ${formatCurrency(limit)} limit for ${transaction.category}.`,
+          title: `Budget Exceeded: ${categoryName}`,
+          description: `You have spent ${formatCurrency(totalSpent)} which exceeds your ${formatCurrency(limit)} limit for ${categoryName}.`,
           type: 'alert',
           actionUrl: '/(app)/(tabs)/plan',
         });
         DeviceEventEmitter.emit('notificationsUpdated');
       } else if (percentage >= 80) {
         await insertNotification({
-          title: `Budget Alert: ${transaction.category}`,
-          description: `You have used ${Math.round(percentage)}% of your ${formatCurrency(limit)} budget for ${transaction.category}.`,
+          title: `Budget Alert: ${categoryName}`,
+          description: `You have spent ${formatCurrency(totalSpent)} (${Math.round(percentage)}% of your ${formatCurrency(limit)} budget for ${categoryName}).`,
           type: 'alert',
           actionUrl: '/(app)/(tabs)/plan',
         });

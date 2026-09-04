@@ -179,13 +179,17 @@ export default function SearchScreen() {
                                 />
                               </View>
                               <View style={styles.txTextContent}>
-                                <Text style={styles.txTitle}>
-                                  {tx.type === 'transfer' ? `Transfer` : tx.merchant}
+                                <Text style={styles.txTitle} numberOfLines={1}>
+                                  {tx.type === 'transfer'
+                                    ? 'Transfer'
+                                    : (tx.merchant && tx.merchant.trim() ? tx.merchant : tx.category)}
                                 </Text>
-                                <Text style={styles.txSubtitle}>
+                                <Text style={styles.txSubtitle} numberOfLines={1}>
                                   {tx.type === 'transfer'
                                     ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}`
-                                    : tx.accountName}
+                                    : (tx.merchant && tx.merchant.trim() && tx.merchant.trim().toLowerCase() !== tx.category.trim().toLowerCase()
+                                        ? `${tx.accountName} • ${tx.category}`
+                                        : tx.accountName)}
                                 </Text>
                               </View>
                             </View>

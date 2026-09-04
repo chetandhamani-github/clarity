@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: clarity-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: clarity_db
+      POSTGRES_USER: clarity_user
+      POSTGRES_PASSWORD: clarity_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - clarity_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clarity_user -d clarity_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - clarity-network
+
+  clarity-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clarity-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 8080
+      DB_URL: jdbc:postgresql://postgres:5432/clarity_db
+      DB_USERNAME: clarity_user
+      DB_PASSWORD: clarity_pass
+      SHOW_SQL: "false"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - clarity-network
+
+volumes:
+  clarity_pgdata:
+    driver: local
+
+networks:
+  clarity-network:
+    driver: bridge

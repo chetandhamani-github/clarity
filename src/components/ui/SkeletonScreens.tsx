@@ -135,7 +135,7 @@ export function AccountsSkeleton() {
   const { colors } = useTheme();
 
   return (
-    <View style={styles.container}>
+    <View style={styles.accountsContainer}>
       {/* Total Balance Card */}
       <View
         style={[
@@ -525,6 +525,12 @@ export function ListSkeleton() {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    gap: 16,
+  },
+  accountsContainer: {
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 16,

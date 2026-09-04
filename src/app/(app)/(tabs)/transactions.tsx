@@ -128,6 +128,19 @@ export default function TransactionsScreen() {
                         groupIndex === groupedTransactions.length - 1 &&
                         txIndex === group.items.length - 1;
                       const sign = getTransactionSign(tx.type);
+                      const hasMerchant = Boolean(
+                        tx.merchant &&
+                        tx.merchant.trim() &&
+                        tx.merchant.trim().toLowerCase() !== tx.category.trim().toLowerCase()
+                      );
+                      const title = tx.type === 'transfer'
+                        ? 'Transfer'
+                        : (hasMerchant ? tx.merchant : tx.category);
+                      const subtitle = tx.type === 'transfer'
+                        ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}`
+                        : (hasMerchant
+                            ? `${tx.accountName} • ${tx.category}`
+                            : (tx.accountName || ''));
 
                       return (
                         <TouchableOpacity
@@ -154,14 +167,12 @@ export default function TransactionsScreen() {
                                 }
                               />
                             </View>
-                            <View>
-                              <Text style={styles.transactionName}>
-                                {tx.type === 'transfer' ? `Transfer` : tx.merchant}
+                            <View style={{ flex: 1, justifyContent: 'center' }}>
+                              <Text style={styles.transactionName} numberOfLines={1}>
+                                {title}
                               </Text>
-                              <Text style={styles.transactionMeta}>
-                                {tx.type === 'transfer'
-                                  ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}`
-                                  : tx.accountName}
+                              <Text style={styles.transactionMeta} numberOfLines={1}>
+                                {subtitle}
                               </Text>
                             </View>
                           </View>

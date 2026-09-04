@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Text, Header, ListSkeleton } from '@/components/ui';
+import { Text, Header, ListSkeleton, useAlert, useToast } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -9,6 +9,7 @@ import {
   useMonthlyTotals,
   useTopMerchants,
   useRecurringTransactions,
+  useDeleteRecurringTransaction,
   useMonthlyReports,
 } from '@/hooks/use-transactions';
 import { useAccounts } from '@/hooks/use-accounts';
@@ -45,7 +46,32 @@ export default function AnalyticsScreen() {
     5
   );
   const { transactions: recurring, isLoading: loadingRecurring } = useRecurringTransactions();
+  const { mutate: deleteRecurring } = useDeleteRecurringTransaction();
+  const { showAlert } = useAlert();
+  const { showToast } = useToast();
   const { reports, isLoading: loadingReports } = useMonthlyReports();
+
+  const handleCancelRecurring = (tx: any) => {
+    const title = tx.type === 'transfer' ? 'Transfer' : tx.merchant;
+    showAlert(
+      'Cancel Recurring Schedule',
+      `Cancel the ${tx.frequency} recurring schedule for "${title}" (${formatCurrency(tx.amount)})?\n\nPast recorded transactions will not be deleted.`,
+      [
+        { text: 'Keep Schedule', style: 'cancel' },
+        {
+          text: 'Cancel Schedule',
+          style: 'destructive',
+          onPress: () => {
+            deleteRecurring(tx.id, {
+              onSuccess: () => {
+                showToast('Recurring schedule cancelled', 'success');
+              },
+            });
+          },
+        },
+      ]
+    );
+  };
 
   const isLoading =
     loadingTotals ||
@@ -391,25 +417,34 @@ export default function AnalyticsScreen() {
                   </View>
 
                   {recurring.length > 0 ? (
-                    recurring.map((tx, i) => (
-                      <View style={styles.listItem} key={tx.id}>
+                    recurring.map((tx) => (
+                      <TouchableOpacity
+                        style={styles.listItem}
+                        key={tx.id}
+                        onPress={() => handleCancelRecurring(tx)}
+                        activeOpacity={0.7}
+                      >
                         <View style={styles.listItemLeft}>
                           <View style={styles.avatarBox}>
-                            <MaterialIcons name="autorenew" size={20} color={colors.onSurface} />
+                            <MaterialIcons name="autorenew" size={20} color={colors.primary} />
                           </View>
-                          <View>
-                            <Text style={styles.listItemTitle}>
+                          <View style={{ flex: 1, paddingRight: 8 }}>
+                            <Text style={styles.listItemTitle} numberOfLines={1}>
                               {tx.type === 'transfer' ? `Transfer` : tx.merchant}
                             </Text>
-                            <Text style={styles.listItemSubtitle}>
+                            <Text style={styles.listItemSubtitle} numberOfLines={1}>
                               {tx.type === 'transfer'
                                 ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'} • ${tx.frequency}`
                                 : `${tx.category} • ${tx.frequency}`}
+                              {tx.nextProcessDate ? ` • Next: ${tx.nextProcessDate}` : ''}
                             </Text>
                           </View>
                         </View>
-                        <Text style={styles.listItemAmount}>{formatCurrency(tx.amount)}</Text>
-                      </View>
+                        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                          <Text style={styles.listItemAmount}>{formatCurrency(tx.amount)}</Text>
+                          <MaterialIcons name="delete-outline" size={18} color={colors.outline} />
+                        </View>
+                      </TouchableOpacity>
                     ))
                   ) : (
                     <Text

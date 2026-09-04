@@ -67,6 +67,8 @@ export interface RecurringTransaction {
   nextProcessDate: string;
   lastProcessedDate?: string;
   isActive: boolean;
+  splits?: { category: string; amount: number }[];
+  splits_json?: string;
 }
 
 export interface TransactionFilters {
@@ -169,3 +171,5 @@ export interface MonthlyTotals {
   income: number;
   expenses: number;
 }
+
+export * from '@/modules/sms/types';

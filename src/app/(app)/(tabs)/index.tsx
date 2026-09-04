@@ -1,4 +1,5 @@
 import { Header, HomeSkeleton, ProgressBar, Text } from '@/components/ui';
+import { AnnouncementBanner } from '@/components/backend';
 import { radius, ThemeColors, typography, useTheme } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -17,6 +18,7 @@ import { useAccounts } from '@/hooks/use-accounts';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
 import { useMonthlyTotals, useNetWorthHistory, useTransactions } from '@/hooks/use-transactions';
 import { useDoubleBackToExit } from '@/hooks/use-double-back-to-exit';
+import { useSmsSync } from '@/hooks/useSmsSync';
 import { formatCurrency, formatCurrencyPrivacy, getTransactionSign } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
 import { useAppStore } from '@/store/use-app-store';
@@ -53,6 +55,23 @@ export default function DashboardScreen() {
     refetch: refetchSpending,
   } = useCategorySpending(currentMonth, currentYear);
   const { history: nwHistory, isLoading: nwLoading, refetch: refetchNw } = useNetWorthHistory(30);
+
+  const {
+    permissionStatus: smsPermissionStatus,
+    isSyncing: isSmsSyncing,
+    requestPermission: requestSmsPermission,
+    startInitialSync: startSmsSync,
+  } = useSmsSync();
+
+  const handleEnableSms = async () => {
+    const status = await requestSmsPermission();
+    if (status === 'granted') {
+      await startSmsSync();
+      refetchTransactions();
+      refetchAccounts();
+      refetchTotals();
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -224,6 +243,68 @@ export default function DashboardScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
+        <AnnouncementBanner />
+        {/* SMS Auto-Tracking Banner */}
+        {smsPermissionStatus !== 'granted' && (
+          <View
+            style={{
+              marginHorizontal: 20,
+              marginTop: 12,
+              padding: 16,
+              borderRadius: 16,
+              backgroundColor: colors.surfaceContainerLow,
+              borderWidth: 1,
+              borderColor: colors.outlineVariant,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: colors.primaryContainer,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <MaterialIcons name="sms" size={20} color={colors.onPrimaryContainer} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ ...typography.bodyLg, color: colors.onSurface, fontWeight: '700' }}>
+                  Auto-Track Bank SMS
+                </Text>
+                <Text style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, fontSize: 12 }}>
+                  Detect UPI, cards, & bills 100% offline.
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={handleEnableSms}
+              disabled={isSmsSyncing}
+              style={{
+                backgroundColor: colors.primary,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 10,
+              }}
+            >
+              <Text
+                style={{
+                  ...typography.labelMd,
+                  color: colors.onPrimary,
+                  fontWeight: '700',
+                }}
+              >
+                {isSmsSyncing ? 'SYNCING...' : 'ENABLE'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
         <View style={{ flex: 1 }}>
           {isLoading ? (
             <HomeSkeleton />
@@ -487,6 +568,20 @@ export default function DashboardScreen() {
                     transactions.map((tx, index) => {
                       const isLast = index === transactions.length - 1;
                       const sign = getTransactionSign(tx.type);
+                      const hasMerchant = Boolean(
+                        tx.merchant &&
+                        tx.merchant.trim() &&
+                        tx.merchant.trim().toLowerCase() !== tx.category.trim().toLowerCase()
+                      );
+                      const title = tx.type === 'transfer'
+                        ? 'Transfer'
+                        : (hasMerchant ? tx.merchant : tx.category);
+                      const subtitle = tx.type === 'transfer'
+                        ? `${tx.date} • ${tx.accountName} → ${tx.toAccountName || 'Unknown'}`
+                        : (hasMerchant
+                            ? `${tx.date} • ${tx.category}`
+                            : `${tx.date}${tx.accountName ? ` • ${tx.accountName}` : ''}`);
+
                       return (
                         <TouchableOpacity
                           key={tx.id}
@@ -508,14 +603,11 @@ export default function DashboardScreen() {
                             />
                           </View>
                           <View style={styles.activityDetails}>
-                            <Text style={styles.activityName}>
-                              {tx.type === 'transfer' ? `Transfer` : tx.merchant}
+                            <Text style={styles.activityName} numberOfLines={1}>
+                              {title}
                             </Text>
-                            <Text style={styles.activityDate}>
-                              {tx.date} •{' '}
-                              {tx.type === 'transfer'
-                                ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}`
-                                : tx.category}
+                            <Text style={styles.activityDate} numberOfLines={1}>
+                              {subtitle}
                             </Text>
                           </View>
                           <View style={{ alignItems: 'flex-end' }}>
@@ -741,11 +833,14 @@ const getStyles = (colors: ThemeColors) => {
     },
     activityDetails: {
       flex: 1,
+      justifyContent: 'center',
+      paddingRight: 8,
     },
     activityName: {
       ...typography.bodyMd,
-      fontWeight: '500',
+      fontWeight: '600',
       color: colors.onSurface,
+      marginBottom: 2,
     },
     activityDate: {
       ...typography.labelMd,

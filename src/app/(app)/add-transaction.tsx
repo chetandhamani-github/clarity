@@ -29,6 +29,7 @@ import type { TransactionType, RecurringFrequency } from '@/types';
 import { getAccountTypeIcon, getCategoryIcon } from '@/utils/icons';
 import { getCurrencySymbol } from '@/utils/format';
 import { evaluateTransactionBudgetAlerts } from '@/services/notifications/alert-engine';
+import { calculateNextDate } from '@/services/database/recurring-dao';
 
 const CATEGORIES = [
   'Groceries',
@@ -187,38 +188,22 @@ export default function AddTransactionScreen() {
       }));
     }
 
-    if (isRecurring && !isEditing) {
-      const recData = {
-        accountId,
-        toAccountId: type === 'transfer' ? toAccountId || undefined : undefined,
-        amount,
-        type,
-        merchant: type === 'transfer' ? 'Transfer' : merchant.trim(),
-        category: type === 'transfer' ? 'Transfer' : category,
-        frequency: recurringFreq,
-        nextProcessDate: date,
-      };
-      createRecurring(recData, {
-        onSuccess: () => {
-          showToast('Recurring transaction created', 'success');
-          router.back();
-        },
-      });
-      return;
-    }
-
     const txData = {
       accountId,
       toAccountId: type === 'transfer' ? toAccountId || undefined : undefined,
       amount,
       type,
-      merchant: type === 'transfer' ? 'Transfer' : merchant.trim(),
+      merchant: type === 'transfer' ? 'Transfer' : (merchant.trim() || category),
       category: type === 'transfer' ? 'Transfer' : category,
       date,
       isRecurring,
       splits: splitsToSave,
       note: '',
     };
+
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
     if (isEditing && id) {
       updateTransaction(id, txData, {
@@ -228,15 +213,62 @@ export default function AddTransactionScreen() {
           router.back();
         },
       });
-    } else {
-      createTransaction(txData, {
+      return;
+    }
+
+    // New transaction with future recurring date
+    if (isRecurring && date > today) {
+      const recData = {
+        accountId,
+        toAccountId: type === 'transfer' ? toAccountId || undefined : undefined,
+        amount,
+        type,
+        merchant: txData.merchant,
+        category: txData.category,
+        frequency: recurringFreq,
+        nextProcessDate: date,
+        splits: splitsToSave,
+      };
+      createRecurring(recData, {
         onSuccess: () => {
-          evaluateTransactionBudgetAlerts(txData);
-          showToast('Transaction added successfully', 'success');
+          showToast(`Recurring schedule created (First on ${date})`, 'success');
           router.back();
         },
       });
+      return;
     }
+
+    // New transaction occurring today (or past): record transaction now & schedule next cycle
+    createTransaction(txData, {
+      onSuccess: () => {
+        evaluateTransactionBudgetAlerts(txData);
+
+        if (isRecurring) {
+          const nextDate = calculateNextDate(date, recurringFreq);
+          const recData = {
+            accountId,
+            toAccountId: type === 'transfer' ? toAccountId || undefined : undefined,
+            amount,
+            type,
+            merchant: txData.merchant,
+            category: txData.category,
+            frequency: recurringFreq,
+            nextProcessDate: nextDate,
+            lastProcessedDate: date,
+            splits: splitsToSave,
+          };
+          createRecurring(recData, {
+            onSuccess: () => {
+              showToast(`Transaction added & scheduled ${recurringFreq}`, 'success');
+              router.back();
+            },
+          });
+        } else {
+          showToast('Transaction added successfully', 'success');
+          router.back();
+        }
+      },
+    });
   };
 
   const handleDelete = () => {
@@ -249,6 +281,9 @@ export default function AddTransactionScreen() {
           onPress: () => {
             deleteTransaction(id, {
               onSuccess: () => {
+                if (transaction) {
+                  evaluateTransactionBudgetAlerts(transaction);
+                }
                 showToast('Transaction deleted', 'success');
                 router.back();
               },

@@ -1,0 +1,75 @@
+#!/bin/sh
+# ----------------------------------------------------------------------------
+# Maven Wrapper Executable for UNIX
+# ----------------------------------------------------------------------------
+
+set -e
+
+# OS specific support.
+cygwin=false;
+darwin=false;
+nonstop=false;
+case "`uname`" in
+  CYGWIN*) cygwin=true ;;
+  Darwin*) darwin=true ;;
+  NONSTOP*) nonstop=true ;;
+esac
+
+PRG="$0"
+while [ -h "$PRG" ] ; do
+  ls=`ls -ld "$PRG"`
+  link=`expr "$ls" : '.*-> \(.*\)$'`
+  if expr "$link" : '/.*' > /dev/null; then
+    PRG="$link"
+  else
+    PRG=`dirname "$PRG"`/"$link"
+  fi
+done
+
+saveddir=`pwd`
+BASE_DIR=`dirname "$PRG"`
+cd "$BASE_DIR"
+
+# Locate Java executable
+if [ -z "$JAVACMD" ] ; then
+  if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ] ; then
+    JAVACMD="$JAVA_HOME/bin/java"
+  elif command -v java >/dev/null 2>&1 ; then
+    JAVACMD="$(command -v java)"
+  elif [ -x "/usr/lib/jvm/java-17-openjdk-amd64/bin/java" ] ; then
+    JAVACMD="/usr/lib/jvm/java-17-openjdk-amd64/bin/java"
+    export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+  fi
+fi
+
+if [ -z "$JAVACMD" ] || [ ! -x "$JAVACMD" ] ; then
+  echo "Error: Java is not found. Please ensure Java 17 is installed." >&2
+  exit 1
+fi
+
+WRAPPER_JAR=".mvn/wrapper/maven-wrapper.jar"
+WRAPPER_LAUNCHER="org.apache.maven.wrapper.MavenWrapperMain"
+WRAPPER_PROPERTIES=".mvn/wrapper/maven-wrapper.properties"
+
+# If wrapper jar doesn't exist, download it
+if [ ! -f "$WRAPPER_JAR" ]; then
+  mkdir -p ".mvn/wrapper"
+  echo "Downloading Maven wrapper..."
+  WRAPPER_URL=$(grep "^wrapperUrl" "$WRAPPER_PROPERTIES" | cut -d= -f2- | tr -d '\r')
+  if command -v curl >/dev/null 2>&1; then
+    curl -sSfL "$WRAPPER_URL" -o "$WRAPPER_JAR" || true
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q "$WRAPPER_URL" -O "$WRAPPER_JAR" || true
+  fi
+fi
+
+if [ -f "$WRAPPER_JAR" ]; then
+  exec "$JAVACMD" \
+    -classpath "$WRAPPER_JAR" \
+    "-Dmaven.multiModuleProjectDirectory=$BASE_DIR" \
+    $WRAPPER_LAUNCHER "$@"
+else
+  echo "Maven wrapper jar could not be downloaded."
+  echo "Please verify your internet connection or install maven."
+  exit 1
+fi

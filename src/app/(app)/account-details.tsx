@@ -169,7 +169,13 @@ export default function AccountDetailsScreen() {
       />
 
       {isLoading || !account ? (
-        <DetailSkeleton />
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <DetailSkeleton />
+        </ScrollView>
       ) : (
         <ScrollView
           style={{ flex: 1 }}
@@ -353,15 +359,20 @@ export default function AccountDetailsScreen() {
                                     }
                                   />
                                 </View>
-                                <View>
-                                  <Text style={styles.txTitle}>
+                                <View style={{ flex: 1, justifyContent: 'center' }}>
+                                  <Text style={styles.txTitle} numberOfLines={1}>
                                     {tx.type === 'transfer'
                                       ? tx.accountId === account?.id
                                         ? `Transfer to ${tx.toAccountName || 'Unknown'}`
                                         : `Transfer from ${tx.accountName}`
-                                      : tx.merchant}
+                                      : (tx.merchant && tx.merchant.trim() ? tx.merchant : tx.category)}
                                   </Text>
-                                  <Text style={styles.txSubtitle}>{formatDate(tx.date)}</Text>
+                                  <Text style={styles.txSubtitle} numberOfLines={1}>
+                                    {formatDate(tx.date)}
+                                    {tx.merchant && tx.merchant.trim() && tx.merchant.trim().toLowerCase() !== tx.category.trim().toLowerCase()
+                                      ? ` • ${tx.category}`
+                                      : ''}
+                                  </Text>
                                 </View>
                               </View>
                               <View style={styles.txRight}>

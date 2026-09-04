@@ -116,7 +116,93 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
       last_processed_date TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
       to_account_id TEXT,
+      splits_json TEXT,
       FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
     );
+  `);
+
+  // Safe migration for existing recurring_transactions table if splits_json is missing
+  try {
+    const tableInfo = await db.getAllAsync<{ name: string }>('PRAGMA table_info(recurring_transactions)');
+    const hasSplitsJson = tableInfo.some((col) => col.name === 'splits_json');
+    if (!hasSplitsJson) {
+      await db.execAsync('ALTER TABLE recurring_transactions ADD COLUMN splits_json TEXT;');
+    }
+  } catch (e) {
+    console.warn('Could not add splits_json to recurring_transactions:', e);
+  }
+
+  // Create performance index
+  try {
+    await db.execAsync(`
+      CREATE INDEX IF NOT EXISTS idx_recurring_due 
+      ON recurring_transactions(is_active, next_process_date);
+    `);
+  } catch (e) {
+    console.warn('Could not create idx_recurring_due:', e);
+  }
+
+  // SMS Intelligence Engine tables
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS sms_messages (
+      id TEXT PRIMARY KEY NOT NULL,
+      address TEXT NOT NULL,
+      body TEXT NOT NULL,
+      date INTEGER NOT NULL,
+      date_sent INTEGER,
+      status TEXT NOT NULL DEFAULT 'read',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS parsed_transactions (
+      id TEXT PRIMARY KEY NOT NULL,
+      sms_id TEXT,
+      amount REAL NOT NULL,
+      type TEXT NOT NULL CHECK(type IN ('DEBIT', 'CREDIT')),
+      merchant TEXT NOT NULL,
+      category TEXT NOT NULL,
+      bank TEXT NOT NULL,
+      account_mask TEXT NOT NULL,
+      reference_number TEXT,
+      available_balance REAL,
+      transaction_date TEXT NOT NULL,
+      confidence REAL NOT NULL DEFAULT 1.0,
+      is_duplicate INTEGER NOT NULL DEFAULT 0,
+      duplicate_of TEXT,
+      transaction_id TEXT,
+      raw_body TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (sms_id) REFERENCES sms_messages(id) ON DELETE SET NULL,
+      FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS sms_patterns (
+      id TEXT PRIMARY KEY NOT NULL,
+      bank TEXT NOT NULL,
+      pattern_regex TEXT NOT NULL,
+      pattern_type TEXT NOT NULL,
+      mapping_json TEXT NOT NULL,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS sms_review_queue (
+      id TEXT PRIMARY KEY NOT NULL,
+      sms_id TEXT NOT NULL,
+      sender TEXT NOT NULL,
+      body TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      confidence REAL NOT NULL DEFAULT 0.0,
+      extracted_data TEXT,
+      status TEXT NOT NULL CHECK(status IN ('pending', 'resolved', 'dismissed')) DEFAULT 'pending',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sms_messages_date ON sms_messages(date DESC);
+    CREATE INDEX IF NOT EXISTS idx_sms_messages_address ON sms_messages(address);
+    CREATE INDEX IF NOT EXISTS idx_parsed_tx_date ON parsed_transactions(transaction_date DESC);
+    CREATE INDEX IF NOT EXISTS idx_parsed_tx_ref ON parsed_transactions(reference_number);
+    CREATE INDEX IF NOT EXISTS idx_parsed_tx_lookup ON parsed_transactions(amount, account_mask, transaction_date);
+    CREATE INDEX IF NOT EXISTS idx_sms_review_status ON sms_review_queue(status, created_at DESC);
   `);
 }

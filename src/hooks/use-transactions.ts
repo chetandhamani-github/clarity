@@ -17,6 +17,7 @@ import {
   createRecurringTransaction,
   getActiveRecurringTransactions,
   deleteRecurringTransaction,
+  toggleRecurringTransactionActive,
 } from '@/services/database/recurring-dao';
 import { queueAutoBackup } from '@/services/cloud/google-drive-service';
 import type {
@@ -168,12 +169,59 @@ export function useCreateRecurringTransaction() {
     mutationFn: (data: any) => createRecurringTransaction(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions', 'recurring'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queueAutoBackup('recurring-create');
     },
   });
 
   return {
     mutate: (data: any, options?: { onSuccess?: () => void }) => {
       mutation.mutate(data, { onSuccess: options?.onSuccess });
+    },
+    isPending: mutation.isPending,
+  };
+}
+
+export function useDeleteRecurringTransaction() {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: (id: string) => deleteRecurringTransaction(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions', 'recurring'] });
+      queueAutoBackup('recurring-delete');
+    },
+  });
+
+  return {
+    mutate: (id: string, options?: { onSuccess?: () => void }) => {
+      mutation.mutate(id, { onSuccess: options?.onSuccess });
+    },
+    isPending: mutation.isPending,
+  };
+}
+
+export function useToggleRecurringTransaction() {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      toggleRecurringTransactionActive(id, isActive),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions', 'recurring'] });
+      queueAutoBackup('recurring-toggle');
+    },
+  });
+
+  return {
+    mutate: (
+      params: { id: string; isActive: boolean },
+      options?: { onSuccess?: () => void }
+    ) => {
+      mutation.mutate(params, { onSuccess: options?.onSuccess });
     },
     isPending: mutation.isPending,
   };

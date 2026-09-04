@@ -14,16 +14,15 @@ const SECURE_KEYS = {
 
 const BACKUP_FILE_NAME = 'clarity_backup.json';
 
-const GOOGLE_USERINFO_ENDPOINT = 'https://www.googleapis.com/oauth2/v2/userinfo';
 const DRIVE_FILES_ENDPOINT = 'https://www.googleapis.com/drive/v3/files';
 const DRIVE_UPLOAD_ENDPOINT = 'https://www.googleapis.com/upload/drive/v3/files';
 
-// Scopes required: Drive AppData (private app folder)
+// Scope required: Drive AppData (private hidden app folder)
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 
 let isGoogleSignInConfigured = false;
 
-function configureGoogleSignIn(): void {
+export function configureGoogleSignIn(): void {
   if (isGoogleSignInConfigured) return;
 
   const webClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
@@ -111,7 +110,7 @@ export async function clearTokens(): Promise<void> {
 }
 
 /**
- * Initiates native Google Sign-In flow.
+ * Initiates native Google Sign-In flow with Drive AppData scope consent.
  */
 export async function authenticateWithGoogle(): Promise<{
   success: boolean;
@@ -124,12 +123,22 @@ export async function authenticateWithGoogle(): Promise<{
 
     await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 
+    // 1. Initial Google Sign In
     const signInResult = await GoogleSignin.signIn();
     const userEmail = signInResult.data?.user?.email;
 
-    // Get access token for Drive API calls
+    // 2. Explicitly request Drive AppData scope if needed
+    try {
+      await GoogleSignin.addScopes({ scopes: [DRIVE_SCOPE] });
+    } catch (scopeErr) {
+      if (__DEV__) {
+        console.log('[GoogleDrive] addScopes notification:', scopeErr);
+      }
+    }
+
+    // 3. Obtain access token for Drive API calls
     const tokenResult = await GoogleSignin.getTokens();
-    const accessToken = tokenResult.accessToken;
+    const accessToken = tokenResult?.accessToken;
 
     if (!accessToken) {
       return { success: false, error: 'Failed to obtain access token from Google.' };
@@ -165,16 +174,25 @@ export async function authenticateWithGoogle(): Promise<{
 }
 
 /**
- * Get active access token (or prompt re-authentication if expired).
+ * Get active access token, refreshing if needed.
  */
-export async function getValidAccessToken(): Promise<string | null> {
+export async function getValidAccessToken(forceRefresh = false): Promise<string | null> {
   try {
     const { accessToken, isExpired } = await getSavedTokens();
-    if (accessToken && !isExpired) {
+    if (accessToken && !isExpired && !forceRefresh) {
       return accessToken;
     }
 
     configureGoogleSignIn();
+
+    // Clear stale cached token if forced
+    if (forceRefresh && accessToken) {
+      try {
+        await GoogleSignin.clearCachedAccessToken(accessToken);
+      } catch {
+        // Ignore cache clear error
+      }
+    }
 
     // 1. Try silent token retrieval from Google Sign-In SDK
     try {
@@ -193,35 +211,57 @@ export async function getValidAccessToken(): Promise<string | null> {
         return tokenResult.accessToken;
       }
     } catch (silentErr) {
-      console.log('Silent token refresh attempt:', silentErr);
+      if (__DEV__) {
+        console.log('[GoogleDrive] Silent token refresh attempt:', silentErr);
+      }
     }
 
     // 2. Interactive sign-in fallback
     const auth = await authenticateWithGoogle();
     return auth.success && auth.accessToken ? auth.accessToken : null;
   } catch (err) {
-    console.error('getValidAccessToken error:', err);
+    console.error('[GoogleDrive] getValidAccessToken error:', err);
     return null;
   }
 }
 
 /**
- * Search for the Clarity backup file in the private AppData folder or Drive.
+ * Search for the Clarity backup file in the private AppData folder.
+ * NOTE: spaces=appDataFolder does NOT support `trashed` field queries in Google Drive v3.
  */
 export async function findBackupFile(accessToken: string): Promise<GoogleDriveBackupInfo | null> {
-  const query = encodeURIComponent(`name = '${BACKUP_FILE_NAME}' and trashed = false`);
-  
-  // 1. First search in private appDataFolder with newest first
   try {
+    // 1. Query files specifically in appDataFolder
+    // Notice: Do NOT use `trashed = false` because appDataFolder does not support trash!
+    const query = encodeURIComponent(`name = '${BACKUP_FILE_NAME}'`);
     const appDataUrl = `${DRIVE_FILES_ENDPOINT}?spaces=appDataFolder&q=${query}&fields=files(id,name,modifiedTime,size)&orderBy=modifiedTime%20desc`;
+
     const response = await fetch(appDataUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
+    if (response.status === 401) {
+      throw new Error('UNAUTHORIZED');
+    }
+
     if (response.ok) {
       const data = await response.json();
-      if (data.files && data.files.length > 0) {
+      if (data.files && Array.isArray(data.files) && data.files.length > 0) {
         const file = data.files[0];
+
+        // If duplicate legacy files exist, prune older ones in background
+        if (data.files.length > 1) {
+          for (let i = 1; i < data.files.length; i++) {
+            const oldId = data.files[i]?.id;
+            if (oldId) {
+              fetch(`${DRIVE_FILES_ENDPOINT}/${oldId}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${accessToken}` },
+              }).catch(() => {});
+            }
+          }
+        }
+
         return {
           fileId: file.id,
           name: file.name,
@@ -229,32 +269,57 @@ export async function findBackupFile(accessToken: string): Promise<GoogleDriveBa
           size: file.size ? parseInt(file.size, 10) : undefined,
         };
       }
+    } else {
+      const errText = await response.text();
+      console.warn('[GoogleDrive] AppData folder query failed:', response.status, errText);
     }
-  } catch (e) {
-    console.warn('Error querying appDataFolder:', e);
-  }
 
-  // 2. Fallback: Search globally in case it was stored in root folder
-  try {
-    const globalUrl = `${DRIVE_FILES_ENDPOINT}?q=${query}&fields=files(id,name,modifiedTime,size)&orderBy=modifiedTime%20desc`;
-    const response = await fetch(globalUrl, {
+    // 2. Fallback: list all files in appDataFolder and filter client-side
+    const listAllUrl = `${DRIVE_FILES_ENDPOINT}?spaces=appDataFolder&fields=files(id,name,modifiedTime,size)&pageSize=20`;
+    const listResponse = await fetch(listAllUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
-    if (response.ok) {
-      const data = await response.json();
-      if (data.files && data.files.length > 0) {
-        const file = data.files[0];
-        return {
-          fileId: file.id,
-          name: file.name,
-          modifiedTime: file.modifiedTime,
-          size: file.size ? parseInt(file.size, 10) : undefined,
-        };
+    if (listResponse.ok) {
+      const listData = await listResponse.json();
+      if (listData.files && Array.isArray(listData.files)) {
+        const matchingFiles = listData.files
+          .filter((f: any) => f.name === BACKUP_FILE_NAME)
+          .sort(
+            (a: any, b: any) =>
+              new Date(b.modifiedTime).getTime() - new Date(a.modifiedTime).getTime()
+          );
+
+        if (matchingFiles.length > 0) {
+          const file = matchingFiles[0];
+
+          // Prune older duplicates in background
+          if (matchingFiles.length > 1) {
+            for (let i = 1; i < matchingFiles.length; i++) {
+              const oldId = matchingFiles[i]?.id;
+              if (oldId) {
+                fetch(`${DRIVE_FILES_ENDPOINT}/${oldId}`, {
+                  method: 'DELETE',
+                  headers: { Authorization: `Bearer ${accessToken}` },
+                }).catch(() => {});
+              }
+            }
+          }
+
+          return {
+            fileId: file.id,
+            name: file.name,
+            modifiedTime: file.modifiedTime,
+            size: file.size ? parseInt(file.size, 10) : undefined,
+          };
+        }
       }
     }
-  } catch (e) {
-    console.warn('Error querying global drive:', e);
+  } catch (e: any) {
+    if (e?.message === 'UNAUTHORIZED') {
+      throw e;
+    }
+    console.warn('[GoogleDrive] Error finding backup file:', e);
   }
 
   return null;
@@ -262,67 +327,125 @@ export async function findBackupFile(accessToken: string): Promise<GoogleDriveBa
 
 /**
  * Upload database snapshot to Google Drive AppData folder.
+ * Uses direct PATCH for existing files and RFC-compliant multipart POST for new files.
  */
 export async function uploadBackup(
   snapshot: ClarityBackupPayload
 ): Promise<{ success: boolean; modifiedTime?: string; error?: string }> {
   try {
-    const accessToken = await getValidAccessToken();
+    let accessToken = await getValidAccessToken();
     if (!accessToken) {
       return { success: false, error: 'Google Drive is not connected or token expired.' };
     }
 
-    const existingFile = await findBackupFile(accessToken);
-    const jsonContent = JSON.stringify(snapshot, null, 2);
-
-    const boundary = '-------314159265358979323846';
-    const delimiter = `\r\n--${boundary}\r\n`;
-    const closeDelimiter = `\r\n--${boundary}--`;
-
-    const metadata = {
-      name: BACKUP_FILE_NAME,
-      mimeType: 'application/json',
-      ...(existingFile ? {} : { parents: ['appDataFolder'] }),
-    };
-
-    const multipartRequestBody =
-      delimiter +
-      'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-      JSON.stringify(metadata) +
-      delimiter +
-      'Content-Type: application/json\r\n\r\n' +
-      jsonContent +
-      closeDelimiter;
-
-    let uploadUrl = `${DRIVE_UPLOAD_ENDPOINT}?uploadType=multipart`;
-    let method = 'POST';
-
-    if (existingFile) {
-      uploadUrl = `${DRIVE_UPLOAD_ENDPOINT}/${existingFile.fileId}?uploadType=multipart`;
-      method = 'PATCH';
+    let existingFile: GoogleDriveBackupInfo | null = null;
+    try {
+      existingFile = await findBackupFile(accessToken);
+    } catch (findErr: any) {
+      if (findErr?.message === 'UNAUTHORIZED') {
+        accessToken = await getValidAccessToken(true);
+        if (accessToken) {
+          existingFile = await findBackupFile(accessToken);
+        }
+      }
     }
 
-    const response = await fetch(uploadUrl, {
-      method,
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': `multipart/related; boundary=${boundary}`,
-      },
-      body: multipartRequestBody,
-    });
+    if (!accessToken) {
+      return { success: false, error: 'Authentication expired. Please reconnect Google Drive.' };
+    }
+
+    const jsonContent = JSON.stringify(snapshot, null, 2);
+
+    let response: Response;
+
+    if (existingFile) {
+      // 1. UPDATE EXISTING FILE: Use direct media PATCH (most reliable, avoids multipart boundary issues)
+      const uploadUrl = `${DRIVE_UPLOAD_ENDPOINT}/${existingFile.fileId}?uploadType=media`;
+      response = await fetch(uploadUrl, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json; charset=UTF-8',
+        },
+        body: jsonContent,
+      });
+
+      // If 401, retry once with refreshed token
+      if (response.status === 401) {
+        accessToken = await getValidAccessToken(true);
+        if (accessToken) {
+          response = await fetch(uploadUrl, {
+            method: 'PATCH',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json; charset=UTF-8',
+            },
+            body: jsonContent,
+          });
+        }
+      }
+    } else {
+      // 2. CREATE NEW FILE: Use RFC-compliant multipart/related POST to appDataFolder
+      const boundary = `boundary_clarity_${Date.now()}`;
+      const metadata = {
+        name: BACKUP_FILE_NAME,
+        mimeType: 'application/json',
+        parents: ['appDataFolder'],
+      };
+
+      // Ensure NO leading CRLF before the first boundary
+      const multipartRequestBody =
+        `--${boundary}\r\n` +
+        'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+        JSON.stringify(metadata) +
+        `\r\n--${boundary}\r\n` +
+        'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+        jsonContent +
+        `\r\n--${boundary}--`;
+
+      const uploadUrl = `${DRIVE_UPLOAD_ENDPOINT}?uploadType=multipart`;
+      response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': `multipart/related; boundary=${boundary}`,
+        },
+        body: multipartRequestBody,
+      });
+
+      // If 401, retry once with refreshed token
+      if (response.status === 401) {
+        accessToken = await getValidAccessToken(true);
+        if (accessToken) {
+          response = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': `multipart/related; boundary=${boundary}`,
+            },
+            body: multipartRequestBody,
+          });
+        }
+      }
+    }
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`Drive upload failed: ${errText}`);
+      console.error('[GoogleDrive] Upload failed HTTP', response.status, errText);
+      return { success: false, error: `Google Drive upload failed (${response.status}): ${errText}` };
     }
 
     const resData = await response.json();
     const modifiedTime = resData.modifiedTime || new Date().toISOString();
 
+    if (__DEV__) {
+      console.log('[GoogleDrive] Backup uploaded successfully at:', modifiedTime);
+    }
+
     return { success: true, modifiedTime };
   } catch (error: any) {
-    console.error('Failed to upload backup to Google Drive:', error);
-    return { success: false, error: error?.message || 'Upload failed.' };
+    console.error('[GoogleDrive] Failed to upload backup:', error);
+    return { success: false, error: error?.message || 'Failed to upload backup to Google Drive.' };
   }
 }
 
@@ -336,31 +459,51 @@ export async function downloadBackup(): Promise<{
   error?: string;
 }> {
   try {
-    const accessToken = await getValidAccessToken();
+    let accessToken = await getValidAccessToken();
     if (!accessToken) {
       return { success: false, error: 'Google Drive is not connected or token expired.' };
     }
 
-    const backupInfo = await findBackupFile(accessToken);
+    let backupInfo: GoogleDriveBackupInfo | null = null;
+    try {
+      backupInfo = await findBackupFile(accessToken);
+    } catch (findErr: any) {
+      if (findErr?.message === 'UNAUTHORIZED') {
+        accessToken = await getValidAccessToken(true);
+        if (accessToken) {
+          backupInfo = await findBackupFile(accessToken);
+        }
+      }
+    }
+
     if (!backupInfo) {
       return { success: false, error: 'No backup file found in Google Drive.' };
     }
 
     const downloadUrl = `${DRIVE_FILES_ENDPOINT}/${backupInfo.fileId}?alt=media`;
-    const response = await fetch(downloadUrl, {
+    let response = await fetch(downloadUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
+    if (response.status === 401) {
+      accessToken = await getValidAccessToken(true);
+      if (accessToken) {
+        response = await fetch(downloadUrl, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+      }
+    }
+
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`Failed to download backup file: ${errText}`);
+      throw new Error(`Failed to download backup file (${response.status}): ${errText}`);
     }
 
     const responseText = await response.text();
     let payload: ClarityBackupPayload;
     try {
       payload = JSON.parse(responseText);
-    } catch (parseErr) {
+    } catch {
       throw new Error('Downloaded backup file is not valid JSON.');
     }
 
@@ -374,7 +517,7 @@ export async function downloadBackup(): Promise<{
       metadata: backupInfo,
     };
   } catch (error: any) {
-    console.error('Failed to download backup from Google Drive:', error);
+    console.error('[GoogleDrive] Failed to download backup:', error);
     return { success: false, error: error?.message || 'Download failed.' };
   }
 }
@@ -383,7 +526,6 @@ let autoBackupDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * Standalone background auto-sync utility.
- * Can be called anywhere (e.g. on app launch or after database mutations).
  */
 export async function syncDatabaseToDriveSilently(reason = 'auto-sync'): Promise<boolean> {
   try {
@@ -410,7 +552,6 @@ export async function syncDatabaseToDriveSilently(reason = 'auto-sync'): Promise
 
 /**
  * Debounced background auto-backup trigger.
- * Waits 5 seconds after the last change before uploading to prevent unnecessary network requests.
  */
 export function queueAutoBackup(reason = 'db-change'): void {
   if (autoBackupDebounceTimer) {

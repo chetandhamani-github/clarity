@@ -22,7 +22,9 @@
       },
       "permissions": [
         "USE_BIOMETRIC",
-        "USE_FINGERPRINT"
+        "USE_FINGERPRINT",
+        "READ_SMS",
+        "RECEIVE_SMS"
       ],
       "predictiveBackGestureEnabled": false,
       "package": "com.homerun.clarity"

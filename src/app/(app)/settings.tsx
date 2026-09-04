@@ -3,6 +3,7 @@ import { useCategorySpending } from '@/hooks/use-budget';
 import { useGoals } from '@/hooks/use-goals';
 import { useGoogleDrive } from '@/hooks/use-google-drive';
 import { useNotifications } from '@/hooks/use-notifications';
+import { useSmsSync } from '@/hooks/useSmsSync';
 import { clearDatabase } from '@/services/database';
 import { useAppStore } from '@/store/use-app-store';
 import { ThemeColors, typography, useTheme } from '@/theme';
@@ -52,6 +53,34 @@ export default function SettingsScreen() {
     restoreFromDrive,
   } = useGoogleDrive();
 
+  const {
+    permissionStatus,
+    isSyncing: isSmsSyncing,
+    progress: smsProgress,
+    lastSyncTimestamp,
+    sync: syncSms,
+    requestPermission: requestSmsPermission,
+  } = useSmsSync();
+
+  const handleSmsScan = async () => {
+    try {
+      if (permissionStatus !== 'granted') {
+        const res = await requestSmsPermission();
+        if (res !== 'granted') {
+          showToast('SMS permission is required to scan messages', 'error');
+          return;
+        }
+      }
+      showToast('Scanning SMS for bank transactions...', 'info');
+      await syncSms();
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      showToast('SMS scan completed successfully!', 'success');
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'SMS scan failed', 'error');
+    }
+  };
+
   const now = new Date();
   const { notifications } = useNotifications();
   const { goals } = useGoals();
@@ -75,9 +104,12 @@ export default function SettingsScreen() {
   };
 
   const handleRestoreFromDrive = async () => {
+    const backupDateMsg = driveLastBackupTime
+      ? ` (Backup from: ${new Date(driveLastBackupTime).toLocaleString()})`
+      : '';
     showAlert(
       'Restore from Google Drive',
-      'This will restore accounts, transactions, and goals from Google Drive and update your local database. Would you like to proceed?',
+      `This will restore accounts, transactions, and goals from Google Drive and replace local data${backupDateMsg}. Would you like to proceed?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -441,6 +473,84 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
               </>
             )}
+          </View>
+        </View>
+
+        {/* SMS Intelligence Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>SMS Intelligence</Text>
+          <View style={styles.listCard}>
+            <View style={styles.settingItem}>
+              <View style={styles.settingItemLeft}>
+                <MaterialIcons name="sms" size={24} color={colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingTitle}>SMS Auto-Tracking</Text>
+                  <Text style={styles.settingSub}>
+                    {permissionStatus === 'granted'
+                      ? 'Access granted • 100% offline'
+                      : permissionStatus === 'permanently_denied'
+                        ? 'Permission blocked in device settings'
+                        : 'Permission not granted'}
+                  </Text>
+                </View>
+              </View>
+              <View
+                style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: 8,
+                  backgroundColor:
+                    permissionStatus === 'granted'
+                      ? colors.primaryContainer
+                      : colors.surfaceContainerHighest,
+                }}
+              >
+                <Text
+                  style={{
+                    ...typography.labelMd,
+                    color:
+                      permissionStatus === 'granted'
+                        ? colors.onPrimaryContainer
+                        : colors.onSurfaceVariant,
+                    fontWeight: '700',
+                  }}
+                >
+                  {permissionStatus === 'granted' ? 'ACTIVE' : 'OFF'}
+                </Text>
+              </View>
+            </View>
+
+            {lastSyncTimestamp ? (
+              <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+                <Text style={{ ...typography.bodyMd, fontSize: 12, color: colors.onSurfaceVariant }}>
+                  Last scanned: {new Date(lastSyncTimestamp).toLocaleString()}
+                </Text>
+              </View>
+            ) : null}
+
+            <View style={{ padding: 16, gap: 8 }}>
+              <TouchableOpacity
+                style={styles.btnPrimary}
+                onPress={handleSmsScan}
+                disabled={isSmsSyncing}
+              >
+                {isSmsSyncing ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <ActivityIndicator size="small" color={colors.onPrimary} />
+                    <Text style={styles.btnPrimaryText}>
+                      SCANNING ({smsProgress.processed}/{smsProgress.total || '...'})
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <MaterialIcons name="sync" size={18} color={colors.onPrimary} />
+                    <Text style={styles.btnPrimaryText}>
+                      {permissionStatus === 'granted' ? 'SCAN SMS NOW' : 'ENABLE SMS TRACKING'}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 

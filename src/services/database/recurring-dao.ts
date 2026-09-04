@@ -1,6 +1,9 @@
+import { DeviceEventEmitter } from 'react-native';
 import { getDatabase } from './index';
 import { insertTransaction } from './transaction-dao';
 import { insertNotification } from './notification-dao';
+import { evaluateTransactionBudgetAlerts } from '@/services/notifications/alert-engine';
+import { queueAutoBackup } from '@/services/cloud/google-drive-service';
 import { formatCurrency } from '@/utils/format';
 import type {
   RecurringTransaction,
@@ -29,11 +32,21 @@ interface RecurringTransactionRow {
   next_process_date: string;
   last_processed_date?: string;
   is_active: number;
+  splits_json?: string;
   account_name?: string;
   to_account_name?: string;
 }
 
 function mapRow(row: RecurringTransactionRow): RecurringTransactionWithAccount {
+  let splits: { category: string; amount: number }[] | undefined;
+  if (row.splits_json) {
+    try {
+      splits = JSON.parse(row.splits_json);
+    } catch {
+      splits = undefined;
+    }
+  }
+
   return {
     id: row.id,
     accountId: row.account_id,
@@ -46,21 +59,32 @@ function mapRow(row: RecurringTransactionRow): RecurringTransactionWithAccount {
     nextProcessDate: row.next_process_date,
     lastProcessedDate: row.last_processed_date,
     isActive: Boolean(row.is_active),
+    splits,
+    splits_json: row.splits_json,
     accountName: row.account_name ?? 'Unknown Account',
     toAccountName: row.to_account_name,
   };
 }
 
 export async function createRecurringTransaction(
-  data: Omit<RecurringTransaction, 'id' | 'lastProcessedDate' | 'isActive'>
+  data: Omit<RecurringTransaction, 'id' | 'isActive'> & {
+    isActive?: boolean;
+    lastProcessedDate?: string;
+  }
 ): Promise<RecurringTransaction> {
   const db = getDatabase();
   const id = generateId();
 
+  const splitsJson = data.splits_json
+    ? data.splits_json
+    : data.splits && data.splits.length > 0
+      ? JSON.stringify(data.splits)
+      : null;
+
   await db.runAsync(
     `INSERT INTO recurring_transactions 
-     (id, account_id, to_account_id, amount, type, merchant, category, frequency, next_process_date, is_active)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+     (id, account_id, to_account_id, amount, type, merchant, category, frequency, next_process_date, last_processed_date, is_active, splits_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       data.accountId,
@@ -71,13 +95,17 @@ export async function createRecurringTransaction(
       data.category,
       data.frequency,
       data.nextProcessDate,
+      data.lastProcessedDate || null,
+      data.isActive !== undefined ? (data.isActive ? 1 : 0) : 1,
+      splitsJson,
     ]
   );
 
   return {
     id,
     ...data,
-    isActive: true,
+    isActive: data.isActive !== undefined ? data.isActive : true,
+    splits_json: splitsJson || undefined,
   };
 }
 
@@ -94,82 +122,168 @@ export async function getActiveRecurringTransactions(): Promise<RecurringTransac
   return rows.map(mapRow);
 }
 
+export async function getAllRecurringTransactions(): Promise<RecurringTransactionWithAccount[]> {
+  const db = getDatabase();
+  const rows = await db.getAllAsync<RecurringTransactionRow>(
+    `SELECT rt.*, a.name as account_name, ta.name as to_account_name
+     FROM recurring_transactions rt
+     LEFT JOIN accounts a ON rt.account_id = a.id
+     LEFT JOIN accounts ta ON rt.to_account_id = ta.id
+     ORDER BY rt.next_process_date ASC`
+  );
+  return rows.map(mapRow);
+}
+
 export async function deleteRecurringTransaction(id: string): Promise<void> {
   const db = getDatabase();
   await db.runAsync('DELETE FROM recurring_transactions WHERE id = ?', [id]);
 }
 
-function calculateNextDate(currentDateStr: string, frequency: RecurringFrequency): string {
-  const date = new Date(currentDateStr);
-  switch (frequency) {
-    case 'daily':
-      date.setDate(date.getDate() + 1);
-      break;
-    case 'weekly':
-      date.setDate(date.getDate() + 7);
-      break;
-    case 'monthly':
-      date.setMonth(date.getMonth() + 1);
-      break;
-    case 'yearly':
-      date.setFullYear(date.getFullYear() + 1);
-      break;
-  }
-  return date.toISOString().split('T')[0];
+export async function toggleRecurringTransactionActive(
+  id: string,
+  isActive: boolean
+): Promise<void> {
+  const db = getDatabase();
+  await db.runAsync('UPDATE recurring_transactions SET is_active = ? WHERE id = ?', [
+    isActive ? 1 : 0,
+    id,
+  ]);
 }
 
-export async function processDueRecurringTransactions(): Promise<void> {
-  const db = getDatabase();
+/**
+ * Deterministic date calculation that handles month-end clamping and avoids timezone drift.
+ */
+export function calculateNextDate(currentDateStr: string, frequency: RecurringFrequency): string {
+  const [yearStr, monthStr, dayStr] = currentDateStr.split('T')[0].split('-');
+  let year = parseInt(yearStr, 10);
+  let month = parseInt(monthStr, 10); // 1-12
+  let day = parseInt(dayStr, 10); // 1-31
 
-  const today = new Date().toISOString().split('T')[0];
-  const dueTransactions = await db.getAllAsync<RecurringTransactionRow>(
-    `SELECT * FROM recurring_transactions 
-     WHERE is_active = 1 AND next_process_date <= ?`,
-    [today]
-  );
+  const pad = (n: number) => n.toString().padStart(2, '0');
 
-  for (const rt of dueTransactions) {
-    try {
-      let currentDate = rt.next_process_date;
-      let lastProcessed = rt.last_processed_date || currentDate;
-      let count = 0;
-      const MAX_CYCLES = 24; // safety guard
-
-      while (currentDate <= today && count < MAX_CYCLES) {
-        // Create the transaction for each due period
-        await insertTransaction({
-          accountId: rt.account_id,
-          toAccountId: rt.to_account_id,
-          amount: rt.amount,
-          type: rt.type as TransactionType,
-          merchant: rt.merchant,
-          category: rt.category,
-          date: currentDate,
-          isRecurring: true,
-          note: 'Auto-generated recurring transaction',
-        });
-
-        lastProcessed = currentDate;
-        currentDate = calculateNextDate(currentDate, rt.frequency as RecurringFrequency);
-        count++;
-      }
-
-      // Insert single summary notification
-      await insertNotification({
-        title: 'Recurring Transaction Processed',
-        description: `Scheduled ${rt.type} of ${formatCurrency(rt.amount)} for "${rt.merchant}" was automatically recorded${count > 1 ? ` (${count} cycles)` : ''}.`,
-        type: 'default',
-        actionUrl: '/(app)/(tabs)/transactions',
-      });
-
-      await db.runAsync(
-        `UPDATE recurring_transactions 
-         SET last_processed_date = ?, next_process_date = ? 
-         WHERE id = ?`,
-        [lastProcessed, currentDate, rt.id]
-      );
-    } catch (error) {
-      console.error(`Failed to process recurring transaction ${rt.id}:`, error);
+  switch (frequency) {
+    case 'daily': {
+      const d = new Date(year, month - 1, day);
+      d.setDate(d.getDate() + 1);
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     }
+    case 'weekly': {
+      const d = new Date(year, month - 1, day);
+      d.setDate(d.getDate() + 7);
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
+    case 'monthly': {
+      month += 1;
+      if (month > 12) {
+        month = 1;
+        year += 1;
+      }
+      // Month-end clamping (e.g. Jan 31 -> Feb 28 or 29, Mar 31 -> Apr 30)
+      const maxDays = new Date(year, month, 0).getDate();
+      day = Math.min(day, maxDays);
+      return `${year}-${pad(month)}-${pad(day)}`;
+    }
+    case 'yearly': {
+      year += 1;
+      const maxDays = new Date(year, month, 0).getDate();
+      day = Math.min(day, maxDays);
+      return `${year}-${pad(month)}-${pad(day)}`;
+    }
+  }
+}
+
+let isProcessingRecurring = false;
+
+export async function processDueRecurringTransactions(): Promise<number> {
+  if (isProcessingRecurring) {
+    return 0;
+  }
+
+  isProcessingRecurring = true;
+  let totalProcessed = 0;
+
+  try {
+    const db = getDatabase();
+
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+    const dueTransactions = await db.getAllAsync<RecurringTransactionRow>(
+      `SELECT * FROM recurring_transactions 
+       WHERE is_active = 1 AND next_process_date <= ?`,
+      [today]
+    );
+
+    for (const rt of dueTransactions) {
+      try {
+        let currentDate = rt.next_process_date;
+        let lastProcessed = rt.last_processed_date || currentDate;
+        let count = 0;
+        const MAX_CYCLES = 24; // safety guard
+
+        let parsedSplits: { category: string; amount: number }[] | undefined;
+        if (rt.splits_json) {
+          try {
+            parsedSplits = JSON.parse(rt.splits_json);
+          } catch {
+            parsedSplits = undefined;
+          }
+        }
+
+        while (currentDate <= today && count < MAX_CYCLES) {
+          const newTx = await insertTransaction({
+            accountId: rt.account_id,
+            toAccountId: rt.to_account_id,
+            amount: rt.amount,
+            type: rt.type as TransactionType,
+            merchant: rt.merchant,
+            category: rt.category,
+            date: currentDate,
+            isRecurring: true,
+            note: 'Auto-generated recurring transaction',
+            splits: parsedSplits,
+          });
+
+          // Evaluate budget alerts if expense
+          if (rt.type === 'expense') {
+            evaluateTransactionBudgetAlerts(newTx).catch(() => {});
+          }
+
+          lastProcessed = currentDate;
+          currentDate = calculateNextDate(currentDate, rt.frequency as RecurringFrequency);
+          count++;
+          totalProcessed++;
+        }
+
+        if (count > 0) {
+          await insertNotification({
+            title: 'Recurring Transaction Processed',
+            description: `Scheduled ${rt.type} of ${formatCurrency(rt.amount)} for "${rt.merchant}" was automatically recorded${count > 1 ? ` (${count} cycles)` : ''}.`,
+            type: 'default',
+            actionUrl: '/(app)/(tabs)/transactions',
+          });
+
+          await db.runAsync(
+            `UPDATE recurring_transactions 
+             SET last_processed_date = ?, next_process_date = ? 
+             WHERE id = ?`,
+            [lastProcessed, currentDate, rt.id]
+          );
+        }
+      } catch (error) {
+        console.error(`Failed to process recurring transaction ${rt.id}:`, error);
+      }
+    }
+
+    if (totalProcessed > 0) {
+      DeviceEventEmitter.emit('transactionsUpdated');
+      DeviceEventEmitter.emit('notificationsUpdated');
+      queueAutoBackup('recurring-processed');
+    }
+
+    return totalProcessed;
+  } finally {
+    isProcessingRecurring = false;
   }
 }
