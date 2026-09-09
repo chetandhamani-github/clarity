@@ -20,7 +20,7 @@ import { useMonthlyTotals, useNetWorthHistory, useTransactions } from '@/hooks/u
 import { useDoubleBackToExit } from '@/hooks/use-double-back-to-exit';
 import { useSmsSync } from '@/hooks/useSmsSync';
 import { formatCurrency, formatCurrencyPrivacy, getTransactionSign } from '@/utils/format';
-import { getCategoryIcon } from '@/utils/icons';
+import { getCategoryIcon, getBankBranding } from '@/utils/icons';
 import { useAppStore } from '@/store/use-app-store';
 
 export default function DashboardScreen() {
@@ -438,6 +438,86 @@ export default function DashboardScreen() {
                 </View>
               </View>
 
+              {/* Bank Accounts Section */}
+              {accounts.length > 0 && (
+                <View style={styles.sectionContainer}>
+                  <View style={styles.recentActivityHeader}>
+                    <Text style={styles.recentActivityTitle}>Bank Accounts</Text>
+                    <TouchableOpacity
+                      style={styles.viewAllButton}
+                      onPress={() => router.push('/accounts')}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={styles.viewAllText}>VIEW ALL</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 12, paddingVertical: 2 }}
+                  >
+                    {accounts.map((acc) => {
+                      const branding = getBankBranding(acc.institution || acc.name);
+                      return (
+                        <TouchableOpacity
+                          key={acc.id}
+                          style={styles.bankAccountCard}
+                          onPress={() =>
+                            router.push({
+                              pathname: '/account-details',
+                              params: { accountId: acc.id },
+                            })
+                          }
+                        >
+                          <View
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                            }}
+                          >
+                            <View
+                              style={[
+                                styles.bankIconCircle,
+                                { backgroundColor: branding.backgroundColor },
+                              ]}
+                            >
+                              <MaterialIcons
+                                name="account-balance"
+                                size={18}
+                                color={branding.color}
+                              />
+                            </View>
+                            <View
+                              style={[
+                                styles.bankPill,
+                                { backgroundColor: branding.backgroundColor },
+                              ]}
+                            >
+                              <Text style={[styles.bankPillText, { color: branding.color }]}>
+                                {branding.shortName}
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={{ marginTop: 12 }}>
+                            <Text style={styles.bankCardName} numberOfLines={1}>
+                              {acc.name}
+                            </Text>
+                            <Text style={styles.bankCardType} numberOfLines={1}>
+                              {acc.type.charAt(0).toUpperCase() + acc.type.slice(1)}
+                              {acc.lastFour ? ` •••• ${acc.lastFour}` : ''}
+                            </Text>
+                            <Text style={styles.bankCardBalance}>
+                              {formatCurrencyPrivacy(acc.balance, false, hideBalances)}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
+
               {/* Spending by Category Donut */}
               <View style={styles.sectionContainer}>
                 <Text style={styles.sectionTitle}>Spending Summary</Text>
@@ -579,7 +659,7 @@ export default function DashboardScreen() {
                       const subtitle = tx.type === 'transfer'
                         ? `${tx.date} • ${tx.accountName} → ${tx.toAccountName || 'Unknown'}`
                         : (hasMerchant
-                            ? `${tx.date} • ${tx.category}`
+                            ? `${tx.date}${tx.accountName ? ` • ${tx.accountName}` : ''} • ${tx.category}`
                             : `${tx.date}${tx.accountName ? ` • ${tx.accountName}` : ''}`);
 
                       return (
@@ -865,6 +945,49 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       fontSize: 10,
       fontWeight: '600',
+    },
+    bankAccountCard: {
+      width: 160,
+      backgroundColor: colors.surfaceContainerLowest,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.surfaceVariant,
+      padding: 14,
+    },
+    bankIconCircle: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    bankPill: {
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    bankPillText: {
+      fontSize: 10,
+      fontWeight: '700',
+    },
+    bankCardName: {
+      ...typography.bodyMd,
+      fontWeight: '600',
+      color: colors.onSurface,
+      fontSize: 13,
+      marginBottom: 2,
+    },
+    bankCardType: {
+      ...typography.labelMd,
+      color: colors.onSurfaceVariant,
+      fontSize: 11,
+      marginBottom: 8,
+    },
+    bankCardBalance: {
+      ...typography.bodyLg,
+      fontWeight: '700',
+      color: colors.onSurface,
+      fontSize: 14,
     },
   });
   return styles;

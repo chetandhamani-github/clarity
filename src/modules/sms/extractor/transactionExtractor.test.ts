@@ -62,4 +62,48 @@ describe('TransactionExtractor', () => {
     expect(res?.accountMask).toBe('3344');
     expect(res?.bank).toBe('Axis Bank');
   });
+
+  it('handles balance-first messages, full account numbers, card use, and ordinary recipient names', () => {
+    const balanceFirst: RawSmsMessage = {
+      id: '5',
+      address: 'AD-ICICIB',
+      body: 'Avl Bal: Rs.45,000.00. INR 1,499.50 has been debited from Account 123456789012 at Amazon India.',
+      date: 1705315200000,
+    };
+    const cardUse: RawSmsMessage = {
+      id: '6',
+      address: 'VM-HDFCBK',
+      body: 'Your HDFC credit card ending XXXX-XXXX-XXXX-4455 was used for INR 1,250.00 at ZARA.',
+      date: 1705315200000,
+    };
+    const recipient: RawSmsMessage = {
+      id: '7',
+      address: 'UNKNOWN',
+      body: 'Rs.500.00 paid to Bob via UPI from A/c XX1234.',
+      date: 1705315200000,
+    };
+
+    expect(TransactionExtractor.extract(balanceFirst)).toEqual(
+      expect.objectContaining({ amount: 1499.5, availableBalance: 45000, accountMask: '9012', merchant: 'Amazon India' })
+    );
+    expect(TransactionExtractor.extract(cardUse)).toEqual(
+      expect.objectContaining({ type: 'DEBIT', accountMask: '4455', merchant: 'ZARA' })
+    );
+    expect(TransactionExtractor.extract(recipient)).toEqual(
+      expect.objectContaining({ bank: 'Other Bank', merchant: 'Bob' })
+    );
+  });
+
+
+  it('extracts the counterparty that credited an account', () => {
+    const result = TransactionExtractor.extract({
+      id: '8',
+      address: 'VM-HDFCBK',
+      body: 'Rs.85,000.00 credited to A/c XX1234 by Infosys Ltd. Avl Bal Rs.90,000.00',
+      date: 1705315200000,
+    });
+
+    expect(result).toEqual(expect.objectContaining({ merchant: 'Infosys Ltd', type: 'CREDIT' }));
+  });
+
 });

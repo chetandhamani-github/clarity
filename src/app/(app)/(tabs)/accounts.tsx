@@ -22,7 +22,7 @@ import {
   formatCurrencyPrivacy,
   formatCurrencyWholePrivacy,
 } from '@/utils/format';
-import { getAccountTypeIcon } from '@/utils/icons';
+import { getAccountTypeIcon, getBankBranding } from '@/utils/icons';
 import type { Account } from '@/types';
 import { useAppStore } from '@/store/use-app-store';
 
@@ -54,6 +54,7 @@ export default function AccountsScreen() {
   const renderAccountRow = (account: Account) => {
     const isSelected = selectedAccount?.id === account.id;
     const isDebt = isLiabilityType(account.type) && account.balance < 0;
+    const branding = getBankBranding(account.institution || account.name);
 
     return (
       <TouchableOpacity
@@ -68,25 +69,36 @@ export default function AccountsScreen() {
               {
                 backgroundColor: isSelected
                   ? colors.primaryContainer
-                  : colors.surfaceVariant,
+                  : branding.backgroundColor,
               },
             ]}
           >
             <MaterialIcons
-              name={getAccountTypeIcon(account.type)}
-              size={24}
-              color={isSelected ? colors.onPrimaryContainer : colors.secondary}
+              name={account.institution ? 'account-balance' : getAccountTypeIcon(account.type)}
+              size={22}
+              color={isSelected ? colors.onPrimaryContainer : branding.color}
             />
           </View>
-          <View>
-            <Text style={styles.accountName}>{account.name}</Text>
-            <Text style={styles.accountType}>
-              {account.type.charAt(0).toUpperCase() + account.type.slice(1)}
-              {account.lastFour ? ` • ${account.lastFour}` : ''}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.accountName} numberOfLines={1}>
+              {account.name}
             </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+              {account.institution ? (
+                <View style={[styles.bankBadge, { backgroundColor: branding.backgroundColor }]}>
+                  <Text style={[styles.bankBadgeText, { color: branding.color }]}>
+                    {branding.shortName}
+                  </Text>
+                </View>
+              ) : null}
+              <Text style={styles.accountType}>
+                {account.type.charAt(0).toUpperCase() + account.type.slice(1)}
+                {account.lastFour ? ` •••• ${account.lastFour}` : ''}
+              </Text>
+            </View>
           </View>
         </View>
-        <View style={{ alignItems: 'flex-end' }}>
+        <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
           <Text style={[styles.accountBalanceActive, isDebt && { color: colors.error }]}>
             {formatCurrencyWholePrivacy(account.balance, hideBalances)}
           </Text>
@@ -313,11 +325,22 @@ function AccountDetailCard({
   // screen padding 20x2 = 40, card padding 20x2 = 40 -> total 80
   const chartWidth = screenWidth - 80;
 
+  const branding = getBankBranding(account.institution || account.name);
+
   return (
     <View style={styles.sectionCard}>
       <View style={styles.detailsHeader}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.detailsLabel}>{account.name.toUpperCase()}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <Text style={styles.detailsLabel}>{account.name.toUpperCase()}</Text>
+            {account.institution ? (
+              <View style={[styles.bankBadge, { backgroundColor: branding.backgroundColor }]}>
+                <Text style={[styles.bankBadgeText, { color: branding.color }]}>
+                  {branding.shortName}
+                </Text>
+              </View>
+            ) : null}
+          </View>
           <Text style={styles.detailsBalance}>
             {formatCurrencyPrivacy(account.balance, false, hideBalances)}
           </Text>
@@ -728,6 +751,17 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.bodyLg,
       fontWeight: '600',
       color: colors.onSurface,
+    },
+    bankBadge: {
+      paddingHorizontal: 6,
+      paddingVertical: 1.5,
+      borderRadius: 4,
+      alignSelf: 'flex-start',
+    },
+    bankBadgeText: {
+      fontSize: 10,
+      fontWeight: '700',
+      letterSpacing: 0.5,
     },
   });
   return styles;

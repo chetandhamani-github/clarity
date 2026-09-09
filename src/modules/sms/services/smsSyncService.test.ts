@@ -17,6 +17,14 @@ jest.mock('@/modules/sms/storage/smsDao', () => ({
   },
 }));
 
+jest.mock('@/services/database', () => ({
+  getDatabase: jest.fn().mockReturnValue({
+    getAllAsync: jest.fn().mockResolvedValue([]),
+    getFirstAsync: jest.fn().mockResolvedValue(null),
+    runAsync: jest.fn().mockResolvedValue(undefined),
+  }),
+}));
+
 jest.mock('@/services/database/account-dao', () => ({
   getAllAccounts: jest.fn().mockResolvedValue([
     {
@@ -32,6 +40,9 @@ jest.mock('@/services/database/account-dao', () => ({
     id: 'acc-new',
     name: 'New Account',
   }),
+  updateAccount: jest.fn().mockResolvedValue(undefined),
+  updateAccountBalance: jest.fn().mockResolvedValue(undefined),
+  deleteAccount: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('@/services/database/transaction-dao', () => ({
@@ -101,5 +112,58 @@ describe('SmsSyncService', () => {
     });
 
     expect(result.scannedCount).toBe(1); // only the message newer than 1705315200000
+  });
+
+  it('creates a new bank account when transactions from a new bank arrive', async () => {
+    const sbiMessages: RawSmsMessage[] = [
+      {
+        id: 'sms-sbi-1',
+        address: 'VM-SBIINB',
+        body: 'Rs.1200.00 debited from SBI a/c **5678 on 16-Jan-25. Avl Bal: Rs. 25,000.00',
+        date: 1705315400000,
+      },
+    ];
+
+    SmsReaderService.setAdapter(new MockSmsReaderAdapter(sbiMessages));
+
+    const result = await SmsSyncService.runInitialScan({
+      autoCreateClarityTransactions: true,
+    });
+
+    expect(result.parsedCount).toBe(1);
+    const { insertAccount, updateAccountBalance } = require('@/services/database/account-dao');
+    expect(insertAccount).toHaveBeenCalledWith(
+      expect.objectContaining({
+        institution: 'State Bank of India',
+        lastFour: '5678',
+      })
+    );
+    expect(updateAccountBalance).toHaveBeenCalledWith('acc-new', 25000);
+  });
+
+  it('consolidates duplicate accounts for the same bank into a single account', async () => {
+    const { getAllAccounts, deleteAccount } = require('@/services/database/account-dao');
+    getAllAccounts.mockResolvedValue([
+      {
+        id: 'kotak-dup-1',
+        name: 'Kotak Mahindra Bank Account',
+        type: 'savings',
+        balance: 0,
+        institution: 'Kotak Mahindra Bank',
+        lastFour: '',
+      },
+      {
+        id: 'kotak-primary',
+        name: 'Kotak Mahindra Bank (..6691)',
+        type: 'savings',
+        balance: 24481,
+        institution: 'Kotak Mahindra Bank',
+        lastFour: '6691',
+      },
+    ]);
+
+    await SmsSyncService.consolidateDuplicateBankAccounts();
+
+    expect(deleteAccount).toHaveBeenCalledWith('kotak-dup-1');
   });
 });

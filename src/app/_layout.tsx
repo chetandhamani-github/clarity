@@ -85,6 +85,12 @@ export default function RootLayout() {
           await processDueRecurringTransactions();
           await checkUpcomingBillReminders();
 
+          // Auto-repair and consolidate duplicate SMS bank accounts
+          const { SmsSyncService } = await import('@/modules/sms/services/smsSyncService');
+          await SmsSyncService.autoRepairMisassignedAccounts();
+          queryClient.invalidateQueries({ queryKey: ['accounts'] });
+          queryClient.invalidateQueries({ queryKey: ['transactions'] });
+
           // Silent cloud backup sync on app launch
           const { syncDatabaseToDriveSilently } = await import(
             '@/services/cloud/google-drive-service'

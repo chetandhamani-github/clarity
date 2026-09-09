@@ -26,7 +26,7 @@ public class FeatureFlag {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
-    @Column(name = "key", nullable = false, unique = true, length = 100)
+    @Column(name = "\"key\"", nullable = false, unique = true, length = 100)
     private String key;
 
     @Column(name = "enabled", nullable = false)

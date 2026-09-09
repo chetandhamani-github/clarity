@@ -40,12 +40,15 @@ export class SmsClassificationEngine {
     /\bauto[- ]debit\b/i,
     /\bspent\b/i,
     /\bpaid\b/i,
-    /\bwithdrawn\b/i,
-    /\btransferred\b/i,
+    /\bwithdraw(?:n|al)?\b/i,
+    /\btransferred?\b/i,
     /\bdeducted\b/i,
     /\bsent\b/i,
     /\bdr\b/i,
-    /\bpurchase of\b/i,
+    /\bpurchas(?:e|ed)\b/i,
+    /\bcharged\b/i,
+    /\b(?:card|debit card)\s+(?:was\s+)?used\b/i,
+    /\b(?:transaction|txn)\s+(?:was\s+)?(?:done|made|successful)\b/i,
   ];
 
   private static readonly CREDIT_VERBS = [
@@ -102,7 +105,8 @@ export class SmsClassificationEngine {
 
     const hasVerb =
       this.DEBIT_VERBS.some((p) => p.test(body)) ||
-      this.CREDIT_VERBS.some((p) => p.test(body));
+      this.CREDIT_VERBS.some((p) => p.test(body)) ||
+      /\b(?:transferred?|remitted)\s+to\s+your\s+(?:a\/?c|account)\b/i.test(body);
 
     return hasVerb;
   }
@@ -149,8 +153,10 @@ export class SmsClassificationEngine {
 
     // 4. Financial content check
     const hasAmount = this.AMOUNT_PATTERNS.some((p) => p.test(body));
-    const isDebit = this.DEBIT_VERBS.some((p) => p.test(body));
-    const isCredit = this.CREDIT_VERBS.some((p) => p.test(body));
+    const isTransferToOwnAccount =
+      /\b(?:transferred?|remitted)\s+to\s+your\s+(?:a\/?c|account)\b/i.test(body);
+    const isDebit = !isTransferToOwnAccount && this.DEBIT_VERBS.some((p) => p.test(body));
+    const isCredit = isTransferToOwnAccount || this.CREDIT_VERBS.some((p) => p.test(body));
 
     if (!hasAmount || (!isDebit && !isCredit)) {
       reasons.push('Missing transaction amount or financial debit/credit verb');

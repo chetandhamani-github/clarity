@@ -1,4 +1,6 @@
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
+import Constants from 'expo-constants';
+import * as Device from 'expo-device';
 
 export class ApiError extends Error {
   public status: number;
@@ -24,10 +26,37 @@ function getDefaultBaseUrl(): string {
   if (process.env.EXPO_PUBLIC_BACKEND_URL) {
     return process.env.EXPO_PUBLIC_BACKEND_URL;
   }
-  // Android emulator routes host machine loopback to 10.0.2.2
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:8080';
+
+  // In development, attempt to resolve the host from Metro bundler if available
+  if (__DEV__) {
+    const hostUri =
+      Constants.expoConfig?.hostUri ?? Constants.manifest2?.extra?.expoClient?.hostUri;
+    if (hostUri) {
+      const host = hostUri.split(':')[0];
+      if (host) {
+        return `http://${host}:8080`;
+      }
+    }
+
+    const scriptURL = (NativeModules.SourceCode as { scriptURL?: string } | undefined)?.scriptURL;
+    if (scriptURL) {
+      try {
+        const url = new URL(scriptURL);
+        if (url.hostname) {
+          return `http://${url.hostname}:8080`;
+        }
+      } catch {
+        // Ignore URL parsing errors
+      }
+    }
   }
+
+  // Android emulator routes host machine loopback to 10.0.2.2
+  // Physical Android devices use localhost:8080 (forwarded via `adb reverse tcp:8080 tcp:8080`)
+  if (Platform.OS === 'android') {
+    return Device.isDevice ? 'http://localhost:8080' : 'http://10.0.2.2:8080';
+  }
+
   return 'http://localhost:8080';
 }
 
