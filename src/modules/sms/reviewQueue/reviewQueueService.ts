@@ -8,6 +8,7 @@ import type {
 } from '@/modules/sms/types';
 import { SmsDao } from '@/modules/sms/storage/smsDao';
 import { LocalCategorizerEngine } from '@/modules/sms/categorizer/localCategorizerEngine';
+import { SmsSyncService } from '@/modules/sms/services/smsSyncService';
 
 function generateId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -76,10 +77,11 @@ export class ReviewQueueService {
       createdAt: new Date().toISOString(),
     };
 
-    // Save to parsed transactions
+    // Save before importing so the link to the main transaction can be persisted.
     await SmsDao.saveParsedTransactionsBatch([parsedTx]);
 
-    // Update status in review queue
+    await SmsSyncService.importParsedTransactions([parsedTx]);
+
     await SmsDao.updateReviewQueueStatus(reviewItem.id, 'resolved');
 
     return parsedTx;

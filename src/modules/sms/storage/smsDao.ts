@@ -205,6 +205,8 @@ export class SmsDao {
   public static async findPotentialDuplicates(
     amount: number,
     accountMask: string,
+    type: 'DEBIT' | 'CREDIT',
+    merchant: string,
     windowStart: string,
     windowEnd: string,
     refNumber?: string
@@ -222,14 +224,24 @@ export class SmsDao {
       }
     }
 
-    // Check sliding window match (same amount + mask within time window)
+    const normalizedMerchant = merchant.trim().toLowerCase();
+    if (
+      !normalizedMerchant ||
+      /^(?:.+\s+)?(?:bank\s+)?transaction$/.test(normalizedMerchant)
+    ) {
+      return [];
+    }
+
+    // A matching amount alone is common, so use direction and merchant too.
     const rows = await db.getAllAsync<ParsedTransactionRow>(
-      `SELECT * FROM parsed_transactions 
-       WHERE amount = ? 
-         AND account_mask = ? 
+      `SELECT * FROM parsed_transactions
+       WHERE amount = ?
+         AND account_mask = ?
+         AND type = ?
+         AND LOWER(TRIM(merchant)) = ?
          AND transaction_date BETWEEN ? AND ?
        LIMIT 10`,
-      [amount, accountMask, windowStart, windowEnd]
+      [amount, accountMask, type, normalizedMerchant, windowStart, windowEnd]
     );
 
     return rows.map(mapParsedRow);
@@ -312,6 +324,24 @@ export class SmsDao {
        ORDER BY transaction_date DESC 
        LIMIT ? OFFSET ?`,
       [limit, offset]
+    );
+    return rows.map(mapParsedRow);
+  }
+
+  /**
+   * Get parsed transactions that were saved but not yet linked to a Clarity transaction.
+   */
+  public static async getUnlinkedParsedTransactions(
+    limit: number = 500
+  ): Promise<ParsedTransaction[]> {
+    const db = getDatabase();
+    const rows = await db.getAllAsync<ParsedTransactionRow>(
+      `SELECT * FROM parsed_transactions
+       WHERE is_duplicate = 0
+         AND transaction_id IS NULL
+       ORDER BY transaction_date ASC
+       LIMIT ?`,
+      [limit]
     );
     return rows.map(mapParsedRow);
   }

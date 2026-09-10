@@ -22,69 +22,85 @@ describe('DuplicateDetectionEngine', () => {
       amount: baseTx.amount,
       accountMask: baseTx.accountMask,
       type: baseTx.type,
+      merchant: baseTx.merchant,
       referenceNumber: baseTx.referenceNumber,
       timestamp: baseTx.timestamp,
     });
 
-    const duplicateCandidate: ExtractedTransaction = {
-      ...baseTx,
-      timestamp: baseTx.timestamp + 5 * 60 * 1000, // 5 minutes later
-    };
+    const result = await DuplicateDetectionEngine.isDuplicate(
+      { ...baseTx, timestamp: baseTx.timestamp + 5 * 60 * 1000 },
+      { checkDatabase: false }
+    );
 
-    const res = await DuplicateDetectionEngine.isDuplicate(duplicateCandidate, {
-      checkDatabase: false,
-    });
-    expect(res.isDuplicate).toBe(true);
-    expect(res.duplicateOfId).toBe('tx-original');
-    expect(res.reason).toContain('Duplicate reference number');
+    expect(result.isDuplicate).toBe(true);
+    expect(result.duplicateOfId).toBe('tx-original');
+    expect(result.reason).toContain('Duplicate reference number');
   });
 
-  it('detects duplicate by amount and account within sliding time window', async () => {
+  it('detects the same merchant, amount, account, and direction within the duplicate window', async () => {
     DuplicateDetectionEngine.addToCache({
-      id: 'tx-orig-2',
-      amount: 1250,
-      accountMask: '5678',
-      type: 'DEBIT',
-      timestamp: 1705315200000,
-    });
-
-    const candidate: ExtractedTransaction = {
+      id: 'tx-original',
       amount: 1250,
       accountMask: '5678',
       type: 'DEBIT',
       merchant: 'Uber',
-      bank: 'ICICI Bank',
-      timestamp: 1705315200000 + 2 * 60 * 1000, // 2 minutes later
-    };
-
-    const res = await DuplicateDetectionEngine.isDuplicate(candidate, {
-      checkDatabase: false,
+      timestamp: 1705315200000,
     });
-    expect(res.isDuplicate).toBe(true);
-    expect(res.duplicateOfId).toBe('tx-orig-2');
+
+    const result = await DuplicateDetectionEngine.isDuplicate(
+      {
+        amount: 1250,
+        accountMask: '5678',
+        type: 'DEBIT',
+        merchant: 'Uber',
+        bank: 'ICICI Bank',
+        timestamp: 1705315200000 + 2 * 60 * 1000,
+      },
+      { checkDatabase: false }
+    );
+
+    expect(result.isDuplicate).toBe(true);
+    expect(result.duplicateOfId).toBe('tx-original');
   });
 
-  it('does not flag distinct transactions with different amounts as duplicates', async () => {
+  it('keeps separate same-amount purchases at different merchants', async () => {
     DuplicateDetectionEngine.addToCache({
-      id: 'tx-orig-3',
+      id: 'tx-original',
       amount: 500,
       accountMask: '1234',
       type: 'DEBIT',
+      merchant: 'Swiggy',
       timestamp: 1705315200000,
     });
 
-    const differentCandidate: ExtractedTransaction = {
-      amount: 750,
-      accountMask: '1234',
-      type: 'DEBIT',
-      merchant: 'Zomato',
-      bank: 'HDFC Bank',
-      timestamp: 1705315200000,
-    };
+    const result = await DuplicateDetectionEngine.isDuplicate(
+      {
+        ...baseTx,
+        merchant: 'Zomato',
+        referenceNumber: undefined,
+        timestamp: baseTx.timestamp + 2 * 60 * 1000,
+      },
+      { checkDatabase: false }
+    );
 
-    const res = await DuplicateDetectionEngine.isDuplicate(differentCandidate, {
-      checkDatabase: false,
+    expect(result.isDuplicate).toBe(false);
+  });
+
+  it('keeps a matching merchant purchase outside the duplicate window', async () => {
+    DuplicateDetectionEngine.addToCache({
+      id: 'tx-original',
+      amount: baseTx.amount,
+      accountMask: baseTx.accountMask,
+      type: baseTx.type,
+      merchant: baseTx.merchant,
+      timestamp: baseTx.timestamp,
     });
-    expect(res.isDuplicate).toBe(false);
+
+    const result = await DuplicateDetectionEngine.isDuplicate(
+      { ...baseTx, referenceNumber: undefined, timestamp: baseTx.timestamp + 16 * 60 * 1000 },
+      { checkDatabase: false }
+    );
+
+    expect(result.isDuplicate).toBe(false);
   });
 });

@@ -78,6 +78,21 @@ export class SmsPipelineService {
       };
     }
 
+    const hasKnownBank = extracted.bank && extracted.bank !== 'Other Bank';
+    const accountSuffix = extracted.accountMask.replace(/[^0-9]/g, '');
+    if (!hasKnownBank || accountSuffix.length < 3) {
+      const reviewItem = ReviewQueueService.createReviewItem(
+        message,
+        'MISSING_ACCOUNT',
+        classification.confidence,
+        extracted
+      );
+      return {
+        type: 'REVIEW',
+        reviewItem,
+      };
+    }
+
     // 3. Local Categorization
     const category = LocalCategorizerEngine.categorize(extracted, classification.classification);
 

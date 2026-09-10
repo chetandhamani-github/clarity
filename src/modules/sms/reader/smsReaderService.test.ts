@@ -50,10 +50,10 @@ describe('SmsReaderService', () => {
     expect(messages[1].id).toBe('2');
   });
 
-  it('fetches messages since a timestamp', async () => {
+  it('includes the cursor timestamp so the sync service can de-duplicate safely', async () => {
     const messages = await SmsReaderService.getSmsSince(1704067200000);
-    expect(messages).toHaveLength(2);
-    expect(messages.map((m) => m.id)).toEqual(['3', '2']);
+    expect(messages).toHaveLength(3);
+    expect(messages.map((m) => m.id)).toEqual(['3', '2', '1']);
   });
 
   it('fetches messages within a date range', async () => {

@@ -16,6 +16,7 @@ import { useAccounts } from '@/hooks/use-accounts';
 import { useCategorySpending } from '@/hooks/use-budget';
 import { formatCurrency } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
+import { getTransactionDisplayName } from '@/utils/transaction-display';
 
 export default function AnalyticsScreen() {
   const { colors } = useTheme();
@@ -52,7 +53,7 @@ export default function AnalyticsScreen() {
   const { reports, isLoading: loadingReports } = useMonthlyReports();
 
   const handleCancelRecurring = (tx: any) => {
-    const title = tx.type === 'transfer' ? 'Transfer' : tx.merchant;
+    const title = getTransactionDisplayName(tx);
     showAlert(
       'Cancel Recurring Schedule',
       `Cancel the ${tx.frequency} recurring schedule for "${title}" (${formatCurrency(tx.amount)})?\n\nPast recorded transactions will not be deleted.`,
@@ -430,7 +431,7 @@ export default function AnalyticsScreen() {
                           </View>
                           <View style={{ flex: 1, paddingRight: 8 }}>
                             <Text style={styles.listItemTitle} numberOfLines={1}>
-                              {tx.type === 'transfer' ? `Transfer` : tx.merchant}
+                              {getTransactionDisplayName(tx)}
                             </Text>
                             <Text style={styles.listItemSubtitle} numberOfLines={1}>
                               {tx.type === 'transfer'

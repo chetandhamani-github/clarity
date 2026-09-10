@@ -7,20 +7,32 @@ import type {
 
 export class TransactionExtractor {
   private static readonly MONEY_AMOUNT_REGEX =
-    /(?:(?:₹|(?:rs|inr)\.?)\s*([\d][\d,]*(?:\.\d{1,2})?)|([\d][\d,]*(?:\.\d{1,2})?)\s*(?:₹|(?:rs|inr)\.?))/gi;
+    /(?:(?:₹|\$|€|£|(?:rs|inr|usd|eur|gbp)\.?|amt\.?|amount)\s*[:.-]?\s*([\d][\d,]*(?:\.\d{1,2})?)|([\d][\d,]*(?:\.\d{1,2})?)\s*(?:\/-\s*)?(?:₹|\$|€|£|(?:rs|inr|usd|eur|gbp)\.?|\/-))/gi;
 
   private static readonly TRANSACTION_CONTEXT_REGEX =
-    /\b(?:debited?|credited?|spent|paid|withdraw(?:n|al)?|transferred?|deducted|sent|purchas(?:e|ed)|charged|used|received|deposited|refunded?|cashback|added|reversed?|disbursed)\b/i;
+    /\b(?:debited?|credited?|spent|paid|withdraw(?:n|al)?|transferred?|deducted|sent|purchas(?:e|ed)?|charged|used|using|use|swiped|received|deposited|refunded?|refund|cashback|added|reversed?|disbursed|transaction|txn)\b/i;
 
-  private static readonly BALANCE_CONTEXT_REGEX =
-    /\b(?:avl\.?\s*bal(?:ance)?|available\s*bal(?:ance)?|current\s*bal(?:ance)?|clear\s*bal(?:ance)?|closing\s*bal(?:ance)?|(?:account\s*)?bal(?:ance)?)\b/i;
+  private static readonly AMOUNT_BEFORE_TRANSACTION_REGEX =
+    /(?:\b(?:debited?|credited?|spent|paid|withdraw(?:n|al)?|transferred?|deducted|sent|purchas(?:e|ed)?|charged|used|using|use|swiped|received|deposited|refunded?|refund|cashback|added|reversed?|disbursed|transaction|txn|payment|done)\b)[\s\S]{0,100}?\s*(?:by|of|for|with|at|to|in|worth|value)?\s*$/i;
 
-  private static readonly NON_TRANSACTION_AMOUNT_REGEX =
-    /\b(?:credit\s+limit|cash\s+limit|minimum\s+(?:amount|due)|amount\s+due|total\s+due)\b/i;
+  private static readonly AMOUNT_AFTER_TRANSACTION_REGEX =
+    /^\s*(?:(?:has\s+been|was|is)\s+)?(?:debited?|credited?|spent|paid|withdraw(?:n|al)?|transferred?|deducted|sent|purchas(?:e|ed)?|charged|used|swiped|received|deposited|refunded?|cashback|added|reversed?|disbursed|done)\b|^\s*(?:on|from|towards|for)\s+[\s\S]{0,60}?\b(?:debited?|credited?|spent|paid|charged|used|swiped|deducted|done)\b/i;
+
+  private static readonly BALANCE_BEFORE_AMOUNT_REGEX =
+    /(?:(?:total\s+)?(?:avl\.?|avail(?:able)?|current|clear|closing|account|acct|remaining)?\s*(?:bal(?:ance)?(?:\s*\/\s*(?:lmt|limit))?|lmt|limit|credit\s*limit|bal\s*limit|bal\s*lmt)|limit\s*(?:available|avl)|card\s*limit\s*available)\s*(?:is|was|:|-)?\s*(?:rs\.?|inr|usd|eur|gbp|₹|\$|€|£)?\s*$/i;
+
+  private static readonly BALANCE_AFTER_AMOUNT_REGEX =
+    /^\s*(?:is|was)?\s*(?:your\s*)?(?:(?:total\s+)?(?:avl\.?|avail(?:able)?|current|clear|closing)?\s*(?:bal(?:ance)?|lmt|limit|credit\s*limit|bal\s*limit)|remaining\s*limit|limit\s*available)\b/i;
+
+  private static readonly NON_TRANSACTION_BEFORE_AMOUNT_REGEX =
+    /\b(?:credit\s*limit|total\s*(?:credit\s*)?limit|total\s*lmt|tot\s*lmt|card\s*limit|cash\s*limit|minimum\s+(?:amount\s+)?due|min\s*(?:amount\s*)?due|min\s*amt\s*due|min\s*due|mad\b|total\s+(?:amount\s+)?due|total\s*due|tot\s*due|tad\b|amount\s+due|amt\s+due|past\s*due|overdue|outstanding\s*(?:bal(?:ance)?|amount|amt)?|outstanding|credit\s*line)\s*(?:is|was|:|-|of)?\s*(?:rs\.?|inr|usd|eur|gbp|₹|\$|€|£)?\s*$/i;
+
+  private static readonly NON_TRANSACTION_AFTER_AMOUNT_REGEX =
+    /^\s*(?:is|was)?\s*(?:the\s*|your\s*)?(?:credit\s*limit|total\s*(?:credit\s*)?limit|total\s*lmt|card\s*limit|cash\s*limit|minimum\s+(?:amount\s+)?due|min\s*due|min\s*amt\s*due|total\s+(?:amount\s+)?due|total\s*due|amount\s+due|outstanding)\b/i;
 
   private static readonly ACCOUNT_MASK_REGEXES = [
-    /(?:a\/?c(?:count)?|acct?\.?|account|card)\s*(?:no\.?|number)?\s*(?:ending(?:\s+(?:with|in))?)?\s*[:#-]?\s*(?:[xX*•#-]\s*)*(\d{3,18})\b/i,
-    /\b(?:ending|ending with|ending in)\s*(\d{3,18})\b/i,
+    /(?:a\/?c(?:count)?|acct?\.?|account|card)\s*(?:no\.?|number)?\s*(?:ending(?:\s+(?:with|in))?)?\s*[:#.\s-]*([xX*•#.-]*\d{3,18})\b/i,
+    /\b(?:ending|ending with|ending in)\s*[:#.\s-]*([xX*•#.-]*\d{3,18})\b/i,
     /(?:[xX*•]{2,}\s*)+(\d{3,18})\b/,
   ];
 
@@ -30,14 +42,14 @@ export class TransactionExtractor {
   ];
 
   private static readonly AVAIL_BAL_REGEXES = [
-    /(?:avl\.?\s*bal(?:ance)?|avail(?:able)?\s*bal(?:ance)?|current\s*bal(?:ance)?|clear\s*bal(?:ance)?|closing\s*bal(?:ance)?|(?:account\s*)?balance)\s*(?:is|:|-)?\s*(?:rs\.?|inr|₹)?\s*([\d][\d,]*(?:\.\d{1,2})?)/i,
-    /(?:rs\.?|inr|₹)\s*([\d][\d,]*(?:\.\d{1,2})?)\s*(?:is\s*)?(?:your\s*)?(?:avl\.?\s*bal(?:ance)?|available\s*balance|current\s*balance|clear\s*balance|closing\s*balance)/i,
+    /(?:(?:total\s+)?(?:avl\.?|avail(?:able)?)\s*(?:bal(?:ance)?(?:\s*\/\s*(?:lmt|limit))?|lmt|limit|credit\s*limit)|(?:current|clear|closing|account|acct)?\s*bal(?:ance)?|bal\s*(?:lmt|limit)|remaining\s*(?:limit|credit\s*limit)|limit\s*(?:available|avl)|card\s*limit\s*available)\s*(?:is|was|:|-)?\s*(?:rs\.?|inr|usd|eur|gbp|₹|\$|€|£)?\s*([\d][\d,]*(?:\.\d{1,2})?)/i,
+    /(?:rs\.?|inr|usd|eur|gbp|₹|\$|€|£)\s*([\d][\d,]*(?:\.\d{1,2})?)\s*(?:is|was)?\s*(?:your\s*)?(?:(?:total\s+)?(?:avl\.?|avail(?:able)?)\s*(?:bal(?:ance)?|lmt|limit|credit\s*limit)|(?:current|clear|closing)?\s*bal(?:ance)?|bal\s*limit|remaining\s*limit|limit\s*available)/i,
   ];
 
   private static readonly MERCHANT_PATTERNS = [
-    /\b(?:credited|received|deposited)\b[\s\S]{0,80}?\b(?:from|by)\s+([A-Za-z0-9@*.\-&_\s]{2,80}?)(?:\s+(?:on|upi\s+ref|ref|rrn|utr|avl\.?\s*bal|available\s+bal(?:ance)?|bal(?:ance)?)|[.;\n]|$)/i,
-    /(?:at|to|towards|vpa|paid to|transferred to|trf to|info\/)\s+([A-Za-z0-9*.\-&_\s]{2,35}?)(?:\s+on|\s+upi\s+ref|\s+ref|\s+avl|\s+not you|\s+via|\s+using|\.|$|\n)/i,
-    /(?:info[:\s]+)([A-Za-z0-9*.\-&_\s]{2,35}?)(?:\s+on|\s+upi\s+ref|\s+ref|\s+avl|\.|$|\n)/i,
+    /\b(?:credited|received|deposited)\b[\s\S]{0,80}?\b(?:from|by)\s+([A-Za-z0-9@*.\-'&_\s]{2,80}?)(?:\s+(?:on|upi\s+ref|ref|rrn|utr|avl\.?\s*bal|available\s+bal(?:ance)?|bal(?:ance)?)|[.;\n]|$)/i,
+    /(?:at|to|towards|vpa|paid to|transferred to|trf to|info\/)\s+([A-Za-z0-9*.\-'&_\s]{2,40}?)(?:\s+on\b|\s+for\b|\s+dated\b|\s+upi\s+ref|\s+ref|\s+avl|\s+not you|\s+via|\s+using|[.;\n]|$)/i,
+    /(?:info[:\s]+)([A-Za-z0-9*.\-'&_\s]{2,40}?)(?:\s+on\b|\s+for\b|\s+upi\s+ref|\s+ref|\s+avl|[.;\n]|$)/i,
   ];
 
   private static readonly BANK_MAPPINGS: Record<string, string> = {
@@ -78,12 +90,6 @@ export class TransactionExtractor {
     YESB: 'YES Bank',
     RBLBNK: 'RBL Bank',
     RBLCRD: 'RBL Bank',
-    PAYTMB: 'Paytm Payments Bank',
-    PAYTM: 'Paytm Payments Bank',
-    PYTMBK: 'Paytm Payments Bank',
-    AIRTEL: 'Airtel Payments Bank',
-    ATLPAY: 'Airtel Payments Bank',
-    JIOPAY: 'Jio Payments Bank',
     SCISMS: 'Standard Chartered Bank',
     SCBL: 'Standard Chartered Bank',
     CITIBK: 'Citibank',
@@ -113,30 +119,32 @@ export class TransactionExtractor {
 
       const start = match.index;
       const end = start + match[0].length;
-      const nearbyText = body.slice(Math.max(0, start - 80), Math.min(body.length, end + 80));
-      const precedingText = body.slice(Math.max(0, start - 48), start);
-      const followingText = body.slice(end, Math.min(body.length, end + 48));
+      const before = body.slice(Math.max(0, start - 120), start);
+      const after = body.slice(end, Math.min(body.length, end + 120));
       const isBalanceAmount =
-        /(?:avl\.?\s*bal(?:ance)?|avail(?:able)?\s*bal(?:ance)?|current\s*bal(?:ance)?|clear\s*bal(?:ance)?|closing\s*bal(?:ance)?|(?:account\s*)?balance)\s*(?:is|:|-)?\s*(?:rs\.?|inr|₹)?\s*$/i.test(
-          precedingText
-        ) ||
-        /^\s*(?:is\s*)?(?:your\s*)?(?:avl\.?\s*bal(?:ance)?|available\s*balance|current\s*balance|clear\s*balance|closing\s*balance)\b/i.test(
-          followingText
-        );
+        this.BALANCE_BEFORE_AMOUNT_REGEX.test(before) ||
+        this.BALANCE_AFTER_AMOUNT_REGEX.test(after);
+      const isNonTransactionAmount =
+        this.NON_TRANSACTION_BEFORE_AMOUNT_REGEX.test(before) ||
+        this.NON_TRANSACTION_AFTER_AMOUNT_REGEX.test(after);
+      const isDirectTransactionAmount =
+        this.AMOUNT_BEFORE_TRANSACTION_REGEX.test(before) ||
+        this.AMOUNT_AFTER_TRANSACTION_REGEX.test(after);
 
-      let score = -start / 100000;
-      if (this.TRANSACTION_CONTEXT_REGEX.test(nearbyText)) score += 10;
-      if (isBalanceAmount) score -= 20;
-      if (this.NON_TRANSACTION_AMOUNT_REGEX.test(nearbyText)) score -= 12;
-      if (this.TRANSACTION_CONTEXT_REGEX.test(precedingText)) score += 8;
-      if (this.TRANSACTION_CONTEXT_REGEX.test(followingText)) score += 8;
+      let score = 1 - start / 100000;
+      if (isDirectTransactionAmount) score += 100;
+      if (this.TRANSACTION_CONTEXT_REGEX.test(before) || this.TRANSACTION_CONTEXT_REGEX.test(after)) {
+        score += 10;
+      }
+      if (isBalanceAmount) score -= 100;
+      if (isNonTransactionAmount) score -= 80;
 
       if (!bestMatch || score > bestMatch.score) {
         bestMatch = { amount, score };
       }
     }
 
-    if (bestMatch) {
+    if (bestMatch && bestMatch.score > 0) {
       return bestMatch.amount;
     }
 
@@ -151,6 +159,7 @@ export class TransactionExtractor {
     return null;
   }
 
+
   /**
    * Extract transaction direction (DEBIT or CREDIT).
    */
@@ -158,7 +167,7 @@ export class TransactionExtractor {
     const isTransferToOwnAccount =
       /\b(?:transferred?|remitted)\s+to\s+your\s+(?:a\/?c|account)\b/i.test(body);
     const debitPattern =
-      /\b(?:debited?|auto[- ]debit|spent|paid|withdraw(?:n|al)?|deducted|sent|purchas(?:e|ed)|charged|used|dr)\b/i;
+      /\b(?:debited?|auto[- ]debit|spent|paid|withdraw(?:n|al)?|deducted|sent|purchas(?:e|ed)|charged|used|using|use|swiped|dr)\b/i;
     const creditPattern =
       /\b(?:credited?|received|deposited|refunded?|cashback|added|reversed?|disbursed|cr)\b/i;
 
@@ -182,9 +191,10 @@ export class TransactionExtractor {
     for (const regex of this.ACCOUNT_MASK_REGEXES) {
       const match = body.match(regex);
       if (match && match[1]) {
-        const raw = match[1].trim();
-        // Standardize account masks after the full number has been captured.
-        return raw.length > 4 ? raw.slice(-4) : raw;
+        const digits = match[1].replace(/[^0-9]/g, '');
+        if (digits.length >= 3) {
+          return digits.length > 4 ? digits.slice(-4) : digits;
+        }
       }
     }
     return null;
@@ -227,43 +237,91 @@ export class TransactionExtractor {
    * Resolve bank name from SMS address (e.g. AX-HDFCBK) or message text.
    */
   public static resolveBank(address: string, body: string): string {
-    const cleanAddress = address.toUpperCase();
+    const cleanAddress = address.toUpperCase().trim();
+    const senderTokens = cleanAddress.split(/[^A-Z0-9]+/).filter(Boolean);
 
-    // Check sender address (typically XX-BANKBK)
+    // 1. Check DLT sender tokens for known bank signatures
+    for (const token of senderTokens) {
+      if (/^HDFC/i.test(token)) return 'HDFC Bank';
+      if (/^(?:SBI|SBM)/i.test(token)) return 'State Bank of India';
+      if (/^ICICI/i.test(token)) return 'ICICI Bank';
+      if (/^AXIS/i.test(token)) return 'Axis Bank';
+      if (/^(?:KOTAK|KMB)/i.test(token)) return 'Kotak Mahindra Bank';
+      if (/^IDFC/i.test(token)) return 'IDFC FIRST Bank';
+      if (/^(?:AUBANK|AUSFB)/i.test(token)) return 'AU Small Finance Bank';
+      if (/^(?:FEDBNK|FEDRL|FEDBN|FEDERAL)/i.test(token)) return 'Federal Bank';
+      if (/^(?:INDBNK|INDUSB|INDUS)/i.test(token)) return 'IndusInd Bank';
+      if (/^(?:CANBNK|CANARA|CANSMS|CANBN)/i.test(token)) return 'Canara Bank';
+      if (/^(?:BOBTXN|BOBSMS|BOBALT|BOBCRD|BARODA|BOBBNK)/i.test(token)) return 'Bank of Baroda';
+      if (/^(?:PNBSMS|PNBBNK|PNBALT|PNBNET|PUNJAB)/i.test(token)) return 'Punjab National Bank';
+      if (/^(?:BOISMS|BOIND|BOIBNK)/i.test(token)) return 'Bank of India';
+      if (/^(?:UNIONB|UBISMS|UBIAUT|UNIONS)/i.test(token)) return 'Union Bank of India';
+      if (/^(?:CBISMS|CBSSMS|CBIBNK)/i.test(token)) return 'Central Bank of India';
+      if (/^(?:YESBNK|YESB|YESPAY|YESCRD)/i.test(token)) return 'YES Bank';
+      if (/^(?:RBLBNK|RBLCRD|RBLSMS)/i.test(token)) return 'RBL Bank';
+      if (/^(?:SCISMS|SCBL|STAN)/i.test(token)) return 'Standard Chartered Bank';
+      if (/^(?:CITIBK|CITI)/i.test(token)) return 'Citibank';
+      if (/^HSBC/i.test(token)) return 'HSBC Bank';
+      if (/^DBS/i.test(token)) return 'DBS Bank';
+      if (/^(?:IOBSMS|IOBTXN|IOB)/i.test(token)) return 'Indian Overseas Bank';
+      if (/^IDBI/i.test(token)) return 'IDBI Bank';
+      if (/^(?:MAHABK|BOMAH)/i.test(token)) return 'Bank of Maharashtra';
+      if (/^(?:UCOBNK|UCO)/i.test(token)) return 'UCO Bank';
+      if (/^BANDHN/i.test(token)) return 'Bandhan Bank';
+      if (/^KVB/i.test(token)) return 'Karur Vysya Bank';
+      if (/^CSB/i.test(token)) return 'CSB Bank';
+      if (/^(?:SOUTHB|SIBLTD)/i.test(token)) return 'South Indian Bank';
+      if (/^(?:JSFB|JANA)/i.test(token)) return 'Jana Small Finance Bank';
+      if (/^ESAF/i.test(token)) return 'ESAF Small Finance Bank';
+      if (/^(?:EQUITAS|EQITAS)/i.test(token)) return 'Equitas Small Finance Bank';
+      if (/^(?:UJJIVAN|UJJIVN)/i.test(token)) return 'Ujjivan Small Finance Bank';
+      if (/^INDIANB/i.test(token)) return 'Indian Bank';
+    }
+
+    // Direct mapping lookup fallback
     for (const [key, bankName] of Object.entries(this.BANK_MAPPINGS)) {
-      if (cleanAddress.includes(key)) {
+      if (senderTokens.includes(key) || cleanAddress.includes(key)) {
         return bankName;
       }
     }
 
-    // Check body text for bank mentions
-    if (/hdfc/i.test(body)) return 'HDFC Bank';
-    if (/icici/i.test(body)) return 'ICICI Bank';
-    if (/sbi|state bank/i.test(body)) return 'State Bank of India';
-    if (/axis bank/i.test(body)) return 'Axis Bank';
-    if (/kotak/i.test(body)) return 'Kotak Mahindra Bank';
-    if (/idfc/i.test(body)) return 'IDFC FIRST Bank';
-    if (/au bank|au small/i.test(body)) return 'AU Small Finance Bank';
-    if (/federal bank/i.test(body)) return 'Federal Bank';
-    if (/indusind/i.test(body)) return 'IndusInd Bank';
-    if (/canara/i.test(body)) return 'Canara Bank';
-    if (/\bbank of baroda\b|\bbob\s*:/i.test(body)) return 'Bank of Baroda';
-    if (/pnb|punjab national/i.test(body)) return 'Punjab National Bank';
-    if (/bank of india\b/i.test(body)) return 'Bank of India';
-    if (/union bank/i.test(body)) return 'Union Bank of India';
-    if (/central bank/i.test(body)) return 'Central Bank of India';
-    if (/yes bank/i.test(body)) return 'YES Bank';
-    if (/rbl bank/i.test(body)) return 'RBL Bank';
+    // 2. Check body text for bank mentions
+    if (/\bhdfc\b/i.test(body)) return 'HDFC Bank';
+    if (/\bicici\b/i.test(body)) return 'ICICI Bank';
+    if (/\b(?:sbi|state bank)\b/i.test(body)) return 'State Bank of India';
+    if (/\baxis\b/i.test(body)) return 'Axis Bank';
+    if (/\bkotak\b/i.test(body)) return 'Kotak Mahindra Bank';
+    if (/\bidfc\b/i.test(body)) return 'IDFC FIRST Bank';
+    if (/\b(?:au bank|au small|aubank)\b/i.test(body)) return 'AU Small Finance Bank';
+    if (/\bfederal bank\b|\bfederal\s+a\/?c/i.test(body)) return 'Federal Bank';
+    if (/\bindusind\b/i.test(body)) return 'IndusInd Bank';
+    if (/\bcanara\b/i.test(body)) return 'Canara Bank';
+    if (/\b(?:bank of baroda|baroda(?:\s+bank|\s+a\/?c)?|bob(?:\s+a\/?c|\s*:|\s+card|\s+bank|\s+upi))\b/i.test(body)) return 'Bank of Baroda';
+    if (/\b(?:pnb|punjab national)\b/i.test(body)) return 'Punjab National Bank';
+    if (/\bbank of india\b/i.test(body)) return 'Bank of India';
+    if (/\b(?:union bank|ubi)\b/i.test(body)) return 'Union Bank of India';
+    if (/\bcentral bank\b/i.test(body)) return 'Central Bank of India';
+    if (/\byes bank\b/i.test(body)) return 'YES Bank';
+    if (/\brbl\b/i.test(body)) return 'RBL Bank';
     if (/\bpaytm payments bank\b/i.test(body)) return 'Paytm Payments Bank';
     if (/\bairtel payments bank\b/i.test(body)) return 'Airtel Payments Bank';
-    if (/standard chartered/i.test(body)) return 'Standard Chartered Bank';
-    if (/citibank/i.test(body)) return 'Citibank';
-    if (/hsbc/i.test(body)) return 'HSBC Bank';
-    if (/dbs bank/i.test(body)) return 'DBS Bank';
-    if (/indian overseas/i.test(body)) return 'Indian Overseas Bank';
-    if (/indian bank/i.test(body)) return 'Indian Bank';
-    if (/bank of maharashtra/i.test(body)) return 'Bank of Maharashtra';
-    if (/uco bank/i.test(body)) return 'UCO Bank';
+    if (/\bjio payments bank\b/i.test(body)) return 'Jio Payments Bank';
+    if (/\bstandard chartered\b/i.test(body)) return 'Standard Chartered Bank';
+    if (/\bcitibank\b/i.test(body)) return 'Citibank';
+    if (/\bhsbc\b/i.test(body)) return 'HSBC Bank';
+    if (/\bdbs\b/i.test(body)) return 'DBS Bank';
+    if (/\bindian overseas\b|\biob\b/i.test(body)) return 'Indian Overseas Bank';
+    if (/\bindian bank\b/i.test(body)) return 'Indian Bank';
+    if (/\bbank of maharashtra\b/i.test(body)) return 'Bank of Maharashtra';
+    if (/\buco bank\b|\buco\b/i.test(body)) return 'UCO Bank';
+    if (/\bbandhan bank\b/i.test(body)) return 'Bandhan Bank';
+    if (/\bkarur vysya\b|\bkvb\b/i.test(body)) return 'Karur Vysya Bank';
+    if (/\bcsb bank\b/i.test(body)) return 'CSB Bank';
+    if (/\bsouth indian bank\b/i.test(body)) return 'South Indian Bank';
+    if (/\bjana small\b|\bjsfb\b/i.test(body)) return 'Jana Small Finance Bank';
+    if (/\besaf\b/i.test(body)) return 'ESAF Small Finance Bank';
+    if (/\bequitas\b/i.test(body)) return 'Equitas Small Finance Bank';
+    if (/\bujjivan\b/i.test(body)) return 'Ujjivan Small Finance Bank';
 
     // Heuristic for DLT bank sender suffix (e.g. XX-XYZBNK -> XYZ Bank)
     const senderMatch = cleanAddress.match(/^[A-Z]{2}-([A-Z0-9]{3,8})$/);
@@ -281,12 +339,25 @@ export class TransactionExtractor {
   }
 
   /**
-   * Check if transaction text indicates a credit card.
+   * Check if transaction text or sender address indicates a credit card.
    */
-  public static isCreditCard(body: string): boolean {
+  public static isCreditCard(body: string, address?: string): boolean {
+    if (address) {
+      const cleanAddress = address.toUpperCase();
+      if (
+        /(?:CRD|CC|CARD|ONECRD|AMEX)/i.test(cleanAddress) ||
+        cleanAddress.includes('SBICRD') ||
+        cleanAddress.includes('BOBCRD') ||
+        cleanAddress.includes('RBLCRD')
+      ) {
+        return true;
+      }
+    }
     return (
-      /\b(?:credit card|card ending|credit a\/?c|c-card|cardmember|bank card)\b/i.test(body) ||
-      /\bcard\s+[xX*]*\d{3,4}\b/i.test(body)
+      /\b(?:credit card|creditcard|card ending|credit a\/?c|c-card|cardmember|bank card|onecard|bobcard|scapia)\b/i.test(body) ||
+      /\bcard\s+[xX*•#-]*\d{3,4}\b/i.test(body) ||
+      /\b(?:sbi card|sbi credit card|hdfc card|icici card|axis card|kotak card|rbl card|idfc card|bob card|indusind card|federal card|citi card|scb card|au card|one card)\b/i.test(body) ||
+      /\b(?:avl\s*lmt|avail\s*limit|credit\s*limit|bal\s*limit|total\s*limit|total\s*due|min\s*due|total\s*outstanding)\b/i.test(body)
     );
   }
 
@@ -313,19 +384,19 @@ export class TransactionExtractor {
       if (/\b(?:salary|payroll|stipend)\b/i.test(body)) {
         return 'Salary Credit';
       }
-      return `${bank} Transaction`;
+      return '';
     }
 
     // Sanitize merchant string
     merchant = merchant
-      .replace(/^(?:info[- ]|vps\*|bil\/|upi\/|payment to\s+|(?:upi|vpa)\s+)/i, '')
-      .replace(/(?:\s+vpa\b.*|\s+on\s+\d{1,2}.*|\s+upi\s+ref.*|\s+ref\s+no.*|\s+upi$)/i, '')
-      .replace(/[^\w\s@&.-]/g, '')
+      .replace(/^(?:info[-:]\s*|vps\*|bil\/|upi\/|payment to\s+|(?:upi|vpa)\s+)/i, '')
+      .replace(/(?:\s+vpa\b.*|\s+on\s+\d{1,2}.*|\s+for\s+(?:rs\.?|inr|₹|\$|€|£).*|\s+upi\s+ref.*|\s+ref\s+no.*|\s+upi$)/i, '')
+      .replace(/[^\w\s@&.'-]/g, '')
       .trim();
 
     // If cleaned merchant is empty or just generic keywords
     if (!merchant || /^(?:your|the|account|card|bank)$/i.test(merchant)) {
-      return `${bank} Transaction`;
+      return '';
     }
 
     return merchant;
@@ -368,7 +439,8 @@ export class TransactionExtractor {
     const bank = this.resolveBank(message.address, message.body);
     const accountMask = this.extractAccountMask(message.body) || 'XXXX';
     const referenceNumber = this.extractReferenceNumber(message.body) || undefined;
-    const availableBalance = this.extractAvailableBalance(message.body) ?? undefined;
+    const isCard = this.isCreditCard(message.body, message.address);
+    const availableBalance = !isCard ? (this.extractAvailableBalance(message.body) ?? undefined) : undefined;
     const merchant = this.extractMerchant(message.body, bank);
 
     return {

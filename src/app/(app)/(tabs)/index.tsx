@@ -21,6 +21,7 @@ import { useDoubleBackToExit } from '@/hooks/use-double-back-to-exit';
 import { useSmsSync } from '@/hooks/useSmsSync';
 import { formatCurrency, formatCurrencyPrivacy, getTransactionSign } from '@/utils/format';
 import { getCategoryIcon, getBankBranding } from '@/utils/icons';
+import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
 import { useAppStore } from '@/store/use-app-store';
 
 export default function DashboardScreen() {
@@ -60,13 +61,13 @@ export default function DashboardScreen() {
     permissionStatus: smsPermissionStatus,
     isSyncing: isSmsSyncing,
     requestPermission: requestSmsPermission,
-    startInitialSync: startSmsSync,
+    sync: syncSms,
   } = useSmsSync();
 
   const handleEnableSms = async () => {
     const status = await requestSmsPermission();
     if (status === 'granted') {
-      await startSmsSync();
+      await syncSms();
       refetchTransactions();
       refetchAccounts();
       refetchTotals();
@@ -648,14 +649,8 @@ export default function DashboardScreen() {
                     transactions.map((tx, index) => {
                       const isLast = index === transactions.length - 1;
                       const sign = getTransactionSign(tx.type);
-                      const hasMerchant = Boolean(
-                        tx.merchant &&
-                        tx.merchant.trim() &&
-                        tx.merchant.trim().toLowerCase() !== tx.category.trim().toLowerCase()
-                      );
-                      const title = tx.type === 'transfer'
-                        ? 'Transfer'
-                        : (hasMerchant ? tx.merchant : tx.category);
+                      const hasMerchant = hasMeaningfulMerchant(tx);
+                      const title = getTransactionDisplayName(tx);
                       const subtitle = tx.type === 'transfer'
                         ? `${tx.date} • ${tx.accountName} → ${tx.toAccountName || 'Unknown'}`
                         : (hasMerchant

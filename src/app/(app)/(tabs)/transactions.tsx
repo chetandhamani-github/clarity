@@ -8,6 +8,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useTransactions } from '@/hooks/use-transactions';
 import { formatCurrency, getTransactionSign, groupTransactionsByDate } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
+import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
 
 const FILTERS = [
   { id: 'all', label: 'All', icon: 'list' },
@@ -128,14 +129,8 @@ export default function TransactionsScreen() {
                         groupIndex === groupedTransactions.length - 1 &&
                         txIndex === group.items.length - 1;
                       const sign = getTransactionSign(tx.type);
-                      const hasMerchant = Boolean(
-                        tx.merchant &&
-                        tx.merchant.trim() &&
-                        tx.merchant.trim().toLowerCase() !== tx.category.trim().toLowerCase()
-                      );
-                      const title = tx.type === 'transfer'
-                        ? 'Transfer'
-                        : (hasMerchant ? tx.merchant : tx.category);
+                      const hasMerchant = hasMeaningfulMerchant(tx);
+                      const title = getTransactionDisplayName(tx);
                       const subtitle = tx.type === 'transfer'
                         ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}`
                         : (hasMerchant

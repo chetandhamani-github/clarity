@@ -126,7 +126,14 @@ export async function getTransactionById(id: string): Promise<TransactionWithAcc
   return row ? mapRow(row) : null;
 }
 
-export async function insertTransaction(data: Omit<Transaction, 'id'>): Promise<Transaction> {
+export interface InsertTransactionOptions {
+  updateAccountBalance?: boolean;
+}
+
+export async function insertTransaction(
+  data: Omit<Transaction, 'id'>,
+  options: InsertTransactionOptions = {}
+): Promise<Transaction> {
   const db = getDatabase();
   const id = generateId();
 
@@ -139,6 +146,7 @@ export async function insertTransaction(data: Omit<Transaction, 'id'>): Promise<
   else if (data.type === 'expense' || data.type === 'transfer') balanceChange = -data.amount;
 
   const newBalance = account.balance + balanceChange;
+  const shouldUpdateAccountBalance = options.updateAccountBalance !== false;
 
   let toAccount;
   if (data.type === 'transfer') {
@@ -168,14 +176,14 @@ export async function insertTransaction(data: Omit<Transaction, 'id'>): Promise<
       ]
     );
 
-    if (balanceChange !== 0) {
+    if (shouldUpdateAccountBalance && balanceChange !== 0) {
       await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
         newBalance,
         data.accountId,
       ]);
     }
 
-    if (toAccount && data.toAccountId) {
+    if (shouldUpdateAccountBalance && toAccount && data.toAccountId) {
       const newToBalance = toAccount.balance + data.amount;
       await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
         newToBalance,
@@ -457,7 +465,11 @@ export async function getTopMerchants(
   const rows = await db.getAllAsync<{ merchant: string; total: number }>(
     `SELECT merchant, SUM(amount) as total
      FROM transactions 
-     WHERE type = 'expense' AND date LIKE ?
+     WHERE type = 'expense'
+       AND date LIKE ?
+       AND merchant IS NOT NULL
+       AND TRIM(merchant) != ''
+       AND LOWER(TRIM(merchant)) NOT LIKE '%transaction'
      GROUP BY merchant
      ORDER BY total DESC
      LIMIT ?`,

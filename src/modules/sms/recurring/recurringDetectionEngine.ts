@@ -35,6 +35,9 @@ export class RecurringDetectionEngine {
 
     for (const tx of validTransactions) {
       const normalizedMerchant = this.normalizeMerchantName(tx.merchant);
+      if (!normalizedMerchant) {
+        continue;
+      }
       const key = `${normalizedMerchant}__${tx.accountMask}__${tx.type}`;
       if (!groups.has(key)) {
         groups.set(key, []);
@@ -148,7 +151,11 @@ export class RecurringDetectionEngine {
   }
 
   private static normalizeMerchantName(merchant: string): string {
-    return merchant
+    const trimmed = merchant.trim();
+    if (!trimmed || /^(?:.+\s+)?(?:bank\s+)?transaction$/i.test(trimmed)) {
+      return '';
+    }
+    return trimmed
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '')
       .slice(0, 20);

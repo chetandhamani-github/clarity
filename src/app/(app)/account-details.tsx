@@ -19,6 +19,7 @@ import { useToast, useAlert } from '@/components/ui';
 import { LineChart } from 'react-native-gifted-charts';
 import { formatCurrency, formatDate, getTransactionSign } from '@/utils/format';
 import { getCategoryIcon, getAccountTypeIcon } from '@/utils/icons';
+import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
 
 export default function AccountDetailsScreen() {
   const { colors } = useTheme();
@@ -365,11 +366,11 @@ export default function AccountDetailsScreen() {
                                       ? tx.accountId === account?.id
                                         ? `Transfer to ${tx.toAccountName || 'Unknown'}`
                                         : `Transfer from ${tx.accountName}`
-                                      : (tx.merchant && tx.merchant.trim() ? tx.merchant : tx.category)}
+                                      : getTransactionDisplayName(tx)}
                                   </Text>
                                   <Text style={styles.txSubtitle} numberOfLines={1}>
                                     {formatDate(tx.date)}
-                                    {tx.merchant && tx.merchant.trim() && tx.merchant.trim().toLowerCase() !== tx.category.trim().toLowerCase()
+                                    {hasMeaningfulMerchant(tx)
                                       ? ` • ${tx.category}`
                                       : ''}
                                   </Text>

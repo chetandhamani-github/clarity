@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTransactions } from '@/hooks/use-transactions';
 import { formatCurrency, getTransactionSign, groupTransactionsByDate } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
+import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
 
 // Simple debounce hook
 function useDebounce<T>(value: T, delay: number): T {
@@ -182,12 +183,12 @@ export default function SearchScreen() {
                                 <Text style={styles.txTitle} numberOfLines={1}>
                                   {tx.type === 'transfer'
                                     ? 'Transfer'
-                                    : (tx.merchant && tx.merchant.trim() ? tx.merchant : tx.category)}
+                                    : getTransactionDisplayName(tx)}
                                 </Text>
                                 <Text style={styles.txSubtitle} numberOfLines={1}>
                                   {tx.type === 'transfer'
                                     ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}`
-                                    : (tx.merchant && tx.merchant.trim() && tx.merchant.trim().toLowerCase() !== tx.category.trim().toLowerCase()
+                                    : (hasMeaningfulMerchant(tx)
                                         ? `${tx.accountName} • ${tx.category}`
                                         : tx.accountName)}
                                 </Text>

@@ -10,6 +10,12 @@ jest.mock('@/modules/sms/storage/smsDao', () => ({
   },
 }));
 
+jest.mock('@/modules/sms/services/smsSyncService', () => ({
+  SmsSyncService: {
+    importParsedTransactions: jest.fn().mockResolvedValue(undefined),
+  },
+}));
+
 describe('ReviewQueueService', () => {
   const sampleMsg: RawSmsMessage = {
     id: 'sms-rev-1',
@@ -44,6 +50,8 @@ describe('ReviewQueueService', () => {
     expect(parsedTx.category).toBe('Food & Dining');
 
     expect(SmsDao.saveParsedTransactionsBatch).toHaveBeenCalled();
+    const { SmsSyncService } = require('@/modules/sms/services/smsSyncService');
+    expect(SmsSyncService.importParsedTransactions).toHaveBeenCalledWith([parsedTx]);
     expect(SmsDao.updateReviewQueueStatus).toHaveBeenCalledWith(item.id, 'resolved');
   });
 

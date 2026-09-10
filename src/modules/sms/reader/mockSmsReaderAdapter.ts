@@ -23,7 +23,7 @@ export class MockSmsReaderAdapter implements ISmsReaderAdapter {
     let filtered = [...this.messages];
 
     if (options?.sinceTimestamp !== undefined) {
-      filtered = filtered.filter((m) => m.date > options.sinceTimestamp!);
+      filtered = filtered.filter((m) => m.date >= options.sinceTimestamp!);
     }
     if (options?.startDate !== undefined) {
       filtered = filtered.filter((m) => m.date >= options.startDate!);
