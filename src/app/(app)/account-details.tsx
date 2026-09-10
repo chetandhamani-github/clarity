@@ -15,7 +15,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAccount, useDeleteAccount } from '@/hooks/use-accounts';
 import { useTransactions, useAccountHistory } from '@/hooks/use-transactions';
-import { useToast, useAlert } from '@/components/ui';
+import { useAccountReconciliation, useCreateAdjustmentEntry } from '@/hooks/use-reconciliation';
+import { useToast, useAlert, DiscrepancyBanner } from '@/components/ui';
 import { LineChart } from 'react-native-gifted-charts';
 import { formatCurrency, formatDate, getTransactionSign } from '@/utils/format';
 import { getCategoryIcon, getAccountTypeIcon } from '@/utils/icons';
@@ -31,10 +32,27 @@ export default function AccountDetailsScreen() {
   const { account, isLoading } = useAccount(accountId);
   const { transactions, isLoading: isTxLoading } = useTransactions({ accountId });
   const { history, isLoading: isHistoryLoading } = useAccountHistory(accountId, 30);
+  const { reconciliation } = useAccountReconciliation(accountId);
+  const { mutate: createAdjustment, isPending: isAdjusting } = useCreateAdjustmentEntry();
   const { mutate: deleteAccount, isPending: isDeleting } = useDeleteAccount();
   const [showMenu, setShowMenu] = useState(false);
   const { showToast } = useToast();
   const { showAlert } = useAlert();
+
+  const handleAdjustBalance = () => {
+    if (!account || !reconciliation) return;
+    createAdjustment(
+      {
+        accountId: account.id,
+        discrepancyAmount: reconciliation.discrepancy,
+      },
+      {
+        onSuccess: () => {
+          showToast('Adjustment entry created', 'success');
+        },
+      }
+    );
+  };
 
   const handleDelete = () => {
     setShowMenu(false);
@@ -315,9 +333,21 @@ export default function AccountDetailsScreen() {
                 />
               </View>
             </View>
-                  {/* Recent Activity */}
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Recent Activity</Text>
+
+            {/* Discrepancy Banner */}
+            {reconciliation && reconciliation.hasDiscrepancy && (
+              <DiscrepancyBanner
+                discrepancy={reconciliation.discrepancy}
+                statementBalance={reconciliation.statementBalance}
+                calculatedBalance={reconciliation.calculatedBalance}
+                onAdjust={handleAdjustBalance}
+                isAdjusting={isAdjusting}
+              />
+            )}
+
+            {/* Recent Activity */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Recent Activity</Text>
 
                     {isTxLoading ? (
                       <View style={styles.emptyActivityBox}>

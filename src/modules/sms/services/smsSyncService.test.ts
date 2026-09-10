@@ -45,6 +45,8 @@ jest.mock('@/services/database/transaction-dao', () => ({
   insertTransaction: jest.fn().mockResolvedValue({
     id: 'clarity-tx-1',
   }),
+  findManualMatch: jest.fn().mockResolvedValue(null),
+  mergeManualWithSmsTransaction: jest.fn().mockResolvedValue(undefined),
 }));
 
 const initialAccounts = [
@@ -182,6 +184,43 @@ describe('SmsSyncService', () => {
     expect(SmsDao.linkClarityTransaction).toHaveBeenCalledWith('pending-1', 'clarity-tx-1');
   });
 
+  it('merges late-arriving SMS with an existing manual transaction instead of creating duplicate', async () => {
+    const { findManualMatch, mergeManualWithSmsTransaction, insertTransaction } = require('@/services/database/transaction-dao');
+    findManualMatch.mockResolvedValueOnce({
+      id: 'manual-tx-450',
+      accountId: 'acc-1',
+      amount: 350,
+      type: 'expense',
+      merchant: 'Swiggy Food',
+      category: 'Dining',
+      date: '2025-01-15T09:00:00.000Z',
+      source: 'MANUAL',
+      status: 'PENDING_MATCH',
+    });
+
+    const result = await SmsSyncService.runInitialScan({
+      autoCreateClarityTransactions: true,
+    });
+
+    expect(result.parsedCount).toBe(1);
+    expect(findManualMatch).toHaveBeenCalledWith(
+      'acc-1',
+      350,
+      'expense',
+      1705315200000,
+      24
+    );
+    expect(mergeManualWithSmsTransaction).toHaveBeenCalledWith(
+      'manual-tx-450',
+      expect.objectContaining({
+        smsId: 'sms-sync-1',
+      })
+    );
+    expect(SmsDao.linkClarityTransaction).toHaveBeenCalledWith(expect.any(String), 'manual-tx-450');
+    // insertTransaction should not have been called for this message
+    expect(insertTransaction).not.toHaveBeenCalled();
+  });
+
   it('does not reprocess stored SMS messages during another initial scan', async () => {
     (SmsDao.getExistingSmsIds as jest.Mock).mockResolvedValue(new Set(['sms-sync-1']));
 
@@ -194,3 +233,4 @@ describe('SmsSyncService', () => {
     expect(SmsDao.saveParsedTransactionsBatch).toHaveBeenCalledWith([]);
   });
 });
+

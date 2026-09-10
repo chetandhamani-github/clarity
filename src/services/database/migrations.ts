@@ -103,6 +103,39 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
     // Column might already exist, ignore error
   }
 
+  try {
+    await db.execAsync("ALTER TABLE transactions ADD COLUMN source TEXT NOT NULL DEFAULT 'MANUAL';");
+  } catch (e) {
+    // Column might already exist, ignore error
+  }
+
+  try {
+    await db.execAsync("ALTER TABLE transactions ADD COLUMN status TEXT NOT NULL DEFAULT 'VERIFIED';");
+  } catch (e) {
+    // Column might already exist, ignore error
+  }
+
+  try {
+    await db.execAsync('ALTER TABLE transactions ADD COLUMN sms_id TEXT;');
+  } catch (e) {
+    // Column might already exist, ignore error
+  }
+
+  try {
+    await db.execAsync('ALTER TABLE transactions ADD COLUMN parsed_tx_id TEXT;');
+  } catch (e) {
+    // Column might already exist, ignore error
+  }
+
+  try {
+    await db.execAsync(`
+      CREATE INDEX IF NOT EXISTS idx_transactions_matching 
+      ON transactions(account_id, amount, source, date);
+    `);
+  } catch (e) {
+    // Index might already exist, ignore error
+  }
+
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS recurring_transactions (
       id TEXT PRIMARY KEY NOT NULL,

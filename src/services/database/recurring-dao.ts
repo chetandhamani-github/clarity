@@ -232,6 +232,30 @@ export async function processDueRecurringTransactions(): Promise<number> {
         }
 
         while (currentDate <= today && count < MAX_CYCLES) {
+          // Check if an SMS or manual transaction already captured this recurring charge for this cycle
+          const existingTx = await db.getFirstAsync<{ id: string; is_recurring: number }>(
+            `SELECT id, is_recurring FROM transactions
+             WHERE account_id = ?
+               AND amount = ?
+               AND type = ?
+               AND (date(date) = date(?) OR date LIKE ?)
+             LIMIT 1`,
+            [rt.account_id, rt.amount, rt.type, currentDate, `${currentDate}%`]
+          );
+
+          if (existingTx) {
+            if (!existingTx.is_recurring) {
+              await db.runAsync('UPDATE transactions SET is_recurring = 1 WHERE id = ?', [
+                existingTx.id,
+              ]);
+            }
+            lastProcessed = currentDate;
+            currentDate = calculateNextDate(currentDate, rt.frequency as RecurringFrequency);
+            count++;
+            totalProcessed++;
+            continue;
+          }
+
           const newTx = await insertTransaction({
             accountId: rt.account_id,
             toAccountId: rt.to_account_id,
@@ -243,6 +267,8 @@ export async function processDueRecurringTransactions(): Promise<number> {
             isRecurring: true,
             note: 'Auto-generated recurring transaction',
             splits: parsedSplits,
+            source: 'MANUAL',
+            status: 'PENDING_MATCH',
           });
 
           // Evaluate budget alerts if expense

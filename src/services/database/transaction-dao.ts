@@ -5,6 +5,8 @@ import type {
   TransactionWithAccount,
   TransactionFilters,
   TransactionType,
+  TransactionSource,
+  TransactionStatus,
   MonthlyTotals,
 } from '@/types';
 
@@ -28,6 +30,10 @@ interface TransactionRow {
   note: string;
   splits_json?: string;
   to_account_id?: string;
+  source?: string;
+  status?: string;
+  sms_id?: string;
+  parsed_tx_id?: string;
   account_name?: string; // from JOIN
   to_account_name?: string; // from JOIN
 }
@@ -54,6 +60,10 @@ function mapRow(row: TransactionRow): TransactionWithAccount {
     isRecurring: Boolean(row.is_recurring),
     note: row.note,
     splits,
+    source: (row.source as TransactionSource) || 'MANUAL',
+    status: (row.status as TransactionStatus) || 'VERIFIED',
+    smsId: row.sms_id,
+    parsedTxId: row.parsed_tx_id,
     accountName: row.account_name ?? 'Unknown Account',
     toAccountName: row.to_account_name,
   };
@@ -155,12 +165,16 @@ export async function insertTransaction(
     if (!toAccount) throw new Error('Destination account not found');
   }
 
+  const source: TransactionSource = data.source || 'MANUAL';
+  const status: TransactionStatus =
+    data.status || (source === 'MANUAL' ? 'PENDING_MATCH' : 'VERIFIED');
+
   // 2. Insert transaction and update account balance in a transaction
   await db.execAsync('BEGIN TRANSACTION');
   try {
     await db.runAsync(
-      `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, to_account_id, splits_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, to_account_id, splits_json, source, status, sms_id, parsed_tx_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         data.accountId,
@@ -173,6 +187,10 @@ export async function insertTransaction(
         data.note,
         data.toAccountId || null,
         data.splits && data.splits.length > 0 ? JSON.stringify(data.splits) : null,
+        source,
+        status,
+        data.smsId || null,
+        data.parsedTxId || null,
       ]
     );
 
@@ -197,7 +215,7 @@ export async function insertTransaction(
     throw error;
   }
 
-  return { id, ...data };
+  return { id, ...data, source, status };
 }
 
 export async function updateTransaction(
@@ -320,6 +338,22 @@ export async function updateTransaction(
     if (data.splits !== undefined) {
       sets.push('splits_json = ?');
       params.push(data.splits && data.splits.length > 0 ? JSON.stringify(data.splits) : null);
+    }
+    if (data.source !== undefined) {
+      sets.push('source = ?');
+      params.push(data.source);
+    }
+    if (data.status !== undefined) {
+      sets.push('status = ?');
+      params.push(data.status);
+    }
+    if (data.smsId !== undefined) {
+      sets.push('sms_id = ?');
+      params.push(data.smsId);
+    }
+    if (data.parsedTxId !== undefined) {
+      sets.push('parsed_tx_id = ?');
+      params.push(data.parsedTxId);
     }
 
     if (sets.length > 0) {
@@ -626,3 +660,78 @@ export async function getAccountHistory(
 
   return history;
 }
+
+export async function findManualMatch(
+  accountId: string,
+  amount: number,
+  type: TransactionType,
+  timestampMs: number,
+  windowHours: number = 24
+): Promise<TransactionWithAccount | null> {
+  const db = getDatabase();
+  const windowStart = new Date(timestampMs - windowHours * 60 * 60 * 1000).toISOString();
+  const windowEnd = new Date(timestampMs + 6 * 60 * 60 * 1000).toISOString();
+
+  const rows = await db.getAllAsync<TransactionRow>(
+    `SELECT t.*, a.name as account_name, ta.name as to_account_name
+     FROM transactions t
+     LEFT JOIN accounts a ON t.account_id = a.id
+     LEFT JOIN accounts ta ON t.to_account_id = ta.id
+     WHERE t.account_id = ?
+       AND t.amount = ?
+       AND t.type = ?
+       AND (t.source = 'MANUAL' OR t.status = 'PENDING_MATCH')
+       AND t.date BETWEEN ? AND ?
+     ORDER BY t.date DESC
+     LIMIT 10`,
+    [accountId, amount, type, windowStart, windowEnd]
+  );
+
+  if (rows.length === 0) return null;
+
+  // If multiple candidates exist, choose the one closest in time
+  let closestRow = rows[0];
+  let minDiff = Math.abs(new Date(rows[0].date).getTime() - timestampMs);
+
+  for (let i = 1; i < rows.length; i++) {
+    const diff = Math.abs(new Date(rows[i].date).getTime() - timestampMs);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closestRow = rows[i];
+    }
+  }
+
+  return mapRow(closestRow);
+}
+
+export async function mergeManualWithSmsTransaction(
+  manualTxId: string,
+  smsData: {
+    smsId: string;
+    parsedTxId: string;
+    merchant?: string;
+    date?: string;
+  }
+): Promise<void> {
+  const db = getDatabase();
+  const existingTx = await getTransactionById(manualTxId);
+  if (!existingTx) return;
+
+  const shouldEnrichMerchant =
+    smsData.merchant &&
+    (!existingTx.merchant ||
+      existingTx.merchant.trim() === '' ||
+      existingTx.merchant.toLowerCase() === existingTx.category.toLowerCase());
+
+  const sets = ["source = 'SMS'", "status = 'VERIFIED'", 'sms_id = ?', 'parsed_tx_id = ?'];
+  const params: any[] = [smsData.smsId, smsData.parsedTxId];
+
+  if (shouldEnrichMerchant) {
+    sets.push('merchant = ?');
+    params.push(smsData.merchant!.trim());
+  }
+
+  params.push(manualTxId);
+  await db.runAsync(`UPDATE transactions SET ${sets.join(', ')} WHERE id = ?`, params);
+}
+

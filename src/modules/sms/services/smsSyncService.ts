@@ -16,7 +16,11 @@ import {
   updateAccount,
   updateAccountBalance,
 } from '@/services/database/account-dao';
-import { insertTransaction } from '@/services/database/transaction-dao';
+import {
+  insertTransaction,
+  findManualMatch,
+  mergeManualWithSmsTransaction,
+} from '@/services/database/transaction-dao';
 import { getDatabase } from '@/services/database';
 import { TransactionExtractor } from '@/modules/sms/extractor/transactionExtractor';
 import { hasMeaningfulMerchant } from '@/utils/transaction-display';
@@ -495,22 +499,50 @@ export class SmsSyncService {
             ? transaction.merchant.trim()
             : transaction.category;
 
-        const createdTransaction = await insertTransaction(
-          {
-            accountId: matchedAccount.id,
-            amount: transaction.amount,
-            type: transaction.type === 'DEBIT' ? 'expense' : 'income',
-            merchant: effectiveMerchant,
-            category: transaction.category,
-            date: new Date(transaction.timestamp).toISOString(),
-            isRecurring: false,
-            note: 'Imported via SMS (' + bankName + ')',
-          },
-          { updateAccountBalance: false }
+        const txType = transaction.type === 'DEBIT' ? 'expense' : 'income';
+
+        // 1. Check if a manual transaction exists within a 24-hour window that can be merged
+        const manualMatch = await findManualMatch(
+          matchedAccount.id,
+          transaction.amount,
+          txType,
+          transaction.timestamp,
+          24 // 24-hour merge window
         );
 
-        await SmsDao.linkClarityTransaction(transaction.id, createdTransaction.id);
-        transaction.transactionId = createdTransaction.id;
+        if (manualMatch) {
+          // Merge silently into existing manual record without double-counting balance
+          await mergeManualWithSmsTransaction(manualMatch.id, {
+            smsId: transaction.smsId,
+            parsedTxId: transaction.id,
+            merchant: effectiveMerchant,
+            date: new Date(transaction.timestamp).toISOString(),
+          });
+          await SmsDao.linkClarityTransaction(transaction.id, manualMatch.id);
+          transaction.transactionId = manualMatch.id;
+        } else {
+          // Insert brand new verified SMS transaction
+          const createdTransaction = await insertTransaction(
+            {
+              accountId: matchedAccount.id,
+              amount: transaction.amount,
+              type: txType,
+              merchant: effectiveMerchant,
+              category: transaction.category,
+              date: new Date(transaction.timestamp).toISOString(),
+              isRecurring: false,
+              note: 'Imported via SMS (' + bankName + ')',
+              source: 'SMS',
+              status: 'VERIFIED',
+              smsId: transaction.smsId,
+              parsedTxId: transaction.id,
+            },
+            { updateAccountBalance: false }
+          );
+
+          await SmsDao.linkClarityTransaction(transaction.id, createdTransaction.id);
+          transaction.transactionId = createdTransaction.id;
+        }
       } catch (error) {
         console.warn(
           '[SmsSyncService] Failed to create Clarity transaction for tx ' +

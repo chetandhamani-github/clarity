@@ -38,6 +38,9 @@ export interface TransactionSplit {
   note?: string;
 }
 
+export type TransactionSource = 'SMS' | 'MANUAL' | 'ADJUSTMENT';
+export type TransactionStatus = 'VERIFIED' | 'PENDING_MATCH';
+
 export interface Transaction {
   id: string;
   accountId: string;
@@ -50,6 +53,10 @@ export interface Transaction {
   isRecurring: boolean;
   note: string;
   splits?: TransactionSplit[];
+  source?: TransactionSource;
+  status?: TransactionStatus;
+  smsId?: string;
+  parsedTxId?: string;
 }
 
 export type TransactionType = 'expense' | 'income' | 'transfer';

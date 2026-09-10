@@ -16,3 +16,4 @@ export * from './AppLockModal';
 export * from './Skeleton';
 export * from './SkeletonScreens';
 export * from './DatePickerModal';
+export * from './DiscrepancyBanner';

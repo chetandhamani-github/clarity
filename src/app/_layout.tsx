@@ -133,6 +133,21 @@ export default function RootLayout() {
           .then(({ processDueRecurringTransactions }) => processDueRecurringTransactions())
           .catch((e) => console.error('Foreground recurring sync failed:', e));
         checkUpcomingBillReminders().catch(() => {});
+
+        // Silent incremental SMS scan on app resume
+        import('@/modules/sms/permissions/smsPermissionManager')
+          .then(async ({ SmsPermissionManager }) => {
+            const status = await SmsPermissionManager.checkSmsPermission();
+            if (status === 'granted') {
+              const { SmsSyncService } = await import('@/modules/sms/services/smsSyncService');
+              const scanResult = await SmsSyncService.runIncrementalScan().catch(() => null);
+              if (scanResult && (scanResult.parsedCount > 0 || scanResult.duplicateCount > 0)) {
+                queryClient.invalidateQueries({ queryKey: ['transactions'] });
+                queryClient.invalidateQueries({ queryKey: ['accounts'] });
+              }
+            }
+          })
+          .catch(() => {});
       }
     };
 
