@@ -362,11 +362,14 @@ const getStyles = (colors: ThemeColors) => {
     editBtn: {
       backgroundColor: colors.primary,
       paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 8,
+      paddingVertical: 10,
+      borderRadius: 10,
     },
     editBtnText: {
       ...typography.labelMd,
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: '700',
       color: colors.onPrimary,
     },
     scrollContent: {

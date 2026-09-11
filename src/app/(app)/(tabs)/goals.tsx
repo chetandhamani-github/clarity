@@ -327,12 +327,15 @@ const getStyles = (colors: ThemeColors) => {
     },
     saveBtn: {
       backgroundColor: colors.primary,
-      paddingVertical: 12,
-      borderRadius: 8,
+      paddingVertical: 14,
+      borderRadius: 12,
       alignItems: 'center',
     },
     saveBtnText: {
       ...typography.labelMd,
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: '700',
       color: colors.onPrimary,
     },
   });

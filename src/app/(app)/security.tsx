@@ -126,7 +126,7 @@ export default function SecurityPrivacyScreen() {
       <Header showBack title="Security & Privacy" />
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 60 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.introSection}>

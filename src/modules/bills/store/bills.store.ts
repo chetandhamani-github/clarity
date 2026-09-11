@@ -62,7 +62,9 @@ export const useBillsStore = create<BillsState>()(
       isLoading: false,
 
       loadData: async () => {
-        set({ isLoading: true });
+        if (get().bills.length === 0 && get().subscriptions.length === 0) {
+          set({ isLoading: true });
+        }
         try {
           await BillsRepository.ensureSchema();
           await BillsRepository.seedSampleDataIfEmpty();

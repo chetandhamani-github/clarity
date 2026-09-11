@@ -143,6 +143,9 @@ const getStyles = (colors: ThemeColors) => {
     },
     primaryBtnText: {
       ...typography.labelMd,
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: '700',
       color: colors.onPrimary,
     },
     secondaryBtn: {
@@ -157,6 +160,9 @@ const getStyles = (colors: ThemeColors) => {
     },
     secondaryBtnText: {
       ...typography.labelMd,
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: '700',
       color: colors.onSurface,
     },
   });

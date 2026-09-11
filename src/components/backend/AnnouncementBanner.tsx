@@ -53,8 +53,7 @@ export function AnnouncementBanner() {
 
 const styles = StyleSheet.create({
   container: {
-    marginHorizontal: 16,
-    marginVertical: 8,
+    marginBottom: 16,
     padding: 12,
     borderRadius: 14,
     borderWidth: 1,

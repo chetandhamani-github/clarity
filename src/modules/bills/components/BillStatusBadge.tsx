@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui';
-import { useTheme, ThemeColors, typography } from '@/theme';
+import { useTheme, typography } from '@/theme';
 import type { BillStatus } from '../types/bill.types';
 
 interface BillStatusBadgeProps {
@@ -21,9 +21,20 @@ export function BillStatusBadge({
 
   const now = new Date();
   const todayTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const [y, m, d] = dueDate.split('-').map(Number);
-  const dueTime = new Date(y, m - 1, d).getTime();
-  const diffDays = Math.round((dueTime - todayTime) / (1000 * 60 * 60 * 24));
+
+  let diffDays = 0;
+  if (dueDate) {
+    const parts = dueDate.split('T')[0].split('-').map(Number);
+    if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      const dueTime = new Date(parts[0], parts[1] - 1, parts[2]).getTime();
+      diffDays = Math.round((dueTime - todayTime) / (1000 * 60 * 60 * 24));
+    } else {
+      const parsed = new Date(dueDate).getTime();
+      if (!isNaN(parsed)) {
+        diffDays = Math.round((parsed - todayTime) / (1000 * 60 * 60 * 24));
+      }
+    }
+  }
 
   let text = `Due in ${diffDays}d`;
   let bgColor = colors.surfaceContainerHighest;
@@ -58,11 +69,13 @@ export function BillStatusBadge({
       ]}
     >
       <Text
+        variant="labelMd"
         style={[
           styles.text,
           isSmall ? styles.textSm : styles.textMd,
           { color: textColor },
         ]}
+        numberOfLines={1}
       >
         {text}
       </Text>
@@ -73,26 +86,31 @@ export function BillStatusBadge({
 const styles = StyleSheet.create({
   badge: {
     borderRadius: 6,
-    alignSelf: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   badgeSm: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
   },
   badgeMd: {
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
   },
   text: {
     ...typography.labelMd,
     fontWeight: '700',
     letterSpacing: 0.2,
+    includeFontPadding: false,
   },
   textSm: {
     fontSize: 10,
+    lineHeight: 13,
   },
   textMd: {
     fontSize: 11,
+    lineHeight: 15,
   },
 });
 

@@ -14,16 +14,18 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   return (
     <View style={[styles.tabBarContainer, { paddingBottom: insets.bottom }]}>
       <View style={styles.tabBar}>
-        {/* Floating Action Button for Add Transaction */}
-        <TouchableOpacity
-          style={[styles.fab, { bottom: insets.bottom + 64 }]} // Float above the tab bar on the right
-          onPress={() => {
-            router.push('/add-transaction');
-          }}
-          activeOpacity={0.8}
-        >
-          <MaterialIcons name="add" size={32} color={colors.onPrimary} />
-        </TouchableOpacity>
+        {/* Floating Action Button for Add Transaction (hidden on Splitwise tab which has its own FAB) */}
+        {state.routes[state.index]?.name !== 'splitwise' && (
+          <TouchableOpacity
+            style={[styles.fab, { bottom: insets.bottom + 64 }]} // Float above the tab bar on the right
+            onPress={() => {
+              router.push('/add-transaction');
+            }}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="add" size={32} color={colors.onPrimary} />
+          </TouchableOpacity>
+        )}
 
         {state.routes.map((route: any, index: number) => {
           const { options } = descriptors[route.key];
@@ -51,6 +53,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
           let iconName: keyof typeof MaterialIcons.glyphMap = 'home';
           if (route.name === 'index') iconName = 'home';
           else if (route.name === 'transactions') iconName = 'receipt-long';
+          else if (route.name === 'splitwise') iconName = 'group';
           else if (route.name === 'plan') iconName = 'analytics';
           else if (route.name === 'goals') iconName = 'track-changes';
           else if (route.name === 'accounts') iconName = 'account-balance';
@@ -87,16 +90,26 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 }
 
 export default function TabsLayout() {
+  const { colors } = useTheme();
+
   return (
-    <Tabs tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
+    <Tabs
+      tabBar={(props) => <CustomTabBar {...props} />}
+      screenOptions={{
+        headerShown: false,
+        sceneStyle: { backgroundColor: colors.background },
+      }}
+    >
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
-      <Tabs.Screen name="plan" options={{ title: 'Plan' }} />
+      <Tabs.Screen name="splitwise" options={{ title: 'Splitwise' }} />
       <Tabs.Screen name="transactions" options={{ title: 'Activity' }} />
+      <Tabs.Screen name="plan" options={{ title: 'Plan' }} />
       <Tabs.Screen name="goals" options={{ title: 'Goals' }} />
       <Tabs.Screen name="accounts" options={{ title: 'Accounts' }} />
     </Tabs>
   );
 }
+
 
 const getStyles = (colors: ThemeColors) => {
   const styles = StyleSheet.create({

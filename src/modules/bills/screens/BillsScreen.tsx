@@ -72,7 +72,7 @@ export function BillsScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 160 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -441,7 +441,7 @@ export function BillsScreen() {
           styles.fab,
           {
             backgroundColor: colors.primary,
-            bottom: Math.max(24, insets.bottom + 16),
+            bottom: Math.max(24, insets.bottom + 85),
           },
         ]}
         onPress={() => router.push('/(app)/add-bill')}
@@ -609,15 +609,16 @@ const styles = StyleSheet.create({
   emptyAddButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 12,
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 14,
   },
   emptyAddButtonText: {
     ...typography.labelMd,
     fontWeight: '700',
-    fontSize: 13,
+    fontSize: 14,
+    lineHeight: 20,
   },
   fab: {
     position: 'absolute',
@@ -625,7 +626,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 24,
     shadowColor: '#000',
@@ -638,5 +639,6 @@ const styles = StyleSheet.create({
     ...typography.labelMd,
     fontWeight: '700',
     fontSize: 14,
+    lineHeight: 20,
   },
 });

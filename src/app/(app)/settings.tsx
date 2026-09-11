@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   ScrollView,
   StyleSheet,
   Switch,
@@ -64,14 +65,21 @@ export default function SettingsScreen() {
 
   const handleSmsScan = async () => {
     try {
+      if (permissionStatus === 'permanently_denied') {
+        Linking.openSettings();
+        return;
+      }
       if (permissionStatus !== 'granted') {
         const res = await requestSmsPermission();
+        if (res === 'permanently_denied') {
+          Linking.openSettings();
+          return;
+        }
         if (res !== 'granted') {
           showToast('SMS permission is required to scan messages', 'error');
           return;
         }
       }
-      showToast('Scanning SMS for bank transactions...', 'info');
       await syncSms();
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
@@ -178,7 +186,7 @@ export default function SettingsScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 60 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Intelligence Section */}
@@ -273,7 +281,7 @@ export default function SettingsScreen() {
             <TouchableOpacity style={styles.settingItem} onPress={cycleTheme}>
               <View style={styles.settingItemLeft}>
                 <MaterialIcons name="palette" size={24} color={colors.secondary} />
-                <View>
+                <View style={styles.settingTextContainer}>
                   <Text style={styles.settingTitle}>Appearance</Text>
                   <Text style={styles.settingSub}>
                     {themeSetting === 'system'
@@ -289,7 +297,7 @@ export default function SettingsScreen() {
             <TouchableOpacity style={styles.settingItem} onPress={cycleCurrency}>
               <View style={styles.settingItemLeft}>
                 <MaterialIcons name="payments" size={24} color={colors.secondary} />
-                <View>
+                <View style={styles.settingTextContainer}>
                   <Text style={styles.settingTitle}>Currency</Text>
                   <Text style={styles.settingSub}>
                     {currencySetting === 'INR'
@@ -309,7 +317,7 @@ export default function SettingsScreen() {
             <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/security')}>
               <View style={styles.settingItemLeft}>
                 <MaterialIcons name="lock" size={24} color={colors.secondary} />
-                <View>
+                <View style={styles.settingTextContainer}>
                   <Text style={styles.settingTitle}>Security & Privacy</Text>
                   <Text style={styles.settingSub}>
                     {biometricsEnabled ? 'Biometrics Enabled' : 'Biometrics Disabled'}
@@ -324,7 +332,7 @@ export default function SettingsScreen() {
             >
               <View style={styles.settingItemLeft}>
                 <MaterialIcons name="receipt-long" size={24} color={colors.secondary} />
-                <View>
+                <View style={styles.settingTextContainer}>
                   <Text style={styles.settingTitle}>Bills & Utilities</Text>
                   <Text style={styles.settingSub}>Reminders, recurring bills & auto-settlement</Text>
                 </View>
@@ -333,11 +341,25 @@ export default function SettingsScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.settingItem}
+              onPress={() => router.push('/(app)/splitwise')}
+            >
+              <View style={styles.settingItemLeft}>
+                <MaterialIcons name="group" size={24} color={colors.primary} />
+                <View style={styles.settingTextContainer}>
+                  <Text style={styles.settingTitle}>Splitwise & Shared Expenses</Text>
+                  <Text style={styles.settingSub}>Track friends, debts, IOUs & settlements</Text>
+                </View>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingItem}
               onPress={() => router.push('/manage-categories')}
             >
               <View style={styles.settingItemLeft}>
                 <MaterialIcons name="category" size={24} color={colors.secondary} />
-                <View>
+                <View style={styles.settingTextContainer}>
                   <Text style={styles.settingTitle}>Manage Categories</Text>
                   <Text style={styles.settingSub}>Customize spending categories</Text>
                 </View>
@@ -496,7 +518,7 @@ export default function SettingsScreen() {
             <View style={styles.settingItem}>
               <View style={styles.settingItemLeft}>
                 <MaterialIcons name="sms" size={24} color={colors.primary} />
-                <View style={{ flex: 1 }}>
+                <View style={styles.settingTextContainer}>
                   <Text style={styles.settingTitle}>SMS Auto-Tracking</Text>
                   <Text style={styles.settingSub}>
                     {permissionStatus === 'granted'
@@ -512,6 +534,7 @@ export default function SettingsScreen() {
                   paddingHorizontal: 10,
                   paddingVertical: 4,
                   borderRadius: 8,
+                  flexShrink: 0,
                   backgroundColor:
                     permissionStatus === 'granted'
                       ? colors.primaryContainer
@@ -548,17 +571,25 @@ export default function SettingsScreen() {
                 disabled={isSmsSyncing}
               >
                 {isSmsSyncing ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                     <ActivityIndicator size="small" color={colors.onPrimary} />
-                    <Text style={styles.btnPrimaryText}>
+                    <Text style={styles.btnPrimaryText} numberOfLines={1}>
                       SCANNING ({smsProgress.processed}/{smsProgress.total || '...'})
                     </Text>
                   </View>
                 ) : (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <MaterialIcons name="sync" size={18} color={colors.onPrimary} />
-                    <Text style={styles.btnPrimaryText}>
-                      {permissionStatus === 'granted' ? 'SCAN SMS NOW' : 'ENABLE SMS TRACKING'}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                    <MaterialIcons
+                      name={permissionStatus === 'permanently_denied' ? 'settings' : 'sync'}
+                      size={18}
+                      color={colors.onPrimary}
+                    />
+                    <Text style={styles.btnPrimaryText} numberOfLines={1}>
+                      {permissionStatus === 'granted'
+                        ? 'SCAN SMS NOW'
+                        : permissionStatus === 'permanently_denied'
+                          ? 'OPEN DEVICE SETTINGS'
+                          : 'ENABLE SMS TRACKING'}
                     </Text>
                   </View>
                 )}
@@ -727,11 +758,16 @@ const getStyles = (colors: ThemeColors) => {
       padding: 16,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.surfaceVariant,
+      gap: 12,
     },
     settingItemLeft: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
+      flex: 1,
+    },
+    settingTextContainer: {
+      flex: 1,
     },
     settingTitle: {
       ...typography.bodyLg,

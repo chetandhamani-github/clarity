@@ -44,6 +44,7 @@ const getStyles = (colors: ThemeColors) => {
       fontWeight: '600',
       color: colors.surfaceContainerLowest,
       textAlign: 'center',
+      includeFontPadding: false,
     },
     textOutline: {
       color: colors.primary,

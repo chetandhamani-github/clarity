@@ -79,27 +79,31 @@ export default function AccountsScreen() {
               color={isSelected ? colors.onPrimaryContainer : branding.color}
             />
           </View>
-          <View style={{ flex: 1 }}>
+          <View style={styles.accountNameContainer}>
             <Text style={styles.accountName} numberOfLines={1}>
               {account.name}
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
               {account.institution ? (
                 <View style={[styles.bankBadge, { backgroundColor: branding.backgroundColor }]}>
-                  <Text style={[styles.bankBadgeText, { color: branding.color }]}>
+                  <Text style={[styles.bankBadgeText, { color: branding.color }]} numberOfLines={1}>
                     {branding.shortName}
                   </Text>
                 </View>
               ) : null}
-              <Text style={styles.accountType}>
+              <Text style={styles.accountType} numberOfLines={1}>
                 {account.type.charAt(0).toUpperCase() + account.type.slice(1)}
                 {account.lastFour ? ` •••• ${account.lastFour}` : ''}
               </Text>
             </View>
           </View>
         </View>
-        <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
-          <Text style={[styles.accountBalanceActive, isDebt && { color: colors.error }]}>
+        <View style={styles.accountItemRight}>
+          <Text
+            style={[styles.accountBalanceActive, isDebt && { color: colors.error }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+          >
             {formatCurrencyWholePrivacy(account.balance, hideBalances)}
           </Text>
           {isDebt && <Text style={[styles.owedBadge, { color: colors.error }]}>Due</Text>}
@@ -173,14 +177,21 @@ export default function AccountsScreen() {
                         />
                       </TouchableOpacity>
                     </View>
-                    <Text style={styles.totalBalance}>
+                    <Text
+                      style={styles.totalBalance}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                    >
                       {formatCurrencyPrivacy(totalBalance, false, hideBalances)}
                     </Text>
                     <View style={styles.summaryPillRow}>
                       <View
                         style={[styles.summaryPill, { backgroundColor: colors.surfaceContainerLow }]}
                       >
-                        <Text style={[styles.summaryPillLabel, { color: colors.primary }]}>
+                        <Text
+                          style={[styles.summaryPillLabel, { color: colors.primary }]}
+                          numberOfLines={1}
+                        >
                           Assets: {formatCurrencyWholePrivacy(totalAssets, hideBalances)}
                         </Text>
                       </View>
@@ -191,7 +202,10 @@ export default function AccountsScreen() {
                             { backgroundColor: colors.errorContainer + '33' },
                           ]}
                         >
-                          <Text style={[styles.summaryPillLabel, { color: colors.error }]}>
+                          <Text
+                            style={[styles.summaryPillLabel, { color: colors.error }]}
+                            numberOfLines={1}
+                          >
                             Liabilities: -{formatCurrencyWholePrivacy(totalLiabilities, hideBalances)}
                           </Text>
                         </View>
@@ -204,7 +218,7 @@ export default function AccountsScreen() {
                     <View style={styles.sectionCard}>
                       <View style={styles.sectionHeaderRow}>
                         <Text style={styles.sectionHeaderLabel}>ASSETS</Text>
-                        <Text style={styles.sectionSubtotal}>
+                        <Text style={styles.sectionSubtotal} numberOfLines={1}>
                           {formatCurrencyWholePrivacy(totalAssets, hideBalances)}
                         </Text>
                       </View>
@@ -221,7 +235,7 @@ export default function AccountsScreen() {
                         <Text style={[styles.sectionHeaderLabel, { color: colors.error }]}>
                           LIABILITIES & DEBT
                         </Text>
-                        <Text style={[styles.sectionSubtotal, { color: colors.error }]}>
+                        <Text style={[styles.sectionSubtotal, { color: colors.error }]} numberOfLines={1}>
                           -{formatCurrencyWholePrivacy(totalLiabilities, hideBalances)}
                         </Text>
                       </View>
@@ -330,25 +344,29 @@ function AccountDetailCard({
   return (
     <View style={styles.sectionCard}>
       <View style={styles.detailsHeader}>
-        <View style={{ flex: 1 }}>
+        <View style={styles.detailsHeaderLeft}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <Text style={styles.detailsLabel}>{account.name.toUpperCase()}</Text>
+            <Text style={styles.detailsLabel} numberOfLines={1}>{account.name.toUpperCase()}</Text>
             {account.institution ? (
               <View style={[styles.bankBadge, { backgroundColor: branding.backgroundColor }]}>
-                <Text style={[styles.bankBadgeText, { color: branding.color }]}>
+                <Text style={[styles.bankBadgeText, { color: branding.color }]} numberOfLines={1}>
                   {branding.shortName}
                 </Text>
               </View>
             ) : null}
           </View>
-          <Text style={styles.detailsBalance}>
+          <Text
+            style={styles.detailsBalance}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+          >
             {formatCurrencyPrivacy(account.balance, false, hideBalances)}
           </Text>
           {account.institution ? (
-            <Text style={styles.institutionText}>{account.institution}</Text>
+            <Text style={styles.institutionText} numberOfLines={1}>{account.institution}</Text>
           ) : null}
         </View>
-        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+        <View style={styles.detailsHeaderRight}>
           <TouchableOpacity
             style={styles.moreButton}
             onPress={() =>
@@ -535,6 +553,9 @@ const getStyles = (colors: ThemeColors) => {
     },
     emptyButtonText: {
       ...typography.labelMd,
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: '700',
     },
     scrollContent: {},
     contentPadding: {
@@ -594,19 +615,21 @@ const getStyles = (colors: ThemeColors) => {
       marginTop: 2,
     },
     payBillButton: {
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: 8,
-      backgroundColor: colors.primary,
       borderRadius: 12,
       paddingVertical: 12,
       marginTop: 16,
     },
     payBillButtonText: {
       ...typography.labelMd,
+      fontSize: 14,
+      lineHeight: 20,
       color: colors.onPrimary,
-      fontWeight: '600',
+      fontWeight: '700',
     },
     sectionCard: {
       backgroundColor: colors.surfaceContainerLowest,
@@ -638,6 +661,7 @@ const getStyles = (colors: ThemeColors) => {
       backgroundColor: colors.surfaceContainer,
       borderWidth: 1,
       borderColor: colors.surfaceVariant,
+      gap: 12,
     },
     accountItemInactive: {
       flexDirection: 'row',
@@ -648,18 +672,30 @@ const getStyles = (colors: ThemeColors) => {
       backgroundColor: colors.surfaceContainerLowest,
       borderWidth: 1,
       borderColor: colors.surfaceVariant,
+      gap: 12,
     },
     accountItemLeft: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 16,
+      gap: 12,
+      flex: 1,
+    },
+    accountNameContainer: {
+      flex: 1,
+    },
+    accountItemRight: {
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+      flexShrink: 0,
+      maxWidth: '42%',
     },
     accountIconContainer: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       alignItems: 'center',
       justifyContent: 'center',
+      flexShrink: 0,
     },
     accountName: {
       ...typography.bodyLg,
@@ -674,12 +710,23 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.bodyLg,
       fontWeight: '600',
       color: colors.onSurface,
+      textAlign: 'right',
     },
     detailsHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'flex-start',
       marginBottom: 24,
+      gap: 12,
+    },
+    detailsHeaderLeft: {
+      flex: 1,
+    },
+    detailsHeaderRight: {
+      flexDirection: 'row',
+      gap: 8,
+      alignItems: 'center',
+      flexShrink: 0,
     },
     detailsLabel: {
       ...typography.labelMd,

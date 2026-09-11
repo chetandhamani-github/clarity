@@ -18,3 +18,4 @@ export * from './SkeletonScreens';
 export * from './DatePickerModal';
 export * from './DiscrepancyBanner';
 export * from './UpcomingBillsWidget';
+export * from './SplitwiseWidget';

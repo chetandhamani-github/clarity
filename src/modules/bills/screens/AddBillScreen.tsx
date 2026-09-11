@@ -215,7 +215,7 @@ export function AddBillScreen() {
 
       <KeyboardAwareScrollView
         style={styles.keyboardView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 140 }]}
         enableOnAndroid
         extraScrollHeight={Platform.OS === 'ios' ? 40 : 80}
         keyboardShouldPersistTaps="handled"

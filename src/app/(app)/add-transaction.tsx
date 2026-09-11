@@ -1229,6 +1229,9 @@ const getStyles = (colors: ThemeColors) => {
     },
     submitButtonText: {
       ...typography.labelMd,
+      fontSize: 15,
+      lineHeight: 20,
+      fontWeight: '700',
       color: colors.onPrimary,
     },
     deleteButton: {
@@ -1243,6 +1246,9 @@ const getStyles = (colors: ThemeColors) => {
     },
     deleteButtonText: {
       ...typography.labelMd,
+      fontSize: 15,
+      lineHeight: 20,
+      fontWeight: '700',
       color: colors.error,
     },
     modalBackdrop: {

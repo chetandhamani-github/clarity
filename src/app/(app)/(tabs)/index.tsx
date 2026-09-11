@@ -1,4 +1,4 @@
-import { Header, HomeSkeleton, ProgressBar, Text, UpcomingBillsWidget } from '@/components/ui';
+import { Header, HomeSkeleton, ProgressBar, Text, UpcomingBillsWidget, SplitwiseWidget } from '@/components/ui';
 import { AnnouncementBanner } from '@/components/backend';
 import { radius, ThemeColors, typography, useTheme } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -249,8 +249,7 @@ export default function DashboardScreen() {
         {smsPermissionStatus !== 'granted' && (
           <View
             style={{
-              marginHorizontal: 20,
-              marginTop: 12,
+              marginBottom: 16,
               padding: 16,
               borderRadius: 16,
               backgroundColor: colors.surfaceContainerLow,
@@ -508,7 +507,7 @@ export default function DashboardScreen() {
                               {acc.type.charAt(0).toUpperCase() + acc.type.slice(1)}
                               {acc.lastFour ? ` •••• ${acc.lastFour}` : ''}
                             </Text>
-                            <Text style={styles.bankCardBalance}>
+                            <Text style={styles.bankCardBalance} numberOfLines={1} adjustsFontSizeToFit>
                               {formatCurrencyPrivacy(acc.balance, false, hideBalances)}
                             </Text>
                           </View>
@@ -521,6 +520,9 @@ export default function DashboardScreen() {
 
               {/* Upcoming Bills & Utilities Carousel */}
               <UpcomingBillsWidget />
+
+              {/* Splitwise Shared Expenses Widget */}
+              <SplitwiseWidget />
 
               {/* Spending by Category Donut */}
               <View style={styles.sectionContainer}>

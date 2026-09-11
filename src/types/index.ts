@@ -249,6 +249,7 @@ export interface MonthlyBillSummary {
 }
 
 export * from '@/modules/sms/types';
+export * from '@/modules/splitwise/types/splitwise.navigation';
 export type {
   Bill,
   Subscription,

@@ -1,4 +1,5 @@
 import type * as SQLite from 'expo-sqlite';
+import { runSplitwiseMigrations } from '@/modules/splitwise/database/splitwise.migration';
 
 export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync(`
@@ -309,5 +310,8 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_subscriptions_renewal ON subscriptions(next_renewal_date ASC);
     CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
   `);
+
+  await runSplitwiseMigrations(db);
 }
+
 

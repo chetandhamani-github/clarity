@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme';
 import { radius } from '@/theme/radius';
+import { Header } from './Header';
 import { SkeletonBox, SkeletonCircle, SkeletonText } from './Skeleton';
 
 /**
@@ -523,12 +525,163 @@ export function ListSkeleton() {
   );
 }
 
+/**
+ * Pixel-perfect Skeleton for Bill Details Screen (`BillDetailsScreen.tsx`)
+ */
+export function BillDetailSkeleton() {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View style={[styles.screenContainer, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+      <Header title="Bill Details" showBack />
+
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.billDetailScroll, { paddingBottom: 24 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Top Hero Banner */}
+        <View
+          style={[
+            styles.billDetailHero,
+            {
+              backgroundColor: colors.surfaceContainerLow,
+              borderColor: colors.outlineVariant,
+            },
+          ]}
+        >
+          <SkeletonCircle size={60} style={{ marginBottom: 12 }} />
+          <SkeletonText width={160} height={20} style={{ marginBottom: 6 }} />
+          <SkeletonText width={110} height={13} style={{ marginBottom: 4 }} />
+          <SkeletonText width={150} height={32} style={{ marginVertical: 10 }} />
+          <View style={styles.heroBadgeRow}>
+            <SkeletonBox width={76} height={22} borderRadius={6} />
+            <SkeletonBox width={64} height={22} borderRadius={6} />
+          </View>
+        </View>
+
+        {/* Information Table */}
+        <View
+          style={[
+            styles.billDetailSection,
+            {
+              backgroundColor: colors.surfaceContainerLow,
+              borderColor: colors.outlineVariant,
+            },
+          ]}
+        >
+          <SkeletonText width={80} height={11} style={{ marginBottom: 14 }} />
+
+          <View style={styles.infoRowBetween}>
+            <SkeletonText width={60} height={13} />
+            <SkeletonText width={90} height={13} />
+          </View>
+          <View style={[styles.divider, { backgroundColor: colors.outlineVariant }]} />
+
+          <View style={styles.infoRowBetween}>
+            <SkeletonText width={65} height={13} />
+            <SkeletonText width={80} height={13} />
+          </View>
+          <View style={[styles.divider, { backgroundColor: colors.outlineVariant }]} />
+
+          <View style={styles.infoRowBetween}>
+            <SkeletonText width={90} height={13} />
+            <SkeletonText width={105} height={13} />
+          </View>
+          <View style={[styles.divider, { backgroundColor: colors.outlineVariant }]} />
+
+          <View style={styles.infoRowBetween}>
+            <SkeletonText width={110} height={13} />
+            <SkeletonText width={85} height={13} />
+          </View>
+          <View style={[styles.divider, { backgroundColor: colors.outlineVariant }]} />
+
+          <View style={styles.infoRowBetween}>
+            <SkeletonText width={50} height={13} />
+            <SkeletonText width={60} height={13} />
+          </View>
+        </View>
+
+        {/* Payment Link Card */}
+        <View
+          style={[
+            styles.billDetailSection,
+            {
+              backgroundColor: colors.surfaceContainerLow,
+              borderColor: colors.outlineVariant,
+            },
+          ]}
+        >
+          <SkeletonText width={85} height={11} style={{ marginBottom: 12 }} />
+          <SkeletonBox width="100%" height={46} borderRadius={8} />
+        </View>
+      </ScrollView>
+
+      {/* Bottom Sticky Action Bar */}
+      <View
+        style={[
+          styles.billDetailBottomBar,
+          {
+            backgroundColor: colors.surfaceContainerLow,
+            borderTopColor: colors.outlineVariant,
+            paddingBottom: Math.max(16, insets.bottom + 12),
+          },
+        ]}
+      >
+        <SkeletonBox width="100%" height={48} borderRadius={12} />
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 0,
     paddingTop: 0,
     gap: 16,
+  },
+  screenContainer: {
+    flex: 1,
+  },
+  billDetailScroll: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    gap: 16,
+  },
+  billDetailHero: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+  },
+  heroBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  billDetailSection: {
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: 16,
+  },
+  infoRowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  divider: {
+    height: 1,
+    marginVertical: 10,
+  },
+  billDetailBottomBar: {
+    borderTopWidth: 1,
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
   accountsContainer: {
     flex: 1,

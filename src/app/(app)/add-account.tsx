@@ -329,6 +329,9 @@ const getStyles = (colors: ThemeColors) => {
     },
     submitBtnText: {
       ...typography.labelMd,
+      fontSize: 15,
+      lineHeight: 20,
+      fontWeight: '700',
       color: colors.onPrimary,
     },
     helperText: {

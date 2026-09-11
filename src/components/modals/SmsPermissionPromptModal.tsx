@@ -32,7 +32,6 @@ export function SmsPermissionPromptModal({ visible, onDismiss }: Props) {
       const status = await requestPermission();
       if (status === 'granted') {
         setHasSeenSmsPrompt(true);
-        showToast('Scanning SMS for bank transactions...', 'info');
         await startInitialSync();
         showToast('SMS scan completed successfully!', 'success');
         onDismiss();

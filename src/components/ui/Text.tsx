@@ -11,5 +11,21 @@ interface Props extends TextProps {
 export const Text = ({ variant = 'bodyMd', color, style, ...props }: Props) => {
   const { colors } = useTheme();
   const textColor = color || colors.onSurface;
-  return <RNText style={[typography[variant], { color: textColor }, style]} {...props} />;
+  return (
+    <RNText
+      style={[
+        styles.defaultText,
+        typography[variant],
+        { color: textColor },
+        style,
+      ]}
+      {...props}
+    />
+  );
 };
+
+const styles = StyleSheet.create({
+  defaultText: {
+    includeFontPadding: false,
+  },
+});

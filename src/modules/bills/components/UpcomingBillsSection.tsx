@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Linking, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Text } from '@/components/ui';
-import { useTheme, typography, radius, spacing } from '@/theme';
+import { Text, SkeletonBox, SkeletonCircle, SkeletonText } from '@/components/ui';
+import { useTheme, typography } from '@/theme';
 import { useAppStore } from '@/store/use-app-store';
 import { formatCurrencyPrivacy } from '@/utils/format';
 import { getBillerBranding } from '@/utils/icons';
@@ -21,31 +21,49 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
   const { hideBalances } = useAppStore();
   const { upcomingBills, isLoading, markBillPaid } = useBills();
 
-  const handlePay = async (bill: Bill) => {
-    if (bill.paymentUrl) {
-      try {
-        await Linking.openURL(bill.paymentUrl);
-      } catch {
-        router.push('/(app)/bills');
-      }
-    } else {
-      router.push('/(app)/bills');
-    }
-  };
-
   const handleMarkPaid = async (bill: Bill) => {
     await markBillPaid(bill.id);
   };
 
-  if (isLoading) {
+  if (isLoading && upcomingBills.length === 0) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.onSurface }]}>Bills & Utilities</Text>
         </View>
-        <View style={styles.loadingBox}>
-          <ActivityIndicator size="small" color={colors.primary} />
-        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {[1, 2].map((i) => (
+            <View
+              key={i}
+              style={[
+                styles.billCard,
+                {
+                  backgroundColor: colors.surfaceContainerLowest,
+                  borderColor: colors.surfaceVariant,
+                },
+              ]}
+            >
+              <View style={styles.cardTopRow}>
+                <SkeletonCircle size={34} />
+                <SkeletonBox width={64} height={20} borderRadius={6} />
+              </View>
+
+              <View style={{ marginTop: 10, gap: 6 }}>
+                <SkeletonText width={100} height={14} />
+                <SkeletonText width={70} height={11} />
+                <SkeletonText width={80} height={16} style={{ marginTop: 2 }} />
+              </View>
+
+              <View style={{ marginTop: 12 }}>
+                <SkeletonBox width="100%" height={32} borderRadius={8} />
+              </View>
+            </View>
+          ))}
+        </ScrollView>
       </View>
     );
   }
@@ -66,6 +84,7 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
         <TouchableOpacity
           onPress={() => router.push('/(app)/bills')}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={styles.viewAllButton}
         >
           <Text style={[styles.viewAllText, { color: colors.primary }]}>VIEW ALL</Text>
         </TouchableOpacity>
@@ -76,8 +95,8 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
           style={[
             styles.emptyContainer,
             {
-              backgroundColor: colors.surfaceContainerLow,
-              borderColor: colors.outlineVariant,
+              backgroundColor: colors.surfaceContainerLowest,
+              borderColor: colors.surfaceVariant,
             },
           ]}
           onPress={() => router.push('/(app)/add-bill')}
@@ -109,8 +128,8 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
                 style={[
                   styles.billCard,
                   {
-                    backgroundColor: colors.surfaceContainerLow,
-                    borderColor: colors.outlineVariant,
+                    backgroundColor: colors.surfaceContainerLowest,
+                    borderColor: colors.surfaceVariant,
                   },
                 ]}
                 onPress={() =>
@@ -143,16 +162,6 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
                 </View>
 
                 <View style={styles.cardActions}>
-                  {bill.paymentUrl ? (
-                    <TouchableOpacity
-                      style={[styles.payBtn, { backgroundColor: colors.primary }]}
-                      onPress={() => handlePay(bill)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.payBtnText}>PAY</Text>
-                      <MaterialIcons name="open-in-new" size={12} color="#ffffff" />
-                    </TouchableOpacity>
-                  ) : null}
                   <TouchableOpacity
                     style={[
                       styles.markPaidBtn,
@@ -160,7 +169,6 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
                         backgroundColor: colors.surfaceContainerLowest,
                         borderColor: colors.outlineVariant,
                       },
-                      bill.paymentUrl ? styles.markPaidBtnFlex : styles.markPaidBtnFull,
                     ]}
                     onPress={() => handleMarkPaid(bill)}
                     activeOpacity={0.8}
@@ -180,34 +188,35 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 24,
+    marginBottom: 24,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
-    paddingHorizontal: 20,
+    marginBottom: 16,
   },
   headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   title: {
     ...typography.headlineSm,
-    fontSize: 16,
-    fontWeight: '700',
   },
   countBadge: {
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
   },
   countBadgeText: {
     ...typography.labelMd,
     fontWeight: '700',
-    fontSize: 10,
+    fontSize: 11,
+  },
+  viewAllButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 4,
   },
   viewAllText: {
     ...typography.labelMd,
@@ -215,19 +224,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 0.5,
   },
-  loadingBox: {
-    padding: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
   emptyContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
+    padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    marginHorizontal: 20,
     gap: 12,
   },
   emptyIconBox: {
@@ -253,7 +255,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     gap: 12,
-    paddingHorizontal: 20,
     paddingVertical: 2,
   },
   billCard: {
@@ -279,41 +280,23 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   billerName: {
+    ...typography.bodyMd,
+    fontWeight: '600',
+    fontSize: 13,
+    marginBottom: 2,
+  },
+  accountRef: {
+    ...typography.labelMd,
+    fontSize: 11,
+    marginBottom: 8,
+  },
+  amount: {
     ...typography.bodyLg,
     fontWeight: '700',
     fontSize: 14,
   },
-  accountRef: {
-    ...typography.bodyMd,
-    fontSize: 11,
-    marginTop: 2,
-  },
-  amount: {
-    ...typography.headlineSm,
-    fontWeight: '800',
-    fontSize: 16,
-    marginTop: 6,
-  },
   cardActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
     marginTop: 12,
-  },
-  payBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  payBtnText: {
-    ...typography.labelMd,
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 11,
   },
   markPaidBtn: {
     flexDirection: 'row',
@@ -321,13 +304,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 4,
     borderWidth: 1,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 8,
-  },
-  markPaidBtnFlex: {
-    flex: 1,
-  },
-  markPaidBtnFull: {
     width: '100%',
   },
   markPaidBtnText: {

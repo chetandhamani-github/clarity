@@ -1,5 +1,5 @@
-import { Stack } from 'expo-router';
-import React, { useEffect, useState, useRef } from 'react';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
@@ -39,7 +39,24 @@ export default function RootLayout() {
   const hasSeenSmsPrompt = useAppStore((state) => state.hasSeenSmsPrompt);
   const googleDriveConnected = useAppStore((state) => state.googleDriveConnected);
   const { expoPushToken } = usePushNotifications();
-  const { theme } = useTheme();
+  const { theme, colors } = useTheme();
+
+  const navigationTheme = useMemo(() => {
+    const base = theme === 'dark' ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      dark: theme === 'dark',
+      colors: {
+        ...base.colors,
+        background: colors.background,
+        card: colors.surfaceContainerLowest,
+        text: colors.onSurface,
+        border: colors.outlineVariant,
+        primary: colors.primary,
+        notification: colors.primary,
+      },
+    };
+  }, [theme, colors]);
 
   // Cold start / App launch lock
   useEffect(() => {
@@ -172,19 +189,26 @@ export default function RootLayout() {
         <BackendProvider>
           <ToastProvider>
             <AlertProvider>
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="(app)" options={{ headerShown: false }} />
-                <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-              </Stack>
-              <AppLockModal visible={isAppLocked} onUnlock={() => setIsAppLocked(false)} />
-              <GoogleDrivePromptModal
-                visible={showDrivePrompt && !isAppLocked}
-                onDismiss={() => setShowDrivePrompt(false)}
-              />
-              <SmsPermissionPromptModal
-                visible={showSmsPrompt && !isAppLocked && !showDrivePrompt}
-                onDismiss={() => setShowSmsPrompt(false)}
-              />
+              <ThemeProvider value={navigationTheme}>
+                <Stack
+                  screenOptions={{
+                    headerShown: false,
+                    contentStyle: { backgroundColor: colors.background },
+                  }}
+                >
+                  <Stack.Screen name="(app)" options={{ headerShown: false }} />
+                  <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                </Stack>
+                <AppLockModal visible={isAppLocked} onUnlock={() => setIsAppLocked(false)} />
+                <GoogleDrivePromptModal
+                  visible={showDrivePrompt && !isAppLocked}
+                  onDismiss={() => setShowDrivePrompt(false)}
+                />
+                <SmsPermissionPromptModal
+                  visible={showSmsPrompt && !isAppLocked && !showDrivePrompt}
+                  onDismiss={() => setShowSmsPrompt(false)}
+                />
+              </ThemeProvider>
             </AlertProvider>
           </ToastProvider>
         </BackendProvider>

@@ -10,8 +10,8 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Text, Header, useToast } from '@/components/ui';
-import { typography, useTheme, ThemeColors, radius } from '@/theme';
+import { Text, Header, useToast, BillDetailSkeleton } from '@/components/ui';
+import { typography, useTheme, radius } from '@/theme';
 import { useAppStore } from '@/store/use-app-store';
 import { formatCurrencyPrivacy } from '@/utils/format';
 import { getBillerBranding } from '@/utils/icons';
@@ -26,9 +26,14 @@ export function BillDetailsScreen() {
   const { showToast } = useToast();
 
   const { billId } = useLocalSearchParams<{ billId: string }>();
-  const { allBills, markBillPaid, deleteBill, updateBill } = useBills();
+  const { allBills, isLoading, markBillPaid, deleteBill, updateBill } = useBills();
 
   const bill = allBills.find((b) => b.id === billId);
+
+  // Show pixel-perfect skeleton during initial load or while data is resolving
+  if ((isLoading || allBills.length === 0) && !bill) {
+    return <BillDetailSkeleton />;
+  }
 
   if (!bill) {
     return (
@@ -122,7 +127,8 @@ export function BillDetailsScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 24 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Top Hero Banner */}
@@ -301,7 +307,7 @@ export function BillDetailsScreen() {
           {
             backgroundColor: colors.surfaceContainerLow,
             borderTopColor: colors.outlineVariant,
-            paddingBottom: Math.max(16, insets.bottom),
+            paddingBottom: Math.max(16, insets.bottom + 12),
           },
         ]}
       >
@@ -488,10 +494,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     borderTopWidth: 1,
     paddingHorizontal: 16,
     paddingTop: 12,
