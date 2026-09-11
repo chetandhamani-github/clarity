@@ -29,6 +29,7 @@ export async function clearDatabase(): Promise<void> {
   // Drop tables
   await db.execAsync('PRAGMA foreign_keys = OFF;');
   await db.execAsync(`
+    DROP TABLE IF EXISTS bill_reminders;
     DROP TABLE IF EXISTS sms_review_queue;
     DROP TABLE IF EXISTS sms_patterns;
     DROP TABLE IF EXISTS parsed_transactions;

@@ -215,6 +215,23 @@ export async function insertTransaction(
     throw error;
   }
 
+  // Trigger auto-settlement for unpaid bills if this is an expense
+  if (data.type === 'expense') {
+    // Import dynamically or use BillSettlementEngine
+    import('@/modules/sms/services/billSettlementEngine')
+      .then(({ BillSettlementEngine }) => {
+        BillSettlementEngine.settleBillsForTransaction({
+          id,
+          amount: data.amount,
+          merchant: data.merchant,
+          type: data.type,
+          date: data.date,
+          category: data.category,
+        }).catch(() => {});
+      })
+      .catch(() => {});
+  }
+
   return { id, ...data, source, status };
 }
 

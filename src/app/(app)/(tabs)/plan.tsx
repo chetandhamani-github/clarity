@@ -6,6 +6,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
+import { useMonthlyBillSummary } from '@/hooks/use-bills';
 import { formatCurrency } from '@/utils/format';
 
 export default function PlanScreen() {
@@ -28,6 +29,7 @@ export default function PlanScreen() {
     isLoading: spendingLoading,
     refetch: refetchSpending,
   } = useCategorySpending(currentMonth, currentYear);
+  const { data: billSummary } = useMonthlyBillSummary(currentMonth, currentYear);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -231,6 +233,31 @@ export default function PlanScreen() {
                     />
                   </View>
                 </View>
+
+                {billSummary && billSummary.totalCommitted > 0 && (
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginTop: 10,
+                      paddingTop: 10,
+                      borderTopWidth: 1,
+                      borderTopColor: colors.outlineVariant,
+                    }}
+                    onPress={() => router.push('/(app)/bills')}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <MaterialIcons name="receipt-long" size={16} color={colors.primary} />
+                      <Text style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, fontSize: 12 }}>
+                        Committed Bills & Utilities
+                      </Text>
+                    </View>
+                    <Text style={{ ...typography.labelMd, color: colors.primary, fontWeight: '700' }}>
+                      {formatCurrency(billSummary.totalCommitted)} →
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </TouchableOpacity>
 
               {/* Wants */}

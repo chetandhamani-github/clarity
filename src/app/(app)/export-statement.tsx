@@ -19,7 +19,6 @@ type DatePreset = 'this_month' | 'last_month' | 'last_90_days' | 'ytd' | 'all' |
 
 export default function ExportStatementScreen() {
   const { colors } = useTheme();
-  const styles = getStyles(colors);
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
   const { accounts } = useAccounts();
@@ -107,7 +106,7 @@ export default function ExportStatementScreen() {
   ];
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
       <Header showBack title="Export Statement" />
 
       <ScrollView
@@ -117,11 +116,15 @@ export default function ExportStatementScreen() {
       >
         {/* Format Selector */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>1. CHOOSE FORMAT</Text>
+          <Text style={[styles.sectionTitle, { color: colors.onSurfaceVariant }]}>1. CHOOSE FORMAT</Text>
           <View style={styles.formatRow}>
             <TouchableOpacity
               style={[
                 styles.formatCard,
+                {
+                  backgroundColor: colors.surfaceContainerLowest,
+                  borderColor: colors.surfaceVariant,
+                },
                 format === 'pdf' && {
                   borderColor: colors.primary,
                   backgroundColor: colors.primaryContainer + '20',
@@ -137,17 +140,22 @@ export default function ExportStatementScreen() {
               <Text
                 style={[
                   styles.formatCardTitle,
+                  { color: colors.onSurface },
                   format === 'pdf' && { color: colors.primary, fontWeight: '700' },
                 ]}
               >
                 PDF Statement
               </Text>
-              <Text style={styles.formatCardDesc}>Printable statement with summary & tables</Text>
+              <Text style={[styles.formatCardDesc, { color: colors.onSurfaceVariant }]}>Printable statement with summary & tables</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[
                 styles.formatCard,
+                {
+                  backgroundColor: colors.surfaceContainerLowest,
+                  borderColor: colors.surfaceVariant,
+                },
                 format === 'csv' && {
                   borderColor: colors.primary,
                   backgroundColor: colors.primaryContainer + '20',
@@ -163,19 +171,20 @@ export default function ExportStatementScreen() {
               <Text
                 style={[
                   styles.formatCardTitle,
+                  { color: colors.onSurface },
                   format === 'csv' && { color: colors.primary, fontWeight: '700' },
                 ]}
               >
                 CSV Spreadsheet
               </Text>
-              <Text style={styles.formatCardDesc}>Excel & Google Sheets compatible data</Text>
+              <Text style={[styles.formatCardDesc, { color: colors.onSurfaceVariant }]}>Excel & Google Sheets compatible data</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Date Range Presets */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>2. TIME PERIOD</Text>
+          <Text style={[styles.sectionTitle, { color: colors.onSurfaceVariant }]}>2. TIME PERIOD</Text>
           <View style={styles.presetGrid}>
             {PRESETS.map((p) => {
               const isSelected = preset === p.value;
@@ -184,6 +193,10 @@ export default function ExportStatementScreen() {
                   key={p.value}
                   style={[
                     styles.presetChip,
+                    {
+                      borderColor: colors.surfaceVariant,
+                      backgroundColor: colors.surfaceContainerLowest,
+                    },
                     isSelected && {
                       backgroundColor: colors.primary,
                       borderColor: colors.primary,
@@ -194,6 +207,7 @@ export default function ExportStatementScreen() {
                   <Text
                     style={[
                       styles.presetChipText,
+                      { color: colors.onSurface },
                       isSelected && { color: colors.onPrimary, fontWeight: '700' },
                     ]}
                   >
@@ -207,9 +221,16 @@ export default function ExportStatementScreen() {
           {preset === 'custom' && (
             <View style={styles.customDateRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>From Date (YYYY-MM-DD)</Text>
+                <Text style={[styles.inputLabel, { color: colors.onSurfaceVariant }]}>From Date (YYYY-MM-DD)</Text>
                 <TextInput
-                  style={styles.dateInput}
+                  style={[
+                    styles.dateInput,
+                    {
+                      backgroundColor: colors.surfaceContainerLow,
+                      borderColor: colors.surfaceVariant,
+                      color: colors.onSurface,
+                    },
+                  ]}
                   value={customFrom}
                   onChangeText={setCustomFrom}
                   placeholder="2026-01-01"
@@ -217,9 +238,16 @@ export default function ExportStatementScreen() {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>To Date (YYYY-MM-DD)</Text>
+                <Text style={[styles.inputLabel, { color: colors.onSurfaceVariant }]}>To Date (YYYY-MM-DD)</Text>
                 <TextInput
-                  style={styles.dateInput}
+                  style={[
+                    styles.dateInput,
+                    {
+                      backgroundColor: colors.surfaceContainerLow,
+                      borderColor: colors.surfaceVariant,
+                      color: colors.onSurface,
+                    },
+                  ]}
                   value={customTo}
                   onChangeText={setCustomTo}
                   placeholder="2026-12-31"
@@ -232,11 +260,15 @@ export default function ExportStatementScreen() {
 
         {/* Account Filter */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>3. ACCOUNT FILTER</Text>
+          <Text style={[styles.sectionTitle, { color: colors.onSurfaceVariant }]}>3. ACCOUNT FILTER</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
             <TouchableOpacity
               style={[
                 styles.accountChip,
+                {
+                  borderColor: colors.surfaceVariant,
+                  backgroundColor: colors.surfaceContainerLowest,
+                },
                 selectedAccountId === 'all' && {
                   backgroundColor: colors.primary,
                   borderColor: colors.primary,
@@ -247,6 +279,7 @@ export default function ExportStatementScreen() {
               <Text
                 style={[
                   styles.accountChipText,
+                  { color: colors.onSurface },
                   selectedAccountId === 'all' && { color: colors.onPrimary, fontWeight: '700' },
                 ]}
               >
@@ -261,6 +294,10 @@ export default function ExportStatementScreen() {
                   key={acc.id}
                   style={[
                     styles.accountChip,
+                    {
+                      borderColor: colors.surfaceVariant,
+                      backgroundColor: colors.surfaceContainerLowest,
+                    },
                     isSelected && {
                       backgroundColor: colors.primary,
                       borderColor: colors.primary,
@@ -271,6 +308,7 @@ export default function ExportStatementScreen() {
                   <Text
                     style={[
                       styles.accountChipText,
+                      { color: colors.onSurface },
                       isSelected && { color: colors.onPrimary, fontWeight: '700' },
                     ]}
                   >
@@ -352,116 +390,100 @@ export default function ExportStatementScreen() {
   );
 }
 
-const getStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    scrollContent: {
-      padding: 20,
-      gap: 24,
-    },
-    section: {
-      gap: 12,
-    },
-    sectionTitle: {
-      ...typography.labelMd,
-      color: colors.onSurfaceVariant,
-      textTransform: 'uppercase',
-      letterSpacing: 0.6,
-      fontWeight: '600',
-    },
-    formatRow: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    formatCard: {
-      flex: 1,
-      backgroundColor: colors.surfaceContainerLowest,
-      borderRadius: 16,
-      padding: 16,
-      borderWidth: 1,
-      borderColor: colors.surfaceVariant,
-      alignItems: 'center',
-      gap: 6,
-    },
-    formatCardTitle: {
-      ...typography.bodyLg,
-      fontWeight: '600',
-      color: colors.onSurface,
-      marginTop: 4,
-    },
-    formatCardDesc: {
-      ...typography.labelMd,
-      fontSize: 11,
-      color: colors.onSurfaceVariant,
-      textAlign: 'center',
-    },
-    presetGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-    },
-    presetChip: {
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: colors.surfaceVariant,
-      backgroundColor: colors.surfaceContainerLowest,
-    },
-    presetChipText: {
-      ...typography.labelMd,
-      color: colors.onSurface,
-    },
-    customDateRow: {
-      flexDirection: 'row',
-      gap: 12,
-      marginTop: 8,
-    },
-    inputLabel: {
-      ...typography.labelMd,
-      fontSize: 11,
-      color: colors.onSurfaceVariant,
-      marginBottom: 4,
-    },
-    dateInput: {
-      backgroundColor: colors.surfaceContainerLow,
-      borderWidth: 1,
-      borderColor: colors.surfaceVariant,
-      borderRadius: 10,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      ...typography.bodyMd,
-      color: colors.onSurface,
-    },
-    accountChip: {
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: colors.surfaceVariant,
-      backgroundColor: colors.surfaceContainerLowest,
-    },
-    accountChipText: {
-      ...typography.labelMd,
-      color: colors.onSurface,
-    },
-    exportButton: {
-      borderRadius: 16,
-      paddingVertical: 16,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginTop: 8,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.1,
-      shadowRadius: 8,
-      elevation: 3,
-    },
-    exportButtonText: {
-      ...typography.bodyLg,
-      fontWeight: '700',
-    },
-  });
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+    gap: 24,
+  },
+  section: {
+    gap: 12,
+  },
+  sectionTitle: {
+    ...typography.labelMd,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    fontWeight: '600',
+  },
+  formatRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  formatCard: {
+    flex: 1,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    gap: 6,
+  },
+  formatCardTitle: {
+    ...typography.bodyLg,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  formatCardDesc: {
+    ...typography.labelMd,
+    fontSize: 11,
+    textAlign: 'center',
+  },
+  presetGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  presetChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  presetChipText: {
+    ...typography.labelMd,
+  },
+  customDateRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  inputLabel: {
+    ...typography.labelMd,
+    fontSize: 11,
+    marginBottom: 4,
+  },
+  dateInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    ...typography.bodyMd,
+  },
+  accountChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  accountChipText: {
+    ...typography.labelMd,
+  },
+  exportButton: {
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  exportButtonText: {
+    ...typography.bodyLg,
+    fontWeight: '700',
+  },
+});
+

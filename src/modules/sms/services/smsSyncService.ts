@@ -23,6 +23,10 @@ import {
 } from '@/services/database/transaction-dao';
 import { getDatabase } from '@/services/database';
 import { TransactionExtractor } from '@/modules/sms/extractor/transactionExtractor';
+import { BillExtractor } from '@/modules/sms/extractor/billExtractor';
+import { mergeOrInsertSmsBill } from '@/services/database/bill-dao';
+import { BillSettlementEngine } from '@/modules/sms/services/billSettlementEngine';
+import { BillAlertEngine } from '@/services/notifications/bill-alert-engine';
 import { hasMeaningfulMerchant } from '@/utils/transaction-display';
 
 const LAST_SYNC_KEY = 'clarity_last_sms_sync_timestamp';
@@ -150,6 +154,9 @@ export class SmsSyncService {
           this.setLastSyncTimestamp(maxSeenTimestamp);
         }
 
+        // Evaluate bill reminders for proactive notifications
+        BillAlertEngine.evaluateUpcomingBillAlerts().catch(() => {});
+
         reportProgress('complete', scannedCount, scannedCount, batchIndex, batchIndex);
       }
 
@@ -236,6 +243,9 @@ export class SmsSyncService {
         if (maxSeenTimestamp > lastSync) {
           this.setLastSyncTimestamp(maxSeenTimestamp);
         }
+
+        // Evaluate bill reminders for proactive notifications
+        BillAlertEngine.evaluateUpcomingBillAlerts().catch(() => {});
       }
 
       return { scannedCount, parsedCount, reviewCount, duplicateCount };
@@ -288,6 +298,19 @@ export class SmsSyncService {
       } else if (result.type === 'REVIEW') {
         reviewBatch.push(result.reviewItem);
         review += 1;
+      }
+
+      // Check if message contains a utility or bill reminder
+      try {
+        const extractedBill = BillExtractor.extractBill(message);
+        if (extractedBill) {
+          await mergeOrInsertSmsBill({
+            ...extractedBill,
+            smsId: message.id,
+          });
+        }
+      } catch (billError) {
+        console.warn('[SmsSyncService] Failed to extract bill reminder:', billError);
       }
     }
 
@@ -542,6 +565,18 @@ export class SmsSyncService {
 
           await SmsDao.linkClarityTransaction(transaction.id, createdTransaction.id);
           transaction.transactionId = createdTransaction.id;
+        }
+
+        // Settle any matching unpaid bill for expense transaction
+        if (txType === 'expense') {
+          BillSettlementEngine.settleBillsForTransaction({
+            id: transaction.transactionId || '',
+            amount: transaction.amount,
+            merchant: effectiveMerchant,
+            type: txType,
+            date: new Date(transaction.timestamp).toISOString(),
+            category: transaction.category,
+          }).catch(() => {});
         }
       } catch (error) {
         console.warn(

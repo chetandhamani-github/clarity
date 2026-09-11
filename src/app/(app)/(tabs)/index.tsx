@@ -1,4 +1,4 @@
-import { Header, HomeSkeleton, ProgressBar, Text } from '@/components/ui';
+import { Header, HomeSkeleton, ProgressBar, Text, UpcomingBillsWidget } from '@/components/ui';
 import { AnnouncementBanner } from '@/components/backend';
 import { radius, ThemeColors, typography, useTheme } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -518,6 +518,9 @@ export default function DashboardScreen() {
                   </ScrollView>
                 </View>
               )}
+
+              {/* Upcoming Bills & Utilities Carousel */}
+              <UpcomingBillsWidget />
 
               {/* Spending by Category Donut */}
               <View style={styles.sectionContainer}>

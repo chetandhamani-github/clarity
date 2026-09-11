@@ -320,6 +320,19 @@ export default function SettingsScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.settingItem}
+              onPress={() => router.push('/(app)/bills')}
+            >
+              <View style={styles.settingItemLeft}>
+                <MaterialIcons name="receipt-long" size={24} color={colors.secondary} />
+                <View>
+                  <Text style={styles.settingTitle}>Bills & Utilities</Text>
+                  <Text style={styles.settingSub}>Reminders, recurring bills & auto-settlement</Text>
+                </View>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.settingItem}
               onPress={() => router.push('/manage-categories')}
             >
               <View style={styles.settingItemLeft}>

@@ -179,4 +179,85 @@ export interface MonthlyTotals {
   expenses: number;
 }
 
+export type BillerCategory =
+  | 'credit_card'
+  | 'electricity'
+  | 'broadband'
+  | 'mobile_postpaid'
+  | 'gas'
+  | 'water'
+  | 'loan_emi'
+  | 'dth'
+  | 'insurance'
+  | 'rent'
+  | 'staff'
+  | 'gym'
+  | 'tuition'
+  | 'maintenance'
+  | 'other';
+
+export const BILLER_CATEGORIES: { label: string; value: BillerCategory; icon: string }[] = [
+  { label: 'Credit Card', value: 'credit_card', icon: 'credit-card' },
+  { label: 'Electricity', value: 'electricity', icon: 'flash-on' },
+  { label: 'Broadband / Wi-Fi', value: 'broadband', icon: 'wifi' },
+  { label: 'Mobile Postpaid', value: 'mobile_postpaid', icon: 'smartphone' },
+  { label: 'House Rent', value: 'rent', icon: 'home' },
+  { label: 'Staff / Maid Salary', value: 'staff', icon: 'people' },
+  { label: 'Gym & Fitness', value: 'gym', icon: 'fitness-center' },
+  { label: 'School / Tuition', value: 'tuition', icon: 'school' },
+  { label: 'Piped Gas / LPG', value: 'gas', icon: 'local-gas-station' },
+  { label: 'Water Bill', value: 'water', icon: 'water-drop' },
+  { label: 'Loan EMI', value: 'loan_emi', icon: 'account-balance' },
+  { label: 'DTH / Cable TV', value: 'dth', icon: 'tv' },
+  { label: 'Insurance', value: 'insurance', icon: 'shield' },
+  { label: 'Society Maintenance', value: 'maintenance', icon: 'apartment' },
+  { label: 'Other Bill', value: 'other', icon: 'receipt' },
+];
+
+export type BillStatus = 'UNPAID' | 'PAID' | 'OVERDUE' | 'DISMISSED';
+export type BillRepeatFrequency = 'one_time' | 'monthly' | 'quarterly' | 'yearly';
+
+export interface BillReminder {
+  id: string;
+  source: 'SMS' | 'MANUAL';
+  billerName: string;
+  billerCategory: BillerCategory;
+  amountDue: number;
+  minAmountDue?: number;
+  dueDate: string; // YYYY-MM-DD
+  repeatFrequency: BillRepeatFrequency;
+  accountReference?: string;
+  status: BillStatus;
+  reminderDaysBefore: number;
+  paidDate?: string;
+  paidTransactionId?: string;
+  paymentUrl?: string;
+  note?: string;
+  smsId?: string;
+  createdAt: string;
+}
+
+export interface MonthlyBillSummary {
+  month: number;
+  year: number;
+  totalCommitted: number;
+  totalPaid: number;
+  totalPending: number;
+  totalOverdue: number;
+  upcomingCount: number;
+  paidCount: number;
+}
+
 export * from '@/modules/sms/types';
+export type {
+  Bill,
+  Subscription,
+  CreateBillDTO,
+  UpdateBillDTO,
+  CreateSubscriptionDTO,
+  UpdateSubscriptionDTO,
+  BillsSummary,
+  SubscriptionCycle,
+  SubscriptionStatus,
+} from '@/modules/bills/types/bill.types';
+

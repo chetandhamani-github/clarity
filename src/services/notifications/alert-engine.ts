@@ -183,6 +183,10 @@ export async function checkUpcomingBillReminders(): Promise<void> {
         DeviceEventEmitter.emit('notificationsUpdated');
       }
     }
+
+    // Also evaluate dedicated bill reminders (utility bills, credit cards, rent, etc.)
+    const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
+    await BillAlertEngine.evaluateUpcomingBillAlerts();
   } catch (error) {
     console.error('Error checking upcoming bill reminders:', error);
   }

@@ -30,7 +30,6 @@ export function DatePickerModal({
   minDate,
 }: DatePickerModalProps) {
   const { colors } = useTheme();
-  const styles = getStyles(colors);
 
   const initialDate = useMemo(() => {
     if (value && !isNaN(new Date(value).getTime())) {
@@ -172,14 +171,22 @@ export function DatePickerModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <TouchableOpacity style={styles.backdropTouch} activeOpacity={1} onPress={onClose} />
-        <View style={styles.modalCard}>
+        <View
+          style={[
+            styles.modalCard,
+            {
+              backgroundColor: colors.surfaceContainerLowest,
+              borderColor: colors.surfaceVariant,
+            },
+          ]}
+        >
           {/* Header */}
           <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
               <View style={[styles.iconCircle, { backgroundColor: colors.primaryContainer }]}>
                 <MaterialIcons name="event" size={20} color={colors.onPrimaryContainer} />
               </View>
-              <Text style={styles.modalTitle}>Select Date</Text>
+              <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Select Date</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
@@ -199,6 +206,10 @@ export function DatePickerModal({
                   key={shortcut.label}
                   style={[
                     styles.shortcutChip,
+                    {
+                      borderColor: colors.surfaceVariant,
+                      backgroundColor: colors.surfaceContainerLow,
+                    },
                     isSelected && {
                       backgroundColor: colors.primary,
                       borderColor: colors.primary,
@@ -209,6 +220,7 @@ export function DatePickerModal({
                   <Text
                     style={[
                       styles.shortcutText,
+                      { color: colors.onSurfaceVariant },
                       isSelected && { color: colors.onPrimary, fontWeight: '700' },
                     ]}
                   >
@@ -222,17 +234,17 @@ export function DatePickerModal({
           {/* Month Navigation */}
           <View style={styles.monthNavRow}>
             <TouchableOpacity
-              style={styles.monthNavBtn}
+              style={[styles.monthNavBtn, { backgroundColor: colors.surfaceContainerHigh }]}
               onPress={handlePrevMonth}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <MaterialIcons name="chevron-left" size={24} color={colors.onSurface} />
             </TouchableOpacity>
-            <Text style={styles.monthYearTitle}>
+            <Text style={[styles.monthYearTitle, { color: colors.onSurface }]}>
               {monthName} {currentYear}
             </Text>
             <TouchableOpacity
-              style={styles.monthNavBtn}
+              style={[styles.monthNavBtn, { backgroundColor: colors.surfaceContainerHigh }]}
               onPress={handleNextMonth}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
@@ -244,7 +256,7 @@ export function DatePickerModal({
           <View style={styles.weekdayRow}>
             {WEEKDAYS.map((wd) => (
               <View key={wd} style={styles.weekdayCell}>
-                <Text style={styles.weekdayText}>{wd}</Text>
+                <Text style={[styles.weekdayText, { color: colors.onSurfaceVariant }]}>{wd}</Text>
               </View>
             ))}
           </View>
@@ -279,6 +291,7 @@ export function DatePickerModal({
                     <Text
                       style={[
                         styles.dayNumberText,
+                        { color: colors.onSurface },
                         !item.isCurrentMonth && { color: colors.outline, opacity: 0.4 },
                         isSelected && { color: colors.onPrimary, fontWeight: '700' },
                         isToday && !isSelected && { color: colors.primary, fontWeight: '700' },
@@ -298,127 +311,116 @@ export function DatePickerModal({
   );
 }
 
-const getStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-    backdrop: {
-      flex: 1,
-      justifyContent: 'flex-end',
-      backgroundColor: 'rgba(0,0,0,0.6)',
-    },
-    backdropTouch: {
-      flex: 1,
-    },
-    modalCard: {
-      backgroundColor: colors.surfaceContainerLowest,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      padding: 20,
-      paddingBottom: 32,
-      borderTopWidth: 1,
-      borderColor: colors.surfaceVariant,
-    },
-    headerRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 16,
-    },
-    headerLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-    },
-    iconCircle: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    modalTitle: {
-      ...typography.headlineSm,
-      fontWeight: '700',
-      color: colors.onSurface,
-    },
-    closeBtn: {
-      padding: 4,
-    },
-    quickShortcutsRow: {
-      flexDirection: 'row',
-      gap: 8,
-      marginBottom: 16,
-    },
-    shortcutChip: {
-      flex: 1,
-      paddingVertical: 8,
-      alignItems: 'center',
-      borderRadius: radius.full,
-      borderWidth: 1,
-      borderColor: colors.surfaceVariant,
-      backgroundColor: colors.surfaceContainerLow,
-    },
-    shortcutText: {
-      ...typography.labelMd,
-      color: colors.onSurfaceVariant,
-      fontWeight: '600',
-    },
-    monthNavRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 12,
-      paddingHorizontal: 8,
-    },
-    monthNavBtn: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.surfaceContainerHigh,
-    },
-    monthYearTitle: {
-      ...typography.bodyLg,
-      fontWeight: '700',
-      color: colors.onSurface,
-    },
-    weekdayRow: {
-      flexDirection: 'row',
-      marginBottom: 8,
-    },
-    weekdayCell: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 4,
-    },
-    weekdayText: {
-      ...typography.labelMd,
-      fontSize: 11,
-      color: colors.onSurfaceVariant,
-      fontWeight: '700',
-    },
-    daysGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-    },
-    dayCell: {
-      width: '14.28%', // 100% / 7 columns
-      aspectRatio: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 2,
-    },
-    dayCircle: {
-      width: 38,
-      height: 38,
-      borderRadius: 19,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    dayNumberText: {
-      ...typography.bodyMd,
-      fontWeight: '500',
-      color: colors.onSurface,
-    },
-  });
+const styles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  backdropTouch: {
+    flex: 1,
+  },
+  modalCard: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 32,
+    borderTopWidth: 1,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  iconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalTitle: {
+    ...typography.headlineSm,
+    fontWeight: '700',
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  quickShortcutsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  shortcutChip: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: radius.full,
+    borderWidth: 1,
+  },
+  shortcutText: {
+    ...typography.labelMd,
+    fontWeight: '600',
+  },
+  monthNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingHorizontal: 8,
+  },
+  monthNavBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthYearTitle: {
+    ...typography.bodyLg,
+    fontWeight: '700',
+  },
+  weekdayRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  weekdayCell: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+  },
+  weekdayText: {
+    ...typography.labelMd,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  daysGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  dayCell: {
+    width: '14.28%', // 100% / 7 columns
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 2,
+  },
+  dayCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayNumberText: {
+    ...typography.bodyMd,
+    fontWeight: '500',
+  },
+});

@@ -21,26 +21,33 @@ export function DiscrepancyBanner({
   isAdjusting = false,
 }: DiscrepancyBannerProps) {
   const { colors } = useTheme();
-  const styles = getStyles(colors);
 
   const diffAbs = Math.abs(discrepancy);
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.tertiaryContainer + '33',
+          borderColor: colors.tertiary + '66',
+        },
+      ]}
+    >
       <View style={styles.headerRow}>
-        <View style={styles.iconCircle}>
+        <View style={[styles.iconCircle, { backgroundColor: colors.tertiaryContainer }]}>
           <MaterialIcons name="sync-problem" size={18} color={colors.tertiary} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Discrepancy Detected</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.title, { color: colors.onSurface }]}>Discrepancy Detected</Text>
+          <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
             Mismatch of {formatCurrency(diffAbs)} between your bank SMS ({formatCurrency(statementBalance)}) and ledger ({formatCurrency(calculatedBalance)}).
           </Text>
         </View>
       </View>
 
       <TouchableOpacity
-        style={styles.actionButton}
+        style={[styles.actionButton, { backgroundColor: colors.tertiaryContainer }]}
         onPress={onAdjust}
         disabled={isAdjusting}
         activeOpacity={0.8}
@@ -50,7 +57,7 @@ export function DiscrepancyBanner({
         ) : (
           <>
             <MaterialIcons name="auto-fix-high" size={16} color={colors.onTertiaryContainer} />
-            <Text style={styles.actionButtonText}>Add Adjustment Entry</Text>
+            <Text style={[styles.actionButtonText, { color: colors.onTertiaryContainer }]}>Add Adjustment Entry</Text>
           </>
         )}
       </TouchableOpacity>
@@ -58,56 +65,48 @@ export function DiscrepancyBanner({
   );
 }
 
-const getStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-    container: {
-      backgroundColor: colors.tertiaryContainer + '33',
-      borderColor: colors.tertiary + '66',
-      borderWidth: 1,
-      borderRadius: 16,
-      padding: 16,
-      gap: 12,
-    },
-    headerRow: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: 12,
-    },
-    iconCircle: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: colors.tertiaryContainer,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginTop: 2,
-    },
-    title: {
-      ...typography.bodyLg,
-      color: colors.onSurface,
-      fontWeight: '700',
-    },
-    subtitle: {
-      ...typography.bodyMd,
-      color: colors.onSurfaceVariant,
-      fontSize: 13,
-      lineHeight: 18,
-      marginTop: 2,
-    },
-    actionButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-      backgroundColor: colors.tertiaryContainer,
-      borderRadius: 10,
-      paddingVertical: 10,
-      paddingHorizontal: 16,
-      alignSelf: 'flex-start',
-    },
-    actionButtonText: {
-      ...typography.labelMd,
-      color: colors.onTertiaryContainer,
-      fontWeight: '600',
-    },
-  });
+const styles = StyleSheet.create({
+  container: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  iconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  title: {
+    ...typography.bodyLg,
+    fontWeight: '700',
+  },
+  subtitle: {
+    ...typography.bodyMd,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignSelf: 'flex-start',
+  },
+  actionButtonText: {
+    ...typography.labelMd,
+    fontWeight: '600',
+  },
+});

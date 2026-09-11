@@ -237,5 +237,77 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_parsed_tx_ref ON parsed_transactions(reference_number);
     CREATE INDEX IF NOT EXISTS idx_parsed_tx_lookup ON parsed_transactions(amount, account_mask, transaction_date);
     CREATE INDEX IF NOT EXISTS idx_sms_review_status ON sms_review_queue(status, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS bill_reminders (
+      id TEXT PRIMARY KEY NOT NULL,
+      source TEXT NOT NULL DEFAULT 'MANUAL' CHECK(source IN ('SMS', 'MANUAL')),
+      biller_name TEXT NOT NULL,
+      biller_category TEXT NOT NULL,
+      amount_due REAL NOT NULL,
+      min_amount_due REAL,
+      due_date TEXT NOT NULL,
+      repeat_frequency TEXT CHECK(repeat_frequency IN ('one_time', 'monthly', 'quarterly', 'yearly')) DEFAULT 'one_time',
+      account_reference TEXT,
+      status TEXT NOT NULL DEFAULT 'UNPAID' CHECK(status IN ('UNPAID', 'PAID', 'OVERDUE', 'DISMISSED')),
+      reminder_days_before INTEGER NOT NULL DEFAULT 3,
+      paid_date TEXT,
+      paid_transaction_id TEXT,
+      payment_url TEXT,
+      note TEXT DEFAULT '',
+      sms_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (sms_id) REFERENCES sms_messages(id) ON DELETE SET NULL,
+      FOREIGN KEY (paid_transaction_id) REFERENCES transactions(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_bills_due ON bill_reminders(status, due_date ASC);
+    CREATE INDEX IF NOT EXISTS idx_bills_lookup ON bill_reminders(biller_name, due_date);
+
+    CREATE TABLE IF NOT EXISTS bills (
+      id TEXT PRIMARY KEY NOT NULL,
+      title TEXT NOT NULL,
+      provider TEXT NOT NULL DEFAULT '',
+      category TEXT NOT NULL,
+      amount REAL NOT NULL,
+      min_amount REAL,
+      due_date TEXT NOT NULL,
+      reminder_days INTEGER NOT NULL DEFAULT 3,
+      status TEXT NOT NULL CHECK(status IN ('upcoming', 'paid', 'overdue', 'dismissed')) DEFAULT 'upcoming',
+      notes TEXT DEFAULT '',
+      is_recurring INTEGER NOT NULL DEFAULT 0,
+      frequency TEXT CHECK(frequency IN ('one_time', 'weekly', 'monthly', 'quarterly', 'yearly')) DEFAULT 'one_time',
+      last_paid_date TEXT,
+      paid_transaction_id TEXT,
+      payment_url TEXT,
+      account_reference TEXT,
+      source TEXT NOT NULL CHECK(source IN ('manual', 'sms', 'email', 'future_api')) DEFAULT 'manual',
+      sms_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      provider TEXT NOT NULL DEFAULT '',
+      amount REAL NOT NULL,
+      billing_cycle TEXT NOT NULL CHECK(billing_cycle IN ('weekly', 'monthly', 'quarterly', 'yearly')) DEFAULT 'monthly',
+      next_renewal_date TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'subscription',
+      status TEXT NOT NULL CHECK(status IN ('active', 'paused', 'cancelled')) DEFAULT 'active',
+      payment_url TEXT,
+      account_reference TEXT,
+      notes TEXT DEFAULT '',
+      bill_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_bills_unified_due ON bills(due_date ASC);
+    CREATE INDEX IF NOT EXISTS idx_bills_unified_status ON bills(status);
+    CREATE INDEX IF NOT EXISTS idx_bills_unified_category ON bills(category);
+    CREATE INDEX IF NOT EXISTS idx_subscriptions_renewal ON subscriptions(next_renewal_date ASC);
+    CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
   `);
 }
+
