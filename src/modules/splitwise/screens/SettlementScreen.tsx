@@ -262,12 +262,16 @@ export function SettlementScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, 16) + 40 },
+          { paddingBottom: Math.max(insets.bottom, 16) + 140 },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        enableOnAndroid
-        extraScrollHeight={Platform.OS === 'ios' ? 20 : 0}
+        enableOnAndroid={true}
+        enableAutomaticScroll={true}
+        enableResetScrollToCoords={false}
+        extraScrollHeight={Platform.OS === 'ios' ? 140 : 160}
+        extraHeight={Platform.OS === 'ios' ? 75 : 140}
+        keyboardOpeningTime={0}
       >
         {/* CARD 1: FRIEND / CONTACT SELECTOR */}
         <View

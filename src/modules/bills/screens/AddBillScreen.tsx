@@ -226,11 +226,15 @@ export function AddBillScreen() {
         style={styles.keyboardView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, 16) + 40 },
+          { paddingBottom: Math.max(insets.bottom, 16) + 140 },
         ]}
         showsVerticalScrollIndicator={false}
-        enableOnAndroid
-        extraScrollHeight={Platform.OS === 'ios' ? 40 : 80}
+        enableOnAndroid={true}
+        enableAutomaticScroll={true}
+        enableResetScrollToCoords={false}
+        extraScrollHeight={Platform.OS === 'ios' ? 140 : 160}
+        extraHeight={Platform.OS === 'ios' ? 75 : 140}
+        keyboardOpeningTime={0}
         keyboardShouldPersistTaps="handled"
       >
         {/* Top Type Selector Toggle */}
