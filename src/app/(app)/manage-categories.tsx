@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Text, Header, useToast, useAlert } from '@/components/ui';
 import { spacing, typography, radius, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -319,7 +320,12 @@ export default function ManageCategoriesScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <KeyboardAwareScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              enableOnAndroid={true}
+              extraScrollHeight={Platform.OS === 'ios' ? 20 : 40}
+            >
               {/* Category Name */}
               <View style={styles.formGroup}>
                 <Text style={[styles.formLabel, { color: colors.onSurfaceVariant }]}>Category Name*</Text>
@@ -439,7 +445,7 @@ export default function ManageCategoriesScreen() {
                   {editingCategory ? 'Update Category' : 'Create Category'}
                 </Text>
               </TouchableOpacity>
-            </ScrollView>
+            </KeyboardAwareScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>

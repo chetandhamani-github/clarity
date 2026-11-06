@@ -13,9 +13,17 @@ export function calculateSafeInsets(
         ? (statusBarHeight ?? 24)
         : 0;
 
+  const bottom =
+    insets.bottom > 0
+      ? insets.bottom
+      : platform === 'android'
+        ? 16
+        : 0;
+
   return {
     ...insets,
     top,
+    bottom,
   };
 }
 

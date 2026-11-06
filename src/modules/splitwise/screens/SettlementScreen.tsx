@@ -31,16 +31,22 @@ export interface SettlementFormData {
   date: string; // YYYY-MM-DD
 }
 
-const PAYMENT_METHODS = [
-  '⚡ UPI / GPay',
-  '💵 Cash',
-  '🏦 Bank Transfer',
-  '📱 Paytm / PhonePe',
-  '🤝 Full Settlement',
-  '🍕 Shared bill adjustment',
+interface PaymentMethodOption {
+  label: string;
+  icon: keyof typeof MaterialIcons.glyphMap;
+  value: string;
+}
+
+const PAYMENT_METHODS: PaymentMethodOption[] = [
+  { label: 'UPI / GPay', icon: 'qr-code-scanner', value: 'UPI / GPay' },
+  { label: 'Cash', icon: 'payments', value: 'Cash' },
+  { label: 'Bank Transfer', icon: 'account-balance', value: 'Bank Transfer' },
+  { label: 'PhonePe / Paytm', icon: 'phone-android', value: 'PhonePe / Paytm' },
+  { label: 'Full Settlement', icon: 'handshake', value: 'Full Settlement' },
+  { label: 'Bill Adjustment', icon: 'receipt-long', value: 'Bill Adjustment' },
 ];
 
-const QUICK_AMOUNTS = [100, 250, 500, 1000, 2000];
+const QUICK_AMOUNTS = [100, 500, 1000, 2000];
 
 export function SettlementScreen() {
   const { colors } = useTheme();
@@ -103,6 +109,7 @@ export function SettlementScreen() {
   const selectedType = watch('type');
   const selectedDate = watch('date');
   const currentAmount = watch('amount');
+  const currentDescription = watch('description');
 
   useEffect(() => {
     if (people.length === 0) {
@@ -180,7 +187,6 @@ export function SettlementScreen() {
     }
 
     try {
-      // Format date to ISO
       let createdAtIso: string;
       if (data.date === todayStr) {
         createdAtIso = new Date().toISOString();
@@ -205,6 +211,8 @@ export function SettlementScreen() {
   };
 
   const personFirstName = selectedPerson ? selectedPerson.name.split(' ')[0] : 'Friend';
+  const isTheyPaid = selectedType === 'THEY_PAID';
+  const themeColor = isTheyPaid ? '#10b981' : '#ef4444';
 
   const addQuickAmount = (delta: number) => {
     const current = parseFloat(currentAmount) || 0;
@@ -212,8 +220,25 @@ export function SettlementScreen() {
     setValue('amount', nextVal, { shouldValidate: true });
   };
 
+  const fullSettlementAmount = useMemo(() => {
+    if (!personBalance) return 0;
+    if (selectedType === 'YOU_PAID') {
+      return personBalance.remainingPayable ?? Math.abs(personBalance.netBalance);
+    }
+    return personBalance.remainingReceivable;
+  }, [personBalance, selectedType]);
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background,
+          paddingTop: insets.top,
+          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
+        },
+      ]}
+    >
       <Header
         title="Record Settlement"
         showBack
@@ -221,48 +246,30 @@ export function SettlementScreen() {
           <TouchableOpacity
             onPress={handleSubmit(onSubmit)}
             disabled={isSubmitting || isLoading}
-            style={[styles.headerSaveBtn, { backgroundColor: '#06b6d4' }]}
+            style={[styles.headerSaveBtn, { backgroundColor: colors.primary }]}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             {isSubmitting || isLoading ? (
-              <ActivityIndicator size="small" color="#ffffff" />
+              <ActivityIndicator size="small" color={colors.onPrimary} />
             ) : (
-              <Text style={styles.headerSaveText}>Save</Text>
+              <Text style={[styles.headerSaveText, { color: colors.onPrimary }]}>Save</Text>
             )}
           </TouchableOpacity>
         }
       />
 
       <KeyboardAwareScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        style={{ flex: 1 }}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 16) + 40 },
+        ]}
+        showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid
         extraScrollHeight={Platform.OS === 'ios' ? 20 : 0}
       >
-        {/* Banner Card */}
-        <View
-          style={[
-            styles.bannerCard,
-            {
-              backgroundColor: 'rgba(6, 182, 212, 0.08)',
-              borderColor: 'rgba(6, 182, 212, 0.25)',
-            },
-          ]}
-        >
-          <View style={styles.bannerIconCircle}>
-            <MaterialIcons name="handshake" size={28} color="#06b6d4" />
-          </View>
-          <View style={styles.bannerTextCol}>
-            <Text style={[styles.bannerTitle, { color: colors.onSurface }]}>
-              Settlement Payment
-            </Text>
-            <Text style={[styles.bannerSub, { color: colors.onSurfaceVariant }]}>
-              Record when {personFirstName} pays you back or when you clear balances.
-            </Text>
-          </View>
-        </View>
-
-        {/* Friend Selector Card */}
+        {/* CARD 1: FRIEND / CONTACT SELECTOR */}
         <View
           style={[
             styles.card,
@@ -274,8 +281,8 @@ export function SettlementScreen() {
         >
           <View style={styles.cardHeaderRow}>
             <View style={styles.labelWithIcon}>
-              <MaterialIcons name="person" size={18} color="#06b6d4" />
-              <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>Friend / Contact</Text>
+              <MaterialIcons name="person" size={18} color={colors.primary} />
+              <Text style={[styles.cardSectionTitle, { color: colors.onSurface }]}>Friend / Contact</Text>
             </View>
             <TouchableOpacity
               onPress={() => setShowPersonPicker(true)}
@@ -291,17 +298,17 @@ export function SettlementScreen() {
           {selectedPerson ? (
             <TouchableOpacity
               style={[
-                styles.selectedPersonBox,
+                styles.selectedFriendBox,
                 {
                   backgroundColor: colors.surfaceContainerLowest,
-                  borderColor: colors.outlineVariant,
+                  borderColor: colors.surfaceVariant,
                 },
               ]}
               onPress={() => setShowPersonPicker(true)}
               activeOpacity={0.8}
             >
-              <View style={[styles.avatarCircle, { backgroundColor: 'rgba(6, 182, 212, 0.15)' }]}>
-                <Text style={[styles.avatarText, { color: '#06b6d4' }]}>
+              <View style={[styles.avatarCircle, { backgroundColor: colors.primaryContainer }]}>
+                <Text style={[styles.avatarText, { color: colors.onPrimaryContainer }]}>
                   {selectedPerson.name
                     .split(' ')
                     .filter(Boolean)
@@ -311,14 +318,14 @@ export function SettlementScreen() {
                     .toUpperCase()}
                 </Text>
               </View>
-              <View style={styles.selectedPersonInfo}>
-                <Text style={[styles.selectedPersonName, { color: colors.onSurface }]}>
+              <View style={styles.selectedFriendInfo}>
+                <Text style={[styles.selectedFriendName, { color: colors.onSurface }]}>
                   {selectedPerson.name}
                 </Text>
                 {personBalance && (
                   <Text
                     style={[
-                      styles.selectedPersonBalanceTag,
+                      styles.selectedFriendBalance,
                       {
                         color:
                           personBalance.status === 'OWED_TO_ME'
@@ -333,7 +340,7 @@ export function SettlementScreen() {
                   </Text>
                 )}
               </View>
-              <MaterialIcons name="check-circle" size={20} color="#06b6d4" />
+              <MaterialIcons name="check-circle" size={20} color={colors.primary} />
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
@@ -346,7 +353,7 @@ export function SettlementScreen() {
               ]}
               onPress={() => setShowPersonPicker(true)}
             >
-              <MaterialIcons name="person-add" size={24} color={colors.primary} />
+              <MaterialIcons name="person-add" size={22} color={colors.primary} />
               <Text style={[styles.selectPromptText, { color: colors.onSurfaceVariant }]}>
                 Tap to select a friend
               </Text>
@@ -355,13 +362,13 @@ export function SettlementScreen() {
 
           {errors.personId && (
             <View style={styles.errorRow}>
-              <MaterialIcons name="error-outline" size={14} color="#ef4444" />
-              <Text style={styles.errorText}>{errors.personId.message}</Text>
+              <MaterialIcons name="error-outline" size={14} color={colors.error} />
+              <Text style={[styles.errorText, { color: colors.error }]}>{errors.personId.message}</Text>
             </View>
           )}
         </View>
 
-        {/* Payment Direction Card */}
+        {/* CARD 2: DIRECTION SELECTOR ("Rahul paid me" vs "I paid Rahul") */}
         <View
           style={[
             styles.card,
@@ -371,52 +378,18 @@ export function SettlementScreen() {
             },
           ]}
         >
-          <View style={styles.labelWithIcon}>
-            <MaterialIcons name="swap-horiz" size={18} color="#06b6d4" />
-            <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>Payment Direction</Text>
-          </View>
+          <Text style={[styles.cardSectionTitle, { color: colors.onSurface }]}>
+            Who made the payment?
+          </Text>
 
-          <View style={[styles.toggleContainer, { backgroundColor: colors.surfaceContainerHigh }]}>
+          <View style={[styles.directionToggleContainer, { backgroundColor: colors.surfaceContainerHigh }]}>
             <TouchableOpacity
               style={[
-                styles.toggleBtn,
-                selectedType === 'YOU_PAID' && {
-                  backgroundColor: '#06b6d4',
-                },
-              ]}
-              onPress={() => {
-                setValue('type', 'YOU_PAID');
-                if (personBalance && (personBalance.remainingPayable ?? 0) > 0) {
-                  setValue('amount', (personBalance.remainingPayable ?? Math.abs(personBalance.netBalance)).toString(), {
-                    shouldValidate: true,
-                  });
-                }
-              }}
-              activeOpacity={0.8}
-            >
-              <MaterialIcons
-                name="call-made"
-                size={18}
-                color={selectedType === 'YOU_PAID' ? '#ffffff' : colors.onSurfaceVariant}
-              />
-              <Text
-                style={[
-                  styles.toggleText,
-                  {
-                    color: selectedType === 'YOU_PAID' ? '#ffffff' : colors.onSurfaceVariant,
-                    fontWeight: selectedType === 'YOU_PAID' ? '700' : '600',
-                  },
-                ]}
-              >
-                I paid {personFirstName}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.toggleBtn,
-                selectedType === 'THEY_PAID' && {
-                  backgroundColor: '#10b981',
+                styles.directionToggleBtn,
+                isTheyPaid && {
+                  backgroundColor: colors.surfaceContainerLowest,
+                  borderColor: '#10b981',
+                  borderWidth: 1.5,
                 },
               ]}
               onPress={() => {
@@ -432,45 +405,81 @@ export function SettlementScreen() {
               <MaterialIcons
                 name="call-received"
                 size={18}
-                color={selectedType === 'THEY_PAID' ? '#ffffff' : colors.onSurfaceVariant}
+                color={isTheyPaid ? '#10b981' : colors.onSurfaceVariant}
               />
               <Text
                 style={[
-                  styles.toggleText,
+                  styles.directionToggleText,
                   {
-                    color: selectedType === 'THEY_PAID' ? '#ffffff' : colors.onSurfaceVariant,
-                    fontWeight: selectedType === 'THEY_PAID' ? '700' : '600',
+                    color: isTheyPaid ? colors.onSurface : colors.onSurfaceVariant,
+                    fontFamily: isTheyPaid ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
                   },
                 ]}
               >
                 {personFirstName} paid me
               </Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.directionToggleBtn,
+                !isTheyPaid && {
+                  backgroundColor: colors.surfaceContainerLowest,
+                  borderColor: '#ef4444',
+                  borderWidth: 1.5,
+                },
+              ]}
+              onPress={() => {
+                setValue('type', 'YOU_PAID');
+                if (personBalance && (personBalance.remainingPayable ?? 0) > 0) {
+                  setValue(
+                    'amount',
+                    (personBalance.remainingPayable ?? Math.abs(personBalance.netBalance)).toString(),
+                    { shouldValidate: true }
+                  );
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons
+                name="call-made"
+                size={18}
+                color={!isTheyPaid ? '#ef4444' : colors.onSurfaceVariant}
+              />
+              <Text
+                style={[
+                  styles.directionToggleText,
+                  {
+                    color: !isTheyPaid ? colors.onSurface : colors.onSurfaceVariant,
+                    fontFamily: !isTheyPaid ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
+                  },
+                ]}
+              >
+                I paid {personFirstName}
+              </Text>
+            </TouchableOpacity>
           </View>
 
-          <Text style={[styles.toggleSubtitle, { color: colors.onSurfaceVariant }]}>
-            {selectedType === 'YOU_PAID'
-              ? `You paid ${personFirstName} to clear what you owe.`
-              : `${personFirstName} paid you to clear what they owe.`}
+          <Text style={[styles.directionSubtitle, { color: colors.onSurfaceVariant }]}>
+            {isTheyPaid
+              ? `${personFirstName} is paying you to clear what they owe you.`
+              : `You are paying ${personFirstName} to clear what you owe them.`}
           </Text>
         </View>
 
-        {/* Amount Input Card */}
+        {/* CARD 3: AMOUNT HERO CARD */}
         <View
           style={[
-            styles.card,
+            styles.amountCard,
             {
-              backgroundColor: colors.surfaceContainerLow,
-              borderColor: colors.outlineVariant,
+              backgroundColor: colors.surfaceContainerLowest,
+              borderColor: errors.amount ? colors.error : colors.surfaceVariant,
             },
           ]}
         >
-          <View style={styles.labelWithIcon}>
-            <MaterialIcons name="currency-rupee" size={18} color="#06b6d4" />
-            <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>
-              Settlement Amount <Text style={{ color: '#ef4444' }}>*</Text>
-            </Text>
-          </View>
+          <Text style={[styles.amountLabel, { color: colors.onSurfaceVariant }]}>
+            SETTLEMENT AMOUNT <Text style={{ color: colors.error }}>*</Text>
+          </Text>
 
           <Controller
             control={control}
@@ -483,20 +492,14 @@ export function SettlementScreen() {
               },
             }}
             render={({ field: { onChange, onBlur, value } }) => (
-              <View
-                style={[
-                  styles.amountInputRow,
-                  {
-                    backgroundColor: colors.surfaceContainerLowest,
-                    borderColor: errors.amount ? '#ef4444' : colors.outlineVariant,
-                  },
-                ]}
-              >
-                <Text style={[styles.amountSymbol, { color: '#06b6d4' }]}>₹</Text>
+              <View style={styles.amountInputRow}>
+                <Text style={[styles.amountCurrency, { color: themeColor }]}>
+                  {isTheyPaid ? '+' : '-'}₹
+                </Text>
                 <TextInput
                   style={[styles.amountInput, { color: colors.onSurface }]}
                   placeholder="0.00"
-                  placeholderTextColor={colors.onSurfaceVariant}
+                  placeholderTextColor={colors.outline}
                   keyboardType="decimal-pad"
                   onBlur={onBlur}
                   onChangeText={onChange}
@@ -509,242 +512,90 @@ export function SettlementScreen() {
 
           {errors.amount && (
             <View style={styles.errorRow}>
-              <MaterialIcons name="error-outline" size={14} color="#ef4444" />
-              <Text style={styles.errorText}>{errors.amount.message}</Text>
+              <MaterialIcons name="error-outline" size={14} color={colors.error} />
+              <Text style={[styles.errorText, { color: colors.error }]}>{errors.amount.message}</Text>
             </View>
           )}
 
-          {/* Quick Exact Balance Settle Buttons */}
-          {personBalance && (
-            (selectedType === 'THEY_PAID' && personBalance.remainingReceivable > 0) ||
-            (selectedType === 'YOU_PAID' && (personBalance.remainingPayable ?? 0) > 0)
-          ) && (
-            <View style={styles.balanceShortcutsRow}>
+          {/* Smart Balance Settle Shortcuts */}
+          {fullSettlementAmount > 0 && (
+            <View style={styles.smartShortcutsRow}>
               <TouchableOpacity
                 style={[
-                  styles.fullSettleBtn,
+                  styles.fullSettleChip,
                   {
-                    backgroundColor: 'rgba(6, 182, 212, 0.15)',
-                    borderColor: '#06b6d4',
+                    backgroundColor: colors.primaryContainer + '25',
+                    borderColor: colors.primary,
                   },
                 ]}
                 onPress={() => {
-                  const targetAmt = selectedType === 'YOU_PAID'
-                    ? (personBalance.remainingPayable ?? Math.abs(personBalance.netBalance))
-                    : personBalance.remainingReceivable;
-                  setValue('amount', targetAmt.toString(), {
+                  setValue('amount', fullSettlementAmount.toString(), {
                     shouldValidate: true,
                   });
                 }}
               >
-                <MaterialIcons name="done-all" size={16} color="#06b6d4" />
-                <Text style={styles.fullSettleBtnText}>
-                  Settle Full Balance: ₹{selectedType === 'YOU_PAID'
-                    ? (personBalance.remainingPayable ?? Math.abs(personBalance.netBalance))
-                    : personBalance.remainingReceivable}
+                <MaterialIcons name="done-all" size={16} color={colors.primary} />
+                <Text style={[styles.fullSettleChipText, { color: colors.primary }]}>
+                  Settle Full Balance: ₹{fullSettlementAmount}
                 </Text>
               </TouchableOpacity>
 
-              {((selectedType === 'YOU_PAID' ? (personBalance.remainingPayable ?? 0) : personBalance.remainingReceivable) > 200) && (
+              {fullSettlementAmount > 200 && (
                 <TouchableOpacity
                   style={[
-                    styles.halfSettleBtn,
+                    styles.halfSettleChip,
                     {
                       backgroundColor: colors.surfaceContainerHigh,
                       borderColor: colors.outlineVariant,
                     },
                   ]}
                   onPress={() => {
-                    const baseAmt = selectedType === 'YOU_PAID'
-                      ? (personBalance.remainingPayable ?? Math.abs(personBalance.netBalance))
-                      : personBalance.remainingReceivable;
-                    setValue(
-                      'amount',
-                      (Math.round(baseAmt / 2)).toString(),
-                      { shouldValidate: true }
-                    );
+                    setValue('amount', Math.round(fullSettlementAmount / 2).toString(), {
+                      shouldValidate: true,
+                    });
                   }}
                 >
-                  <Text style={[styles.halfSettleBtnText, { color: colors.onSurface }]}>
-                    50% (₹{Math.round(((selectedType === 'YOU_PAID' ? (personBalance.remainingPayable ?? 0) : personBalance.remainingReceivable) / 2))})
+                  <Text style={[styles.halfSettleChipText, { color: colors.onSurface }]}>
+                    50% (₹{Math.round(fullSettlementAmount / 2)})
                   </Text>
                 </TouchableOpacity>
               )}
             </View>
           )}
 
-          {/* Quick Amount Add Pills */}
-          <View style={styles.quickAmountsRow}>
+          {/* Quick Increment Chips */}
+          <View style={styles.quickChipsRow}>
             {QUICK_AMOUNTS.map((amt) => (
               <TouchableOpacity
                 key={amt}
                 style={[
-                  styles.quickAmountPill,
+                  styles.quickChip,
                   {
-                    backgroundColor: colors.surfaceContainerHigh,
+                    backgroundColor: colors.surfaceContainerLow,
                     borderColor: colors.outlineVariant,
                   },
                 ]}
                 onPress={() => addQuickAmount(amt)}
               >
-                <Text style={[styles.quickAmountText, { color: colors.onSurface }]}>+₹{amt}</Text>
+                <Text style={[styles.quickChipText, { color: colors.onSurface }]}>+{amt}</Text>
               </TouchableOpacity>
             ))}
+            <TouchableOpacity
+              style={[
+                styles.quickChip,
+                {
+                  backgroundColor: colors.surfaceContainerLow,
+                  borderColor: colors.error + '44',
+                },
+              ]}
+              onPress={() => setValue('amount', '', { shouldValidate: true })}
+            >
+              <Text style={[styles.quickChipText, { color: colors.error }]}>Clear</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Payment Method / Description Card */}
-        <View
-          style={[
-            styles.card,
-            {
-              backgroundColor: colors.surfaceContainerLow,
-              borderColor: colors.outlineVariant,
-            },
-          ]}
-        >
-          <View style={styles.labelWithIcon}>
-            <MaterialIcons name="payment" size={18} color="#06b6d4" />
-            <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>
-              Payment Note / Method
-            </Text>
-          </View>
-
-          <Controller
-            control={control}
-            name="description"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                style={[
-                  styles.textInput,
-                  {
-                    backgroundColor: colors.surfaceContainerLowest,
-                    borderColor: colors.outlineVariant,
-                    color: colors.onSurface,
-                  },
-                ]}
-                placeholder="e.g. GPay, Cash, Bank Transfer"
-                placeholderTextColor={colors.onSurfaceVariant}
-                onBlur={onBlur}
-                onChangeText={onChange}
-                value={value}
-              />
-            )}
-          />
-
-          {/* Quick Payment Method Tags */}
-          <View style={styles.quickTagsContainer}>
-            {PAYMENT_METHODS.map((method) => (
-              <TouchableOpacity
-                key={method}
-                style={[
-                  styles.quickTagPill,
-                  {
-                    backgroundColor: colors.surfaceContainerHigh,
-                  },
-                ]}
-                onPress={() => setValue('description', method, { shouldValidate: true })}
-              >
-                <Text style={[styles.quickTagText, { color: colors.onSurfaceVariant }]}>
-                  {method}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Date Selector Card */}
-        <View
-          style={[
-            styles.card,
-            {
-              backgroundColor: colors.surfaceContainerLow,
-              borderColor: colors.outlineVariant,
-            },
-          ]}
-        >
-          <View style={styles.cardHeaderRow}>
-            <View style={styles.labelWithIcon}>
-              <MaterialIcons name="event" size={18} color="#06b6d4" />
-              <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>Payment Date</Text>
-            </View>
-
-            {/* Quick date pills */}
-            <View style={styles.quickDatesRow}>
-              <TouchableOpacity
-                style={[
-                  styles.quickDatePill,
-                  selectedDate === todayStr && {
-                    backgroundColor: '#06b6d4',
-                  },
-                  selectedDate !== todayStr && {
-                    backgroundColor: colors.surfaceContainerHigh,
-                  },
-                ]}
-                onPress={() => setValue('date', todayStr)}
-              >
-                <Text
-                  style={[
-                    styles.quickDateText,
-                    {
-                      color: selectedDate === todayStr ? '#ffffff' : colors.onSurfaceVariant,
-                      fontWeight: selectedDate === todayStr ? '700' : '500',
-                    },
-                  ]}
-                >
-                  Today
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.quickDatePill,
-                  selectedDate === yesterdayStr && {
-                    backgroundColor: '#06b6d4',
-                  },
-                  selectedDate !== yesterdayStr && {
-                    backgroundColor: colors.surfaceContainerHigh,
-                  },
-                ]}
-                onPress={() => setValue('date', yesterdayStr)}
-              >
-                <Text
-                  style={[
-                    styles.quickDateText,
-                    {
-                      color: selectedDate === yesterdayStr ? '#ffffff' : colors.onSurfaceVariant,
-                      fontWeight: selectedDate === yesterdayStr ? '700' : '500',
-                    },
-                  ]}
-                >
-                  Yesterday
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={[
-              styles.datePickerBtn,
-              {
-                backgroundColor: colors.surfaceContainerLowest,
-                borderColor: colors.outlineVariant,
-              },
-            ]}
-            onPress={() => setShowDatePicker(true)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.datePickerLeft}>
-              <MaterialIcons name="calendar-today" size={18} color="#06b6d4" />
-              <Text style={[styles.datePickerText, { color: colors.onSurface }]}>
-                {formatReadableDate(selectedDate)}
-              </Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Balance Impact Preview Card */}
+        {/* CARD 4: BALANCE PROJECTION PREVIEW */}
         {personBalance && parsedAmount > 0 && (
           <View
             style={[
@@ -756,7 +607,7 @@ export function SettlementScreen() {
             ]}
           >
             <View style={styles.previewHeaderRow}>
-              <MaterialIcons name="insights" size={16} color="#06b6d4" />
+              <MaterialIcons name="insights" size={16} color={colors.primary} />
               <Text style={[styles.previewTitle, { color: colors.onSurface }]}>
                 Balance Projection
               </Text>
@@ -778,7 +629,7 @@ export function SettlementScreen() {
                 <Text style={[styles.previewLabel, { color: colors.onSurfaceVariant }]}>
                   Payment
                 </Text>
-                <Text style={[styles.previewValue, { color: '#06b6d4' }]}>
+                <Text style={[styles.previewValue, { color: themeColor }]}>
                   {selectedType === 'YOU_PAID' ? `+₹${parsedAmount}` : `-₹${parsedAmount}`}
                 </Text>
               </View>
@@ -798,7 +649,8 @@ export function SettlementScreen() {
                           ? '#10b981'
                           : projectedBalance < 0
                             ? '#ef4444'
-                            : '#06b6d4',
+                            : colors.primary,
+                      fontFamily: 'Manrope_700Bold',
                     },
                   ]}
                 >
@@ -811,19 +663,193 @@ export function SettlementScreen() {
           </View>
         )}
 
-        {/* Submit Button */}
+        {/* CARD 5: PAYMENT METHOD & NOTE */}
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: colors.surfaceContainerLow,
+              borderColor: colors.outlineVariant,
+            },
+          ]}
+        >
+          <View style={styles.labelWithIcon}>
+            <MaterialIcons name="payment" size={18} color={colors.primary} />
+            <Text style={[styles.cardSectionTitle, { color: colors.onSurface }]}>
+              Payment Method / Note
+            </Text>
+          </View>
+
+          <Controller
+            control={control}
+            name="description"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <View
+                style={[
+                  styles.inputWrapper,
+                  {
+                    backgroundColor: colors.surfaceContainerLowest,
+                    borderColor: colors.surfaceVariant,
+                  },
+                ]}
+              >
+                <TextInput
+                  style={[styles.textInput, { color: colors.onSurface }]}
+                  placeholder="e.g. GPay, Cash, Bank Transfer"
+                  placeholderTextColor={colors.outline}
+                  onBlur={onBlur}
+                  onChangeText={onChange}
+                  value={value}
+                />
+              </View>
+            )}
+          />
+
+          {/* Quick Payment Method Tags */}
+          <View style={styles.quickTagsContainer}>
+            {PAYMENT_METHODS.map((method) => {
+              const isSelected = currentDescription === method.value;
+              return (
+                <TouchableOpacity
+                  key={method.value}
+                  style={[
+                    styles.quickTagPill,
+                    {
+                      backgroundColor: isSelected
+                        ? colors.primaryContainer + '30'
+                        : colors.surfaceContainerHigh,
+                      borderColor: isSelected ? colors.primary : colors.outlineVariant,
+                      borderWidth: isSelected ? 1 : 0,
+                    },
+                  ]}
+                  onPress={() => setValue('description', method.value, { shouldValidate: true })}
+                  activeOpacity={0.75}
+                >
+                  <MaterialIcons
+                    name={method.icon}
+                    size={15}
+                    color={isSelected ? colors.primary : colors.onSurfaceVariant}
+                  />
+                  <Text
+                    style={[
+                      styles.quickTagText,
+                      {
+                        color: isSelected ? colors.primary : colors.onSurfaceVariant,
+                        fontFamily: isSelected ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
+                      },
+                    ]}
+                  >
+                    {method.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* CARD 6: DATE SELECTOR CARD */}
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: colors.surfaceContainerLow,
+              borderColor: colors.outlineVariant,
+            },
+          ]}
+        >
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.labelWithIcon}>
+              <MaterialIcons name="event" size={18} color={colors.primary} />
+              <Text style={[styles.cardSectionTitle, { color: colors.onSurface }]}>Date</Text>
+            </View>
+
+            <View style={styles.quickDatesRow}>
+              <TouchableOpacity
+                style={[
+                  styles.quickDatePill,
+                  selectedDate === todayStr && {
+                    backgroundColor: colors.primary,
+                  },
+                  selectedDate !== todayStr && {
+                    backgroundColor: colors.surfaceContainerHigh,
+                  },
+                ]}
+                onPress={() => setValue('date', todayStr)}
+              >
+                <Text
+                  style={[
+                    styles.quickDateText,
+                    {
+                      color: selectedDate === todayStr ? colors.onPrimary : colors.onSurfaceVariant,
+                      fontFamily: selectedDate === todayStr ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
+                    },
+                  ]}
+                >
+                  Today
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.quickDatePill,
+                  selectedDate === yesterdayStr && {
+                    backgroundColor: colors.primary,
+                  },
+                  selectedDate !== yesterdayStr && {
+                    backgroundColor: colors.surfaceContainerHigh,
+                  },
+                ]}
+                onPress={() => setValue('date', yesterdayStr)}
+              >
+                <Text
+                  style={[
+                    styles.quickDateText,
+                    {
+                      color: selectedDate === yesterdayStr ? colors.onPrimary : colors.onSurfaceVariant,
+                      fontFamily: selectedDate === yesterdayStr ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
+                    },
+                  ]}
+                >
+                  Yesterday
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.datePickerBtn,
+              {
+                backgroundColor: colors.surfaceContainerLowest,
+                borderColor: colors.surfaceVariant,
+              },
+            ]}
+            onPress={() => setShowDatePicker(true)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.datePickerLeft}>
+              <MaterialIcons name="calendar-today" size={18} color={colors.primary} />
+              <Text style={[styles.datePickerText, { color: colors.onSurface }]}>
+                {formatReadableDate(selectedDate)}
+              </Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+          </TouchableOpacity>
+        </View>
+
+        {/* CARD 7: SUBMIT BUTTON */}
         <TouchableOpacity
-          style={[styles.submitButton, { backgroundColor: '#06b6d4' }]}
+          style={[styles.submitButton, { backgroundColor: colors.primary }]}
           onPress={handleSubmit(onSubmit)}
           disabled={isSubmitting || isLoading}
           activeOpacity={0.85}
         >
           {isSubmitting || isLoading ? (
-            <ActivityIndicator size="small" color="#ffffff" />
+            <ActivityIndicator size="small" color={colors.onPrimary} />
           ) : (
             <>
-              <MaterialIcons name="handshake" size={20} color="#ffffff" />
-              <Text style={styles.submitButtonText}>
+              <MaterialIcons name="handshake" size={20} color={colors.onPrimary} />
+              <Text style={[styles.submitButtonText, { color: colors.onPrimary }]}>
                 {parsedAmount > 0
                   ? `Record ₹${parsedAmount} Settlement`
                   : 'Record Settlement'}
@@ -853,8 +879,9 @@ export function SettlementScreen() {
             style={[
               styles.modalCard,
               {
-                backgroundColor: colors.surface,
+                backgroundColor: colors.surfaceContainerLowest,
                 borderColor: colors.outlineVariant,
+                paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 40 : 24),
               },
             ]}
           >
@@ -864,7 +891,7 @@ export function SettlementScreen() {
                 onPress={() => setShowPersonPicker(false)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <MaterialIcons name="close" size={24} color={colors.onSurfaceVariant} />
+                <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
               </TouchableOpacity>
             </View>
 
@@ -916,7 +943,7 @@ export function SettlementScreen() {
                       styles.friendItem,
                       {
                         backgroundColor: isSelected
-                          ? colors.primaryContainer
+                          ? colors.primaryContainer + '20'
                           : colors.surfaceContainerLow,
                         borderColor: isSelected ? colors.primary : colors.outlineVariant,
                       },
@@ -947,35 +974,21 @@ export function SettlementScreen() {
                         {initials}
                       </Text>
                     </View>
-
                     <View style={styles.friendItemInfo}>
-                      <Text
-                        style={[
-                          styles.friendItemName,
-                          {
-                            color: isSelected ? colors.onPrimaryContainer : colors.onSurface,
-                            fontWeight: isSelected ? '700' : '600',
-                          },
-                        ]}
-                      >
+                      <Text style={[styles.friendItemName, { color: colors.onSurface }]}>
                         {p.name}
                       </Text>
                       {p.phone && (
                         <Text
                           style={[
                             styles.friendItemPhone,
-                            {
-                              color: isSelected
-                                ? colors.onPrimaryContainer
-                                : colors.onSurfaceVariant,
-                            },
+                            { color: colors.onSurfaceVariant },
                           ]}
                         >
                           {p.phone}
                         </Text>
                       )}
                     </View>
-
                     {isSelected && (
                       <MaterialIcons name="check" size={20} color={colors.primary} />
                     )}
@@ -984,27 +997,25 @@ export function SettlementScreen() {
               })}
 
               {filteredPeople.length === 0 && (
-                <View style={styles.emptyFriendsBox}>
-                  <Text style={[styles.emptyFriendsText, { color: colors.onSurfaceVariant }]}>
+                <View style={styles.emptySearchBox}>
+                  <Text style={[styles.emptySearchText, { color: colors.onSurfaceVariant }]}>
                     No friends found matching "{friendSearch}"
                   </Text>
+                  <TouchableOpacity
+                    style={[styles.addFriendPromptBtn, { backgroundColor: colors.primary }]}
+                    onPress={() => {
+                      setShowPersonPicker(false);
+                      router.push('/(app)/add-splitwise-person');
+                    }}
+                  >
+                    <MaterialIcons name="person-add" size={16} color={colors.onPrimary} />
+                    <Text style={[styles.addFriendPromptText, { color: colors.onPrimary }]}>
+                      Add New Friend
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               )}
             </ScrollView>
-
-            {/* Add New Friend Button */}
-            <TouchableOpacity
-              style={[styles.addNewFriendBtn, { backgroundColor: colors.surfaceContainerHigh }]}
-              onPress={() => {
-                setShowPersonPicker(false);
-                router.push('/add-splitwise-person');
-              }}
-            >
-              <MaterialIcons name="person-add" size={18} color={colors.primary} />
-              <Text style={[styles.addNewFriendText, { color: colors.primary }]}>
-                + Add New Friend
-              </Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1036,83 +1047,26 @@ const styles = StyleSheet.create({
   },
   headerSaveBtn: {
     paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingVertical: 7,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 64,
   },
   headerSaveText: {
     ...typography.labelMd,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 13,
-    color: '#ffffff',
+    lineHeight: 18,
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 12,
-  },
-  bannerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    marginBottom: 16,
-    gap: 12,
-  },
-  bannerIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(6, 182, 212, 0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bannerTextCol: {
-    flex: 1,
-  },
-  bannerTitle: {
-    ...typography.headlineSm,
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 2,
-  },
-  bannerSub: {
-    ...typography.bodyMd,
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  toggleContainer: {
-    flexDirection: 'row',
-    borderRadius: radius.md,
-    padding: 4,
-    gap: 6,
-  },
-  toggleBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: radius.sm,
-    gap: 6,
-  },
-  toggleText: {
-    ...typography.labelMd,
-    fontSize: 13,
-  },
-  toggleSubtitle: {
-    ...typography.bodyMd,
-    fontSize: 12,
-    marginTop: 10,
-    textAlign: 'center',
+    paddingTop: 8,
   },
   card: {
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     borderWidth: 1,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   cardHeaderRow: {
     flexDirection: 'row',
@@ -1123,13 +1077,14 @@ const styles = StyleSheet.create({
   labelWithIcon: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     marginBottom: 10,
   },
-  sectionTitle: {
-    ...typography.headlineSm,
-    fontSize: 14,
-    fontWeight: '700',
+  cardSectionTitle: {
+    ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 13,
+    lineHeight: 18,
   },
   changeFriendBtn: {
     flexDirection: 'row',
@@ -1142,40 +1097,44 @@ const styles = StyleSheet.create({
   changeFriendText: {
     ...typography.labelMd,
     fontSize: 12,
-    fontWeight: '700',
+    lineHeight: 16,
+    fontFamily: 'Manrope_700Bold',
   },
-  selectedPersonBox: {
+  selectedFriendBox: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
     gap: 12,
   },
   avatarCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
     ...typography.headlineSm,
-    fontSize: 15,
-    fontWeight: '800',
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 16,
+    lineHeight: 22,
   },
-  selectedPersonInfo: {
+  selectedFriendInfo: {
     flex: 1,
   },
-  selectedPersonName: {
+  selectedFriendName: {
     ...typography.bodyMd,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 15,
-    fontWeight: '700',
+    lineHeight: 20,
   },
-  selectedPersonBalanceTag: {
-    ...typography.labelMd,
+  selectedFriendBalance: {
+    ...typography.bodyMd,
+    fontFamily: 'Manrope_600SemiBold',
     fontSize: 12,
-    fontWeight: '600',
+    lineHeight: 16,
     marginTop: 2,
   },
   selectPromptBox: {
@@ -1183,115 +1142,202 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderStyle: 'dashed',
-    gap: 10,
+    gap: 8,
   },
   selectPromptText: {
     ...typography.bodyMd,
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    fontSize: 13,
+  },
+  directionToggleContainer: {
+    flexDirection: 'row',
+    borderRadius: 14,
+    padding: 4,
+    marginTop: 10,
+    gap: 6,
+  },
+  directionToggleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    gap: 6,
+  },
+  directionToggleText: {
+    ...typography.labelMd,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  directionSubtitle: {
+    ...typography.bodyMd,
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 8,
+  },
+  amountCard: {
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    padding: 20,
+    marginBottom: 14,
+    alignItems: 'center',
+  },
+  amountLabel: {
+    ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 11,
+    lineHeight: 14,
+    letterSpacing: 0.8,
+    marginBottom: 8,
   },
   amountInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    marginBottom: 10,
+    justifyContent: 'center',
   },
-  amountSymbol: {
-    ...typography.headlineSm,
+  amountCurrency: {
+    ...typography.displayLg,
     fontFamily: 'Manrope_700Bold',
-    fontSize: 26,
-    lineHeight: 34,
-    marginRight: 8,
+    fontSize: 32,
+    lineHeight: 40,
+    marginRight: 4,
   },
   amountInput: {
-    flex: 1,
+    ...typography.displayLg,
     fontFamily: 'Manrope_700Bold',
-    fontSize: 26,
-    paddingVertical: 8,
+    fontSize: 32,
+    lineHeight: 40,
+    minWidth: 120,
+    textAlign: 'left',
+    padding: 0,
   },
-  balanceShortcutsRow: {
+  smartShortcutsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-  },
-  fullSettleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    gap: 6,
-    flex: 1.5,
-  },
-  fullSettleBtnText: {
-    ...typography.labelMd,
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#06b6d4',
-  },
-  halfSettleBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radius.sm,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
-  },
-  halfSettleBtnText: {
-    ...typography.labelMd,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  quickAmountsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
-    marginTop: 4,
+    marginTop: 14,
+    flexWrap: 'wrap',
   },
-  quickAmountPill: {
+  fullSettleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    gap: 6,
+  },
+  fullSettleChipText: {
+    ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 12,
+  },
+  halfSettleChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    borderWidth: 1,
+  },
+  halfSettleChipText: {
+    ...typography.labelMd,
+    fontFamily: 'Manrope_600SemiBold',
+    fontSize: 12,
+  },
+  quickChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 14,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  quickChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: radius.full,
     borderWidth: 1,
   },
-  quickAmountText: {
+  quickChipText: {
     ...typography.labelMd,
+    fontFamily: 'Manrope_600SemiBold',
     fontSize: 12,
-    fontWeight: '600',
+    lineHeight: 16,
+  },
+  previewCard: {
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 14,
+  },
+  previewHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  previewTitle: {
+    ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  previewGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  previewCol: {
+    alignItems: 'center',
+  },
+  previewLabel: {
+    ...typography.labelMd,
+    fontSize: 11,
+    lineHeight: 14,
+    marginBottom: 2,
+  },
+  previewValue: {
+    ...typography.headlineSm,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: 'Manrope_600SemiBold',
+  },
+  inputWrapper: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 2,
+    marginBottom: 10,
   },
   textInput: {
     ...typography.bodyMd,
     fontSize: 14,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 10,
+    lineHeight: 20,
+    paddingVertical: 10,
   },
   quickTagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 2,
+    gap: 8,
   },
   quickTagPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: radius.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.full,
+    gap: 6,
   },
   quickTagText: {
     ...typography.bodyMd,
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: 'Manrope_600SemiBold',
   },
   quickDatesRow: {
     flexDirection: 'row',
@@ -1300,97 +1346,60 @@ const styles = StyleSheet.create({
   quickDatePill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: radius.sm,
+    borderRadius: radius.full,
   },
   quickDateText: {
     ...typography.labelMd,
     fontSize: 11,
+    lineHeight: 15,
   },
   datePickerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: radius.md,
+    padding: 12,
+    borderRadius: radius.lg,
     borderWidth: 1,
   },
   datePickerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   datePickerText: {
     ...typography.bodyMd,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  previewCard: {
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: 14,
-    marginBottom: 16,
-  },
-  previewHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 10,
-  },
-  previewTitle: {
-    ...typography.labelMd,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  previewGrid: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-  },
-  previewCol: {
-    alignItems: 'center',
-  },
-  previewLabel: {
-    ...typography.labelMd,
-    fontSize: 11,
-    marginBottom: 2,
-  },
-  previewValue: {
-    ...typography.headlineSm,
+    fontFamily: 'Manrope_600SemiBold',
     fontSize: 13,
-    fontWeight: '800',
   },
   submitButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: radius.xl,
     gap: 8,
-    paddingVertical: 14,
-    borderRadius: 16,
-    marginTop: 4,
+    marginTop: 8,
+    marginBottom: 24,
   },
   submitButtonText: {
     ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 15,
     lineHeight: 20,
-    fontWeight: '700',
-    color: '#ffffff',
   },
   errorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     marginTop: 4,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   errorText: {
     ...typography.bodyMd,
-    color: '#ef4444',
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 11,
+    lineHeight: 15,
   },
-  // Friend Picker Modal
+  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
@@ -1408,37 +1417,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   modalTitle: {
     ...typography.headlineSm,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 18,
-    fontWeight: '800',
+    lineHeight: 24,
   },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: radius.md,
     paddingHorizontal: 12,
     paddingVertical: 8,
+    borderRadius: radius.lg,
+    borderWidth: 1,
     gap: 8,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   searchInput: {
     flex: 1,
     ...typography.bodyMd,
-    fontSize: 14,
-    paddingVertical: 2,
+    fontSize: 13,
+    padding: 0,
   },
   friendsListScroll: {
-    maxHeight: 280,
+    maxHeight: 320,
   },
   friendItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
     marginBottom: 8,
     gap: 12,
@@ -1451,43 +1461,47 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   friendItemAvatarText: {
-    ...typography.headlineSm,
+    ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 14,
-    fontWeight: '800',
+    lineHeight: 18,
   },
   friendItemInfo: {
     flex: 1,
   },
   friendItemName: {
     ...typography.bodyMd,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 14,
+    lineHeight: 18,
   },
   friendItemPhone: {
     ...typography.bodyMd,
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 16,
     marginTop: 2,
   },
-  emptyFriendsBox: {
-    padding: 24,
+  emptySearchBox: {
     alignItems: 'center',
+    padding: 24,
+    gap: 12,
   },
-  emptyFriendsText: {
+  emptySearchText: {
     ...typography.bodyMd,
     fontSize: 13,
     textAlign: 'center',
   },
-  addNewFriendBtn: {
+  addFriendPromptBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: radius.md,
-    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: radius.full,
     gap: 6,
   },
-  addNewFriendText: {
+  addFriendPromptText: {
     ...typography.labelMd,
-    fontSize: 13,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 12,
   },
 });

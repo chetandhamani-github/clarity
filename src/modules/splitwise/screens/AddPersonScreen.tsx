@@ -57,7 +57,16 @@ export function AddPersonScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background,
+          paddingTop: insets.top,
+          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
+        },
+      ]}
+    >
       <Header
         title="Add Friend"
         showBack
@@ -78,7 +87,12 @@ export function AddPersonScreen() {
       />
 
       <KeyboardAwareScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        style={{ flex: 1 }}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 16) + 40 },
+        ]}
+        showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid
         extraScrollHeight={Platform.OS === 'ios' ? 20 : 0}
@@ -93,8 +107,8 @@ export function AddPersonScreen() {
             },
           ]}
         >
-          <View style={[styles.avatarCircle, { backgroundColor: 'rgba(99, 102, 241, 0.12)' }]}>
-            <MaterialIcons name="person-add" size={32} color={colors.primary} />
+          <View style={[styles.avatarCircle, { backgroundColor: colors.primaryContainer }]}>
+            <MaterialIcons name="person-add" size={32} color={colors.onPrimaryContainer} />
           </View>
           <Text style={[styles.bannerTitle, { color: colors.onSurface }]}>
             Add a Friend or Contact
@@ -119,7 +133,7 @@ export function AddPersonScreen() {
             <View style={styles.labelRow}>
               <MaterialIcons name="badge" size={16} color={colors.primary} />
               <Text style={[styles.inputLabel, { color: colors.onSurface }]}>
-                Friend's Name <Text style={{ color: '#ef4444' }}>*</Text>
+                Friend's Name <Text style={{ color: colors.error }}>*</Text>
               </Text>
             </View>
 
@@ -137,7 +151,7 @@ export function AddPersonScreen() {
                     {
                       color: colors.onSurface,
                       backgroundColor: colors.surfaceContainerLowest,
-                      borderColor: errors.name ? '#ef4444' : colors.outlineVariant,
+                      borderColor: errors.name ? colors.error : colors.outlineVariant,
                     },
                   ]}
                   placeholder="e.g. Rahul Sharma"
@@ -152,8 +166,8 @@ export function AddPersonScreen() {
             />
             {errors.name && (
               <View style={styles.errorRow}>
-                <MaterialIcons name="error-outline" size={14} color="#ef4444" />
-                <Text style={styles.errorText}>{errors.name.message}</Text>
+                <MaterialIcons name="error-outline" size={14} color={colors.error} />
+                <Text style={[styles.errorText, { color: colors.error }]}>{errors.name.message}</Text>
               </View>
             )}
           </View>
@@ -278,7 +292,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   bannerCard: {
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     borderWidth: 1,
     padding: 20,
     alignItems: 'center',
@@ -294,8 +308,9 @@ const styles = StyleSheet.create({
   },
   bannerTitle: {
     ...typography.headlineSm,
-    fontSize: 17,
-    fontWeight: '800',
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 18,
+    lineHeight: 24,
     marginBottom: 4,
     textAlign: 'center',
   },
@@ -307,7 +322,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   formCard: {
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     borderWidth: 1,
     padding: 16,
     marginBottom: 20,
@@ -327,13 +342,13 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   optionalTag: {
-    fontWeight: '400',
+    fontFamily: 'Manrope_400Regular',
     fontSize: 11,
   },
   textInput: {
     ...typography.bodyMd,
     fontSize: 14,
-    borderRadius: 12,
+    borderRadius: radius.lg,
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -354,22 +369,20 @@ const styles = StyleSheet.create({
   },
   errorText: {
     ...typography.bodyMd,
-    color: '#ef4444',
     fontSize: 12,
-    fontWeight: '500',
   },
   saveButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 14,
-    borderRadius: 16,
+    paddingVertical: 16,
+    borderRadius: radius.xl,
   },
   saveButtonText: {
     ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 15,
     lineHeight: 20,
-    fontWeight: '700',
   },
 });

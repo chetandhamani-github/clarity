@@ -26,6 +26,7 @@ import { TransactionExtractor } from '@/modules/sms/extractor/transactionExtract
 import { BillExtractor } from '@/modules/sms/extractor/billExtractor';
 import { mergeOrInsertSmsBill } from '@/services/database/bill-dao';
 import { BillService } from '@/modules/bills/services/BillService';
+import { BillsRepository } from '@/modules/bills/database/bills.repository';
 import type { BillCategory } from '@/modules/bills/types/bill.types';
 import { BillSettlementEngine } from '@/modules/sms/services/billSettlementEngine';
 import { BillAlertEngine } from '@/services/notifications/bill-alert-engine';
@@ -158,6 +159,7 @@ export class SmsSyncService {
 
         // Evaluate bill reminders for proactive notifications
         BillAlertEngine.evaluateUpcomingBillAlerts().catch(() => {});
+        BillsRepository.deduplicateExistingBills().catch(() => {});
 
         reportProgress('complete', scannedCount, scannedCount, batchIndex, batchIndex);
       }
@@ -248,6 +250,7 @@ export class SmsSyncService {
 
         // Evaluate bill reminders for proactive notifications
         BillAlertEngine.evaluateUpcomingBillAlerts().catch(() => {});
+        BillsRepository.deduplicateExistingBills().catch(() => {});
       }
 
       return { scannedCount, parsedCount, reviewCount, duplicateCount };

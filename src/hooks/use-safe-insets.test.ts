@@ -19,6 +19,7 @@ describe('calculateSafeInsets', () => {
     const insets = { top: 0, bottom: 0, left: 0, right: 0 };
     const result = calculateSafeInsets(insets, 'android', undefined);
     expect(result.top).toBe(24);
+    expect(result.bottom).toBe(16);
   });
 
   it('preserves 0 on iOS when insets.top is 0 (for sheet modals)', () => {

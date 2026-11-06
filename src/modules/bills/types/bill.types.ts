@@ -76,6 +76,8 @@ export interface CreateBillDTO {
   source?: BillSource;
   smsId?: string;
   status?: BillStatus;
+  paidDate?: string;
+  paidTransactionId?: string;
 }
 
 export interface UpdateBillDTO {

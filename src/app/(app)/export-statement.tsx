@@ -7,12 +7,14 @@ import {
   ActivityIndicator,
   TextInput,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Text, Header, useToast } from '@/components/ui';
 import { typography, radius, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccounts } from '@/hooks/use-accounts';
 import { exportCustomStatement } from '@/services/export/export-service';
+import { formatLocalDate } from '@/utils/format';
 
 type ExportFormat = 'pdf' | 'csv';
 type DatePreset = 'this_month' | 'last_month' | 'last_90_days' | 'ytd' | 'all' | 'custom';
@@ -31,9 +33,9 @@ export default function ExportStatementScreen() {
   // Custom date inputs
   const now = new Date();
   const [customFrom, setCustomFrom] = useState(
-    new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+    formatLocalDate(new Date(now.getFullYear(), now.getMonth(), 1))
   );
-  const [customTo, setCustomTo] = useState(now.toISOString().split('T')[0]);
+  const [customTo, setCustomTo] = useState(formatLocalDate(now));
 
   // Compute actual date range based on preset
   const dateRange = useMemo<{ dateFrom?: string; dateTo?: string }>(() => {
@@ -43,23 +45,23 @@ export default function ExportStatementScreen() {
 
     switch (preset) {
       case 'this_month': {
-        const from = new Date(y, m, 1).toISOString().split('T')[0];
-        const to = today.toISOString().split('T')[0];
+        const from = formatLocalDate(new Date(y, m, 1));
+        const to = formatLocalDate(today);
         return { dateFrom: from, dateTo: to };
       }
       case 'last_month': {
-        const from = new Date(y, m - 1, 1).toISOString().split('T')[0];
-        const to = new Date(y, m, 0).toISOString().split('T')[0];
+        const from = formatLocalDate(new Date(y, m - 1, 1));
+        const to = formatLocalDate(new Date(y, m, 0));
         return { dateFrom: from, dateTo: to };
       }
       case 'last_90_days': {
         const fromDate = new Date();
         fromDate.setDate(fromDate.getDate() - 90);
-        return { dateFrom: fromDate.toISOString().split('T')[0], dateTo: today.toISOString().split('T')[0] };
+        return { dateFrom: formatLocalDate(fromDate), dateTo: formatLocalDate(today) };
       }
       case 'ytd': {
-        const from = new Date(y, 0, 1).toISOString().split('T')[0];
-        return { dateFrom: from, dateTo: today.toISOString().split('T')[0] };
+        const from = formatLocalDate(new Date(y, 0, 1));
+        return { dateFrom: from, dateTo: formatLocalDate(today) };
       }
       case 'custom': {
         return { dateFrom: customFrom, dateTo: customTo };
@@ -109,10 +111,12 @@ export default function ExportStatementScreen() {
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
       <Header showBack title="Export Statement" />
 
-      <ScrollView
+      <KeyboardAwareScrollView
         style={{ flex: 1 }}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
       >
         {/* Format Selector */}
         <View style={styles.section}>
@@ -385,7 +389,7 @@ export default function ExportStatementScreen() {
             </TouchableOpacity>
           )}
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

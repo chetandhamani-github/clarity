@@ -121,5 +121,100 @@ describe('BillService', () => {
       expect(sub.billingCycle).toBe('monthly');
       expect(sub.status).toBe('active');
     });
+
+    describe('mergeOrInsertExternalBill Deduplication', () => {
+      it('merges with existing manual bill without creating duplicate', async () => {
+        // Mock existing manual bill in database
+        mockDb.getAllAsync.mockResolvedValueOnce([
+          {
+            id: 'bill-manual-1',
+            title: 'Electricity',
+            provider: 'Electricity',
+            category: 'electricity',
+            amount: 1450,
+            min_amount: null,
+            due_date: '2026-10-15',
+            status: 'upcoming',
+            account_reference: null,
+            payment_url: null,
+            sms_id: null,
+          },
+        ]);
+
+        mockDb.getFirstAsync
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce({
+            id: 'bill-manual-1',
+            title: 'Electricity',
+            provider: 'BESCOM',
+            category: 'electricity',
+            amount: 1450,
+            due_date: '2026-10-15',
+            status: 'upcoming',
+            source: 'manual',
+          });
+
+        const result = await BillService.mergeOrInsertExternalBill({
+          title: 'BESCOM',
+          provider: 'BESCOM',
+          category: 'electricity',
+          amount: 1450,
+          dueDate: '2026-10-15',
+          source: 'sms',
+          smsId: 'sms-bescom-1',
+        });
+
+        expect(result.isNew).toBe(false);
+        expect(result.bill.id).toBe('bill-manual-1');
+        expect(mockDb.runAsync).toHaveBeenCalledWith(
+          expect.stringContaining('UPDATE bills SET'),
+          expect.anything()
+        );
+      });
+
+      it('does not resurrect already paid bill as upcoming or overdue duplicate', async () => {
+        mockDb.getAllAsync.mockResolvedValueOnce([
+          {
+            id: 'bill-paid-1',
+            title: 'BESCOM',
+            provider: 'BESCOM',
+            category: 'electricity',
+            amount: 1450,
+            min_amount: null,
+            due_date: '2026-10-15',
+            status: 'paid',
+            account_reference: null,
+            payment_url: null,
+            sms_id: null,
+          },
+        ]);
+
+        mockDb.getFirstAsync
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce({
+            id: 'bill-paid-1',
+            title: 'BESCOM',
+            provider: 'BESCOM',
+            category: 'electricity',
+            amount: 1450,
+            due_date: '2026-10-15',
+            status: 'paid',
+            source: 'manual',
+          });
+
+        const result = await BillService.mergeOrInsertExternalBill({
+          title: 'BESCOM',
+          provider: 'BESCOM',
+          category: 'electricity',
+          amount: 1450,
+          dueDate: '2026-10-15',
+          source: 'sms',
+          smsId: 'sms-bescom-2',
+        });
+
+        expect(result.isNew).toBe(false);
+        expect(result.bill.status).toBe('paid');
+      });
+    });
   });
 });

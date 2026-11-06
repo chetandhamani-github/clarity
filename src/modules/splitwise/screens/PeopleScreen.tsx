@@ -7,6 +7,7 @@ import {
   TextInput,
   RefreshControl,
   DeviceEventEmitter,
+  Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
@@ -110,7 +111,16 @@ export function PeopleScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background,
+          paddingTop: insets.top,
+          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
+        },
+      ]}
+    >
       <Header
         title="Friends & Balances"
         showBack
@@ -126,8 +136,12 @@ export function PeopleScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 16) + 40 },
+        ]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={refreshing || isLoading}
@@ -412,10 +426,10 @@ const styles = StyleSheet.create({
   tabButtonText: {
     ...typography.labelMd,
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
   },
   tabButtonTextActive: {
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
   },
   peopleList: {
     gap: 8,
@@ -425,7 +439,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 14,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
   },
   personCardLeft: {
@@ -461,12 +475,13 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: radius.full,
   },
   statusBadgeText: {
     ...typography.labelMd,
-    fontSize: 11,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 10,
+    lineHeight: 14,
   },
   personCardRight: {
     flexDirection: 'row',
@@ -475,8 +490,9 @@ const styles = StyleSheet.create({
   },
   balanceAmountText: {
     ...typography.headlineSm,
-    fontWeight: '800',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 15,
+    lineHeight: 20,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -494,8 +510,9 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     ...typography.headlineSm,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 16,
-    fontWeight: '700',
+    lineHeight: 22,
     marginBottom: 6,
     textAlign: 'center',
   },
@@ -512,11 +529,11 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 14,
+    borderRadius: radius.full,
   },
   emptyAddBtnText: {
     ...typography.labelMd,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 14,
     lineHeight: 20,
   },

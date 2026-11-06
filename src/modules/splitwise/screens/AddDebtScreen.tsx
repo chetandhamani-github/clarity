@@ -17,7 +17,10 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
 import { Text, Header, DatePickerModal } from '@/components/ui';
 import { typography, useTheme, radius } from '@/theme';
+import { formatCurrencyPrivacy } from '@/utils/format';
+import { useAppStore } from '@/store/use-app-store';
 import { useSplitwiseStore } from '../store/splitwise.store';
+import { BalanceCalculator } from '../services/BalanceCalculator';
 import { DebtType } from '../types/splitwise.types';
 
 export interface AddDebtFormData {
@@ -28,23 +31,23 @@ export interface AddDebtFormData {
   date: string; // YYYY-MM-DD
 }
 
-const QUICK_TAGS = [
-  '🍽️ Dinner / Lunch',
-  '🛒 Groceries',
-  '🎬 Movie Tickets',
-  '🚕 Cab / Travel',
-  '🏠 Rent & Bills',
-  '☕ Coffee & Snacks',
-  '🛍️ Shopping',
-  '🎉 Party / Drinks',
+const QUICK_CATEGORIES = [
+  { label: 'Dinner / Lunch', icon: 'restaurant' as const },
+  { label: 'Groceries', icon: 'shopping-cart' as const },
+  { label: 'Travel / Cab', icon: 'local-taxi' as const },
+  { label: 'Movie Tickets', icon: 'movie' as const },
+  { label: 'Rent & Bills', icon: 'receipt' as const },
+  { label: 'Coffee & Snacks', icon: 'local-cafe' as const },
+  { label: 'Shopping', icon: 'shopping-bag' as const },
 ];
 
-const QUICK_AMOUNTS = [100, 250, 500, 1000, 2000];
+const QUICK_AMOUNTS = [100, 500, 1000, 2000];
 
 export function AddDebtScreen() {
   const { colors } = useTheme();
   const insets = useSafeInsets();
   const router = useRouter();
+  const { hideBalances } = useAppStore();
 
   const params = useLocalSearchParams<{
     personId?: string;
@@ -53,7 +56,7 @@ export function AddDebtScreen() {
     description?: string;
   }>();
 
-  const { people, addDebt, loadPeople, isLoading } = useSplitwiseStore();
+  const { people, debts, settlements, addDebt, loadPeople, isLoading } = useSplitwiseStore();
 
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
   const yesterdayStr = useMemo(() => {
@@ -94,6 +97,7 @@ export function AddDebtScreen() {
   const selectedType = watch('type');
   const selectedDate = watch('date');
   const currentAmount = watch('amount');
+  const currentDescription = watch('description');
 
   useEffect(() => {
     if (people.length === 0) {
@@ -111,6 +115,16 @@ export function AddDebtScreen() {
     () => people.find((p) => p.id === selectedPersonId),
     [people, selectedPersonId]
   );
+
+  const personBalance = useMemo(() => {
+    if (!selectedPerson) return null;
+    return BalanceCalculator.calculatePersonBalance(
+      selectedPerson.id,
+      debts,
+      settlements,
+      selectedPerson
+    );
+  }, [selectedPerson, debts, settlements]);
 
   const filteredPeople = useMemo(() => {
     if (!friendSearch.trim()) return people;
@@ -140,7 +154,6 @@ export function AddDebtScreen() {
     }
 
     try {
-      // Format date to ISO
       let createdAtIso: string;
       if (data.date === todayStr) {
         createdAtIso = new Date().toISOString();
@@ -178,7 +191,16 @@ export function AddDebtScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background,
+          paddingTop: insets.top,
+          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
+        },
+      ]}
+    >
       <Header
         title="Add Debt"
         showBack
@@ -186,25 +208,30 @@ export function AddDebtScreen() {
           <TouchableOpacity
             onPress={handleSubmit(onSubmit)}
             disabled={isSubmitting || isLoading}
-            style={[styles.headerSaveBtn, { backgroundColor: themeColor }]}
+            style={[styles.headerSaveBtn, { backgroundColor: colors.primary }]}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             {isSubmitting || isLoading ? (
-              <ActivityIndicator size="small" color="#ffffff" />
+              <ActivityIndicator size="small" color={colors.onPrimary} />
             ) : (
-              <Text style={styles.headerSaveText}>Save</Text>
+              <Text style={[styles.headerSaveText, { color: colors.onPrimary }]}>Save</Text>
             )}
           </TouchableOpacity>
         }
       />
 
       <KeyboardAwareScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        style={{ flex: 1 }}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 16) + 40 },
+        ]}
+        showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid
         extraScrollHeight={Platform.OS === 'ios' ? 20 : 0}
       >
-        {/* Person Selector Card */}
+        {/* CARD 1: FRIEND / CONTACT SELECTOR */}
         <View
           style={[
             styles.card,
@@ -216,15 +243,15 @@ export function AddDebtScreen() {
         >
           <View style={styles.cardHeaderRow}>
             <View style={styles.labelWithIcon}>
-              <MaterialIcons name="person" size={18} color={themeColor} />
-              <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>Friend / Person</Text>
+              <MaterialIcons name="person" size={18} color={colors.primary} />
+              <Text style={[styles.cardSectionTitle, { color: colors.onSurface }]}>Friend / Contact</Text>
             </View>
             <TouchableOpacity
               onPress={() => setShowPersonPicker(true)}
               style={[styles.changeFriendBtn, { backgroundColor: colors.surfaceContainerHigh }]}
             >
               <Text style={[styles.changeFriendText, { color: colors.primary }]}>
-                {selectedPerson ? 'Change' : 'Select Friend'}
+                {selectedPerson ? 'Change' : 'Select'}
               </Text>
               <MaterialIcons name="expand-more" size={16} color={colors.primary} />
             </TouchableOpacity>
@@ -233,17 +260,17 @@ export function AddDebtScreen() {
           {selectedPerson ? (
             <TouchableOpacity
               style={[
-                styles.selectedPersonBox,
+                styles.selectedFriendBox,
                 {
                   backgroundColor: colors.surfaceContainerLowest,
-                  borderColor: colors.outlineVariant,
+                  borderColor: colors.surfaceVariant,
                 },
               ]}
               onPress={() => setShowPersonPicker(true)}
               activeOpacity={0.8}
             >
-              <View style={[styles.avatarCircle, { backgroundColor: `${themeColor}20` }]}>
-                <Text style={[styles.avatarText, { color: themeColor }]}>
+              <View style={[styles.avatarCircle, { backgroundColor: colors.primaryContainer }]}>
+                <Text style={[styles.avatarText, { color: colors.onPrimaryContainer }]}>
                   {selectedPerson.name
                     .split(' ')
                     .filter(Boolean)
@@ -253,17 +280,29 @@ export function AddDebtScreen() {
                     .toUpperCase()}
                 </Text>
               </View>
-              <View style={styles.selectedPersonInfo}>
-                <Text style={[styles.selectedPersonName, { color: colors.onSurface }]}>
+              <View style={styles.selectedFriendInfo}>
+                <Text style={[styles.selectedFriendName, { color: colors.onSurface }]}>
                   {selectedPerson.name}
                 </Text>
-                {selectedPerson.phone && (
-                  <Text style={[styles.selectedPersonPhone, { color: colors.onSurfaceVariant }]}>
-                    {selectedPerson.phone}
+                {personBalance && (
+                  <Text
+                    style={[
+                      styles.selectedFriendBalance,
+                      {
+                        color:
+                          personBalance.status === 'OWED_TO_ME'
+                            ? '#10b981'
+                            : personBalance.status === 'YOU_OWE'
+                              ? '#ef4444'
+                              : colors.onSurfaceVariant,
+                      },
+                    ]}
+                  >
+                    {personBalance.statusLabel}: {formatCurrencyPrivacy(Math.abs(personBalance.netBalance), hideBalances)}
                   </Text>
                 )}
               </View>
-              <MaterialIcons name="check-circle" size={20} color={themeColor} />
+              <MaterialIcons name="check-circle" size={20} color={colors.primary} />
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
@@ -276,22 +315,22 @@ export function AddDebtScreen() {
               ]}
               onPress={() => setShowPersonPicker(true)}
             >
-              <MaterialIcons name="person-add" size={24} color={colors.primary} />
+              <MaterialIcons name="person-add" size={22} color={colors.primary} />
               <Text style={[styles.selectPromptText, { color: colors.onSurfaceVariant }]}>
-                Tap to select or add a friend
+                Tap to select a friend
               </Text>
             </TouchableOpacity>
           )}
 
           {errors.personId && (
             <View style={styles.errorRow}>
-              <MaterialIcons name="error-outline" size={14} color="#ef4444" />
-              <Text style={styles.errorText}>{errors.personId.message}</Text>
+              <MaterialIcons name="error-outline" size={14} color={colors.error} />
+              <Text style={[styles.errorText, { color: colors.error }]}>{errors.personId.message}</Text>
             </View>
           )}
         </View>
 
-        {/* Debt Direction Selector ("Rahul owes me" vs "I owe Rahul") */}
+        {/* CARD 2: DIRECTION SELECTOR ("Rahul owes me" vs "I owe Rahul") */}
         <View
           style={[
             styles.card,
@@ -301,16 +340,18 @@ export function AddDebtScreen() {
             },
           ]}
         >
-          <Text style={[styles.sectionTitle, { color: colors.onSurface, marginBottom: 12 }]}>
+          <Text style={[styles.cardSectionTitle, { color: colors.onSurface }]}>
             Who owes whom?
           </Text>
 
-          <View style={[styles.toggleContainer, { backgroundColor: colors.surfaceContainerHigh }]}>
+          <View style={[styles.directionToggleContainer, { backgroundColor: colors.surfaceContainerHigh }]}>
             <TouchableOpacity
               style={[
-                styles.toggleBtn,
+                styles.directionToggleBtn,
                 isOweMe && {
-                  backgroundColor: '#10b981',
+                  backgroundColor: colors.surfaceContainerLowest,
+                  borderColor: '#10b981',
+                  borderWidth: 1.5,
                 },
               ]}
               onPress={() => setValue('type', DebtType.OWE_ME)}
@@ -319,14 +360,14 @@ export function AddDebtScreen() {
               <MaterialIcons
                 name="call-received"
                 size={18}
-                color={isOweMe ? '#ffffff' : colors.onSurfaceVariant}
+                color={isOweMe ? '#10b981' : colors.onSurfaceVariant}
               />
               <Text
                 style={[
-                  styles.toggleText,
+                  styles.directionToggleText,
                   {
-                    color: isOweMe ? '#ffffff' : colors.onSurfaceVariant,
-                    fontWeight: isOweMe ? '700' : '600',
+                    color: isOweMe ? colors.onSurface : colors.onSurfaceVariant,
+                    fontFamily: isOweMe ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
                   },
                 ]}
               >
@@ -336,9 +377,11 @@ export function AddDebtScreen() {
 
             <TouchableOpacity
               style={[
-                styles.toggleBtn,
+                styles.directionToggleBtn,
                 !isOweMe && {
-                  backgroundColor: '#ef4444',
+                  backgroundColor: colors.surfaceContainerLowest,
+                  borderColor: '#ef4444',
+                  borderWidth: 1.5,
                 },
               ]}
               onPress={() => setValue('type', DebtType.I_OWE)}
@@ -347,14 +390,14 @@ export function AddDebtScreen() {
               <MaterialIcons
                 name="call-made"
                 size={18}
-                color={!isOweMe ? '#ffffff' : colors.onSurfaceVariant}
+                color={!isOweMe ? '#ef4444' : colors.onSurfaceVariant}
               />
               <Text
                 style={[
-                  styles.toggleText,
+                  styles.directionToggleText,
                   {
-                    color: !isOweMe ? '#ffffff' : colors.onSurfaceVariant,
-                    fontWeight: !isOweMe ? '700' : '600',
+                    color: !isOweMe ? colors.onSurface : colors.onSurfaceVariant,
+                    fontFamily: !isOweMe ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
                   },
                 ]}
               >
@@ -363,29 +406,26 @@ export function AddDebtScreen() {
             </TouchableOpacity>
           </View>
 
-          <Text style={[styles.toggleSubtitle, { color: colors.onSurfaceVariant }]}>
+          <Text style={[styles.directionSubtitle, { color: colors.onSurfaceVariant }]}>
             {isOweMe
               ? `You paid for ${personFirstName}. They will pay you back.`
               : `${personFirstName} paid for you. You need to pay them back.`}
           </Text>
         </View>
 
-        {/* Amount Input Card */}
+        {/* CARD 3: AMOUNT HERO CARD */}
         <View
           style={[
-            styles.card,
+            styles.amountCard,
             {
-              backgroundColor: colors.surfaceContainerLow,
-              borderColor: colors.outlineVariant,
+              backgroundColor: colors.surfaceContainerLowest,
+              borderColor: errors.amount ? colors.error : colors.surfaceVariant,
             },
           ]}
         >
-          <View style={styles.labelWithIcon}>
-            <MaterialIcons name="currency-rupee" size={18} color={themeColor} />
-            <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>
-              Amount <Text style={{ color: '#ef4444' }}>*</Text>
-            </Text>
-          </View>
+          <Text style={[styles.amountLabel, { color: colors.onSurfaceVariant }]}>
+            DEBT AMOUNT <Text style={{ color: colors.error }}>*</Text>
+          </Text>
 
           <Controller
             control={control}
@@ -398,20 +438,14 @@ export function AddDebtScreen() {
               },
             }}
             render={({ field: { onChange, onBlur, value } }) => (
-              <View
-                style={[
-                  styles.amountInputRow,
-                  {
-                    backgroundColor: colors.surfaceContainerLowest,
-                    borderColor: errors.amount ? '#ef4444' : colors.outlineVariant,
-                  },
-                ]}
-              >
-                <Text style={[styles.amountSymbol, { color: themeColor }]}>₹</Text>
+              <View style={styles.amountInputRow}>
+                <Text style={[styles.amountCurrency, { color: themeColor }]}>
+                  {isOweMe ? '+' : '-'}₹
+                </Text>
                 <TextInput
                   style={[styles.amountInput, { color: colors.onSurface }]}
                   placeholder="0.00"
-                  placeholderTextColor={colors.onSurfaceVariant}
+                  placeholderTextColor={colors.outline}
                   keyboardType="decimal-pad"
                   onBlur={onBlur}
                   onChangeText={onChange}
@@ -424,32 +458,44 @@ export function AddDebtScreen() {
 
           {errors.amount && (
             <View style={styles.errorRow}>
-              <MaterialIcons name="error-outline" size={14} color="#ef4444" />
-              <Text style={styles.errorText}>{errors.amount.message}</Text>
+              <MaterialIcons name="error-outline" size={14} color={colors.error} />
+              <Text style={[styles.errorText, { color: colors.error }]}>{errors.amount.message}</Text>
             </View>
           )}
 
-          {/* Quick Amount Add Pills */}
-          <View style={styles.quickAmountsRow}>
+          {/* Quick Amount Chips */}
+          <View style={styles.quickChipsRow}>
             {QUICK_AMOUNTS.map((amt) => (
               <TouchableOpacity
                 key={amt}
                 style={[
-                  styles.quickAmountPill,
+                  styles.quickChip,
                   {
-                    backgroundColor: colors.surfaceContainerHigh,
+                    backgroundColor: colors.surfaceContainerLow,
                     borderColor: colors.outlineVariant,
                   },
                 ]}
                 onPress={() => addQuickAmount(amt)}
               >
-                <Text style={[styles.quickAmountText, { color: colors.onSurface }]}>+₹{amt}</Text>
+                <Text style={[styles.quickChipText, { color: colors.onSurface }]}>+{amt}</Text>
               </TouchableOpacity>
             ))}
+            <TouchableOpacity
+              style={[
+                styles.quickChip,
+                {
+                  backgroundColor: colors.surfaceContainerLow,
+                  borderColor: colors.error + '44',
+                },
+              ]}
+              onPress={() => setValue('amount', '', { shouldValidate: true })}
+            >
+              <Text style={[styles.quickChipText, { color: colors.error }]}>Clear</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Description & Category Tags Card */}
+        {/* CARD 4: DESCRIPTION & CATEGORY CARDS */}
         <View
           style={[
             styles.card,
@@ -460,9 +506,9 @@ export function AddDebtScreen() {
           ]}
         >
           <View style={styles.labelWithIcon}>
-            <MaterialIcons name="description" size={18} color={themeColor} />
-            <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>
-              Description <Text style={{ color: '#ef4444' }}>*</Text>
+            <MaterialIcons name="description" size={18} color={colors.primary} />
+            <Text style={[styles.cardSectionTitle, { color: colors.onSurface }]}>
+              Description <Text style={{ color: colors.error }}>*</Text>
             </Text>
           </View>
 
@@ -474,51 +520,76 @@ export function AddDebtScreen() {
               validate: (val) => val.trim().length > 0 || 'Description cannot be empty',
             }}
             render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
+              <View
                 style={[
-                  styles.textInput,
+                  styles.inputWrapper,
                   {
                     backgroundColor: colors.surfaceContainerLowest,
-                    borderColor: errors.description ? '#ef4444' : colors.outlineVariant,
-                    color: colors.onSurface,
+                    borderColor: errors.description ? colors.error : colors.surfaceVariant,
                   },
                 ]}
-                placeholder="e.g. Dinner bill, Uber ride, Grocery store"
-                placeholderTextColor={colors.onSurfaceVariant}
-                onBlur={onBlur}
-                onChangeText={onChange}
-                value={value}
-              />
+              >
+                <TextInput
+                  style={[styles.textInput, { color: colors.onSurface }]}
+                  placeholder="e.g. Dinner bill, Uber ride, Grocery store"
+                  placeholderTextColor={colors.outline}
+                  onBlur={onBlur}
+                  onChangeText={onChange}
+                  value={value}
+                />
+              </View>
             )}
           />
 
           {errors.description && (
             <View style={styles.errorRow}>
-              <MaterialIcons name="error-outline" size={14} color="#ef4444" />
-              <Text style={styles.errorText}>{errors.description.message}</Text>
+              <MaterialIcons name="error-outline" size={14} color={colors.error} />
+              <Text style={[styles.errorText, { color: colors.error }]}>{errors.description.message}</Text>
             </View>
           )}
 
-          {/* Quick Category Tags */}
+          {/* Quick Categories */}
           <View style={styles.quickTagsContainer}>
-            {QUICK_TAGS.map((tag) => (
-              <TouchableOpacity
-                key={tag}
-                style={[
-                  styles.quickTagPill,
-                  {
-                    backgroundColor: colors.surfaceContainerHigh,
-                  },
-                ]}
-                onPress={() => setValue('description', tag, { shouldValidate: true })}
-              >
-                <Text style={[styles.quickTagText, { color: colors.onSurfaceVariant }]}>{tag}</Text>
-              </TouchableOpacity>
-            ))}
+            {QUICK_CATEGORIES.map((cat) => {
+              const isSelected = currentDescription === cat.label;
+              return (
+                <TouchableOpacity
+                  key={cat.label}
+                  style={[
+                    styles.quickTagPill,
+                    {
+                      backgroundColor: isSelected
+                        ? colors.primaryContainer + '30'
+                        : colors.surfaceContainerHigh,
+                      borderColor: isSelected ? colors.primary : colors.outlineVariant,
+                      borderWidth: isSelected ? 1 : 0,
+                    },
+                  ]}
+                  onPress={() => setValue('description', cat.label, { shouldValidate: true })}
+                >
+                  <MaterialIcons
+                    name={cat.icon}
+                    size={14}
+                    color={isSelected ? colors.primary : colors.onSurfaceVariant}
+                  />
+                  <Text
+                    style={[
+                      styles.quickTagText,
+                      {
+                        color: isSelected ? colors.primary : colors.onSurfaceVariant,
+                        fontFamily: isSelected ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
+                      },
+                    ]}
+                  >
+                    {cat.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
-        {/* Date Selector Card */}
+        {/* CARD 5: DATE SELECTOR CARD */}
         <View
           style={[
             styles.card,
@@ -530,17 +601,16 @@ export function AddDebtScreen() {
         >
           <View style={styles.cardHeaderRow}>
             <View style={styles.labelWithIcon}>
-              <MaterialIcons name="event" size={18} color={themeColor} />
-              <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>Date</Text>
+              <MaterialIcons name="event" size={18} color={colors.primary} />
+              <Text style={[styles.cardSectionTitle, { color: colors.onSurface }]}>Date</Text>
             </View>
 
-            {/* Quick date pills */}
             <View style={styles.quickDatesRow}>
               <TouchableOpacity
                 style={[
                   styles.quickDatePill,
                   selectedDate === todayStr && {
-                    backgroundColor: themeColor,
+                    backgroundColor: colors.primary,
                   },
                   selectedDate !== todayStr && {
                     backgroundColor: colors.surfaceContainerHigh,
@@ -552,8 +622,8 @@ export function AddDebtScreen() {
                   style={[
                     styles.quickDateText,
                     {
-                      color: selectedDate === todayStr ? '#ffffff' : colors.onSurfaceVariant,
-                      fontWeight: selectedDate === todayStr ? '700' : '500',
+                      color: selectedDate === todayStr ? colors.onPrimary : colors.onSurfaceVariant,
+                      fontFamily: selectedDate === todayStr ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
                     },
                   ]}
                 >
@@ -565,7 +635,7 @@ export function AddDebtScreen() {
                 style={[
                   styles.quickDatePill,
                   selectedDate === yesterdayStr && {
-                    backgroundColor: themeColor,
+                    backgroundColor: colors.primary,
                   },
                   selectedDate !== yesterdayStr && {
                     backgroundColor: colors.surfaceContainerHigh,
@@ -577,8 +647,8 @@ export function AddDebtScreen() {
                   style={[
                     styles.quickDateText,
                     {
-                      color: selectedDate === yesterdayStr ? '#ffffff' : colors.onSurfaceVariant,
-                      fontWeight: selectedDate === yesterdayStr ? '700' : '500',
+                      color: selectedDate === yesterdayStr ? colors.onPrimary : colors.onSurfaceVariant,
+                      fontFamily: selectedDate === yesterdayStr ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
                     },
                   ]}
                 >
@@ -593,14 +663,14 @@ export function AddDebtScreen() {
               styles.datePickerBtn,
               {
                 backgroundColor: colors.surfaceContainerLowest,
-                borderColor: colors.outlineVariant,
+                borderColor: colors.surfaceVariant,
               },
             ]}
             onPress={() => setShowDatePicker(true)}
             activeOpacity={0.8}
           >
             <View style={styles.datePickerLeft}>
-              <MaterialIcons name="calendar-today" size={18} color={themeColor} />
+              <MaterialIcons name="calendar-today" size={18} color={colors.primary} />
               <Text style={[styles.datePickerText, { color: colors.onSurface }]}>
                 {formatReadableDate(selectedDate)}
               </Text>
@@ -609,25 +679,22 @@ export function AddDebtScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Submit Button */}
+        {/* CARD 6: SUBMIT BUTTON */}
         <TouchableOpacity
-          style={[
-            styles.submitButton,
-            {
-              backgroundColor: themeColor,
-            },
-          ]}
+          style={[styles.submitButton, { backgroundColor: colors.primary }]}
           onPress={handleSubmit(onSubmit)}
           disabled={isSubmitting || isLoading}
           activeOpacity={0.85}
         >
           {isSubmitting || isLoading ? (
-            <ActivityIndicator size="small" color="#ffffff" />
+            <ActivityIndicator size="small" color={colors.onPrimary} />
           ) : (
             <>
-              <MaterialIcons name="check" size={20} color="#ffffff" />
-              <Text style={styles.submitButtonText}>
-                {isOweMe ? 'Record Receivable Debt' : 'Record Payable Debt'}
+              <MaterialIcons name="check" size={20} color={colors.onPrimary} />
+              <Text style={[styles.submitButtonText, { color: colors.onPrimary }]}>
+                {currentAmount && parseFloat(currentAmount) > 0
+                  ? `Save Debt (${isOweMe ? '+' : '-'}₹${currentAmount})`
+                  : 'Save Debt'}
               </Text>
             </>
           )}
@@ -654,8 +721,9 @@ export function AddDebtScreen() {
             style={[
               styles.modalCard,
               {
-                backgroundColor: colors.surface,
+                backgroundColor: colors.surfaceContainerLowest,
                 borderColor: colors.outlineVariant,
+                paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 40 : 24),
               },
             ]}
           >
@@ -665,7 +733,7 @@ export function AddDebtScreen() {
                 onPress={() => setShowPersonPicker(false)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <MaterialIcons name="close" size={24} color={colors.onSurfaceVariant} />
+                <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
               </TouchableOpacity>
             </View>
 
@@ -717,7 +785,7 @@ export function AddDebtScreen() {
                       styles.friendItem,
                       {
                         backgroundColor: isSelected
-                          ? colors.primaryContainer
+                          ? colors.primaryContainer + '20'
                           : colors.surfaceContainerLow,
                         borderColor: isSelected ? colors.primary : colors.outlineVariant,
                       },
@@ -748,35 +816,21 @@ export function AddDebtScreen() {
                         {initials}
                       </Text>
                     </View>
-
                     <View style={styles.friendItemInfo}>
-                      <Text
-                        style={[
-                          styles.friendItemName,
-                          {
-                            color: isSelected ? colors.onPrimaryContainer : colors.onSurface,
-                            fontWeight: isSelected ? '700' : '600',
-                          },
-                        ]}
-                      >
+                      <Text style={[styles.friendItemName, { color: colors.onSurface }]}>
                         {p.name}
                       </Text>
                       {p.phone && (
                         <Text
                           style={[
                             styles.friendItemPhone,
-                            {
-                              color: isSelected
-                                ? colors.onPrimaryContainer
-                                : colors.onSurfaceVariant,
-                            },
+                            { color: colors.onSurfaceVariant },
                           ]}
                         >
                           {p.phone}
                         </Text>
                       )}
                     </View>
-
                     {isSelected && (
                       <MaterialIcons name="check" size={20} color={colors.primary} />
                     )}
@@ -785,27 +839,25 @@ export function AddDebtScreen() {
               })}
 
               {filteredPeople.length === 0 && (
-                <View style={styles.emptyFriendsBox}>
-                  <Text style={[styles.emptyFriendsText, { color: colors.onSurfaceVariant }]}>
+                <View style={styles.emptySearchBox}>
+                  <Text style={[styles.emptySearchText, { color: colors.onSurfaceVariant }]}>
                     No friends found matching "{friendSearch}"
                   </Text>
+                  <TouchableOpacity
+                    style={[styles.addFriendPromptBtn, { backgroundColor: colors.primary }]}
+                    onPress={() => {
+                      setShowPersonPicker(false);
+                      router.push('/(app)/add-splitwise-person');
+                    }}
+                  >
+                    <MaterialIcons name="person-add" size={16} color={colors.onPrimary} />
+                    <Text style={[styles.addFriendPromptText, { color: colors.onPrimary }]}>
+                      Add New Friend
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               )}
             </ScrollView>
-
-            {/* Add New Friend Button */}
-            <TouchableOpacity
-              style={[styles.addNewFriendBtn, { backgroundColor: colors.surfaceContainerHigh }]}
-              onPress={() => {
-                setShowPersonPicker(false);
-                router.push('/add-splitwise-person');
-              }}
-            >
-              <MaterialIcons name="person-add" size={18} color={colors.primary} />
-              <Text style={[styles.addNewFriendText, { color: colors.primary }]}>
-                + Add New Friend
-              </Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -837,27 +889,26 @@ const styles = StyleSheet.create({
   },
   headerSaveBtn: {
     paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingVertical: 7,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 64,
   },
   headerSaveText: {
     ...typography.labelMd,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 13,
-    color: '#ffffff',
+    lineHeight: 18,
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 8,
   },
   card: {
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     borderWidth: 1,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   cardHeaderRow: {
     flexDirection: 'row',
@@ -868,13 +919,14 @@ const styles = StyleSheet.create({
   labelWithIcon: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     marginBottom: 10,
   },
-  sectionTitle: {
-    ...typography.headlineSm,
-    fontSize: 14,
-    fontWeight: '700',
+  cardSectionTitle: {
+    ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 13,
+    lineHeight: 18,
   },
   changeFriendBtn: {
     flexDirection: 'row',
@@ -887,39 +939,44 @@ const styles = StyleSheet.create({
   changeFriendText: {
     ...typography.labelMd,
     fontSize: 12,
-    fontWeight: '700',
+    lineHeight: 16,
+    fontFamily: 'Manrope_700Bold',
   },
-  selectedPersonBox: {
+  selectedFriendBox: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
     gap: 12,
   },
   avatarCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
     ...typography.headlineSm,
-    fontSize: 15,
-    fontWeight: '800',
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 16,
+    lineHeight: 22,
   },
-  selectedPersonInfo: {
+  selectedFriendInfo: {
     flex: 1,
   },
-  selectedPersonName: {
+  selectedFriendName: {
     ...typography.bodyMd,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 15,
-    fontWeight: '700',
+    lineHeight: 20,
   },
-  selectedPersonPhone: {
+  selectedFriendBalance: {
     ...typography.bodyMd,
+    fontFamily: 'Manrope_600SemiBold',
     fontSize: 12,
+    lineHeight: 16,
     marginTop: 2,
   },
   selectPromptBox: {
@@ -927,104 +984,130 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderStyle: 'dashed',
-    gap: 10,
+    gap: 8,
   },
   selectPromptText: {
     ...typography.bodyMd,
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    fontSize: 13,
   },
-  toggleContainer: {
+  directionToggleContainer: {
     flexDirection: 'row',
-    borderRadius: radius.md,
+    borderRadius: 14,
     padding: 4,
+    marginTop: 10,
     gap: 6,
   },
-  toggleBtn: {
+  directionToggleBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
-    borderRadius: radius.sm,
+    paddingHorizontal: 8,
+    borderRadius: 10,
     gap: 6,
   },
-  toggleText: {
+  directionToggleText: {
     ...typography.labelMd,
     fontSize: 13,
+    lineHeight: 18,
   },
-  toggleSubtitle: {
+  directionSubtitle: {
     ...typography.bodyMd,
     fontSize: 12,
-    marginTop: 10,
-    textAlign: 'center',
+    lineHeight: 16,
+    marginTop: 8,
+  },
+  amountCard: {
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    padding: 20,
+    marginBottom: 14,
+    alignItems: 'center',
+  },
+  amountLabel: {
+    ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 11,
+    lineHeight: 14,
+    letterSpacing: 0.8,
+    marginBottom: 8,
   },
   amountInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    marginBottom: 10,
+    justifyContent: 'center',
   },
-  amountSymbol: {
-    ...typography.headlineSm,
+  amountCurrency: {
+    ...typography.displayLg,
     fontFamily: 'Manrope_700Bold',
-    fontSize: 26,
-    lineHeight: 34,
-    marginRight: 8,
+    fontSize: 32,
+    lineHeight: 40,
+    marginRight: 4,
   },
   amountInput: {
-    flex: 1,
+    ...typography.displayLg,
     fontFamily: 'Manrope_700Bold',
-    fontSize: 26,
-    paddingVertical: 8,
+    fontSize: 32,
+    lineHeight: 40,
+    minWidth: 120,
+    textAlign: 'left',
+    padding: 0,
   },
-  quickAmountsRow: {
+  quickChipsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
-    marginTop: 4,
+    marginTop: 16,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
   },
-  quickAmountPill: {
+  quickChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: radius.full,
     borderWidth: 1,
   },
-  quickAmountText: {
+  quickChipText: {
     ...typography.labelMd,
+    fontFamily: 'Manrope_600SemiBold',
     fontSize: 12,
-    fontWeight: '600',
+    lineHeight: 16,
+  },
+  inputWrapper: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 2,
+    marginBottom: 10,
   },
   textInput: {
     ...typography.bodyMd,
     fontSize: 14,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 10,
+    lineHeight: 20,
+    paddingVertical: 10,
   },
   quickTagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 2,
+    gap: 8,
   },
   quickTagPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: radius.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.full,
+    gap: 6,
   },
   quickTagText: {
     ...typography.bodyMd,
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: 'Manrope_600SemiBold',
   },
   quickDatesRow: {
     flexDirection: 'row',
@@ -1033,61 +1116,60 @@ const styles = StyleSheet.create({
   quickDatePill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: radius.sm,
+    borderRadius: radius.full,
   },
   quickDateText: {
     ...typography.labelMd,
     fontSize: 11,
+    lineHeight: 15,
   },
   datePickerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: radius.md,
+    padding: 12,
+    borderRadius: radius.lg,
     borderWidth: 1,
   },
   datePickerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   datePickerText: {
     ...typography.bodyMd,
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    fontSize: 13,
   },
   submitButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: radius.xl,
     gap: 8,
-    paddingVertical: 14,
-    borderRadius: 16,
-    marginTop: 4,
+    marginTop: 8,
+    marginBottom: 24,
   },
   submitButtonText: {
     ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 15,
     lineHeight: 20,
-    fontWeight: '700',
-    color: '#ffffff',
   },
   errorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     marginTop: 4,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   errorText: {
     ...typography.bodyMd,
-    color: '#ef4444',
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 11,
+    lineHeight: 15,
   },
-  // Friend Picker Modal
+  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
@@ -1105,37 +1187,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   modalTitle: {
     ...typography.headlineSm,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 18,
-    fontWeight: '800',
+    lineHeight: 24,
   },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: radius.md,
     paddingHorizontal: 12,
     paddingVertical: 8,
+    borderRadius: radius.lg,
+    borderWidth: 1,
     gap: 8,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   searchInput: {
     flex: 1,
     ...typography.bodyMd,
-    fontSize: 14,
-    paddingVertical: 2,
+    fontSize: 13,
+    padding: 0,
   },
   friendsListScroll: {
-    maxHeight: 280,
+    maxHeight: 320,
   },
   friendItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
     marginBottom: 8,
     gap: 12,
@@ -1148,43 +1231,47 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   friendItemAvatarText: {
-    ...typography.headlineSm,
+    ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 14,
-    fontWeight: '800',
+    lineHeight: 18,
   },
   friendItemInfo: {
     flex: 1,
   },
   friendItemName: {
     ...typography.bodyMd,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 14,
+    lineHeight: 18,
   },
   friendItemPhone: {
     ...typography.bodyMd,
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 16,
     marginTop: 2,
   },
-  emptyFriendsBox: {
-    padding: 24,
+  emptySearchBox: {
     alignItems: 'center',
+    padding: 24,
+    gap: 12,
   },
-  emptyFriendsText: {
+  emptySearchText: {
     ...typography.bodyMd,
     fontSize: 13,
     textAlign: 'center',
   },
-  addNewFriendBtn: {
+  addFriendPromptBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: radius.md,
-    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: radius.full,
     gap: 6,
   },
-  addNewFriendText: {
+  addFriendPromptText: {
     ...typography.labelMd,
-    fontSize: 13,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 12,
   },
 });

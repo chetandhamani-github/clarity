@@ -122,46 +122,234 @@ export class BillService {
     const db = getDatabase();
     await BillsRepository.ensureSchema();
 
-    // Check for existing unpaid bill from same provider around the due date (15-day tolerance window)
+    // 1. Direct sms_id check
+    if (extracted.smsId) {
+      const existingBySms = await db.getFirstAsync<{ id: string }>(
+        `SELECT id FROM bills WHERE sms_id = ? LIMIT 1`,
+        [extracted.smsId]
+      );
+      if (existingBySms) {
+        const bill = await BillsRepository.getBillById(existingBySms.id);
+        if (bill) return { bill, isNew: false };
+      }
+    }
+
+    // 2. Fetch candidate bills within flexible billing period (±30 days around due date)
     const [year, month, day] = extracted.dueDate.split('-').map(Number);
     const dueTime = new Date(year, month - 1, day).getTime();
-    const minRange = new Date(dueTime - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const maxRange = new Date(dueTime + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const minRange = new Date(dueTime - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const maxRange = new Date(dueTime + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    const whereRefClause = extracted.accountReference ? 'OR account_reference = ?' : '';
-    const queryParams = extracted.accountReference
-      ? [`%${extracted.provider}%`, `%${extracted.title}%`, extracted.accountReference, minRange, maxRange]
-      : [`%${extracted.provider}%`, `%${extracted.title}%`, minRange, maxRange];
-
-    const existing = await db.getFirstAsync<{ id: string }>(
-      `SELECT id FROM bills 
-       WHERE (status = 'upcoming' OR status = 'overdue')
-         AND (provider LIKE ? OR title LIKE ? ${whereRefClause})
-         AND due_date BETWEEN ? AND ?
-       LIMIT 1`,
-      queryParams
+    const candidates = await db.getAllAsync<{
+      id: string;
+      title: string;
+      provider: string;
+      category: BillCategory;
+      amount: number;
+      min_amount: number | null;
+      due_date: string;
+      status: string;
+      account_reference: string | null;
+      payment_url: string | null;
+      sms_id: string | null;
+    }>(
+      `SELECT id, title, provider, category, amount, min_amount, due_date, status, account_reference, payment_url, sms_id 
+       FROM bills 
+       WHERE due_date BETWEEN ? AND ?`,
+      [minRange, maxRange]
     );
 
-    if (existing) {
-      await BillsRepository.updateBill(existing.id, {
+    // Also include candidates by account reference if present
+    if (extracted.accountReference && extracted.accountReference.trim()) {
+      const refMatches = await db.getAllAsync<{
+        id: string;
+        title: string;
+        provider: string;
+        category: BillCategory;
+        amount: number;
+        min_amount: number | null;
+        due_date: string;
+        status: string;
+        account_reference: string | null;
+        payment_url: string | null;
+        sms_id: string | null;
+      }>(
+        `SELECT id, title, provider, category, amount, min_amount, due_date, status, account_reference, payment_url, sms_id 
+         FROM bills 
+         WHERE account_reference IS NOT NULL AND account_reference != ''`
+      );
+
+      for (const rm of refMatches) {
+        if (!candidates.some((c) => c.id === rm.id)) {
+          candidates.push(rm);
+        }
+      }
+    }
+
+    // 3. Calculate similarity score for each candidate
+    let bestCandidate: (typeof candidates)[0] | null = null;
+    let highestScore = 0;
+
+    for (const cand of candidates) {
+      let score = 0;
+
+      // 3a. Account reference matching (highest confidence)
+      if (extracted.accountReference && cand.account_reference) {
+        const extRef = extracted.accountReference.toLowerCase().trim();
+        const candRef = cand.account_reference.toLowerCase().trim();
+        const extDigits = extRef.replace(/\D/g, '');
+        const candDigits = candRef.replace(/\D/g, '');
+
+        if (extRef === candRef) {
+          score += 80;
+        } else if (extRef.includes(candRef) || candRef.includes(extRef)) {
+          score += 70;
+        } else if (extDigits.length >= 4 && candDigits.length >= 4) {
+          if (extDigits.endsWith(candDigits) || candDigits.endsWith(extDigits)) {
+            score += 75;
+          }
+        }
+      }
+
+      // 3b. Name / Provider matching (two-way normalized + token matching)
+      const normExtP = (extracted.provider || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
+      const normExtT = (extracted.title || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
+      const normCandP = (cand.provider || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
+      const normCandT = (cand.title || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
+
+      const extWords = new Set(
+        [...normExtP.split(/\s+/), ...normExtT.split(/\s+/)].filter((w) => w.length >= 3)
+      );
+      const candWords = new Set(
+        [...normCandP.split(/\s+/), ...normCandT.split(/\s+/)].filter((w) => w.length >= 3)
+      );
+
+      let sharedWords = 0;
+      for (const w of extWords) {
+        if (candWords.has(w)) sharedWords++;
+      }
+
+      const isSub =
+        (normExtP && normCandP && (normExtP.includes(normCandP) || normCandP.includes(normExtP))) ||
+        (normExtT && normCandT && (normExtT.includes(normCandT) || normCandT.includes(normExtT))) ||
+        (normExtP && normCandT && (normExtP.includes(normCandT) || normCandT.includes(normExtP))) ||
+        (normExtT && normCandP && (normExtT.includes(normCandP) || normCandP.includes(normExtT)));
+
+      if (
+        (normExtP && normCandP && normExtP === normCandP) ||
+        (normExtT && normCandT && normExtT === normCandT)
+      ) {
+        score += 50;
+      } else if (isSub) {
+        score += 40;
+      } else if (sharedWords > 0) {
+        score += Math.min(35, sharedWords * 15);
+      }
+
+      // 3c. Category match
+      if (cand.category === extracted.category) {
+        score += 30;
+      }
+
+      // 3d. Amount match
+      const amountDiff = Math.abs(cand.amount - extracted.amount);
+      const amountDiffPct = cand.amount > 0 ? amountDiff / cand.amount : 1;
+      if (amountDiff <= 1) {
+        score += 40;
+      } else if (amountDiffPct <= 0.05 || amountDiff <= 10) {
+        score += 25;
+      } else if (
+        extracted.minAmount &&
+        cand.min_amount &&
+        Math.abs(extracted.minAmount - cand.min_amount) <= 1
+      ) {
+        score += 20;
+      }
+
+      // 3e. Due date proximity
+      const [cYear, cMonth, cDay] = cand.due_date.split('-').map(Number);
+      const dayDiff = Math.abs(
+        Math.round((new Date(cYear, cMonth - 1, cDay).getTime() - dueTime) / (1000 * 60 * 60 * 24))
+      );
+
+      if (dayDiff === 0) {
+        score += 25;
+      } else if (dayDiff <= 5) {
+        score += 20;
+      } else if (dayDiff <= 15) {
+        score += 10;
+      } else if (dayDiff <= 25) {
+        score += 5;
+      }
+
+      if (score > highestScore) {
+        highestScore = score;
+        bestCandidate = cand;
+      }
+    }
+
+    // 4. If high-confidence match found, update existing bill
+    if (bestCandidate && highestScore >= 50) {
+      if (bestCandidate.status === 'paid') {
+        // Keep it paid, update missing metadata
+        await BillsRepository.updateBill(bestCandidate.id, {
+          accountReference: extracted.accountReference || bestCandidate.account_reference || undefined,
+          paymentUrl: extracted.paymentUrl || bestCandidate.payment_url || undefined,
+          smsId: extracted.smsId || bestCandidate.sms_id || undefined,
+        });
+        const updated = await BillsRepository.getBillById(bestCandidate.id);
+        return { bill: updated!, isNew: false };
+      }
+
+      // Update upcoming or overdue bill
+      await BillsRepository.updateBill(bestCandidate.id, {
+        provider:
+          bestCandidate.provider && bestCandidate.provider !== bestCandidate.title
+            ? bestCandidate.provider
+            : extracted.provider,
         amount: extracted.amount,
-        minAmount: extracted.minAmount,
+        minAmount:
+          extracted.minAmount !== undefined ? extracted.minAmount : bestCandidate.min_amount ?? undefined,
         dueDate: extracted.dueDate,
-        accountReference: extracted.accountReference,
-        paymentUrl: extracted.paymentUrl,
-        smsId: extracted.smsId,
+        accountReference: extracted.accountReference || bestCandidate.account_reference || undefined,
+        paymentUrl: extracted.paymentUrl || bestCandidate.payment_url || undefined,
+        smsId: extracted.smsId || bestCandidate.sms_id || undefined,
       });
 
-      const updated = await BillsRepository.getBillById(existing.id);
+      const updated = await BillsRepository.getBillById(bestCandidate.id);
       return { bill: updated!, isNew: false };
     }
+
+    // 5. If brand new bill, check if an existing expense transaction already paid it
+    const matchedPayment = await db.getFirstAsync<{ id: string; date: string }>(
+      `SELECT id, date FROM transactions 
+       WHERE (merchant LIKE ? OR category LIKE ? OR ? LIKE '%' || merchant || '%') 
+         AND ABS(amount - ?) <= ? 
+         AND type = 'expense'
+         AND date BETWEEN ? AND ?
+       LIMIT 1`,
+      [
+        `%${extracted.provider}%`,
+        `%${extracted.category}%`,
+        extracted.provider,
+        extracted.amount,
+        Math.max(2, extracted.amount * 0.03),
+        minRange,
+        maxRange,
+      ]
+    );
 
     const now = new Date();
     const todayTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const diffDays = Math.round((dueTime - todayTime) / (1000 * 60 * 60 * 24));
 
-    // If bill due date is older than 30 days in the past, treat as historically paid so it doesn't pollute upcoming
-    const initialStatus = diffDays < -30 ? 'paid' : diffDays < 0 ? 'overdue' : 'upcoming';
+    const initialStatus = matchedPayment
+      ? 'paid'
+      : diffDays < -30
+        ? 'paid'
+        : diffDays < 0
+          ? 'overdue'
+          : 'upcoming';
 
     const created = await this.createBill({
       title: extracted.title,
@@ -176,6 +364,8 @@ export class BillService {
       source: extracted.source,
       notes: extracted.notes || `Auto-detected from ${extracted.source.toUpperCase()}`,
       status: initialStatus,
+      paidDate: matchedPayment ? matchedPayment.date.split('T')[0] : undefined,
+      paidTransactionId: matchedPayment ? matchedPayment.id : undefined,
       reminderDays: 3,
       isRecurring: true,
       frequency: 'monthly',

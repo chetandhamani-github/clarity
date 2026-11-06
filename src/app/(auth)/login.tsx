@@ -10,7 +10,7 @@ export default function SplashLandingScreen() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      router.replace('/(app)/(tabs)/dashboard' as never);
+      router.replace('/(app)/(tabs)' as never);
     }, 1500);
     return () => clearTimeout(timer);
   }, []);

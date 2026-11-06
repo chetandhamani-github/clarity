@@ -1,5 +1,12 @@
-import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback, useMemo } from 'react';
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  SectionList,
+  Platform,
+} from 'react-native';
 import { Text, Header, TransactionsSkeleton } from '@/components/ui';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -37,40 +44,126 @@ export default function TransactionsScreen() {
     }, [refetch])
   );
 
-  const groupedTransactions = groupTransactionsByDate(transactions);
+  const groupedTransactions = useMemo(
+    () => groupTransactionsByDate(transactions),
+    [transactions]
+  );
 
-  return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <Header
-        isMainTab
-        title="Activity"
-        leftNode={
-          <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
-            <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
-              <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
-            </View>
-          </TouchableOpacity>
-        }
-        rightNode={
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/search')}>
-              <MaterialIcons name="search" size={24} color={colors.onSurface} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.iconButton}
-              onPress={() => router.push('/add-transaction')}
-            >
-              <MaterialIcons name="add" size={24} color={colors.onSurface} />
-            </TouchableOpacity>
-          </View>
-        }
-      />
+  const sections = useMemo(() => {
+    if (isLoading) return [];
+    return groupedTransactions.map((group, groupIndex) => ({
+      title: group.label,
+      date: group.date,
+      data: group.items,
+      isFirst: groupIndex === 0,
+      isLast: groupIndex === groupedTransactions.length - 1,
+    }));
+  }, [groupedTransactions, isLoading]);
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
-        showsVerticalScrollIndicator={false}
+  const renderSectionHeader = useCallback(
+    ({ section }: any) => (
+      <View
+        style={[
+          styles.dateGroupHeader,
+          section.isFirst && styles.firstSectionHeader,
+        ]}
       >
+        <Text style={styles.dateGroupText}>{section.title}</Text>
+      </View>
+    ),
+    [styles]
+  );
+
+  const renderItem = useCallback(
+    ({ item: tx, index, section }: any) => {
+      const isLastInSection = index === section.data.length - 1;
+      const isVeryLast = section.isLast && isLastInSection;
+      const sign = getTransactionSign(tx.type);
+      const hasMerchant = hasMeaningfulMerchant(tx);
+      const title = getTransactionDisplayName(tx);
+      const subtitle =
+        tx.type === 'transfer'
+          ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}`
+          : hasMerchant
+            ? `${tx.accountName} • ${tx.category}`
+            : tx.accountName || '';
+
+      return (
+        <TouchableOpacity
+          key={tx.id}
+          style={[
+            styles.transactionItem,
+            isVeryLast && styles.lastTransactionItem,
+            isLastInSection && !isVeryLast && { borderBottomWidth: 0 },
+          ]}
+          onPress={() => {
+            router.push(`/(app)/add-transaction?id=${tx.id}`);
+          }}
+        >
+          <View style={styles.transactionLeft}>
+            <View
+              style={[
+                styles.transactionIconBox,
+                tx.type === 'income' ? { backgroundColor: colors.primaryContainer } : undefined,
+              ]}
+            >
+              <MaterialIcons
+                name={getCategoryIcon(tx.category)}
+                size={20}
+                color={tx.type === 'income' ? colors.onPrimaryContainer : colors.primary}
+              />
+            </View>
+            <View style={{ flex: 1, justifyContent: 'center' }}>
+              <Text style={styles.transactionName} numberOfLines={1}>
+                {title}
+              </Text>
+              <Text style={styles.transactionMeta} numberOfLines={1}>
+                {subtitle}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.transactionRight}>
+            <Text
+              style={[
+                styles.transactionAmount,
+                tx.type === 'income' ? { color: colors.primary } : undefined,
+              ]}
+            >
+              {sign}
+              {formatCurrency(tx.amount)}
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {tx.splits && tx.splits.length > 0 && (
+                <View
+                  style={[
+                    styles.categoryBadge,
+                    { backgroundColor: colors.secondaryContainer },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.categoryBadgeText,
+                      { color: colors.onSecondaryContainer },
+                    ]}
+                  >
+                    Split ({tx.splits.length})
+                  </Text>
+                </View>
+              )}
+              <View style={styles.categoryBadge}>
+                <Text style={styles.categoryBadgeText}>{tx.category}</Text>
+              </View>
+            </View>
+          </View>
+        </TouchableOpacity>
+      );
+    },
+    [colors, styles, router]
+  );
+
+  const renderListHeader = useMemo(
+    () => (
+      <View>
         <TouchableOpacity style={styles.searchBar} onPress={() => router.push('/search')}>
           <MaterialIcons name="search" size={20} color={colors.primary} />
           <Text style={styles.searchPlaceholder}>Search transactions...</Text>
@@ -108,112 +201,64 @@ export default function TransactionsScreen() {
           <Text style={styles.resultsTitle}>Recent Activity</Text>
           <Text style={styles.resultsCount}>{transactions.length} Transactions</Text>
         </View>
+      </View>
+    ),
+    [colors, styles, router, activeFilter, transactions.length]
+  );
 
-        {isLoading ? (
-          <TransactionsSkeleton />
-        ) : (
-          <>
-            {transactions.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No transactions found</Text>
-              </View>
-            ) : (
-              <View style={styles.listCard}>
-                {groupedTransactions.map((group, groupIndex) => (
-                  <React.Fragment key={group.date}>
-                    <View style={styles.dateGroupHeader}>
-                      <Text style={styles.dateGroupText}>{group.label}</Text>
-                    </View>
-                    {group.items.map((tx, txIndex) => {
-                      const isLast =
-                        groupIndex === groupedTransactions.length - 1 &&
-                        txIndex === group.items.length - 1;
-                      const sign = getTransactionSign(tx.type);
-                      const hasMerchant = hasMeaningfulMerchant(tx);
-                      const title = getTransactionDisplayName(tx);
-                      const subtitle = tx.type === 'transfer'
-                        ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}`
-                        : (hasMerchant
-                            ? `${tx.accountName} • ${tx.category}`
-                            : (tx.accountName || ''));
+  const renderListEmpty = useCallback(() => {
+    if (isLoading) {
+      return <TransactionsSkeleton />;
+    }
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>No transactions found</Text>
+      </View>
+    );
+  }, [isLoading, styles]);
 
-                      return (
-                        <TouchableOpacity
-                          key={tx.id}
-                          style={[styles.transactionItem, isLast && { borderBottomWidth: 0 }]}
-                          onPress={() => {
-                            router.push(`/(app)/add-transaction?id=${tx.id}`);
-                          }}
-                        >
-                          <View style={styles.transactionLeft}>
-                            <View
-                              style={[
-                                styles.transactionIconBox,
-                                tx.type === 'income'
-                                  ? { backgroundColor: colors.primaryContainer }
-                                  : undefined,
-                              ]}
-                            >
-                              <MaterialIcons
-                                name={getCategoryIcon(tx.category)}
-                                size={20}
-                                color={
-                                  tx.type === 'income' ? colors.onPrimaryContainer : colors.primary
-                                }
-                              />
-                            </View>
-                            <View style={{ flex: 1, justifyContent: 'center' }}>
-                              <Text style={styles.transactionName} numberOfLines={1}>
-                                {title}
-                              </Text>
-                              <Text style={styles.transactionMeta} numberOfLines={1}>
-                                {subtitle}
-                              </Text>
-                            </View>
-                          </View>
-                          <View style={styles.transactionRight}>
-                            <Text
-                              style={[
-                                styles.transactionAmount,
-                                tx.type === 'income' ? { color: colors.primary } : undefined,
-                              ]}
-                            >
-                              {sign}
-                              {formatCurrency(tx.amount)}
-                            </Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              {tx.splits && tx.splits.length > 0 && (
-                                <View
-                                  style={[
-                                    styles.categoryBadge,
-                                    { backgroundColor: colors.secondaryContainer },
-                                  ]}
-                                >
-                                  <Text
-                                    style={[
-                                      styles.categoryBadgeText,
-                                      { color: colors.onSecondaryContainer },
-                                    ]}
-                                  >
-                                    Split ({tx.splits.length})
-                                  </Text>
-                                </View>
-                              )}
-                              <View style={styles.categoryBadge}>
-                                <Text style={styles.categoryBadgeText}>{tx.category}</Text>
-                              </View>
-                            </View>
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </React.Fragment>
-                ))}
-              </View>
-            )}
-          </>
-        )}
-      </ScrollView>
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <Header
+        isMainTab
+        title="Activity"
+        leftNode={
+          <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
+            <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
+              <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
+            </View>
+          </TouchableOpacity>
+        }
+        rightNode={
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/search')}>
+              <MaterialIcons name="search" size={24} color={colors.onSurface} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => router.push('/add-transaction')}
+            >
+              <MaterialIcons name="add" size={24} color={colors.onSurface} />
+            </TouchableOpacity>
+          </View>
+        }
+      />
+
+      <SectionList
+        sections={sections}
+        keyExtractor={(item) => item.id}
+        renderSectionHeader={renderSectionHeader}
+        renderItem={renderItem}
+        ListHeaderComponent={renderListHeader}
+        ListEmptyComponent={renderListEmpty}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+        showsVerticalScrollIndicator={false}
+        stickySectionHeadersEnabled={false}
+        initialNumToRender={15}
+        maxToRenderPerBatch={15}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS === 'android'}
+      />
     </View>
   );
 }
@@ -328,25 +373,26 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.bodyLg,
       color: colors.onSurfaceVariant,
     },
-    listCard: {
-      backgroundColor: colors.surfaceContainerLowest,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: colors.outlineVariant,
-      overflow: 'hidden',
-    },
     dateGroupHeader: {
       backgroundColor: colors.surfaceContainerLow + '80',
       paddingHorizontal: 16,
       paddingVertical: 12,
       borderBottomWidth: 1,
       borderBottomColor: colors.outlineVariant,
+      borderLeftWidth: 1,
+      borderRightWidth: 1,
+      borderColor: colors.outlineVariant,
     },
     dateGroupText: {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
       textTransform: 'uppercase',
       letterSpacing: 0.6,
+    },
+    firstSectionHeader: {
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      borderTopWidth: 1,
     },
     transactionItem: {
       flexDirection: 'row',
@@ -356,6 +402,15 @@ const getStyles = (colors: ThemeColors) => {
       paddingVertical: 12,
       borderBottomWidth: 1,
       borderBottomColor: colors.outlineVariant,
+      borderLeftWidth: 1,
+      borderRightWidth: 1,
+      borderColor: colors.outlineVariant,
+      backgroundColor: colors.surfaceContainerLowest,
+    },
+    lastTransactionItem: {
+      borderBottomLeftRadius: 16,
+      borderBottomRightRadius: 16,
+      borderBottomWidth: 1,
     },
     transactionLeft: {
       flexDirection: 'row',

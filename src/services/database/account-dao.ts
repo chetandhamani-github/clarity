@@ -104,7 +104,16 @@ export async function updateAccount(
 
 export async function deleteAccount(id: string): Promise<void> {
   const db = getDatabase();
-  await db.runAsync('DELETE FROM accounts WHERE id = ?', [id]);
+  await db.execAsync('BEGIN TRANSACTION');
+  try {
+    await db.runAsync('UPDATE transactions SET to_account_id = NULL WHERE to_account_id = ?', [id]);
+    await db.runAsync('DELETE FROM recurring_transactions WHERE to_account_id = ?', [id]);
+    await db.runAsync('DELETE FROM accounts WHERE id = ?', [id]);
+    await db.execAsync('COMMIT');
+  } catch (error) {
+    await db.execAsync('ROLLBACK');
+    throw error;
+  }
 }
 
 export async function getTotalBalance(): Promise<number> {

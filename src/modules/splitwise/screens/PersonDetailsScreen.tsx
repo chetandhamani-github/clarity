@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
-  SectionList,
+  FlatList,
   TouchableOpacity,
   TextInput,
   RefreshControl,
@@ -12,6 +12,7 @@ import {
   Platform,
   Linking,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -21,27 +22,17 @@ import { useAppStore } from '@/store/use-app-store';
 import { formatCurrencyPrivacy } from '@/utils/format';
 import { useSplitwiseStore } from '../store/splitwise.store';
 import { BalanceCalculator } from '../services/BalanceCalculator';
-import type {
-  Debt,
-  Settlement,
-  DebtType,
-} from '../types/splitwise.types';
+import type { Debt, Settlement } from '../types/splitwise.types';
 
-interface DebtSection {
-  title: string;
-  type: 'debt';
-  icon: keyof typeof MaterialIcons.glyphMap;
-  data: Debt[];
+type ActivityTab = 'ALL' | 'DEBTS' | 'SETTLEMENTS';
+
+interface ActivityItem {
+  id: string;
+  kind: 'debt' | 'settlement';
+  createdAt: string;
+  debt?: Debt;
+  settlement?: Settlement;
 }
-
-interface SettlementSection {
-  title: string;
-  type: 'settlement';
-  icon: keyof typeof MaterialIcons.glyphMap;
-  data: Settlement[];
-}
-
-type SplitwiseSection = DebtSection | SettlementSection;
 
 export function PersonDetailsScreen() {
   const { colors } = useTheme();
@@ -58,37 +49,35 @@ export function PersonDetailsScreen() {
     loadAllData,
     updatePerson,
     deletePerson,
-    addDebt,
     deleteDebt,
-    addSettlement,
     deleteSettlement,
   } = useSplitwiseStore();
 
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<ActivityTab>('ALL');
 
-  // Modal states
+  // Modal states - Edit Friend
   const [showEditPersonModal, setShowEditPersonModal] = useState(false);
-
-  // Form states - Edit Person
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editNotes, setEditNotes] = useState('');
-
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const person = useMemo(() => people.find((p) => p.id === personId), [people, personId]);
 
   const personDebts = useMemo(
-    () => debts.filter((d) => d.personId === personId).sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    ),
+    () =>
+      debts
+        .filter((d) => d.personId === personId)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [debts, personId]
   );
 
   const personSettlements = useMemo(
-    () => settlements.filter((s) => s.personId === personId).sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    ),
+    () =>
+      settlements
+        .filter((s) => s.personId === personId)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [settlements, personId]
   );
 
@@ -113,7 +102,6 @@ export function PersonDetailsScreen() {
     };
   }, [handleRefresh, loadAllData]);
 
-  // Init edit fields when person loads or modal opens
   const openEditModal = () => {
     if (!person) return;
     setEditName(person.name);
@@ -217,9 +205,49 @@ export function PersonDetailsScreen() {
     });
   };
 
+  // Activity list filtered by active tab
+  const activities = useMemo<ActivityItem[]>(() => {
+    const list: ActivityItem[] = [];
+
+    if (activeTab === 'ALL' || activeTab === 'DEBTS') {
+      for (const d of personDebts) {
+        list.push({
+          id: `debt-${d.id}`,
+          kind: 'debt',
+          createdAt: d.createdAt,
+          debt: d,
+        });
+      }
+    }
+
+    if (activeTab === 'ALL' || activeTab === 'SETTLEMENTS') {
+      for (const s of personSettlements) {
+        list.push({
+          id: `settlement-${s.id}`,
+          kind: 'settlement',
+          createdAt: s.createdAt,
+          settlement: s,
+        });
+      }
+    }
+
+    return list.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [personDebts, personSettlements, activeTab]);
+
   if (!person || !personBalance) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+      <View
+        style={[
+          styles.container,
+          {
+            backgroundColor: colors.background,
+            paddingTop: insets.top,
+            paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
+          },
+        ]}
+      >
         <Header title="Friend Details" showBack />
         <View style={styles.notFoundContainer}>
           <MaterialIcons name="person-off" size={48} color={colors.onSurfaceVariant} style={styles.emptyIcon} />
@@ -239,46 +267,52 @@ export function PersonDetailsScreen() {
 
   const isOwedToMe = personBalance.status === 'OWED_TO_ME';
   const isYouOwe = personBalance.status === 'YOU_OWE';
-  const badgeColor = isOwedToMe ? '#10b981' : isYouOwe ? '#ef4444' : colors.onSurfaceVariant;
-  const badgeBg = isOwedToMe
+  const isSettled = personBalance.status === 'SETTLED';
+
+  const balanceColor = isOwedToMe ? '#10b981' : isYouOwe ? '#ef4444' : colors.onSurface;
+  const balanceBg = isOwedToMe
     ? 'rgba(16, 185, 129, 0.12)'
     : isYouOwe
       ? 'rgba(239, 68, 68, 0.12)'
-      : 'rgba(148, 163, 184, 0.12)';
+      : colors.surfaceContainerHigh;
 
-  const initials = person.name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((n) => n[0])
-    .join('')
-    .substring(0, 2)
-    .toUpperCase() || '?';
+  const initials =
+    person.name
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((n) => n[0])
+      .join('')
+      .substring(0, 2)
+      .toUpperCase() || '?';
 
-  const sections: SplitwiseSection[] = [
-    {
-      title: 'Debt History',
-      type: 'debt',
-      icon: 'receipt-long',
-      data: personDebts,
-    },
-    {
-      title: 'Settlement History',
-      type: 'settlement',
-      icon: 'handshake',
-      data: personSettlements,
-    },
-  ];
-
-  const quickDebtTags = ['Lunch / Dinner', 'Groceries', 'Movie Tickets', 'Cab / Travel', 'Shopping', 'Shared Bill'];
+  const personFirstName = person.name.split(' ')[0];
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background,
+          paddingTop: insets.top,
+          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
+        },
+      ]}
+    >
       <Header
         title={person.name}
         showBack
         rightNode={
           <View style={styles.headerActions}>
+            {person.phone && (
+              <TouchableOpacity
+                style={styles.headerBtn}
+                onPress={() => handlePhoneCall(person.phone!)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialIcons name="phone" size={20} color={colors.primary} />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={styles.headerBtn}
               onPress={openEditModal}
@@ -291,16 +325,19 @@ export function PersonDetailsScreen() {
               onPress={handleDeletePerson}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <MaterialIcons name="delete-outline" size={22} color="#ef4444" />
+              <MaterialIcons name="delete-outline" size={22} color={colors.error} />
             </TouchableOpacity>
           </View>
         }
       />
 
-      <SectionList<Debt | Settlement, SplitwiseSection>
-        sections={sections}
+      <FlatList<ActivityItem>
+        data={activities}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 16) + 40 },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -312,7 +349,7 @@ export function PersonDetailsScreen() {
         }
         ListHeaderComponent={
           <View style={styles.listHeaderContainer}>
-            {/* Person Information Hero Card */}
+            {/* HERO PROFILE CARD */}
             <View
               style={[
                 styles.profileCard,
@@ -326,26 +363,24 @@ export function PersonDetailsScreen() {
                 style={[
                   styles.avatarLarge,
                   {
-                    backgroundColor: isOwedToMe
-                      ? 'rgba(16, 185, 129, 0.15)'
-                      : isYouOwe
-                        ? 'rgba(239, 68, 68, 0.15)'
-                        : colors.surfaceContainerHigh,
+                    backgroundColor: colors.primaryContainer,
                   },
                 ]}
               >
-                <Text style={[styles.avatarLargeText, { color: badgeColor }]}>{initials}</Text>
+                <Text style={[styles.avatarLargeText, { color: colors.onPrimaryContainer }]}>
+                  {initials}
+                </Text>
               </View>
 
               <Text style={[styles.personName, { color: colors.onSurface }]}>{person.name}</Text>
 
               {person.phone && (
                 <TouchableOpacity
-                  style={styles.phoneRow}
+                  style={[styles.phonePill, { backgroundColor: colors.surfaceContainerHigh }]}
                   onPress={() => handlePhoneCall(person.phone!)}
                   activeOpacity={0.7}
                 >
-                  <MaterialIcons name="phone" size={14} color={colors.primary} />
+                  <MaterialIcons name="call" size={13} color={colors.primary} />
                   <Text style={[styles.personPhone, { color: colors.primary }]}>{person.phone}</Text>
                 </TouchableOpacity>
               )}
@@ -360,28 +395,43 @@ export function PersonDetailsScreen() {
                     },
                   ]}
                 >
-                  <MaterialIcons name="notes" size={14} color={colors.onSurfaceVariant} style={styles.notesIcon} />
-                  <Text style={[styles.notesText, { color: colors.onSurfaceVariant }]}>{person.notes}</Text>
+                  <MaterialIcons
+                    name="notes"
+                    size={14}
+                    color={colors.onSurfaceVariant}
+                    style={styles.notesIcon}
+                  />
+                  <Text style={[styles.notesText, { color: colors.onSurfaceVariant }]}>
+                    {person.notes}
+                  </Text>
                 </View>
               )}
 
-              <Text style={[styles.memberSinceText, { color: colors.onSurfaceVariant }]}>
-                Member since {formatDate(person.createdAt)}
-              </Text>
-
-              {/* Status Badge */}
-              <View style={[styles.statusBadge, { backgroundColor: badgeBg }]}>
-                <Text style={[styles.statusBadgeText, { color: badgeColor }]}>
-                  {personBalance.statusLabel} {formatCurrencyPrivacy(Math.abs(personBalance.netBalance), hideBalances)}
+              {/* NET BALANCE HERO DISPLAY */}
+              <View style={styles.balanceSection}>
+                <Text style={[styles.balanceSubLabel, { color: colors.onSurfaceVariant }]}>
+                  CURRENT BALANCE
                 </Text>
+                <Text style={[styles.balanceMainAmount, { color: balanceColor }]}>
+                  {isOwedToMe ? '+' : isYouOwe ? '-' : ''}
+                  {formatCurrencyPrivacy(Math.abs(personBalance.netBalance), hideBalances)}
+                </Text>
+
+                <View style={[styles.statusBadge, { backgroundColor: balanceBg }]}>
+                  <Text style={[styles.statusBadgeText, { color: balanceColor }]}>
+                    {personBalance.statusLabel}
+                  </Text>
+                </View>
               </View>
 
-              {/* Breakdown Grid */}
+              {/* 3-COLUMN METRICS BREAKDOWN */}
               <View style={[styles.breakdownDivider, { backgroundColor: colors.outlineVariant }]} />
 
               <View style={styles.breakdownRow}>
                 <View style={styles.breakdownCol}>
-                  <Text style={[styles.breakdownLabel, { color: colors.onSurfaceVariant }]}>Owed To You</Text>
+                  <Text style={[styles.breakdownLabel, { color: colors.onSurfaceVariant }]}>
+                    Owed To You
+                  </Text>
                   <Text style={[styles.breakdownValue, { color: '#10b981' }]}>
                     +{formatCurrencyPrivacy(personBalance.remainingReceivable, hideBalances)}
                   </Text>
@@ -390,7 +440,9 @@ export function PersonDetailsScreen() {
                 <View style={[styles.verticalDivider, { backgroundColor: colors.outlineVariant }]} />
 
                 <View style={styles.breakdownCol}>
-                  <Text style={[styles.breakdownLabel, { color: colors.onSurfaceVariant }]}>You Owe</Text>
+                  <Text style={[styles.breakdownLabel, { color: colors.onSurfaceVariant }]}>
+                    You Owe
+                  </Text>
                   <Text style={[styles.breakdownValue, { color: '#ef4444' }]}>
                     -{formatCurrencyPrivacy(personBalance.remainingPayable ?? personBalance.totalPayable, hideBalances)}
                   </Text>
@@ -399,32 +451,24 @@ export function PersonDetailsScreen() {
                 <View style={[styles.verticalDivider, { backgroundColor: colors.outlineVariant }]} />
 
                 <View style={styles.breakdownCol}>
-                  <Text style={[styles.breakdownLabel, { color: colors.onSurfaceVariant }]}>Settled</Text>
-                  <Text style={[styles.breakdownValue, { color: '#06b6d4' }]}>
+                  <Text style={[styles.breakdownLabel, { color: colors.onSurfaceVariant }]}>
+                    Settled
+                  </Text>
+                  <Text style={[styles.breakdownValue, { color: colors.onSurfaceVariant }]}>
                     {formatCurrencyPrivacy(personBalance.totalSettled, hideBalances)}
                   </Text>
                 </View>
               </View>
             </View>
 
-            {/* Quick Actions Row */}
+            {/* ACTION BUTTONS */}
             <View style={styles.actionButtonsRow}>
               <TouchableOpacity
-                style={[styles.actionBtn, styles.actionBtnDebt, { backgroundColor: '#10b981' }]}
-                onPress={() => {
-                  router.push({
-                    pathname: '/add-splitwise-debt',
-                    params: { personId: person.id },
-                  });
-                }}
-                activeOpacity={0.8}
-              >
-                <MaterialIcons name="add" size={18} color="#ffffff" />
-                <Text style={styles.actionBtnText}>Add Debt</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.actionBtnSettle, { backgroundColor: '#06b6d4' }]}
+                style={[
+                  styles.actionBtn,
+                  styles.actionBtnPrimary,
+                  { backgroundColor: colors.primary },
+                ]}
                 onPress={() => {
                   router.push({
                     pathname: '/add-splitwise-settlement',
@@ -434,66 +478,118 @@ export function PersonDetailsScreen() {
                     },
                   });
                 }}
-                activeOpacity={0.8}
+                activeOpacity={0.85}
               >
-                <MaterialIcons name="handshake" size={18} color="#ffffff" />
-                <Text style={styles.actionBtnText}>Record Settlement</Text>
+                <MaterialIcons name="handshake" size={18} color={colors.onPrimary} />
+                <Text style={[styles.actionBtnPrimaryText, { color: colors.onPrimary }]}>
+                  Record Settlement
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
                   styles.actionBtn,
-                  styles.actionBtnEdit,
+                  styles.actionBtnSecondary,
                   {
                     backgroundColor: colors.surfaceContainerHigh,
                     borderColor: colors.outlineVariant,
                   },
                 ]}
-                onPress={openEditModal}
+                onPress={() => {
+                  router.push({
+                    pathname: '/add-splitwise-debt',
+                    params: { personId: person.id },
+                  });
+                }}
+                activeOpacity={0.85}
+              >
+                <MaterialIcons name="add" size={18} color={colors.onSurface} />
+                <Text style={[styles.actionBtnSecondaryText, { color: colors.onSurface }]}>
+                  Add Debt
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* SEGMENTED ACTIVITY TABS */}
+            <View
+              style={[
+                styles.tabContainer,
+                {
+                  backgroundColor: colors.surfaceContainerLow,
+                  borderColor: colors.outlineVariant,
+                },
+              ]}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.tabItem,
+                  activeTab === 'ALL' && { backgroundColor: colors.primary },
+                ]}
+                onPress={() => setActiveTab('ALL')}
                 activeOpacity={0.8}
               >
-                <MaterialIcons name="edit" size={16} color={colors.onSurface} />
-                <Text style={[styles.actionBtnText, { color: colors.onSurface }]}>Edit</Text>
+                <Text
+                  style={[
+                    styles.tabItemText,
+                    {
+                      color: activeTab === 'ALL' ? colors.onPrimary : colors.onSurfaceVariant,
+                      fontFamily: activeTab === 'ALL' ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
+                    },
+                  ]}
+                >
+                  All ({personDebts.length + personSettlements.length})
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.tabItem,
+                  activeTab === 'DEBTS' && { backgroundColor: colors.primary },
+                ]}
+                onPress={() => setActiveTab('DEBTS')}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.tabItemText,
+                    {
+                      color: activeTab === 'DEBTS' ? colors.onPrimary : colors.onSurfaceVariant,
+                      fontFamily: activeTab === 'DEBTS' ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
+                    },
+                  ]}
+                >
+                  Debts ({personDebts.length})
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.tabItem,
+                  activeTab === 'SETTLEMENTS' && { backgroundColor: colors.primary },
+                ]}
+                onPress={() => setActiveTab('SETTLEMENTS')}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.tabItemText,
+                    {
+                      color:
+                        activeTab === 'SETTLEMENTS' ? colors.onPrimary : colors.onSurfaceVariant,
+                      fontFamily:
+                        activeTab === 'SETTLEMENTS' ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
+                    },
+                  ]}
+                >
+                  Settled ({personSettlements.length})
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
         }
-        renderSectionHeader={({ section }) => (
-          <View
-            style={[
-              styles.sectionHeaderContainer,
-              {
-                backgroundColor: colors.background,
-              },
-            ]}
-          >
-            <View style={styles.sectionHeaderTitleRow}>
-              <MaterialIcons
-                name={section.icon}
-                size={18}
-                color={section.type === 'debt' ? '#10b981' : '#06b6d4'}
-              />
-              <Text style={[styles.sectionHeaderText, { color: colors.onSurface }]}>
-                {section.title}
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.sectionBadge,
-                {
-                  backgroundColor: colors.surfaceContainerHigh,
-                },
-              ]}
-            >
-              <Text style={[styles.sectionBadgeText, { color: colors.onSurfaceVariant }]}>
-                {section.data.length}
-              </Text>
-            </View>
-          </View>
-        )}
-        renderItem={({ item, section }) => {
-          if (section.type === 'debt') {
-            const debt = item as Debt;
+        renderItem={({ item }) => {
+          if (item.kind === 'debt' && item.debt) {
+            const debt = item.debt;
             const isOweMe = debt.type === 'OWE_ME';
             const itemColor = isOweMe ? '#10b981' : '#ef4444';
             const itemBg = isOweMe ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)';
@@ -503,26 +599,28 @@ export function PersonDetailsScreen() {
                 style={[
                   styles.itemCard,
                   {
-                    backgroundColor: colors.surfaceContainerLow,
-                    borderColor: colors.outlineVariant,
+                    backgroundColor: colors.surfaceContainerLowest,
+                    borderColor: colors.surfaceVariant,
                   },
                 ]}
               >
                 <View style={[styles.iconCircle, { backgroundColor: itemBg }]}>
                   <MaterialIcons
                     name={isOweMe ? 'call-received' : 'call-made'}
-                    size={18}
+                    size={20}
                     color={itemColor}
                   />
                 </View>
 
                 <View style={styles.itemDetails}>
-                  <Text style={[styles.itemTitle, { color: colors.onSurface }]}>{debt.description}</Text>
+                  <Text style={[styles.itemTitle, { color: colors.onSurface }]} numberOfLines={1}>
+                    {debt.description}
+                  </Text>
                   <View style={styles.itemMetaRow}>
                     <Text style={[styles.itemDate, { color: colors.onSurfaceVariant }]}>
                       {formatDate(debt.createdAt)}
                     </Text>
-                    <View style={styles.metaDot} />
+                    <View style={[styles.metaDot, { backgroundColor: colors.outlineVariant }]} />
                     <Text style={[styles.itemTypeTag, { color: itemColor }]}>
                       {isOweMe ? 'Owed to you' : 'You owe'}
                     </Text>
@@ -546,82 +644,108 @@ export function PersonDetailsScreen() {
             );
           }
 
-          const settlement = item as Settlement;
-          return (
-            <View
-              style={[
-                styles.itemCard,
-                {
-                  backgroundColor: colors.surfaceContainerLow,
-                  borderColor: colors.outlineVariant,
-                },
-              ]}
-            >
-              <View style={[styles.iconCircle, { backgroundColor: 'rgba(6, 182, 212, 0.12)' }]}>
-                <MaterialIcons name="handshake" size={18} color="#06b6d4" />
-              </View>
+          if (item.kind === 'settlement' && item.settlement) {
+            const settlement = item.settlement;
+            const isYouPaid = settlement.settlementType === 'YOU_PAID';
+            const title = isYouPaid
+              ? `You paid ${personFirstName}`
+              : `${personFirstName} paid you`;
 
-              <View style={styles.itemDetails}>
-                <Text style={[styles.itemTitle, { color: colors.onSurface }]}>
-                  {settlement.description || 'Settlement Payment'}
-                </Text>
-                <View style={styles.itemMetaRow}>
-                  <Text style={[styles.itemDate, { color: colors.onSurfaceVariant }]}>
-                    {formatDate(settlement.createdAt)}
-                  </Text>
-                  <View style={styles.metaDot} />
-                  <Text style={[styles.itemTypeTag, { color: '#06b6d4' }]}>Settled</Text>
-                </View>
-              </View>
-
-              <View style={styles.itemRight}>
-                <Text style={[styles.itemAmount, { color: '#06b6d4' }]}>
-                  {formatCurrencyPrivacy(settlement.amount, hideBalances)}
-                </Text>
-                <TouchableOpacity
-                  style={styles.itemDeleteBtn}
-                  onPress={() => handleDeleteSettlement(settlement)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <MaterialIcons name="delete-outline" size={16} color={colors.onSurfaceVariant} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          );
-        }}
-        renderSectionFooter={({ section }) => {
-          if (section.data.length === 0) {
             return (
               <View
                 style={[
-                  styles.sectionEmptyBox,
+                  styles.itemCard,
                   {
-                    backgroundColor: colors.surfaceContainerLow,
-                    borderColor: colors.outlineVariant,
+                    backgroundColor: colors.surfaceContainerLowest,
+                    borderColor: colors.surfaceVariant,
                   },
                 ]}
               >
-                <MaterialIcons
-                  name={section.type === 'debt' ? 'receipt-long' : 'handshake'}
-                  size={24}
-                  color={colors.onSurfaceVariant}
-                  style={styles.emptySectionIcon}
-                />
-                <Text style={[styles.sectionEmptyText, { color: colors.onSurfaceVariant }]}>
-                  {section.type === 'debt'
-                    ? `No debts recorded with ${person.name} yet.`
-                    : `No settlements recorded with ${person.name} yet.`}
-                </Text>
+                <View
+                  style={[
+                    styles.iconCircle,
+                    {
+                      backgroundColor: isYouPaid
+                        ? 'rgba(239, 68, 68, 0.12)'
+                        : 'rgba(16, 185, 129, 0.12)',
+                    },
+                  ]}
+                >
+                  <MaterialIcons
+                    name={isYouPaid ? 'call-made' : 'call-received'}
+                    size={20}
+                    color={isYouPaid ? '#ef4444' : '#10b981'}
+                  />
+                </View>
+
+                <View style={styles.itemDetails}>
+                  <Text style={[styles.itemTitle, { color: colors.onSurface }]} numberOfLines={1}>
+                    {settlement.description || title}
+                  </Text>
+                  <View style={styles.itemMetaRow}>
+                    <Text style={[styles.itemDate, { color: colors.onSurfaceVariant }]}>
+                      {formatDate(settlement.createdAt)}
+                    </Text>
+                    <View style={[styles.metaDot, { backgroundColor: colors.outlineVariant }]} />
+                    <Text style={[styles.itemTypeTag, { color: colors.primary }]}>
+                      {isYouPaid ? 'Paid by you' : 'Received'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.itemRight}>
+                  <Text style={[styles.itemAmount, { color: colors.onSurface }]}>
+                    {formatCurrencyPrivacy(settlement.amount, hideBalances)}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.itemDeleteBtn}
+                    onPress={() => handleDeleteSettlement(settlement)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <MaterialIcons name="delete-outline" size={16} color={colors.onSurfaceVariant} />
+                  </TouchableOpacity>
+                </View>
               </View>
             );
           }
-          return <View style={styles.sectionSpacer} />;
+
+          return null;
         }}
+        ListEmptyComponent={
+          <View
+            style={[
+              styles.emptyCard,
+              {
+                backgroundColor: colors.surfaceContainerLow,
+                borderColor: colors.outlineVariant,
+              },
+            ]}
+          >
+            <MaterialIcons
+              name={activeTab === 'DEBTS' ? 'receipt-long' : 'handshake'}
+              size={36}
+              color={colors.onSurfaceVariant}
+              style={{ marginBottom: 8 }}
+            />
+            <Text style={[styles.emptyTitle, { color: colors.onSurface }]}>
+              {activeTab === 'DEBTS'
+                ? 'No Debts Recorded'
+                : activeTab === 'SETTLEMENTS'
+                  ? 'No Settlements Recorded'
+                  : 'No Activity Yet'}
+            </Text>
+            <Text style={[styles.emptySubtitle, { color: colors.onSurfaceVariant }]}>
+              {activeTab === 'DEBTS'
+                ? `You don't have any pending or past debts with ${personFirstName}.`
+                : activeTab === 'SETTLEMENTS'
+                  ? `No payment settlements recorded with ${personFirstName} yet.`
+                  : `Start by recording a shared expense or settling a balance with ${personFirstName}.`}
+            </Text>
+          </View>
+        }
       />
 
-      {/* ========================================================================= */}
-      {/* EDIT PERSON MODAL */}
-      {/* ========================================================================= */}
+      {/* EDIT FRIEND MODAL */}
       <Modal
         visible={showEditPersonModal}
         transparent
@@ -629,26 +753,33 @@ export function PersonDetailsScreen() {
         onRequestClose={() => setShowEditPersonModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalContent,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.outlineVariant,
-              },
-            ]}
+          <KeyboardAwareScrollView
+            contentContainerStyle={styles.modalScrollContainer}
+            keyboardShouldPersistTaps="handled"
+            enableOnAndroid
+            showsVerticalScrollIndicator={false}
+            bounces={false}
           >
+            <View
+              style={[
+                styles.modalContent,
+                {
+                  backgroundColor: colors.surfaceContainerLowest,
+                  borderColor: colors.outlineVariant,
+                  paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 40 : 24),
+                },
+              ]}
+            >
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Edit Friend</Text>
               <TouchableOpacity
                 onPress={() => setShowEditPersonModal(false)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <MaterialIcons name="close" size={24} color={colors.onSurfaceVariant} />
+                <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
               </TouchableOpacity>
             </View>
 
-            {/* Name Input */}
             <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>Name *</Text>
             <TextInput
               style={[
@@ -659,13 +790,12 @@ export function PersonDetailsScreen() {
                   color: colors.onSurface,
                 },
               ]}
-              placeholder="Friend's Full Name"
-              placeholderTextColor={colors.onSurfaceVariant}
               value={editName}
               onChangeText={setEditName}
+              placeholder="Friend's name"
+              placeholderTextColor={colors.onSurfaceVariant}
             />
 
-            {/* Phone Input */}
             <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>Phone Number</Text>
             <TextInput
               style={[
@@ -676,15 +806,16 @@ export function PersonDetailsScreen() {
                   color: colors.onSurface,
                 },
               ]}
-              placeholder="+91 9876543210"
-              placeholderTextColor={colors.onSurfaceVariant}
-              keyboardType="phone-pad"
               value={editPhone}
               onChangeText={setEditPhone}
+              placeholder="e.g. +91 98765 43210"
+              placeholderTextColor={colors.onSurfaceVariant}
+              keyboardType="phone-pad"
             />
 
-            {/* Notes Input */}
-            <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>Notes / Relation</Text>
+            <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>
+              Notes / Relation
+            </Text>
             <TextInput
               style={[
                 styles.textInput,
@@ -695,26 +826,28 @@ export function PersonDetailsScreen() {
                   color: colors.onSurface,
                 },
               ]}
-              placeholder="e.g. College roommate, Office colleague"
+              value={editNotes}
+              onChangeText={setEditNotes}
+              placeholder="e.g. Roommate, Colleague, Trip buddy"
               placeholderTextColor={colors.onSurfaceVariant}
               multiline
               numberOfLines={3}
-              value={editNotes}
-              onChangeText={setEditNotes}
             />
 
             <TouchableOpacity
               style={[styles.submitBtn, { backgroundColor: colors.primary }]}
               onPress={handleSaveEditPerson}
               disabled={isSubmitting}
+              activeOpacity={0.85}
             >
               <Text style={[styles.submitBtnText, { color: colors.onPrimary }]}>
                 {isSubmitting ? 'Saving...' : 'Save Changes'}
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </Modal>
+        </KeyboardAwareScrollView>
+      </View>
+    </Modal>
     </View>
   );
 }
@@ -722,10 +855,19 @@ export function PersonDetailsScreen() {
 function formatDate(iso: string): string {
   try {
     const d = new Date(iso);
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    const yesterday = new Date();
+    yesterday.setDate(now.getDate() - 1);
+    const isYesterday = d.toDateString() === yesterday.toDateString();
+
+    if (isToday) return 'Today';
+    if (isYesterday) return 'Yesterday';
+
     return d.toLocaleDateString('en-IN', {
       month: 'short',
       day: 'numeric',
-      year: 'numeric',
+      year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
     });
   } catch {
     return 'Recent';
@@ -739,17 +881,17 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
   headerBtn: {
-    padding: 6,
+    padding: 4,
   },
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 8,
   },
   listHeaderContainer: {
-    marginBottom: 8,
+    marginBottom: 4,
   },
   notFoundContainer: {
     flex: 1,
@@ -762,7 +904,6 @@ const styles = StyleSheet.create({
   },
   notFoundText: {
     ...typography.bodyMd,
-    fontSize: 14,
     textAlign: 'center',
     marginBottom: 16,
   },
@@ -773,46 +914,51 @@ const styles = StyleSheet.create({
   },
   backBtnText: {
     ...typography.labelMd,
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
   },
   profileCard: {
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     borderWidth: 1,
     padding: 20,
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   avatarLarge: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   avatarLargeText: {
     ...typography.headlineSm,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 22,
-    fontWeight: '800',
+    lineHeight: 28,
   },
   personName: {
     ...typography.headlineSm,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 20,
-    fontWeight: '800',
+    lineHeight: 26,
     marginBottom: 2,
+    textAlign: 'center',
   },
-  phoneRow: {
+  phonePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    marginTop: 4,
   },
   personPhone: {
-    ...typography.bodyMd,
-    fontSize: 13,
-    fontWeight: '600',
+    ...typography.labelMd,
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: 'Manrope_600SemiBold',
   },
   notesContainer: {
     flexDirection: 'row',
@@ -821,9 +967,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: radius.sm,
     borderWidth: 1,
-    marginTop: 4,
-    marginBottom: 6,
-    maxWidth: '90%',
+    marginTop: 6,
+    maxWidth: '92%',
   },
   notesIcon: {
     marginRight: 6,
@@ -831,23 +976,38 @@ const styles = StyleSheet.create({
   notesText: {
     ...typography.bodyMd,
     fontSize: 12,
+    lineHeight: 16,
   },
-  memberSinceText: {
-    ...typography.bodyMd,
+  balanceSection: {
+    alignItems: 'center',
+    marginTop: 16,
+    width: '100%',
+  },
+  balanceSubLabel: {
+    ...typography.labelMd,
     fontSize: 11,
-    marginBottom: 8,
+    lineHeight: 14,
+    letterSpacing: 0.8,
+    fontFamily: 'Manrope_700Bold',
+  },
+  balanceMainAmount: {
+    ...typography.displayLg,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 32,
+    lineHeight: 40,
+    marginTop: 2,
   },
   statusBadge: {
     paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 12,
-    marginTop: 2,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    marginTop: 6,
   },
   statusBadgeText: {
     ...typography.labelMd,
     fontFamily: 'Manrope_700Bold',
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 16,
   },
   breakdownDivider: {
     height: 1,
@@ -866,90 +1026,83 @@ const styles = StyleSheet.create({
   },
   verticalDivider: {
     width: 1,
-    height: 36,
+    height: 32,
   },
   breakdownLabel: {
     ...typography.labelMd,
     fontSize: 11,
-    marginBottom: 2,
+    lineHeight: 14,
+    marginBottom: 4,
   },
   breakdownValue: {
     ...typography.headlineSm,
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: 'Manrope_700Bold',
   },
   actionButtonsRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
+    gap: 10,
+    marginBottom: 14,
   },
   actionBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: radius.md,
-    gap: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: radius.lg,
+    gap: 6,
   },
-  actionBtnDebt: {
-    flex: 1.2,
+  actionBtnPrimary: {},
+  actionBtnPrimaryText: {
+    ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 13,
+    lineHeight: 18,
   },
-  actionBtnSettle: {
-    flex: 1.5,
-  },
-  actionBtnEdit: {
-    flex: 0.8,
+  actionBtnSecondary: {
     borderWidth: 1,
   },
-  actionBtnText: {
+  actionBtnSecondaryText: {
     ...typography.labelMd,
-    color: '#ffffff',
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    borderRadius: 14,
+    padding: 3,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  tabItem: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 11,
+  },
+  tabItemText: {
+    ...typography.labelMd,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '700',
-  },
-  sectionHeaderContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    marginTop: 4,
-    marginBottom: 8,
-  },
-  sectionHeaderTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  sectionHeaderText: {
-    ...typography.headlineSm,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  sectionBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  sectionBadgeText: {
-    ...typography.labelMd,
-    fontSize: 11,
-    fontWeight: '700',
   },
   itemCard: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
     marginBottom: 8,
     gap: 12,
   },
   iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -958,8 +1111,9 @@ const styles = StyleSheet.create({
   },
   itemTitle: {
     ...typography.bodyMd,
+    fontFamily: 'Manrope_600SemiBold',
     fontSize: 14,
-    fontWeight: '700',
+    lineHeight: 18,
     marginBottom: 2,
   },
   itemMetaRow: {
@@ -970,17 +1124,18 @@ const styles = StyleSheet.create({
   itemDate: {
     ...typography.bodyMd,
     fontSize: 11,
+    lineHeight: 14,
   },
   metaDot: {
     width: 3,
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: '#94a3b8',
   },
   itemTypeTag: {
     ...typography.labelMd,
     fontSize: 11,
-    fontWeight: '600',
+    lineHeight: 14,
+    fontFamily: 'Manrope_600SemiBold',
   },
   itemRight: {
     alignItems: 'flex-end',
@@ -989,34 +1144,40 @@ const styles = StyleSheet.create({
   itemAmount: {
     ...typography.headlineSm,
     fontSize: 14,
-    fontWeight: '800',
+    lineHeight: 18,
+    fontFamily: 'Manrope_700Bold',
   },
   itemDeleteBtn: {
     padding: 2,
   },
-  sectionEmptyBox: {
-    padding: 20,
-    borderRadius: radius.md,
+  emptyCard: {
+    padding: 24,
+    borderRadius: radius.lg,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginTop: 8,
   },
-  emptySectionIcon: {
-    marginBottom: 6,
+  emptyTitle: {
+    ...typography.headlineSm,
+    fontSize: 15,
+    lineHeight: 20,
+    fontFamily: 'Manrope_700Bold',
+    marginBottom: 4,
   },
-  sectionEmptyText: {
+  emptySubtitle: {
     ...typography.bodyMd,
     fontSize: 12,
+    lineHeight: 16,
     textAlign: 'center',
-  },
-  sectionSpacer: {
-    height: 8,
   },
   // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  modalScrollContainer: {
+    flexGrow: 1,
     justifyContent: 'flex-end',
   },
   modalContent: {
@@ -1030,19 +1191,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 12,
   },
   modalTitle: {
     ...typography.headlineSm,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 18,
-    fontWeight: '800',
+    lineHeight: 24,
   },
   fieldLabel: {
     ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 12,
-    fontWeight: '700',
+    lineHeight: 16,
     marginBottom: 6,
-    marginTop: 6,
+    marginTop: 8,
   },
   textInput: {
     borderWidth: 1,
@@ -1051,7 +1214,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     ...typography.bodyMd,
     fontSize: 14,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   notesAreaInput: {
     height: 72,
@@ -1062,13 +1225,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 14,
     borderRadius: radius.md,
-    marginTop: 8,
+    marginTop: 14,
   },
   submitBtnText: {
     ...typography.labelMd,
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: '700',
-    color: '#ffffff',
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 14,
+    lineHeight: 18,
   },
 });

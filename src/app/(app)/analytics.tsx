@@ -129,7 +129,7 @@ export default function AnalyticsScreen() {
         rightNode={
           <TouchableOpacity
             style={styles.iconButton}
-            onPress={() => router.push('/export-success')}
+            onPress={() => router.push('/export-statement')}
           >
             <MaterialIcons name="download" size={24} color={colors.primary} />
           </TouchableOpacity>
@@ -159,7 +159,7 @@ export default function AnalyticsScreen() {
                 </View>
                 <TouchableOpacity
                   style={styles.exportButton}
-                  onPress={() => router.push('/export-success')}
+                  onPress={() => router.push('/export-statement')}
                 >
                   <Text style={styles.exportButtonText}>Export</Text>
                   <MaterialIcons name="download" size={16} color={colors.onPrimary} />

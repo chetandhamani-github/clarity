@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   TextInput,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Text, Header, GoalsSkeleton } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -91,10 +92,12 @@ export default function GoalsScreen() {
         }
       />
 
-      <ScrollView
+      <KeyboardAwareScrollView
         style={{ flex: 1 }}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
       >
         {isLoading ? (
           <GoalsSkeleton />
@@ -198,7 +201,7 @@ export default function GoalsScreen() {
             })}
           </>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

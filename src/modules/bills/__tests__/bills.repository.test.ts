@@ -51,13 +51,44 @@ describe('BillsRepository', () => {
     );
   });
 
-  it('purges dummy data from bills and subscriptions', async () => {
+  it('purges dummy data and deduplicates existing bills', async () => {
+    mockDb.getAllAsync.mockResolvedValueOnce([
+      {
+        id: 'dup-1',
+        title: 'Electricity',
+        provider: 'Electricity',
+        category: 'electricity',
+        amount: 1450,
+        due_date: '2026-10-15',
+        status: 'upcoming',
+        account_reference: null,
+        payment_url: null,
+        sms_id: null,
+      },
+      {
+        id: 'dup-2',
+        title: 'BESCOM',
+        provider: 'BESCOM Electricity',
+        category: 'electricity',
+        amount: 1450,
+        due_date: '2026-10-15',
+        status: 'upcoming',
+        account_reference: null,
+        payment_url: 'https://bescom.org',
+        sms_id: 'sms-1',
+      },
+    ]);
+
     await BillsRepository.cleanupDummyData();
     expect(mockDb.runAsync).toHaveBeenCalledWith(
       expect.stringContaining('DELETE FROM bills WHERE')
     );
     expect(mockDb.runAsync).toHaveBeenCalledWith(
       expect.stringContaining('DELETE FROM subscriptions WHERE')
+    );
+    expect(mockDb.runAsync).toHaveBeenCalledWith(
+      'DELETE FROM bills WHERE id = ?',
+      ['dup-1']
     );
   });
 

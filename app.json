@@ -23,8 +23,7 @@
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
-        "READ_SMS",
-        "RECEIVE_SMS"
+        "READ_SMS"
       ],
       "predictiveBackGestureEnabled": false,
       "package": "com.homerun.clarity"
@@ -34,6 +33,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/withSmsReader",
       "expo-router",
       [
         "expo-splash-screen",

@@ -268,8 +268,9 @@ export class BillsRepository {
       `INSERT INTO bills (
         id, title, provider, category, amount, min_amount, due_date,
         reminder_days, status, notes, is_recurring, frequency,
+        last_paid_date, paid_transaction_id,
         payment_url, account_reference, source, sms_id, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         dto.title.trim(),
@@ -283,6 +284,8 @@ export class BillsRepository {
         dto.notes?.trim() || '',
         isRecurring,
         frequency,
+        dto.paidDate || null,
+        dto.paidTransactionId || null,
         dto.paymentUrl?.trim() || null,
         dto.accountReference?.trim() || null,
         dto.source || 'manual',
@@ -307,6 +310,8 @@ export class BillsRepository {
       notes: dto.notes?.trim() || '',
       isRecurring: Boolean(isRecurring),
       frequency,
+      lastPaidDate: dto.paidDate,
+      paidTransactionId: dto.paidTransactionId,
       paymentUrl: dto.paymentUrl?.trim() || undefined,
       accountReference: dto.accountReference?.trim() || undefined,
       source: dto.source || 'manual',
@@ -626,7 +631,7 @@ export class BillsRepository {
     let totalCommittedMonth = 0;
 
     for (const b of bills) {
-      const isThisMonth = b.dueDate.startsWith(monthPrefix);
+      const isThisMonth = b.dueDate ? b.dueDate.startsWith(monthPrefix) : false;
       if (isThisMonth) {
         totalCommittedMonth += b.amount;
       }
@@ -767,5 +772,142 @@ export class BillsRepository {
        OR (name = 'Google One 2TB' AND notes = 'Annual cloud storage plan')
        OR name IN ('Netflix Premium 4K', 'Spotify Family Plan', 'Google One 2TB');`
     );
+
+    await this.deduplicateExistingBills();
+  }
+
+  /**
+   * Automatically cleans up any duplicate bills created by previous scans or manual entries.
+   */
+  public static async deduplicateExistingBills(): Promise<number> {
+    await this.ensureSchema();
+    const db = getDatabase();
+
+    const rows = await db.getAllAsync<BillRow>(
+      `SELECT * FROM bills ORDER BY due_date ASC, created_at DESC`
+    );
+
+    if (!rows || rows.length <= 1) return 0;
+
+    const toDeleteIds = new Set<string>();
+
+    for (let i = 0; i < rows.length; i++) {
+      const b1 = rows[i];
+      if (toDeleteIds.has(b1.id)) continue;
+
+      for (let j = i + 1; j < rows.length; j++) {
+        const b2 = rows[j];
+        if (toDeleteIds.has(b2.id)) continue;
+
+        const isDuplicate = this.isDuplicateBillPair(b1, b2);
+        if (isDuplicate) {
+          // Determine which to keep
+          let keep = b1;
+          let remove = b2;
+
+          // Paid bills take absolute precedence
+          if (b2.status === 'paid' && b1.status !== 'paid') {
+            keep = b2;
+            remove = b1;
+          } else if (b1.status === b2.status) {
+            // Keep the one with SMS data or more complete details
+            const b1Score = (b1.sms_id ? 3 : 0) + (b1.payment_url ? 1 : 0) + (b1.account_reference ? 1 : 0);
+            const b2Score = (b2.sms_id ? 3 : 0) + (b2.payment_url ? 1 : 0) + (b2.account_reference ? 1 : 0);
+            if (b2Score > b1Score) {
+              keep = b2;
+              remove = b1;
+            }
+          }
+
+          // Merge any details into keep
+          await db.runAsync(
+            `UPDATE bills 
+             SET sms_id = COALESCE(sms_id, ?),
+                 payment_url = COALESCE(payment_url, ?),
+                 account_reference = COALESCE(account_reference, ?),
+                 provider = CASE WHEN provider = '' OR provider = title THEN ? ELSE provider END
+             WHERE id = ?`,
+            [remove.sms_id, remove.payment_url, remove.account_reference, remove.provider || remove.title, keep.id]
+          );
+
+          toDeleteIds.add(remove.id);
+        }
+      }
+    }
+
+    if (toDeleteIds.size > 0) {
+      for (const id of toDeleteIds) {
+        await db.runAsync(`DELETE FROM bills WHERE id = ?`, [id]);
+      }
+      DeviceEventEmitter.emit('billsUpdated');
+    }
+
+    return toDeleteIds.size;
+  }
+
+  private static isDuplicateBillPair(b1: BillRow, b2: BillRow): boolean {
+    // 1. Same SMS id
+    if (b1.sms_id && b2.sms_id && b1.sms_id === b2.sms_id) {
+      return true;
+    }
+
+    // 2. Account reference match
+    if (b1.account_reference && b2.account_reference) {
+      const ref1 = b1.account_reference.toLowerCase().trim();
+      const ref2 = b2.account_reference.toLowerCase().trim();
+      const d1 = ref1.replace(/\D/g, '');
+      const d2 = ref2.replace(/\D/g, '');
+      const isRefMatch =
+        ref1 === ref2 ||
+        ref1.includes(ref2) ||
+        ref2.includes(ref1) ||
+        (d1.length >= 4 && d2.length >= 4 && (d1.endsWith(d2) || d2.endsWith(d1)));
+
+      if (isRefMatch) {
+        // Same account reference, check if due dates are in same billing cycle (within 25 days)
+        const [y1, m1, day1] = b1.due_date.split('-').map(Number);
+        const [y2, m2, day2] = b2.due_date.split('-').map(Number);
+        const diffDays = Math.abs(
+          Math.round((new Date(y1, m1 - 1, day1).getTime() - new Date(y2, m2 - 1, day2).getTime()) / 86400000)
+        );
+        if (diffDays <= 25) return true;
+      }
+    }
+
+    // 3. Due date proximity
+    const [y1, m1, day1] = b1.due_date.split('-').map(Number);
+    const [y2, m2, day2] = b2.due_date.split('-').map(Number);
+    const diffDays = Math.abs(
+      Math.round((new Date(y1, m1 - 1, day1).getTime() - new Date(y2, m2 - 1, day2).getTime()) / 86400000)
+    );
+
+    // Must be in the same billing cycle (within 15 days)
+    if (diffDays > 15) return false;
+
+    // 4. Amount proximity
+    const amountDiff = Math.abs(b1.amount - b2.amount);
+    const maxAmount = Math.max(b1.amount, b2.amount);
+    const isAmountClose = maxAmount > 0 ? amountDiff <= 5 || amountDiff / maxAmount <= 0.05 : false;
+
+    // 5. Category and Name check
+    const isSameCategory = b1.category === b2.category;
+
+    const n1 = (b1.provider + ' ' + b1.title).toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
+    const n2 = (b2.provider + ' ' + b2.title).toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
+
+    const words1 = n1.split(/\s+/).filter((w) => w.length >= 3);
+    const words2 = n2.split(/\s+/).filter((w) => w.length >= 3);
+    const hasSharedWord = words1.some((w) => words2.includes(w));
+    const isNameSub = n1.includes(n2) || n2.includes(n1);
+
+    if (isSameCategory && isAmountClose && (hasSharedWord || isNameSub || diffDays <= 3)) {
+      return true;
+    }
+
+    if ((hasSharedWord || isNameSub) && isAmountClose) {
+      return true;
+    }
+
+    return false;
   }
 }

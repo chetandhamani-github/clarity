@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput, ScrollView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Text, Header } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
@@ -102,7 +102,9 @@ export default function AddAccountScreen() {
       <Header showBack title={isEditing ? 'Edit Account' : 'Add Account'} />
 
       <KeyboardAwareScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 60 }]}
+        showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
       >

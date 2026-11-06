@@ -1,5 +1,6 @@
 import { getDatabase } from './index';
 import type { Notification } from '@/types';
+import { triggerLocalSystemNotification } from '@/services/notifications/system-notification';
 
 export async function getNotifications(): Promise<Notification[]> {
   const db = getDatabase();
@@ -54,4 +55,11 @@ export async function insertNotification(
       notification.actionUrl || '',
     ]
   );
+
+  // Trigger native system notification tray alert
+  triggerLocalSystemNotification({
+    title: notification.title,
+    body: notification.description,
+    data: { actionUrl: notification.actionUrl },
+  }).catch(() => {});
 }

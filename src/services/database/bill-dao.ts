@@ -355,23 +355,36 @@ export async function mergeOrInsertSmsBill(extracted: {
 }): Promise<{ bill: BillReminder; isNew: boolean }> {
   const db = getDatabase();
 
-  // Search for an existing unpaid bill from same biller within 15 days of due date
+  // Search for an existing bill from same biller within 25 days of due date
   const [year, month, day] = extracted.dueDate.split('-').map(Number);
   const dueTime = new Date(year, month - 1, day).getTime();
-  const minRange = new Date(dueTime - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-  const maxRange = new Date(dueTime + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const minRange = new Date(dueTime - 25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const maxRange = new Date(dueTime + 25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   const existing = await db.getFirstAsync<BillReminderRow>(
     `SELECT * FROM bill_reminders 
-     WHERE (status = 'UNPAID' OR status = 'OVERDUE')
-       AND (biller_name LIKE ? OR biller_category = ?)
+     WHERE (biller_name LIKE ? OR biller_category = ? OR ? LIKE '%' || biller_name || '%')
        AND due_date BETWEEN ? AND ?
      LIMIT 1`,
-    [`%${extracted.billerName}%`, extracted.billerCategory, minRange, maxRange]
+    [`%${extracted.billerName}%`, extracted.billerCategory, extracted.billerName, minRange, maxRange]
   );
 
   if (existing) {
-    // Update existing unpaid bill with latest amount/link/smsId
+    // If already marked as paid, preserve status and update metadata only
+    if (existing.status === 'PAID') {
+      await db.runAsync(
+        `UPDATE bill_reminders 
+         SET account_reference = COALESCE(?, account_reference),
+             payment_url = COALESCE(?, payment_url),
+             sms_id = COALESCE(?, sms_id)
+         WHERE id = ?`,
+        [extracted.accountReference ?? null, extracted.paymentUrl ?? null, extracted.smsId ?? null, existing.id]
+      );
+      const updated = await getBillById(existing.id);
+      return { bill: updated!, isNew: false };
+    }
+
+    // Update existing unpaid/overdue bill with latest amount/link/smsId
     await db.runAsync(
       `UPDATE bill_reminders 
        SET amount_due = ?, 
@@ -613,6 +626,32 @@ export async function getMonthlyBillSummary(
       totalPending += row.amount_due;
       upcomingCount++;
     }
+  }
+
+  // Also include modern bills module if bill_reminders is empty
+  if (rows.length === 0) {
+    try {
+      const modernRows = await db.getAllAsync<{ amount: number; status: string }>(
+        `SELECT amount, status FROM bills WHERE due_date LIKE ?`,
+        [`${monthStr}%`]
+      );
+      if (modernRows && modernRows.length > 0) {
+        for (const mRow of modernRows) {
+          totalCommitted += mRow.amount;
+          if (mRow.status === 'paid') {
+            totalPaid += mRow.amount;
+            paidCount++;
+          } else if (mRow.status === 'overdue') {
+            totalOverdue += mRow.amount;
+            totalPending += mRow.amount;
+            upcomingCount++;
+          } else if (mRow.status === 'upcoming') {
+            totalPending += mRow.amount;
+            upcomingCount++;
+          }
+        }
+      }
+    } catch {}
   }
 
   return {

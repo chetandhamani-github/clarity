@@ -370,6 +370,7 @@ export default function AccountDetailsScreen() {
                             <TouchableOpacity
                               key={tx.id}
                               style={[styles.transactionItem, isLast && { borderBottomWidth: 0 }]}
+                              onPress={() => router.push(`/(app)/add-transaction?id=${tx.id}`)}
                             >
                               <View style={styles.txLeft}>
                                 <View
@@ -423,7 +424,7 @@ export default function AccountDetailsScreen() {
                         {transactions.length > 5 && (
                           <TouchableOpacity
                             style={styles.viewAllBtn}
-                            onPress={() => router.push('/(app)/(tabs)/transactions')}
+                            onPress={() => router.navigate('/transactions')}
                           >
                             <Text style={{ color: colors.primary, fontWeight: '500' }}>
                               View All

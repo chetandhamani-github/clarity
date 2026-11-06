@@ -66,7 +66,7 @@ class SmsReaderModule(private val reactContext: ReactApplicationContext) :
                 selectionArgs.add(sinceTimestamp.toString())
             }
             if (startDate != null) {
-                selectionParts.add("${Telephony.Sms.DATE} >= ?")
+                selectionParts.add("\${Telephony.Sms.DATE} >= ?")
                 selectionArgs.add(startDate.toString())
             }
             if (endDate != null) {

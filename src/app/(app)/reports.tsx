@@ -29,7 +29,7 @@ export default function ReportsScreen() {
         rightNode={
           <TouchableOpacity
             style={styles.iconButton}
-            onPress={() => router.push('/export-success')}
+            onPress={() => router.push('/export-statement')}
           >
             <MaterialIcons name="download" size={24} color={colors.onSurface} />
           </TouchableOpacity>

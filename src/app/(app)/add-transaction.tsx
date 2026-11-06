@@ -27,7 +27,7 @@ import { useAccounts } from '@/hooks/use-accounts';
 import { useCategories } from '@/hooks/use-budget';
 import type { TransactionType, RecurringFrequency } from '@/types';
 import { getAccountTypeIcon, getCategoryIcon } from '@/utils/icons';
-import { getCurrencySymbol } from '@/utils/format';
+import { getCurrencySymbol, formatLocalDate } from '@/utils/format';
 import { evaluateTransactionBudgetAlerts } from '@/services/notifications/alert-engine';
 import { calculateNextDate } from '@/services/database/recurring-dao';
 
@@ -89,9 +89,10 @@ export default function AddTransactionScreen() {
   const [amountStr, setAmountStr] = useState(params.amount || '');
   const [merchant, setMerchant] = useState('');
   const [category, setCategory] = useState(CATEGORIES[0]);
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(formatLocalDate(new Date()));
   const [accountId, setAccountId] = useState<string | null>(params.accountId || null);
   const [toAccountId, setToAccountId] = useState<string | null>(params.toAccountId || null);
+  const [note, setNote] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringFreq, setRecurringFreq] = useState<RecurringFrequency>('monthly');
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -118,6 +119,7 @@ export default function AddTransactionScreen() {
       setCategory(transaction.category);
       setDate(transaction.date);
       setAccountId(transaction.accountId);
+      setNote(transaction.note || '');
       if ('toAccountId' in transaction) {
         setToAccountId(transaction.toAccountId || null);
       }
@@ -198,7 +200,7 @@ export default function AddTransactionScreen() {
       date,
       isRecurring,
       splits: splitsToSave,
-      note: '',
+      note: note.trim(),
     };
 
     const now = new Date();
@@ -302,9 +304,15 @@ export default function AddTransactionScreen() {
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 140 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
+        enableAutomaticScroll={true}
+        enableResetScrollToCoords={false}
+        extraScrollHeight={Platform.OS === 'ios' ? 140 : 160}
+        extraHeight={Platform.OS === 'ios' ? 75 : 140}
+        keyboardOpeningTime={0}
       >
         <View style={styles.card}>
           {/* Type Switcher */}
@@ -713,6 +721,29 @@ export default function AddTransactionScreen() {
                 </View>
               </View>
             )}
+
+            {/* Note Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>
+                Note{' '}
+                <Text style={{ color: colors.outline, fontWeight: '400' }}>(Optional)</Text>
+              </Text>
+              <View style={styles.textInputWrapper}>
+                <MaterialIcons
+                  name="edit-note"
+                  size={24}
+                  color={colors.onSurfaceVariant}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="e.g. Dinner with team"
+                  placeholderTextColor={colors.outline}
+                  value={note}
+                  onChangeText={setNote}
+                />
+              </View>
+            </View>
           </View>
 
           <TouchableOpacity

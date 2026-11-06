@@ -201,7 +201,16 @@ export function AddBillScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          paddingTop: insets.top,
+          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
+          backgroundColor: colors.background,
+        },
+      ]}
+    >
       <Header
         title={
           isEditing
@@ -215,7 +224,11 @@ export function AddBillScreen() {
 
       <KeyboardAwareScrollView
         style={styles.keyboardView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 140 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 16) + 40 },
+        ]}
+        showsVerticalScrollIndicator={false}
         enableOnAndroid
         extraScrollHeight={Platform.OS === 'ios' ? 40 : 80}
         keyboardShouldPersistTaps="handled"
