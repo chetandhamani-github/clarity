@@ -1,5 +1,6 @@
 import { DeviceEventEmitter } from 'react-native';
 import { findMatchingUnpaidBill, markBillAsPaid } from '@/services/database/bill-dao';
+import { BillService } from '@/modules/bills/services/BillService';
 import { insertNotification } from '@/services/database/notification-dao';
 import { formatCurrency } from '@/utils/format';
 import type { Transaction, BillReminder } from '@/types';
@@ -17,6 +18,25 @@ export class BillSettlementEngine {
     }
 
     try {
+      // 1. Settle in modern Bills module (displayed in UI)
+      try {
+        const modernMatched = await BillService.matchTransactionWithUnpaidBill(
+          transaction.merchant || transaction.category,
+          transaction.amount,
+          transaction.date
+        );
+        if (modernMatched) {
+          await BillService.markBillPaid(
+            modernMatched.id,
+            transaction.date.split('T')[0],
+            transaction.id
+          );
+        }
+      } catch (err) {
+        console.warn('[BillSettlementEngine] Error in modern bill settlement:', err);
+      }
+
+      // 2. Settle in legacy bill-dao
       const matched = await findMatchingUnpaidBill(
         transaction.merchant || transaction.category,
         transaction.amount,

@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
 import { Text, Header } from '@/components/ui';
@@ -25,7 +25,7 @@ export interface AddPersonFormData {
 
 export function AddPersonScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
   const { addPerson, isLoading } = useSplitwiseStore();
 
@@ -50,8 +50,9 @@ export function AddPersonScreen() {
         notes: data.notes?.trim() || undefined,
       });
       router.back();
-    } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to add friend. Please try again.');
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Failed to add friend. Please try again.';
+      Alert.alert('Error', msg);
     }
   };
 
@@ -268,8 +269,9 @@ const styles = StyleSheet.create({
   },
   headerSaveText: {
     ...typography.labelMd,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 13,
+    lineHeight: 18,
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -320,8 +322,9 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 13,
-    fontWeight: '700',
+    lineHeight: 18,
   },
   optionalTag: {
     fontWeight: '400',

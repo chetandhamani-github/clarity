@@ -192,16 +192,39 @@ export async function processDueRecurringTransactions(): Promise<number> {
           }
         }
 
+        let createdTxCount = 0;
+
         while (currentDate <= today && count < MAX_CYCLES) {
           // Check if an SMS or manual transaction already captured this recurring charge for this cycle
+          // Window: within 2 days of scheduled date, matching amount, account, and merchant/category
+          const cleanMerchant = (rt.merchant || '').toLowerCase().trim();
+
           const existingTx = await db.getFirstAsync<{ id: string; is_recurring: number }>(
             `SELECT id, is_recurring FROM transactions
              WHERE account_id = ?
-               AND amount = ?
+               AND ABS(amount - ?) <= 0.01
                AND type = ?
-               AND (date(date) = date(?) OR date LIKE ?)
+               AND (
+                 date(date) BETWEEN date(?, '-2 days') AND date(?, '+2 days')
+                 OR date LIKE ?
+               )
+               AND (
+                 LOWER(merchant) LIKE ? OR ? LIKE '%' || LOWER(merchant) || '%'
+                 OR category = ?
+                 OR is_recurring = 1
+               )
              LIMIT 1`,
-            [rt.account_id, rt.amount, rt.type, currentDate, `${currentDate}%`]
+            [
+              rt.account_id,
+              rt.amount,
+              rt.type,
+              currentDate,
+              currentDate,
+              `${currentDate}%`,
+              `%${cleanMerchant}%`,
+              cleanMerchant,
+              rt.category,
+            ]
           );
 
           if (existingTx) {
@@ -237,6 +260,7 @@ export async function processDueRecurringTransactions(): Promise<number> {
             evaluateTransactionBudgetAlerts(newTx).catch(() => {});
           }
 
+          createdTxCount++;
           lastProcessed = currentDate;
           currentDate = calculateNextDate(currentDate, rt.frequency as RecurringFrequency);
           count++;
@@ -244,12 +268,14 @@ export async function processDueRecurringTransactions(): Promise<number> {
         }
 
         if (count > 0) {
-          await insertNotification({
-            title: 'Recurring Transaction Processed',
-            description: `Scheduled ${rt.type} of ${formatCurrency(rt.amount)} for "${rt.merchant}" was automatically recorded${count > 1 ? ` (${count} cycles)` : ''}.`,
-            type: 'default',
-            actionUrl: '/(app)/(tabs)/transactions',
-          });
+          if (createdTxCount > 0) {
+            await insertNotification({
+              title: 'Recurring Transaction Processed',
+              description: `Scheduled ${rt.type} of ${formatCurrency(rt.amount)} for "${rt.merchant}" was automatically recorded${createdTxCount > 1 ? ` (${createdTxCount} cycles)` : ''}.`,
+              type: 'default',
+              actionUrl: '/(app)/(tabs)/transactions',
+            });
+          }
 
           await db.runAsync(
             `UPDATE recurring_transactions 

@@ -27,6 +27,26 @@ export async function seedDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
        VALUES (?, ?, ?, ?, ?, ?, datetime('now'));`,
       [borrowedAccountId, 'Borrowed / Loan', 'borrowed', 0, 'Personal / Friend', '']
     );
+
+    const lentAccountId = uuid();
+    await db.runAsync(
+      `INSERT INTO accounts (id, name, type, balance, institution, last_four, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, datetime('now'));`,
+      [lentAccountId, 'Lent / Money Given', 'lent', 0, 'Personal / Friend', '']
+    );
+  } else {
+    // If accounts already exist, ensure default Lent account exists as well
+    const lentResult = await db.getFirstAsync<{ count: number }>(
+      "SELECT count(*) as count FROM accounts WHERE type = 'lent';"
+    );
+    if (!lentResult || lentResult.count === 0) {
+      const lentAccountId = uuid();
+      await db.runAsync(
+        `INSERT INTO accounts (id, name, type, balance, institution, last_four, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, datetime('now'));`,
+        [lentAccountId, 'Lent / Money Given', 'lent', 0, 'Personal / Friend', '']
+      );
+    }
   }
 
   // 2. Seed standard structured categories for India & modern daily spending

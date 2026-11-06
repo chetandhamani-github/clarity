@@ -63,6 +63,7 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: 'Manrope_700Bold',
     fontSize: 22,
+    lineHeight: 28,
     marginBottom: 12,
     textAlign: 'center',
   },
@@ -81,5 +82,6 @@ const styles = StyleSheet.create({
   retryText: {
     fontFamily: 'Manrope_600SemiBold',
     fontSize: 15,
+    lineHeight: 20,
   },
 });

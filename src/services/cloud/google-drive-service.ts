@@ -3,7 +3,10 @@ import {
   GoogleSignin,
   statusCodes,
 } from '@react-native-google-signin/google-signin';
-import type { ClarityBackupPayload } from '@/services/database/backup-restore-service';
+import {
+  isMeaningfulDatabaseSnapshot,
+  type ClarityBackupPayload,
+} from '@/services/database/backup-restore-service';
 
 const SECURE_KEYS = {
   ACCESS_TOKEN: 'gdrive_access_token',
@@ -330,7 +333,8 @@ export async function findBackupFile(accessToken: string): Promise<GoogleDriveBa
  * Uses direct PATCH for existing files and RFC-compliant multipart POST for new files.
  */
 export async function uploadBackup(
-  snapshot: ClarityBackupPayload
+  snapshot: ClarityBackupPayload,
+  options?: { allowEmptyOverwrite?: boolean }
 ): Promise<{ success: boolean; modifiedTime?: string; error?: string }> {
   try {
     let accessToken = await getValidAccessToken();
@@ -352,6 +356,17 @@ export async function uploadBackup(
 
     if (!accessToken) {
       return { success: false, error: 'Authentication expired. Please reconnect Google Drive.' };
+    }
+
+    const isMeaningful = isMeaningfulDatabaseSnapshot(snapshot);
+
+    // Safeguard: Never overwrite an existing cloud backup with an empty/cleared local database
+    if (existingFile && !isMeaningful && !options?.allowEmptyOverwrite) {
+      console.warn('[GoogleDrive] Blocked attempt to overwrite existing cloud backup with empty/cleared local database.');
+      return {
+        success: false,
+        error: 'Aborted: Cloud backup contains data, but current local device data is empty. Prevented accidental overwrite.',
+      };
     }
 
     const jsonContent = JSON.stringify(snapshot, null, 2);
@@ -457,6 +472,7 @@ export async function downloadBackup(): Promise<{
   data?: ClarityBackupPayload;
   metadata?: GoogleDriveBackupInfo;
   error?: string;
+  isRecoveredFromRevision?: boolean;
 }> {
   try {
     let accessToken = await getValidAccessToken();
@@ -511,6 +527,66 @@ export async function downloadBackup(): Promise<{
       throw new Error('Downloaded file does not contain valid Clarity backup data.');
     }
 
+    // If the latest backup file is empty (e.g. was overwritten by auto-sync after data clear),
+    // query Google Drive file revisions history to find the most recent valid backup with real data!
+    if (!isMeaningfulDatabaseSnapshot(payload)) {
+      try {
+        const revUrl = `${DRIVE_FILES_ENDPOINT}/${backupInfo.fileId}/revisions?fields=revisions(id,modifiedTime,size)`;
+        let revRes = await fetch(revUrl, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+
+        if (revRes.status === 401) {
+          accessToken = await getValidAccessToken(true);
+          if (accessToken) {
+            revRes = await fetch(revUrl, {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+          }
+        }
+
+        if (revRes.ok) {
+          const revData = await revRes.json();
+          const revisions = revData.revisions;
+          if (Array.isArray(revisions) && revisions.length > 0) {
+            // Check revisions from newest to oldest
+            for (let i = revisions.length - 1; i >= 0; i--) {
+              const rev = revisions[i];
+              const revDlUrl = `${DRIVE_FILES_ENDPOINT}/${backupInfo.fileId}/revisions/${rev.id}?alt=media`;
+              const revFileRes = await fetch(revDlUrl, {
+                headers: { Authorization: `Bearer ${accessToken}` },
+              });
+
+              if (revFileRes.ok) {
+                const revText = await revFileRes.text();
+                try {
+                  const revPayload = JSON.parse(revText);
+                  if (isMeaningfulDatabaseSnapshot(revPayload)) {
+                    console.log(
+                      `[GoogleDrive] Recovered backup from revision history: ${rev.id} (${rev.modifiedTime})`
+                    );
+                    return {
+                      success: true,
+                      data: revPayload,
+                      metadata: {
+                        ...backupInfo,
+                        modifiedTime: rev.modifiedTime || backupInfo.modifiedTime,
+                      },
+                      isRecoveredFromRevision: true,
+                    };
+                  }
+                } catch {
+                  // Ignore parse error on older revision
+                }
+              }
+            }
+          }
+        }
+      } catch (revError) {
+        console.warn('[GoogleDrive] Revision recovery attempt error:', revError);
+      }
+    }
+
     return {
       success: true,
       data: payload,
@@ -530,7 +606,9 @@ let autoBackupDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 export async function syncDatabaseToDriveSilently(reason = 'auto-sync'): Promise<boolean> {
   try {
     const { useAppStore } = await import('@/store/use-app-store');
-    const { generateDatabaseSnapshot } = await import('@/services/database/backup-restore-service');
+    const { generateDatabaseSnapshot, isMeaningfulDatabaseSnapshot } = await import(
+      '@/services/database/backup-restore-service'
+    );
     const state = useAppStore.getState();
 
     if (!state.googleDriveConnected || !state.autoBackupEnabled) {
@@ -538,6 +616,15 @@ export async function syncDatabaseToDriveSilently(reason = 'auto-sync'): Promise
     }
 
     const snapshot = await generateDatabaseSnapshot();
+
+    // Safeguard: Never auto-sync an empty/cleared local database to the cloud
+    if (!isMeaningfulDatabaseSnapshot(snapshot)) {
+      if (__DEV__) {
+        console.log(`[AutoBackup:${reason}] Skipped silent sync: local database is empty/cleared.`);
+      }
+      return false;
+    }
+
     const result = await uploadBackup(snapshot);
     if (result.success && result.modifiedTime) {
       state.setLastCloudBackupTime(result.modifiedTime);

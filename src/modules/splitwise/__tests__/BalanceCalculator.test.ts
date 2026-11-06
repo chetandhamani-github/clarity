@@ -6,6 +6,7 @@ import {
   calculateTotalSettled,
   calculateNetBalance,
   calculateRemainingReceivable,
+  calculateRemainingPayable,
   determineBalanceStatus,
   getStatusLabel,
   calculatePersonBalance,
@@ -54,6 +55,81 @@ describe('BalanceCalculator', () => {
       expect(result.status).toBe('OWED_TO_ME');
       expect(result.statusLabel).toBe('Owes you');
     });
+
+    it('calculates remaining payable correctly for I_OWE ₹1000 when user settles ₹1000 (YOU_PAID)', () => {
+      const debts: Debt[] = [
+        {
+          id: 'd-2',
+          personId: 'p-2',
+          amount: 1000,
+          type: 'I_OWE',
+          description: 'Dinner bill share',
+          createdAt: '2026-09-01',
+        },
+      ];
+
+      const settlements: Settlement[] = [
+        {
+          id: 's-2',
+          personId: 'p-2',
+          amount: 1000,
+          settlementType: 'YOU_PAID',
+          description: 'Paid via GPay',
+          createdAt: '2026-09-02',
+        },
+      ];
+
+      const person: Person = {
+        id: 'p-2',
+        name: 'Sneha',
+        createdAt: '2026-09-01',
+      };
+
+      const result = calculatePersonBalance('p-2', debts, settlements, person);
+
+      expect(result.totalReceivable).toBe(0);
+      expect(result.totalPayable).toBe(1000);
+      expect(result.settledByYou).toBe(1000);
+      expect(result.settledByThem).toBe(0);
+      expect(result.remainingPayable).toBe(0);
+      expect(result.netBalance).toBe(0);
+      expect(result.status).toBe('SETTLED');
+      expect(result.statusLabel).toBe('Settled up');
+    });
+
+    it('calculates remaining payable correctly for partial payment of I_OWE debt', () => {
+      const debts: Debt[] = [
+        {
+          id: 'd-3',
+          personId: 'p-3',
+          amount: 1500,
+          type: 'I_OWE',
+          description: 'Weekend trip car rental',
+          createdAt: '2026-09-01',
+        },
+      ];
+
+      const settlements: Settlement[] = [
+        {
+          id: 's-3',
+          personId: 'p-3',
+          amount: 500,
+          settlementType: 'YOU_PAID',
+          description: 'Partial advance transfer',
+          createdAt: '2026-09-02',
+        },
+      ];
+
+      const result = calculatePersonBalance('p-3', debts, settlements);
+
+      expect(result.totalReceivable).toBe(0);
+      expect(result.totalPayable).toBe(1500);
+      expect(result.settledByYou).toBe(500);
+      expect(result.remainingPayable).toBe(1000);
+      expect(result.netBalance).toBe(-1000);
+      expect(result.status).toBe('YOU_OWE');
+      expect(result.statusLabel).toBe('You owe');
+    });
   });
 
   describe('Pure calculation functions', () => {
@@ -101,6 +177,23 @@ describe('BalanceCalculator', () => {
       expect(calculateRemainingReceivable(5000, 1000)).toBe(4000);
       expect(calculateRemainingReceivable(5000, 5000)).toBe(0);
       expect(calculateRemainingReceivable(5000, 6000)).toBe(0);
+    });
+
+    it('calculates remaining payable without negative values', () => {
+      expect(calculateRemainingPayable(3000, 1000)).toBe(2000);
+      expect(calculateRemainingPayable(3000, 3000)).toBe(0);
+      expect(calculateRemainingPayable(3000, 4000)).toBe(0);
+    });
+
+    it('calculates net balance accurately with explicit directional settlements', () => {
+      // User owed 500 (Payable 500), paid 500 (Settled by you: 500) -> net 0
+      expect(calculateNetBalance(0, 500, 0, 500)).toBe(0);
+
+      // User owed 1000, paid 300 -> net -700
+      expect(calculateNetBalance(0, 1000, 0, 300)).toBe(-700);
+
+      // Person owed 1000, paid 400 -> net +600
+      expect(calculateNetBalance(1000, 0, 400, 0)).toBe(600);
     });
 
     it('determines balance status correctly', () => {

@@ -15,7 +15,7 @@ import { Text, Header, DatePickerModal, useToast, useAlert } from '@/components/
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import {
   useCreateTransaction,
   useUpdateTransaction,
@@ -52,7 +52,7 @@ export default function AddTransactionScreen() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
 
   const params = useLocalSearchParams<{
     id?: string;
@@ -1125,11 +1125,9 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.displayLg,
       color: colors.onSurface,
       textAlign: 'left',
-      padding: 0,
-      paddingVertical: 0,
       paddingHorizontal: 0,
+      paddingVertical: 2,
       margin: 0,
-      includeFontPadding: false,
     },
     formGroup: {
       gap: 16,
@@ -1183,6 +1181,7 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
       fontSize: 10,
+      lineHeight: 14,
     },
     frequencySection: {
       gap: 8,
@@ -1214,10 +1213,11 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
       fontSize: 12,
+      lineHeight: 16,
     },
     freqPillTextActive: {
       color: colors.onPrimary,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
     },
     submitButton: {
       marginTop: 32,
@@ -1229,9 +1229,9 @@ const getStyles = (colors: ThemeColors) => {
     },
     submitButtonText: {
       ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
       fontSize: 15,
       lineHeight: 20,
-      fontWeight: '700',
       color: colors.onPrimary,
     },
     deleteButton: {
@@ -1246,9 +1246,9 @@ const getStyles = (colors: ThemeColors) => {
     },
     deleteButtonText: {
       ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
       fontSize: 15,
       lineHeight: 20,
-      fontWeight: '700',
       color: colors.error,
     },
     modalBackdrop: {
@@ -1366,6 +1366,7 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
       fontSize: 11,
+      lineHeight: 16,
       marginTop: 2,
     },
     splitsCard: {
@@ -1383,15 +1384,16 @@ const getStyles = (colors: ThemeColors) => {
     },
     splitHeaderTitle: {
       ...typography.labelMd,
-      fontWeight: '600',
+      fontFamily: 'Manrope_600SemiBold',
       color: colors.onSurface,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
     },
     splitSumText: {
       ...typography.labelMd,
-      fontWeight: '600',
+      fontFamily: 'Manrope_600SemiBold',
       fontSize: 11,
+      lineHeight: 16,
     },
     splitRow: {
       flexDirection: 'row',
@@ -1413,6 +1415,7 @@ const getStyles = (colors: ThemeColors) => {
       color: colors.onSurface,
       flex: 1,
       fontSize: 13,
+      lineHeight: 18,
     },
     splitAmountInputWrapper: {
       flex: 1,

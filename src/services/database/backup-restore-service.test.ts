@@ -1,4 +1,8 @@
-import { getBackupSummary, type ClarityBackupPayload } from './backup-restore-service';
+import {
+  getBackupSummary,
+  isMeaningfulDatabaseSnapshot,
+  type ClarityBackupPayload,
+} from './backup-restore-service';
 
 describe('backup-restore-service', () => {
   it('extracts correct metadata summary from backup payload', () => {
@@ -51,5 +55,92 @@ describe('backup-restore-service', () => {
 
     expect(canonA).toBe(canonB);
     expect(computeChecksum(canonA)).toBe(computeChecksum(canonB));
+  });
+
+  describe('isMeaningfulDatabaseSnapshot', () => {
+    it('returns false for newly seeded / cleared database with only default 0-balance accounts', () => {
+      const seededEmptyPayload: ClarityBackupPayload = {
+        version: 1,
+        appName: 'Clarity',
+        exportedAt: '2026-09-01T12:00:00.000Z',
+        data: {
+          accounts: [
+            { id: '1', name: 'Primary Bank Account', balance: 0 },
+            { id: '2', name: 'Borrowed / Loan', balance: 0 },
+            { id: '3', name: 'Lent / Money Given', balance: 0 },
+          ],
+          transactions: [],
+          goals: [],
+          goal_contributions: [],
+          budget_plans: [{ id: 'p1', monthly_income: 0 }],
+          budget_categories: [{ id: 'c1', name: 'Groceries' }],
+          recurring_transactions: [],
+          notifications: [{ id: 'n1', title: 'Welcome to Clarity' }],
+        },
+      };
+
+      expect(isMeaningfulDatabaseSnapshot(seededEmptyPayload)).toBe(false);
+    });
+
+    it('returns true when transactions exist', () => {
+      const payloadWithTx: ClarityBackupPayload = {
+        version: 1,
+        appName: 'Clarity',
+        exportedAt: '2026-09-01T12:00:00.000Z',
+        data: {
+          accounts: [{ id: '1', name: 'Primary Bank Account', balance: 0 }],
+          transactions: [{ id: 't1', amount: 50 }],
+          goals: [],
+          goal_contributions: [],
+          budget_plans: [],
+          budget_categories: [],
+          recurring_transactions: [],
+          notifications: [],
+        },
+      };
+
+      expect(isMeaningfulDatabaseSnapshot(payloadWithTx)).toBe(true);
+    });
+
+    it('returns true when bills or subscriptions exist', () => {
+      const payloadWithBills: ClarityBackupPayload = {
+        version: 1,
+        appName: 'Clarity',
+        exportedAt: '2026-09-01T12:00:00.000Z',
+        data: {
+          accounts: [],
+          transactions: [],
+          goals: [],
+          goal_contributions: [],
+          budget_plans: [],
+          budget_categories: [],
+          recurring_transactions: [],
+          notifications: [],
+          bills: [{ id: 'b1', title: 'Internet', amount: 999 }],
+        },
+      };
+
+      expect(isMeaningfulDatabaseSnapshot(payloadWithBills)).toBe(true);
+    });
+
+    it('returns true when custom accounts or accounts with non-zero balance exist', () => {
+      const payloadWithCustomAccount: ClarityBackupPayload = {
+        version: 1,
+        appName: 'Clarity',
+        exportedAt: '2026-09-01T12:00:00.000Z',
+        data: {
+          accounts: [{ id: 'acc-1', name: 'HDFC Savings', balance: 25000 }],
+          transactions: [],
+          goals: [],
+          goal_contributions: [],
+          budget_plans: [],
+          budget_categories: [],
+          recurring_transactions: [],
+          notifications: [],
+        },
+      };
+
+      expect(isMeaningfulDatabaseSnapshot(payloadWithCustomAccount)).toBe(true);
+    });
   });
 });

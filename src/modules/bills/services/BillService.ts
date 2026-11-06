@@ -128,13 +128,18 @@ export class BillService {
     const minRange = new Date(dueTime - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const maxRange = new Date(dueTime + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
+    const whereRefClause = extracted.accountReference ? 'OR account_reference = ?' : '';
+    const queryParams = extracted.accountReference
+      ? [`%${extracted.provider}%`, `%${extracted.title}%`, extracted.accountReference, minRange, maxRange]
+      : [`%${extracted.provider}%`, `%${extracted.title}%`, minRange, maxRange];
+
     const existing = await db.getFirstAsync<{ id: string }>(
       `SELECT id FROM bills 
        WHERE (status = 'upcoming' OR status = 'overdue')
-         AND (provider LIKE ? OR title LIKE ? OR category = ?)
+         AND (provider LIKE ? OR title LIKE ? ${whereRefClause})
          AND due_date BETWEEN ? AND ?
        LIMIT 1`,
-      [`%${extracted.provider}%`, `%${extracted.title}%`, extracted.category, minRange, maxRange]
+      queryParams
     );
 
     if (existing) {
@@ -151,6 +156,13 @@ export class BillService {
       return { bill: updated!, isNew: false };
     }
 
+    const now = new Date();
+    const todayTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const diffDays = Math.round((dueTime - todayTime) / (1000 * 60 * 60 * 24));
+
+    // If bill due date is older than 30 days in the past, treat as historically paid so it doesn't pollute upcoming
+    const initialStatus = diffDays < -30 ? 'paid' : diffDays < 0 ? 'overdue' : 'upcoming';
+
     const created = await this.createBill({
       title: extracted.title,
       provider: extracted.provider,
@@ -163,7 +175,7 @@ export class BillService {
       smsId: extracted.smsId,
       source: extracted.source,
       notes: extracted.notes || `Auto-detected from ${extracted.source.toUpperCase()}`,
-      status: 'upcoming',
+      status: initialStatus,
       reminderDays: 3,
       isRecurring: true,
       frequency: 'monthly',

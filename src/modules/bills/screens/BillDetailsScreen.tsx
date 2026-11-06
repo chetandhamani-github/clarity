@@ -8,7 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Text, Header, useToast, BillDetailSkeleton } from '@/components/ui';
 import { typography, useTheme, radius } from '@/theme';
@@ -20,7 +20,7 @@ import { BillStatusBadge } from '../components/BillStatusBadge';
 
 export function BillDetailsScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
   const { hideBalances } = useAppStore();
   const { showToast } = useToast();
@@ -128,7 +128,7 @@ export function BillDetailsScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 24 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 80 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Top Hero Banner */}
@@ -512,8 +512,9 @@ const styles = StyleSheet.create({
   },
   payOnlineBtnText: {
     ...typography.labelMd,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 13,
+    lineHeight: 18,
   },
   primaryActionBtn: {
     flex: 1,
@@ -526,8 +527,9 @@ const styles = StyleSheet.create({
   },
   primaryActionBtnText: {
     ...typography.labelMd,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 13,
+    lineHeight: 18,
   },
   unpaidBtn: {
     flex: 1,
@@ -541,8 +543,9 @@ const styles = StyleSheet.create({
   },
   unpaidBtnText: {
     ...typography.labelMd,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 13,
+    lineHeight: 18,
   },
 });
 

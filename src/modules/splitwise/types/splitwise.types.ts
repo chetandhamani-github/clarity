@@ -18,6 +18,13 @@ export const DebtType = {
 
 export type DebtType = (typeof DebtType)[keyof typeof DebtType];
 
+export const SettlementType = {
+  THEY_PAID: 'THEY_PAID', // Friend paid user (settles OWE_ME debt)
+  YOU_PAID: 'YOU_PAID',   // User paid friend (settles I_OWE debt)
+} as const;
+
+export type SettlementType = (typeof SettlementType)[keyof typeof SettlementType];
+
 export const SplitType = {
   EQUAL: 'EQUAL',
   EXACT: 'EXACT',
@@ -80,6 +87,7 @@ export interface Settlement {
   personId: string;
   amount: number;
   description?: string;
+  settlementType?: SettlementType;
   groupId?: string;
   expenseId?: string;
   syncStatus?: SyncStatus;
@@ -293,6 +301,7 @@ export interface CreateSettlement {
   personId: string;
   amount: number;
   description?: string;
+  settlementType?: SettlementType;
   groupId?: string;
   expenseId?: string;
   createdAt?: string;
@@ -302,6 +311,7 @@ export interface UpdateSettlement {
   personId?: string;
   amount?: number;
   description?: string;
+  settlementType?: SettlementType;
   groupId?: string;
   expenseId?: string;
   createdAt?: string;
@@ -388,6 +398,8 @@ export interface PersonBalanceSummary {
   totalOwedToMe: number;
   totalIOwe: number;
   totalSettled: number;
+  remainingReceivable?: number;
+  remainingPayable?: number;
   netBalance: number;
 }
 
@@ -416,6 +428,7 @@ export interface SplitwiseActivityItem {
   personName?: string;
   amount: number;
   debtType?: DebtType;
+  settlementType?: SettlementType;
   description: string;
   groupId?: string;
   groupName?: string;

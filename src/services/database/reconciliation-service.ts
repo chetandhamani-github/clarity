@@ -25,7 +25,7 @@ export async function getAccountReconciliationStatus(
   if (!account) return null;
 
   // Credit cards, loans, and debts have liability limit semantics
-  if (['credit', 'loan', 'borrowed'].includes(account.type)) {
+  if (['credit', 'loan', 'borrowed', 'lent'].includes(account.type)) {
     return null;
   }
 

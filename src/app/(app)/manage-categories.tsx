@@ -536,12 +536,14 @@ const styles = StyleSheet.create({
   },
   bucketBadgeText: {
     ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 10,
-    fontWeight: '700',
+    lineHeight: 14,
   },
   limitText: {
     ...typography.labelMd,
     fontSize: 11,
+    lineHeight: 16,
   },
   cardActions: {
     flexDirection: 'row',
@@ -606,6 +608,7 @@ const styles = StyleSheet.create({
   bucketChoiceText: {
     ...typography.labelMd,
     fontSize: 11,
+    lineHeight: 16,
     fontWeight: '600',
   },
   iconGrid: {

@@ -272,6 +272,7 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       color: colors.onPrimaryContainer,
       fontSize: 11,
+      lineHeight: 16,
       fontWeight: '600',
     },
     markReadBtn: {
@@ -356,6 +357,7 @@ const getStyles = (colors: ThemeColors) => {
     cardTime: {
       ...typography.bodyMd,
       fontSize: 12,
+      lineHeight: 16,
       color: colors.onSurfaceVariant,
       flexShrink: 0,
     },

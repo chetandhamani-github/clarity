@@ -109,18 +109,18 @@ export function SplitwiseWidget() {
             {people.length > 0 && (
               <View style={styles.metaRow}>
                 <Text style={[styles.metaText, { color: colors.onSurfaceVariant }]}>
-                  {summary.totalReceivable > 0 && (
+                  {summary.remainingReceivable > 0 && (
                     <Text style={{ color: '#10b981', fontWeight: '600' }}>
-                      +₹{summary.totalReceivable}
+                      +{formatCurrencyPrivacy(summary.remainingReceivable, hideBalances)}
                     </Text>
                   )}
-                  {summary.totalReceivable > 0 && summary.totalPayable > 0 && '  •  '}
-                  {summary.totalPayable > 0 && (
+                  {summary.remainingReceivable > 0 && summary.remainingPayable > 0 && '  •  '}
+                  {summary.remainingPayable > 0 && (
                     <Text style={{ color: '#ef4444', fontWeight: '600' }}>
-                      -₹{summary.totalPayable}
+                      -{formatCurrencyPrivacy(summary.remainingPayable, hideBalances)}
                     </Text>
                   )}
-                  {summary.totalReceivable === 0 && summary.totalPayable === 0 && 'No pending debts'}
+                  {summary.remainingReceivable === 0 && summary.remainingPayable === 0 && 'No pending debts'}
                 </Text>
               </View>
             )}
@@ -218,8 +218,9 @@ const styles = StyleSheet.create({
   },
   netBalanceText: {
     ...typography.headlineSm,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 22,
-    fontWeight: '800',
+    lineHeight: 30,
   },
   metaRow: {
     flexDirection: 'row',

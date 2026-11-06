@@ -36,6 +36,7 @@ export const CREATE_SPLITWISE_SETTLEMENTS_TABLE_SQL = `
     person_id TEXT NOT NULL,
     amount REAL NOT NULL,
     description TEXT,
+    settlement_type TEXT DEFAULT 'THEY_PAID',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (person_id) REFERENCES splitwise_people(id) ON DELETE CASCADE
   );

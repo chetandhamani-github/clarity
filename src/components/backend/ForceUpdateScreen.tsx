@@ -80,6 +80,7 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: 'Manrope_700Bold',
     fontSize: 22,
+    lineHeight: 28,
     marginBottom: 12,
     textAlign: 'center',
   },
@@ -99,6 +100,7 @@ const styles = StyleSheet.create({
   versionText: {
     fontFamily: 'Manrope_500Medium',
     fontSize: 13,
+    lineHeight: 18,
   },
   updateButton: {
     paddingHorizontal: 36,
@@ -108,5 +110,6 @@ const styles = StyleSheet.create({
   updateText: {
     fontFamily: 'Manrope_600SemiBold',
     fontSize: 15,
+    lineHeight: 20,
   },
 });

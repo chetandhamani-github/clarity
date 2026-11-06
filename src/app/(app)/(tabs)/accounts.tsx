@@ -42,13 +42,16 @@ export default function AccountsScreen() {
   );
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId) ?? accounts[0] ?? null;
-  const isLiabilityType = (type: string) => ['credit', 'loan', 'borrowed'].includes(type);
+  const isLiabilityType = (type: string) => ['credit', 'loan', 'borrowed', 'lent'].includes(type);
 
   const assetAccounts = accounts.filter((a) => !isLiabilityType(a.type));
   const liabilityAccounts = accounts.filter((a) => isLiabilityType(a.type));
 
-  const totalAssets = assetAccounts.reduce((sum, a) => sum + Math.max(0, a.balance), 0);
-  const totalLiabilities = liabilityAccounts.reduce((sum, a) => sum + Math.abs(a.balance), 0);
+  const totalAssets = accounts.reduce((sum, a) => sum + (a.balance > 0 ? a.balance : 0), 0);
+  const totalLiabilities = liabilityAccounts.reduce(
+    (sum, a) => sum + (a.balance < 0 ? Math.abs(a.balance) : a.type !== 'lent' ? Math.abs(a.balance) : 0),
+    0
+  );
   const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
 
   const renderAccountRow = (account: Account) => {
@@ -103,6 +106,7 @@ export default function AccountsScreen() {
             style={[styles.accountBalanceActive, isDebt && { color: colors.error }]}
             numberOfLines={1}
             adjustsFontSizeToFit
+            minimumFontScale={0.75}
           >
             {formatCurrencyWholePrivacy(account.balance, hideBalances)}
           </Text>
@@ -181,6 +185,7 @@ export default function AccountsScreen() {
                       style={styles.totalBalance}
                       numberOfLines={1}
                       adjustsFontSizeToFit
+                      minimumFontScale={0.75}
                     >
                       {formatCurrencyPrivacy(totalBalance, false, hideBalances)}
                     </Text>
@@ -359,6 +364,7 @@ function AccountDetailCard({
             style={styles.detailsBalance}
             numberOfLines={1}
             adjustsFontSizeToFit
+            minimumFontScale={0.75}
           >
             {formatCurrencyPrivacy(account.balance, false, hideBalances)}
           </Text>
@@ -553,9 +559,9 @@ const getStyles = (colors: ThemeColors) => {
     },
     emptyButtonText: {
       ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
       fontSize: 14,
       lineHeight: 20,
-      fontWeight: '700',
     },
     scrollContent: {},
     contentPadding: {
@@ -579,6 +585,7 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.dataLg,
       color: colors.onPrimary,
       fontSize: 32,
+      lineHeight: 40,
     },
     summaryPillRow: {
       flexDirection: 'row',
@@ -626,10 +633,10 @@ const getStyles = (colors: ThemeColors) => {
     },
     payBillButtonText: {
       ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
       fontSize: 14,
       lineHeight: 20,
       color: colors.onPrimary,
-      fontWeight: '700',
     },
     sectionCard: {
       backgroundColor: colors.surfaceContainerLowest,

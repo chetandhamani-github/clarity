@@ -9,7 +9,7 @@ import {
   DeviceEventEmitter,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter } from 'expo-router';
 import { Text, Header } from '@/components/ui';
 import { typography, useTheme, radius } from '@/theme';
@@ -22,7 +22,7 @@ type PeopleFilterTab = 'ALL' | 'OWE_ME' | 'I_OWE' | 'SETTLED';
 
 export function PeopleScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
   const { hideBalances } = useAppStore();
 
@@ -281,11 +281,13 @@ function PeopleListItem({ balance, hideBalances, onPress }: PeopleListItemProps)
   const badgeColor = isOwedToMe ? '#10b981' : isYouOwe ? '#ef4444' : colors.onSurfaceVariant;
 
   const initials = (balance.personName || 'Friend')
-    .split(' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
     .map((n) => n[0])
     .join('')
     .substring(0, 2)
-    .toUpperCase();
+    .toUpperCase() || 'F';
 
   // Status text example: "Owes You ₹2000" or "You Owe ₹500" or "Settled up"
   const formattedStatusText = isOwedToMe
@@ -441,8 +443,9 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     ...typography.labelMd,
-    fontWeight: '800',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 15,
+    lineHeight: 20,
   },
   nameContainer: {
     flex: 1,
@@ -450,8 +453,9 @@ const styles = StyleSheet.create({
   },
   personNameText: {
     ...typography.headlineSm,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 15,
+    lineHeight: 22,
   },
   statusBadge: {
     alignSelf: 'flex-start',

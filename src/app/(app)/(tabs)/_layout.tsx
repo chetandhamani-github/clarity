@@ -153,6 +153,7 @@ const getStyles = (colors: ThemeColors) => {
     tabLabel: {
       ...typography.labelMd,
       fontSize: 10,
+      lineHeight: 14,
     },
     fab: {
       position: 'absolute',

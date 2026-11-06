@@ -824,13 +824,14 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.bodyMd,
       color: colors.onSurfaceVariant,
       fontSize: 13,
+      lineHeight: 18,
       marginTop: 2,
     },
     driveLastBackupText: {
       ...typography.bodyMd,
       color: colors.primary,
       fontSize: 12,
-      fontWeight: '500',
+      lineHeight: 16,
       marginTop: 4,
     },
   });

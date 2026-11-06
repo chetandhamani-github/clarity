@@ -12,7 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter } from 'expo-router';
 import { Text, Header } from '@/components/ui';
 import { typography, useTheme, radius } from '@/theme';
@@ -33,7 +33,7 @@ type FilterTab = 'ALL' | 'OWE_ME' | 'I_OWE' | 'SETTLED';
 
 export function SplitwiseHomeScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
   const { hideBalances } = useAppStore();
 
@@ -146,8 +146,9 @@ export function SplitwiseHomeScreen() {
       setPersonNotes('');
       setShowAddModal(false);
       handleRefresh();
-    } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to add friend');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to add friend';
+      Alert.alert('Error', msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -180,8 +181,9 @@ export function SplitwiseHomeScreen() {
       setDebtDescription('');
       setShowAddModal(false);
       handleRefresh();
-    } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to add debt');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to add debt';
+      Alert.alert('Error', msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -200,17 +202,24 @@ export function SplitwiseHomeScreen() {
 
     setIsSubmitting(true);
     try {
+      const selectedPersonBalance = allPersonBalances.find((p) => p.personId === selectedPersonId);
+      const settlementType = selectedPersonBalance && selectedPersonBalance.status === 'YOU_OWE'
+        ? 'YOU_PAID'
+        : 'THEY_PAID';
+
       await addSettlement({
         personId: selectedPersonId,
         amount: amountNum,
-        description: settlementDescription.trim() || 'Settlement payment',
+        settlementType,
+        description: settlementDescription.trim() || undefined,
       });
       setSettlementAmount('');
       setSettlementDescription('');
       setShowAddModal(false);
       handleRefresh();
-    } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to record settlement');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to record settlement';
+      Alert.alert('Error', msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -479,6 +488,14 @@ export function SplitwiseHomeScreen() {
                 }}
                 onSettlePress={() => {
                   setSelectedPersonId(item.personId);
+                  const amt = item.status === 'YOU_OWE'
+                    ? (item.remainingPayable ?? Math.abs(item.netBalance))
+                    : item.remainingReceivable;
+                  if (amt > 0) {
+                    setSettlementAmount(amt.toString());
+                  } else {
+                    setSettlementAmount('');
+                  }
                   openAction('SETTLEMENT');
                 }}
               />
@@ -970,11 +987,13 @@ function PersonCard({ balance, hideBalances, onPress, onSettlePress }: PersonCar
   const badgeColor = isOwedToMe ? '#10b981' : isYouOwe ? '#ef4444' : colors.onSurfaceVariant;
 
   const initials = (balance.personName || 'Friend')
-    .split(' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
     .map((n) => n[0])
     .join('')
     .substring(0, 2)
-    .toUpperCase();
+    .toUpperCase() || 'F';
 
   return (
     <TouchableOpacity
@@ -1016,7 +1035,7 @@ function PersonCard({ balance, hideBalances, onPress, onSettlePress }: PersonCar
 
       <View style={styles.personCardRight}>
         <Text style={[styles.balanceAmount, { color: badgeColor }]}>
-          {isOwedToMe ? '+' : ''}
+          {isOwedToMe ? '+' : isYouOwe ? '-' : ''}
           {formatCurrencyPrivacy(Math.abs(balance.netBalance), hideBalances)}
         </Text>
 
@@ -1094,8 +1113,9 @@ const styles = StyleSheet.create({
   },
   heroMainAmount: {
     ...typography.headlineSm,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 28,
-    fontWeight: '800',
+    lineHeight: 36,
   },
   peopleCountBadge: {
     flexDirection: 'row',
@@ -1186,8 +1206,9 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...typography.headlineSm,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 17,
-    fontWeight: '800',
+    lineHeight: 24,
   },
   sectionSubtitle: {
     ...typography.bodyMd,
@@ -1507,16 +1528,18 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     ...typography.labelMd,
-    fontWeight: '800',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 15,
+    lineHeight: 20,
   },
   nameCol: {
     flex: 1,
   },
   nameText: {
     ...typography.headlineSm,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 15,
+    lineHeight: 22,
     marginBottom: 4,
   },
   subRow: {
@@ -1546,8 +1569,9 @@ const styles = StyleSheet.create({
   },
   balanceAmount: {
     ...typography.headlineSm,
-    fontWeight: '800',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 15,
+    lineHeight: 22,
   },
   quickSettleBtn: {
     paddingHorizontal: 10,
@@ -1556,7 +1580,8 @@ const styles = StyleSheet.create({
   },
   quickSettleText: {
     ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 11,
-    fontWeight: '700',
+    lineHeight: 16,
   },
 });

@@ -695,13 +695,16 @@ export async function findManualMatch(
      LEFT JOIN accounts a ON t.account_id = a.id
      LEFT JOIN accounts ta ON t.to_account_id = ta.id
      WHERE t.account_id = ?
-       AND t.amount = ?
+       AND ABS(t.amount - ?) <= 0.01
        AND t.type = ?
        AND (t.source = 'MANUAL' OR t.status = 'PENDING_MATCH')
-       AND t.date BETWEEN ? AND ?
+       AND (
+         t.date BETWEEN ? AND ?
+         OR date(t.date) BETWEEN date(?) AND date(?)
+       )
      ORDER BY t.date DESC
      LIMIT 10`,
-    [accountId, amount, type, windowStart, windowEnd]
+    [accountId, amount, type, windowStart, windowEnd, windowStart, windowEnd]
   );
 
   if (rows.length === 0) return null;

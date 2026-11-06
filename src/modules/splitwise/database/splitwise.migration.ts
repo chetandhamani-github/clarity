@@ -9,6 +9,11 @@ import {
  */
 export async function runSplitwiseMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync(CREATE_ALL_SPLITWISE_SCHEMA_SQL);
+  try {
+    await db.execAsync("ALTER TABLE splitwise_settlements ADD COLUMN settlement_type TEXT DEFAULT 'THEY_PAID';");
+  } catch {
+    // Column already exists or table freshly created with column
+  }
 }
 
 /**

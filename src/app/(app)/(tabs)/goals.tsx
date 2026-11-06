@@ -333,9 +333,9 @@ const getStyles = (colors: ThemeColors) => {
     },
     saveBtnText: {
       ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
       fontSize: 14,
       lineHeight: 20,
-      fontWeight: '700',
       color: colors.onPrimary,
     },
   });

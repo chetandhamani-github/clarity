@@ -367,9 +367,9 @@ const getStyles = (colors: ThemeColors) => {
     },
     editBtnText: {
       ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
       fontSize: 13,
       lineHeight: 18,
-      fontWeight: '700',
       color: colors.onPrimary,
     },
     scrollContent: {
@@ -424,6 +424,7 @@ const getStyles = (colors: ThemeColors) => {
       color: colors.onSurface,
       marginTop: 8,
       fontSize: 22,
+      lineHeight: 28,
     },
     allocationSections: {
       gap: 16,

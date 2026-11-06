@@ -1,10 +1,18 @@
 import { BillSettlementEngine } from './billSettlementEngine';
 import { findMatchingUnpaidBill, markBillAsPaid } from '@/services/database/bill-dao';
+import { BillService } from '@/modules/bills/services/BillService';
 import { insertNotification } from '@/services/database/notification-dao';
 
 jest.mock('@/services/database/bill-dao', () => ({
   findMatchingUnpaidBill: jest.fn(),
   markBillAsPaid: jest.fn(),
+}));
+
+jest.mock('@/modules/bills/services/BillService', () => ({
+  BillService: {
+    matchTransactionWithUnpaidBill: jest.fn().mockResolvedValue(null),
+    markBillPaid: jest.fn().mockResolvedValue({}),
+  },
 }));
 
 jest.mock('@/services/database/notification-dao', () => ({

@@ -78,12 +78,13 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: 'Manrope_700Bold',
     fontSize: 14,
+    lineHeight: 20,
     marginBottom: 2,
   },
   message: {
     fontFamily: 'Manrope_400Regular',
     fontSize: 12,
-    lineHeight: 17,
+    lineHeight: 18,
   },
   closeButton: {
     padding: 4,

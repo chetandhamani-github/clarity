@@ -7,7 +7,7 @@ const FEATURE_FLAGS_CACHE_KEY = 'clarity_cached_feature_flags';
 export const DEFAULT_FEATURE_FLAGS: FeatureFlagsMap = {
   subscription_manager: true,
   bills_reminders: true,
-  splitwise: false,
+  splitwise: true,
   premium: false,
   ai_insights: false,
 };

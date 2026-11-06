@@ -51,6 +51,16 @@ describe('BillsRepository', () => {
     );
   });
 
+  it('purges dummy data from bills and subscriptions', async () => {
+    await BillsRepository.cleanupDummyData();
+    expect(mockDb.runAsync).toHaveBeenCalledWith(
+      expect.stringContaining('DELETE FROM bills WHERE')
+    );
+    expect(mockDb.runAsync).toHaveBeenCalledWith(
+      expect.stringContaining('DELETE FROM subscriptions WHERE')
+    );
+  });
+
   it('calculates summary statistics correctly', async () => {
     mockDb.getAllAsync
       .mockResolvedValueOnce([

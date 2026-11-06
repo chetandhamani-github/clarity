@@ -46,6 +46,8 @@ describe('BillService', () => {
       expect(BillService.calculateNextOccurrence('2026-01-15', 'quarterly')).toBe('2026-04-15');
       expect(BillService.calculateNextOccurrence('2026-03-01', 'yearly')).toBe('2027-03-01');
       expect(BillService.calculateNextOccurrence('2026-05-10', 'weekly')).toBe('2026-05-17');
+      expect(BillService.calculateNextOccurrence('2026-01-31', 'monthly')).toBe('2026-02-28');
+      expect(BillService.calculateNextOccurrence('2026-08-31', 'quarterly')).toBe('2026-11-30');
     });
   });
 

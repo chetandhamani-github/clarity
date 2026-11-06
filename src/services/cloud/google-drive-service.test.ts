@@ -136,7 +136,7 @@ describe('google-drive-service', () => {
       appName: 'Clarity',
       exportedAt: '2026-09-03T10:00:00Z',
       data: {
-        accounts: [],
+        accounts: [{ id: '1', name: 'Savings' } as any],
         transactions: [],
         goals: [],
         goal_contributions: [],
@@ -170,5 +170,142 @@ describe('google-drive-service', () => {
     const res = await uploadBackup(mockPayload);
     expect(res.success).toBe(true);
     expect(res.modifiedTime).toBe('2026-09-03T11:00:00Z');
+  });
+
+  it('prevents overwriting an existing cloud backup when current local database is empty', async () => {
+    const SecureStore = require('expo-secure-store');
+    SecureStore.getItemAsync.mockImplementation((key: string) => {
+      if (key === 'gdrive_access_token') return Promise.resolve('valid-token');
+      if (key === 'gdrive_token_expires_at') return Promise.resolve(String(Date.now() + 3600000));
+      return Promise.resolve(null);
+    });
+
+    const emptySnapshot: ClarityBackupPayload = {
+      version: 1,
+      appName: 'Clarity',
+      exportedAt: '2026-09-03T10:00:00Z',
+      data: {
+        accounts: [
+          { id: '1', name: 'Primary Bank Account', balance: 0 },
+          { id: '2', name: 'Borrowed / Loan', balance: 0 },
+          { id: '3', name: 'Lent / Money Given', balance: 0 },
+        ],
+        transactions: [],
+        goals: [],
+        goal_contributions: [],
+        budget_plans: [],
+        budget_categories: [],
+        recurring_transactions: [],
+        notifications: [],
+      },
+    };
+
+    const mockFetch = jest.fn().mockImplementation((url: string) => {
+      // files.list finding existing file
+      return Promise.resolve({
+        status: 200,
+        ok: true,
+        json: async () => ({
+          files: [{ id: 'file-123', name: 'clarity_backup.json', modifiedTime: '2026-09-03T09:00:00Z' }],
+        }),
+      });
+    });
+    globalThis.fetch = mockFetch as unknown as typeof fetch;
+
+    const res = await uploadBackup(emptySnapshot);
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('Prevented accidental overwrite');
+  });
+
+  it('recovers data from previous revision when latest cloud backup is empty', async () => {
+    const SecureStore = require('expo-secure-store');
+    SecureStore.getItemAsync.mockImplementation((key: string) => {
+      if (key === 'gdrive_access_token') return Promise.resolve('valid-token');
+      if (key === 'gdrive_token_expires_at') return Promise.resolve(String(Date.now() + 3600000));
+      return Promise.resolve(null);
+    });
+
+    const emptyHeadPayload: ClarityBackupPayload = {
+      version: 1,
+      appName: 'Clarity',
+      exportedAt: '2026-09-03T12:00:00Z',
+      data: {
+        accounts: [{ id: '1', name: 'Primary Bank Account', balance: 0 }],
+        transactions: [],
+        goals: [],
+        goal_contributions: [],
+        budget_plans: [],
+        budget_categories: [],
+        recurring_transactions: [],
+        notifications: [],
+      },
+    };
+
+    const validRevisionPayload: ClarityBackupPayload = {
+      version: 1,
+      appName: 'Clarity',
+      exportedAt: '2026-09-03T09:00:00Z',
+      data: {
+        accounts: [{ id: 'acc-1', name: 'HDFC Bank', balance: 50000 }],
+        transactions: [{ id: 'tx-1', amount: 1200, merchant: 'Supermarket' }],
+        goals: [],
+        goal_contributions: [],
+        budget_plans: [],
+        budget_categories: [],
+        recurring_transactions: [],
+        notifications: [],
+      },
+    };
+
+    const mockFetch = jest.fn().mockImplementation((url: string) => {
+      if (url.includes('/revisions/rev-1?alt=media')) {
+        return Promise.resolve({
+          status: 200,
+          ok: true,
+          text: async () => JSON.stringify(validRevisionPayload),
+        });
+      }
+      if (url.includes('/revisions/rev-2?alt=media')) {
+        return Promise.resolve({
+          status: 200,
+          ok: true,
+          text: async () => JSON.stringify(emptyHeadPayload),
+        });
+      }
+      if (url.includes('/revisions?fields=')) {
+        return Promise.resolve({
+          status: 200,
+          ok: true,
+          json: async () => ({
+            revisions: [
+              { id: 'rev-1', modifiedTime: '2026-09-03T09:00:00Z', size: '2048' },
+              { id: 'rev-2', modifiedTime: '2026-09-03T12:00:00Z', size: '512' },
+            ],
+          }),
+        });
+      }
+      if (url.includes('/files/file-123?alt=media')) {
+        return Promise.resolve({
+          status: 200,
+          ok: true,
+          text: async () => JSON.stringify(emptyHeadPayload),
+        });
+      }
+      // files.list finding existing file
+      return Promise.resolve({
+        status: 200,
+        ok: true,
+        json: async () => ({
+          files: [{ id: 'file-123', name: 'clarity_backup.json', modifiedTime: '2026-09-03T12:00:00Z' }],
+        }),
+      });
+    });
+    globalThis.fetch = mockFetch as unknown as typeof fetch;
+
+    const res = await downloadBackup();
+    expect(res.success).toBe(true);
+    expect(res.isRecoveredFromRevision).toBe(true);
+    expect(res.data?.data.transactions.length).toBe(1);
+    expect(res.data?.data.accounts[0].name).toBe('HDFC Bank');
   });
 });

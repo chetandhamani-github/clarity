@@ -8,7 +8,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter } from 'expo-router';
 import { Text, Header } from '@/components/ui';
 import { typography, useTheme, radius } from '@/theme';
@@ -22,7 +22,7 @@ import type { BillsTab } from '../store/bills.store';
 
 export function BillsScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
   const { hideBalances } = useAppStore();
 

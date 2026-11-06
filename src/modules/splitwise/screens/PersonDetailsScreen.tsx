@@ -13,7 +13,7 @@ import {
   Linking,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Text, Header } from '@/components/ui';
 import { typography, useTheme, radius } from '@/theme';
@@ -45,7 +45,7 @@ type SplitwiseSection = DebtSection | SettlementSection;
 
 export function PersonDetailsScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
   const { hideBalances } = useAppStore();
   const { personId } = useLocalSearchParams<{ personId: string }>();
@@ -67,18 +67,7 @@ export function PersonDetailsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   // Modal states
-  const [showAddDebtModal, setShowAddDebtModal] = useState(false);
-  const [showAddSettlementModal, setShowAddSettlementModal] = useState(false);
   const [showEditPersonModal, setShowEditPersonModal] = useState(false);
-
-  // Form states - Add Debt
-  const [debtAmount, setDebtAmount] = useState('');
-  const [debtType, setDebtType] = useState<DebtType>('OWE_ME');
-  const [debtDescription, setDebtDescription] = useState('');
-
-  // Form states - Add Settlement
-  const [settlementAmount, setSettlementAmount] = useState('');
-  const [settlementDescription, setSettlementDescription] = useState('');
 
   // Form states - Edit Person
   const [editName, setEditName] = useState('');
@@ -133,20 +122,6 @@ export function PersonDetailsScreen() {
     setShowEditPersonModal(true);
   };
 
-  const openAddSettlementModal = () => {
-    if (!personBalance) return;
-    const remainingReceivable = personBalance.remainingReceivable;
-    if (remainingReceivable > 0) {
-      setSettlementAmount(remainingReceivable.toString());
-    } else if (personBalance.totalPayable > 0) {
-      setSettlementAmount(personBalance.totalPayable.toString());
-    } else {
-      setSettlementAmount('');
-    }
-    setSettlementDescription('Cash / UPI Settlement');
-    setShowAddSettlementModal(true);
-  };
-
   const handleSaveEditPerson = async () => {
     if (!person || !editName.trim()) {
       Alert.alert('Required', 'Person name cannot be empty');
@@ -162,63 +137,6 @@ export function PersonDetailsScreen() {
       setShowEditPersonModal(false);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to update person';
-      Alert.alert('Error', msg);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleSaveDebt = async () => {
-    if (!person) return;
-    const parsedAmount = parseFloat(debtAmount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid amount greater than 0');
-      return;
-    }
-    if (!debtDescription.trim()) {
-      Alert.alert('Required', 'Please enter a description for this debt');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await addDebt({
-        personId: person.id,
-        amount: parsedAmount,
-        type: debtType,
-        description: debtDescription.trim(),
-      });
-      setDebtAmount('');
-      setDebtDescription('');
-      setShowAddDebtModal(false);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to record debt';
-      Alert.alert('Error', msg);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleSaveSettlement = async () => {
-    if (!person) return;
-    const parsedAmount = parseFloat(settlementAmount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid amount greater than 0');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await addSettlement({
-        personId: person.id,
-        amount: parsedAmount,
-        description: settlementDescription.trim() || undefined,
-      });
-      setSettlementAmount('');
-      setSettlementDescription('');
-      setShowAddSettlementModal(false);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to record settlement';
       Alert.alert('Error', msg);
     } finally {
       setIsSubmitting(false);
@@ -329,7 +247,8 @@ export function PersonDetailsScreen() {
       : 'rgba(148, 163, 184, 0.12)';
 
   const initials = person.name
-    .split(' ')
+    .trim()
+    .split(/\s+/)
     .filter(Boolean)
     .map((n) => n[0])
     .join('')
@@ -464,7 +383,7 @@ export function PersonDetailsScreen() {
                 <View style={styles.breakdownCol}>
                   <Text style={[styles.breakdownLabel, { color: colors.onSurfaceVariant }]}>Owed To You</Text>
                   <Text style={[styles.breakdownValue, { color: '#10b981' }]}>
-                    +{formatCurrencyPrivacy(personBalance.totalReceivable, hideBalances)}
+                    +{formatCurrencyPrivacy(personBalance.remainingReceivable, hideBalances)}
                   </Text>
                 </View>
 
@@ -473,7 +392,7 @@ export function PersonDetailsScreen() {
                 <View style={styles.breakdownCol}>
                   <Text style={[styles.breakdownLabel, { color: colors.onSurfaceVariant }]}>You Owe</Text>
                   <Text style={[styles.breakdownValue, { color: '#ef4444' }]}>
-                    -{formatCurrencyPrivacy(personBalance.totalPayable, hideBalances)}
+                    -{formatCurrencyPrivacy(personBalance.remainingPayable ?? personBalance.totalPayable, hideBalances)}
                   </Text>
                 </View>
 
@@ -509,7 +428,10 @@ export function PersonDetailsScreen() {
                 onPress={() => {
                   router.push({
                     pathname: '/add-splitwise-settlement',
-                    params: { personId: person.id },
+                    params: {
+                      personId: person.id,
+                      type: personBalance.status === 'YOU_OWE' ? 'YOU_PAID' : 'THEY_PAID',
+                    },
                   });
                 }}
                 activeOpacity={0.8}
@@ -696,299 +618,6 @@ export function PersonDetailsScreen() {
           return <View style={styles.sectionSpacer} />;
         }}
       />
-
-      {/* ========================================================================= */}
-      {/* ADD DEBT MODAL */}
-      {/* ========================================================================= */}
-      <Modal
-        visible={showAddDebtModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowAddDebtModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalContent,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.outlineVariant,
-              },
-            ]}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Add Debt</Text>
-              <TouchableOpacity
-                onPress={() => setShowAddDebtModal(false)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <MaterialIcons name="close" size={24} color={colors.onSurfaceVariant} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={[styles.modalSub, { color: colors.onSurfaceVariant }]}>
-              Recording debt with <Text style={styles.bold}>{person.name}</Text>
-            </Text>
-
-            {/* Debt Type Selector */}
-            <View
-              style={[
-                styles.typeToggleContainer,
-                {
-                  backgroundColor: colors.surfaceContainerHigh,
-                },
-              ]}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.typeToggleBtn,
-                  debtType === 'OWE_ME' && {
-                    backgroundColor: '#10b981',
-                  },
-                ]}
-                onPress={() => setDebtType('OWE_ME')}
-              >
-                <MaterialIcons
-                  name="call-received"
-                  size={16}
-                  color={debtType === 'OWE_ME' ? '#ffffff' : colors.onSurfaceVariant}
-                />
-                <Text
-                  style={[
-                    styles.typeToggleText,
-                    {
-                      color: debtType === 'OWE_ME' ? '#ffffff' : colors.onSurfaceVariant,
-                      fontWeight: debtType === 'OWE_ME' ? '700' : '500',
-                    },
-                  ]}
-                >
-                  They Owe Me
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.typeToggleBtn,
-                  debtType === 'I_OWE' && {
-                    backgroundColor: '#ef4444',
-                  },
-                ]}
-                onPress={() => setDebtType('I_OWE')}
-              >
-                <MaterialIcons
-                  name="call-made"
-                  size={16}
-                  color={debtType === 'I_OWE' ? '#ffffff' : colors.onSurfaceVariant}
-                />
-                <Text
-                  style={[
-                    styles.typeToggleText,
-                    {
-                      color: debtType === 'I_OWE' ? '#ffffff' : colors.onSurfaceVariant,
-                      fontWeight: debtType === 'I_OWE' ? '700' : '500',
-                    },
-                  ]}
-                >
-                  I Owe Them
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Amount Input */}
-            <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>Amount (₹) *</Text>
-            <View
-              style={[
-                styles.amountInputContainer,
-                {
-                  backgroundColor: colors.surfaceContainerLow,
-                  borderColor: colors.outlineVariant,
-                },
-              ]}
-            >
-              <Text style={[styles.amountCurrencyPrefix, { color: colors.onSurface }]}>₹</Text>
-              <TextInput
-                style={[styles.amountInput, { color: colors.onSurface }]}
-                placeholder="0.00"
-                placeholderTextColor={colors.onSurfaceVariant}
-                keyboardType="numeric"
-                value={debtAmount}
-                onChangeText={setDebtAmount}
-                autoFocus
-              />
-            </View>
-
-            {/* Description Input */}
-            <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>Description *</Text>
-            <TextInput
-              style={[
-                styles.textInput,
-                {
-                  backgroundColor: colors.surfaceContainerLow,
-                  borderColor: colors.outlineVariant,
-                  color: colors.onSurface,
-                },
-              ]}
-              placeholder="e.g. Dinner, Movie ticket, Groceries"
-              placeholderTextColor={colors.onSurfaceVariant}
-              value={debtDescription}
-              onChangeText={setDebtDescription}
-            />
-
-            {/* Quick Description Suggestions */}
-            <View style={styles.quickTagsContainer}>
-              {quickDebtTags.map((tag) => (
-                <TouchableOpacity
-                  key={tag}
-                  style={[
-                    styles.quickTagPill,
-                    {
-                      backgroundColor:
-                        debtDescription === tag
-                          ? colors.primaryContainer
-                          : colors.surfaceContainerHigh,
-                    },
-                  ]}
-                  onPress={() => setDebtDescription(tag)}
-                >
-                  <Text
-                    style={[
-                      styles.quickTagText,
-                      {
-                        color:
-                          debtDescription === tag
-                            ? colors.onPrimaryContainer
-                            : colors.onSurfaceVariant,
-                      },
-                    ]}
-                  >
-                    {tag}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.submitBtn,
-                {
-                  backgroundColor: debtType === 'OWE_ME' ? '#10b981' : '#ef4444',
-                },
-              ]}
-              onPress={handleSaveDebt}
-              disabled={isSubmitting}
-            >
-              <Text style={styles.submitBtnText}>
-                {isSubmitting ? 'Saving...' : 'Record Debt'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ========================================================================= */}
-      {/* RECORD SETTLEMENT MODAL */}
-      {/* ========================================================================= */}
-      <Modal
-        visible={showAddSettlementModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowAddSettlementModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalContent,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.outlineVariant,
-              },
-            ]}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Record Settlement</Text>
-              <TouchableOpacity
-                onPress={() => setShowAddSettlementModal(false)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <MaterialIcons name="close" size={24} color={colors.onSurfaceVariant} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={[styles.modalSub, { color: colors.onSurfaceVariant }]}>
-              Record a payment with <Text style={styles.bold}>{person.name}</Text>
-            </Text>
-
-            {/* Amount Input */}
-            <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>Amount Settled (₹) *</Text>
-            <View
-              style={[
-                styles.amountInputContainer,
-                {
-                  backgroundColor: colors.surfaceContainerLow,
-                  borderColor: colors.outlineVariant,
-                },
-              ]}
-            >
-              <Text style={[styles.amountCurrencyPrefix, { color: colors.onSurface }]}>₹</Text>
-              <TextInput
-                style={[styles.amountInput, { color: colors.onSurface }]}
-                placeholder="0.00"
-                placeholderTextColor={colors.onSurfaceVariant}
-                keyboardType="numeric"
-                value={settlementAmount}
-                onChangeText={setSettlementAmount}
-                autoFocus
-              />
-            </View>
-
-            {/* Quick Settle Pill */}
-            {personBalance.remainingReceivable > 0 && (
-              <TouchableOpacity
-                style={[
-                  styles.quickSettleBanner,
-                  {
-                    backgroundColor: 'rgba(6, 182, 212, 0.12)',
-                    borderColor: 'rgba(6, 182, 212, 0.3)',
-                  },
-                ]}
-                onPress={() => setSettlementAmount(personBalance.remainingReceivable.toString())}
-              >
-                <MaterialIcons name="auto-fix-high" size={16} color="#06b6d4" />
-                <Text style={styles.quickSettleText}>
-                  Settle full remaining balance: ₹{personBalance.remainingReceivable}
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            {/* Description Input */}
-            <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>Payment Note</Text>
-            <TextInput
-              style={[
-                styles.textInput,
-                {
-                  backgroundColor: colors.surfaceContainerLow,
-                  borderColor: colors.outlineVariant,
-                  color: colors.onSurface,
-                },
-              ]}
-              placeholder="e.g. UPI, GPay, Cash, Bank Transfer"
-              placeholderTextColor={colors.onSurfaceVariant}
-              value={settlementDescription}
-              onChangeText={setSettlementDescription}
-            />
-
-            <TouchableOpacity
-              style={[styles.submitBtn, { backgroundColor: '#06b6d4' }]}
-              onPress={handleSaveSettlement}
-              disabled={isSubmitting}
-            >
-              <Text style={styles.submitBtnText}>
-                {isSubmitting ? 'Recording...' : 'Confirm Settlement'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
       {/* ========================================================================= */}
       {/* EDIT PERSON MODAL */}
@@ -1216,8 +845,9 @@ const styles = StyleSheet.create({
   },
   statusBadgeText: {
     ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 13,
-    fontWeight: '700',
+    lineHeight: 18,
   },
   breakdownDivider: {
     height: 1,
@@ -1407,61 +1037,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
   },
-  modalSub: {
-    ...typography.bodyMd,
-    fontSize: 13,
-    marginBottom: 16,
-  },
-  bold: {
-    fontWeight: '700',
-  },
-  typeToggleContainer: {
-    flexDirection: 'row',
-    borderRadius: radius.md,
-    padding: 4,
-    marginBottom: 16,
-    gap: 4,
-  },
-  typeToggleBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: radius.sm,
-    gap: 6,
-  },
-  typeToggleText: {
-    ...typography.labelMd,
-    fontSize: 13,
-  },
   fieldLabel: {
     ...typography.labelMd,
     fontSize: 12,
     fontWeight: '700',
     marginBottom: 6,
     marginTop: 6,
-  },
-  amountInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: radius.md,
-    paddingHorizontal: 14,
-    marginBottom: 12,
-  },
-  amountCurrencyPrefix: {
-    ...typography.headlineSm,
-    fontSize: 20,
-    fontWeight: '800',
-    marginRight: 6,
-  },
-  amountInput: {
-    flex: 1,
-    ...typography.headlineSm,
-    fontSize: 20,
-    fontWeight: '800',
-    paddingVertical: 10,
   },
   textInput: {
     borderWidth: 1,
@@ -1475,38 +1056,6 @@ const styles = StyleSheet.create({
   notesAreaInput: {
     height: 72,
     textAlignVertical: 'top',
-  },
-  quickTagsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 16,
-  },
-  quickTagPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  quickTagText: {
-    ...typography.bodyMd,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  quickSettleBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    gap: 6,
-    marginBottom: 12,
-  },
-  quickSettleText: {
-    ...typography.labelMd,
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#06b6d4',
   },
   submitBtn: {
     alignItems: 'center',

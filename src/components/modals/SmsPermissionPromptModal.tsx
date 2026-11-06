@@ -205,6 +205,7 @@ const getStyles = (colors: ThemeColors) => {
       color: colors.onSurface,
       flex: 1,
       fontSize: 13,
+      lineHeight: 18,
     },
     progressContainer: {
       flexDirection: 'row',
@@ -216,6 +217,7 @@ const getStyles = (colors: ThemeColors) => {
     progressText: {
       ...typography.bodyMd,
       fontSize: 12,
+      lineHeight: 16,
       color: colors.primary,
     },
     actionsContainer: {

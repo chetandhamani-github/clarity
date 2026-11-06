@@ -405,6 +405,7 @@ const getStyles = (colors: ThemeColors) => {
     cardTitle: {
       ...typography.headlineSm,
       fontSize: 18,
+      lineHeight: 24,
       color: colors.onSurface,
       marginBottom: 4,
     },

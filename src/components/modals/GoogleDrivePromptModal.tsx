@@ -178,6 +178,7 @@ const getStyles = (colors: ThemeColors) => {
       color: colors.onSurface,
       flex: 1,
       fontSize: 13,
+      lineHeight: 18,
     },
     actionsContainer: {
       gap: 12,

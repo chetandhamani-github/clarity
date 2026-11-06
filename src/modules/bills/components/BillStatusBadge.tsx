@@ -100,17 +100,16 @@ const styles = StyleSheet.create({
   },
   text: {
     ...typography.labelMd,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     letterSpacing: 0.2,
-    includeFontPadding: false,
   },
   textSm: {
     fontSize: 10,
-    lineHeight: 13,
+    lineHeight: 14,
   },
   textMd: {
     fontSize: 11,
-    lineHeight: 15,
+    lineHeight: 16,
   },
 });
 

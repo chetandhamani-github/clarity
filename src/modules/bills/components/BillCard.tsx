@@ -229,21 +229,25 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.bodyLg,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 15,
+    lineHeight: 20,
   },
   providerSubtitle: {
     ...typography.bodyMd,
     fontSize: 12,
+    lineHeight: 16,
     marginTop: 2,
   },
   amountContainer: {
     alignItems: 'flex-end',
+    flexShrink: 0,
   },
   amount: {
     ...typography.headlineSm,
-    fontWeight: '800',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 16,
+    lineHeight: 22,
   },
   minDueText: {
     ...typography.labelMd,

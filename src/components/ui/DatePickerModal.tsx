@@ -398,8 +398,9 @@ const styles = StyleSheet.create({
   },
   weekdayText: {
     ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 11,
-    fontWeight: '700',
+    lineHeight: 16,
   },
   daysGrid: {
     flexDirection: 'row',

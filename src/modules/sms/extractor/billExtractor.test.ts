@@ -18,6 +18,22 @@ describe('BillExtractor', () => {
       date: Date.now(),
     };
     expect(BillExtractor.extractBill(promoMsg)).toBeNull();
+
+    const debitMsg: RawSmsMessage = {
+      id: '2b',
+      address: 'VK-SBIINB',
+      body: 'Your A/c XX1234 debited by Rs. 2,450.00 on 25-09-2026 towards BESCOM Electricity bill payment. Avl Bal Rs. 15,200.00.',
+      date: Date.now(),
+    };
+    expect(BillExtractor.extractBill(debitMsg)).toBeNull();
+
+    const paidReceiptMsg: RawSmsMessage = {
+      id: '2c',
+      address: 'BP-AIRTEL',
+      body: 'Thank you for paying Rs. 1178 towards Airtel Broadband account 08041234567. Payment received with thanks.',
+      date: Date.now(),
+    };
+    expect(BillExtractor.extractBill(paidReceiptMsg)).toBeNull();
   });
 
   it('should correctly parse Electricity bills (e.g. BESCOM)', () => {

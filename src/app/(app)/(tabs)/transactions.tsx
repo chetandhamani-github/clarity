@@ -383,12 +383,12 @@ const getStyles = (colors: ThemeColors) => {
     },
     transactionRight: {
       alignItems: 'flex-end',
+      flexShrink: 0,
     },
     transactionAmount: {
-      fontFamily: 'Manrope',
+      fontFamily: 'Manrope_500Medium',
       fontSize: 20,
       lineHeight: 28,
-      fontWeight: '500',
       color: colors.onSurface,
     },
     categoryBadge: {
@@ -399,10 +399,9 @@ const getStyles = (colors: ThemeColors) => {
       marginTop: 4,
     },
     categoryBadgeText: {
-      fontFamily: 'Manrope',
+      fontFamily: 'Manrope_600SemiBold',
       fontSize: 10,
       lineHeight: 14,
-      fontWeight: '600',
       color: colors.primary,
       textTransform: 'uppercase',
     },

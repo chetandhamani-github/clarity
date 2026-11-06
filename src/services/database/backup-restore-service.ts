@@ -14,6 +14,12 @@ export interface ClarityBackupPayload {
     budget_categories: any[];
     recurring_transactions: any[];
     notifications: any[];
+    bills?: any[];
+    bill_reminders?: any[];
+    subscriptions?: any[];
+    splitwise_people?: any[];
+    splitwise_debts?: any[];
+    splitwise_settlements?: any[];
   };
 }
 
@@ -23,6 +29,7 @@ export interface BackupMetadata {
   transactionCount: number;
   accountCount: number;
   goalCount: number;
+  billCount?: number;
   checksum?: string;
 }
 
@@ -51,19 +58,66 @@ export function canonicalizeData(obj: any): string {
 }
 
 /**
+ * Validates whether a backup snapshot contains real, meaningful user financial records
+ * rather than a newly seeded / cleared blank database.
+ */
+export function isMeaningfulDatabaseSnapshot(payload: ClarityBackupPayload | null | undefined): boolean {
+  if (!payload || !payload.data) return false;
+  const { data } = payload;
+
+  if (Array.isArray(data.transactions) && data.transactions.length > 0) return true;
+  if (Array.isArray(data.goals) && data.goals.length > 0) return true;
+  if (Array.isArray(data.recurring_transactions) && data.recurring_transactions.length > 0) return true;
+  if (Array.isArray(data.bills) && data.bills.length > 0) return true;
+  if (Array.isArray(data.subscriptions) && data.subscriptions.length > 0) return true;
+  if (Array.isArray(data.splitwise_debts) && data.splitwise_debts.length > 0) return true;
+  if (Array.isArray(data.splitwise_people) && data.splitwise_people.length > 0) return true;
+
+  if (Array.isArray(data.accounts)) {
+    if (data.accounts.length > 3) return true;
+    for (const acc of data.accounts) {
+      if (Math.abs(acc.balance ?? 0) > 0.001) return true;
+      if (
+        acc.name !== 'Primary Bank Account' &&
+        acc.name !== 'Borrowed / Loan' &&
+        acc.name !== 'Lent / Money Given'
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * Generate full JSON backup snapshot of local database tables.
  */
 export async function generateDatabaseSnapshot(): Promise<ClarityBackupPayload> {
   const db = getDatabase();
 
-  const accounts = await db.getAllAsync('SELECT * FROM accounts');
-  const transactions = await db.getAllAsync('SELECT * FROM transactions');
-  const goals = await db.getAllAsync('SELECT * FROM goals');
-  const goal_contributions = await db.getAllAsync('SELECT * FROM goal_contributions');
-  const budget_plans = await db.getAllAsync('SELECT * FROM budget_plans');
-  const budget_categories = await db.getAllAsync('SELECT * FROM budget_categories');
-  const recurring_transactions = await db.getAllAsync('SELECT * FROM recurring_transactions');
-  const notifications = await db.getAllAsync('SELECT * FROM notifications');
+  const safeGetAll = async (sql: string): Promise<any[]> => {
+    try {
+      return await db.getAllAsync(sql);
+    } catch {
+      return [];
+    }
+  };
+
+  const accounts = await safeGetAll('SELECT * FROM accounts');
+  const transactions = await safeGetAll('SELECT * FROM transactions');
+  const goals = await safeGetAll('SELECT * FROM goals');
+  const goal_contributions = await safeGetAll('SELECT * FROM goal_contributions');
+  const budget_plans = await safeGetAll('SELECT * FROM budget_plans');
+  const budget_categories = await safeGetAll('SELECT * FROM budget_categories');
+  const recurring_transactions = await safeGetAll('SELECT * FROM recurring_transactions');
+  const notifications = await safeGetAll('SELECT * FROM notifications');
+  const bills = await safeGetAll('SELECT * FROM bills');
+  const bill_reminders = await safeGetAll('SELECT * FROM bill_reminders');
+  const subscriptions = await safeGetAll('SELECT * FROM subscriptions');
+  const splitwise_people = await safeGetAll('SELECT * FROM splitwise_people');
+  const splitwise_debts = await safeGetAll('SELECT * FROM splitwise_debts');
+  const splitwise_settlements = await safeGetAll('SELECT * FROM splitwise_settlements');
 
   const dataPayload = {
     accounts,
@@ -74,6 +128,12 @@ export async function generateDatabaseSnapshot(): Promise<ClarityBackupPayload> 
     budget_categories,
     recurring_transactions,
     notifications,
+    bills,
+    bill_reminders,
+    subscriptions,
+    splitwise_people,
+    splitwise_debts,
+    splitwise_settlements,
   };
 
   const checksum = computeChecksum(canonicalizeData(dataPayload));
@@ -97,6 +157,7 @@ export function getBackupSummary(payload: ClarityBackupPayload): BackupMetadata 
     accountCount: payload.data?.accounts?.length ?? 0,
     transactionCount: payload.data?.transactions?.length ?? 0,
     goalCount: payload.data?.goals?.length ?? 0,
+    billCount: (payload.data?.bills?.length ?? 0) + (payload.data?.subscriptions?.length ?? 0),
     checksum: payload.checksum,
   };
 }
@@ -139,6 +200,19 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
       DELETE FROM notifications;
     `);
 
+    try {
+      await db.execAsync(`
+        DELETE FROM bill_reminders;
+        DELETE FROM bills;
+        DELETE FROM subscriptions;
+        DELETE FROM splitwise_settlements;
+        DELETE FROM splitwise_debts;
+        DELETE FROM splitwise_people;
+      `);
+    } catch {
+      // Ignore if some tables do not exist in older migrations
+    }
+
     // 2. Insert Accounts
     if (Array.isArray(data.accounts)) {
       for (const a of data.accounts) {
@@ -162,8 +236,8 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
     if (Array.isArray(data.transactions)) {
       for (const t of data.transactions) {
         await db.runAsync(
-          `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, to_account_id, splits_json)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, to_account_id, splits_json, source, status, sms_id, parsed_tx_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             t.id,
             t.account_id,
@@ -176,6 +250,10 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
             t.note ?? '',
             t.to_account_id ?? null,
             t.splits_json ?? null,
+            t.source ?? 'MANUAL',
+            t.status ?? 'VERIFIED',
+            t.sms_id ?? null,
+            t.parsed_tx_id ?? null,
           ]
         );
       }
@@ -261,8 +339,8 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
     if (Array.isArray(data.recurring_transactions)) {
       for (const rt of data.recurring_transactions) {
         await db.runAsync(
-          `INSERT INTO recurring_transactions (id, account_id, to_account_id, amount, type, merchant, category, frequency, next_process_date, last_processed_date, is_active)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO recurring_transactions (id, account_id, to_account_id, amount, type, merchant, category, frequency, next_process_date, last_processed_date, is_active, splits_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             rt.id,
             rt.account_id,
@@ -275,6 +353,7 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
             rt.next_process_date,
             rt.last_processed_date ?? null,
             rt.is_active ?? 1,
+            rt.splits_json ?? null,
           ]
         );
       }
@@ -296,6 +375,164 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
             n.action_url ?? '',
           ]
         );
+      }
+    }
+
+    // 10. Insert Bills (if present)
+    if (Array.isArray(data.bills)) {
+      for (const b of data.bills) {
+        try {
+          await db.runAsync(
+            `INSERT INTO bills (id, title, provider, category, amount, min_amount, due_date, reminder_days, status, notes, is_recurring, frequency, last_paid_date, paid_transaction_id, payment_url, account_reference, source, sms_id, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              b.id,
+              b.title,
+              b.provider ?? '',
+              b.category ?? '',
+              b.amount,
+              b.min_amount ?? null,
+              b.due_date,
+              b.reminder_days ?? 3,
+              b.status ?? 'upcoming',
+              b.notes ?? '',
+              b.is_recurring ? 1 : 0,
+              b.frequency ?? 'one_time',
+              b.last_paid_date ?? null,
+              b.paid_transaction_id ?? null,
+              b.payment_url ?? null,
+              b.account_reference ?? null,
+              b.source ?? 'manual',
+              b.sms_id ?? null,
+              b.created_at ?? new Date().toISOString(),
+              b.updated_at ?? new Date().toISOString(),
+            ]
+          );
+        } catch {
+          // Ignore if table not present in current schema
+        }
+      }
+    }
+
+    // 11. Insert Bill Reminders (if present)
+    if (Array.isArray(data.bill_reminders)) {
+      for (const br of data.bill_reminders) {
+        try {
+          await db.runAsync(
+            `INSERT INTO bill_reminders (id, source, biller_name, biller_category, amount_due, min_amount_due, due_date, repeat_frequency, account_reference, status, reminder_days_before, paid_date, paid_transaction_id, payment_url, note, sms_id, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              br.id,
+              br.source ?? 'MANUAL',
+              br.biller_name,
+              br.biller_category,
+              br.amount_due,
+              br.min_amount_due ?? null,
+              br.due_date,
+              br.repeat_frequency ?? 'one_time',
+              br.account_reference ?? null,
+              br.status ?? 'UNPAID',
+              br.reminder_days_before ?? 3,
+              br.paid_date ?? null,
+              br.paid_transaction_id ?? null,
+              br.payment_url ?? null,
+              br.note ?? '',
+              br.sms_id ?? null,
+              br.created_at ?? new Date().toISOString(),
+            ]
+          );
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    // 12. Insert Subscriptions (if present)
+    if (Array.isArray(data.subscriptions)) {
+      for (const s of data.subscriptions) {
+        try {
+          await db.runAsync(
+            `INSERT INTO subscriptions (id, name, provider, amount, billing_cycle, next_renewal_date, category, status, payment_url, account_reference, notes, bill_id, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              s.id,
+              s.name,
+              s.provider ?? '',
+              s.amount,
+              s.billing_cycle ?? 'monthly',
+              s.next_renewal_date,
+              s.category ?? 'subscription',
+              s.status ?? 'active',
+              s.payment_url ?? null,
+              s.account_reference ?? null,
+              s.notes ?? '',
+              s.bill_id ?? null,
+              s.created_at ?? new Date().toISOString(),
+              s.updated_at ?? new Date().toISOString(),
+            ]
+          );
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    // 13. Insert Splitwise People (if present)
+    if (Array.isArray(data.splitwise_people)) {
+      for (const p of data.splitwise_people) {
+        try {
+          await db.runAsync(
+            `INSERT INTO splitwise_people (id, name, phone, notes, created_at)
+             VALUES (?, ?, ?, ?, ?)`,
+            [p.id, p.name, p.phone ?? null, p.notes ?? null, p.created_at ?? new Date().toISOString()]
+          );
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    // 14. Insert Splitwise Debts (if present)
+    if (Array.isArray(data.splitwise_debts)) {
+      for (const d of data.splitwise_debts) {
+        try {
+          await db.runAsync(
+            `INSERT INTO splitwise_debts (id, person_id, amount, type, description, created_at)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [
+              d.id,
+              d.person_id,
+              d.amount,
+              d.type,
+              d.description,
+              d.created_at ?? new Date().toISOString(),
+            ]
+          );
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    // 15. Insert Splitwise Settlements (if present)
+    if (Array.isArray(data.splitwise_settlements)) {
+      for (const st of data.splitwise_settlements) {
+        try {
+          await db.runAsync(
+            `INSERT INTO splitwise_settlements (id, person_id, amount, description, settlement_type, created_at)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [
+              st.id,
+              st.person_id,
+              st.amount,
+              st.description ?? null,
+              st.settlement_type ?? 'THEY_PAID',
+              st.created_at ?? new Date().toISOString(),
+            ]
+          );
+        } catch {
+          // Ignore
+        }
       }
     }
 

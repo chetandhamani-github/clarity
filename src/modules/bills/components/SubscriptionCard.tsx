@@ -180,15 +180,18 @@ const styles = StyleSheet.create({
   },
   name: {
     ...typography.bodyLg,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 15,
+    lineHeight: 20,
     flex: 1,
     marginRight: 8,
   },
   amount: {
     ...typography.headlineSm,
-    fontWeight: '800',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 16,
+    lineHeight: 22,
+    flexShrink: 0,
   },
   subRow: {
     flexDirection: 'row',

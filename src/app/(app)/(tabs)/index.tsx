@@ -507,7 +507,12 @@ export default function DashboardScreen() {
                               {acc.type.charAt(0).toUpperCase() + acc.type.slice(1)}
                               {acc.lastFour ? ` •••• ${acc.lastFour}` : ''}
                             </Text>
-                            <Text style={styles.bankCardBalance} numberOfLines={1} adjustsFontSizeToFit>
+                            <Text
+                              style={styles.bankCardBalance}
+                              numberOfLines={1}
+                              adjustsFontSizeToFit
+                              minimumFontScale={0.75}
+                            >
                               {formatCurrencyPrivacy(acc.balance, false, hideBalances)}
                             </Text>
                           </View>
@@ -972,22 +977,25 @@ const getStyles = (colors: ThemeColors) => {
     },
     bankCardName: {
       ...typography.bodyMd,
-      fontWeight: '600',
+      fontFamily: 'Manrope_600SemiBold',
       color: colors.onSurface,
       fontSize: 13,
+      lineHeight: 18,
       marginBottom: 2,
     },
     bankCardType: {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
       fontSize: 11,
+      lineHeight: 16,
       marginBottom: 8,
     },
     bankCardBalance: {
       ...typography.bodyLg,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
       color: colors.onSurface,
       fontSize: 14,
+      lineHeight: 20,
     },
   });
   return styles;

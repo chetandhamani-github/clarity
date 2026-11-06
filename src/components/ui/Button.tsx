@@ -41,10 +41,9 @@ const getStyles = (colors: ThemeColors) => {
     },
     text: {
       ...typography.bodyMd,
-      fontWeight: '600',
+      fontFamily: 'Manrope_600SemiBold',
       color: colors.surfaceContainerLowest,
       textAlign: 'center',
-      includeFontPadding: false,
     },
     textOutline: {
       color: colors.primary,

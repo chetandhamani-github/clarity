@@ -69,11 +69,8 @@ export function Header({
       <View style={styles.titleContainer} pointerEvents="none">
         {title ? (
           <Text
-            style={[
-              styles.title,
-              isMainTab ? typography.headlineMd : typography.headlineSm,
-              { color: colors.onSurface },
-            ]}
+            variant={isMainTab ? 'headlineMd' : 'headlineSm'}
+            style={[styles.title, { color: colors.onSurface }]}
             numberOfLines={1}
           >
             {title}
@@ -119,6 +116,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 56,
     zIndex: 1,
   },
   title: {

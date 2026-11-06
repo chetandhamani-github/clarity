@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   billCard: {
-    width: 175,
+    width: 185,
     padding: 14,
     borderRadius: 16,
     borderWidth: 1,
@@ -281,19 +281,22 @@ const styles = StyleSheet.create({
   },
   billerName: {
     ...typography.bodyMd,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     fontSize: 13,
+    lineHeight: 18,
     marginBottom: 2,
   },
   accountRef: {
     ...typography.labelMd,
     fontSize: 11,
+    lineHeight: 16,
     marginBottom: 8,
   },
   amount: {
     ...typography.bodyLg,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 14,
+    lineHeight: 20,
   },
   cardActions: {
     marginTop: 12,
@@ -310,7 +313,8 @@ const styles = StyleSheet.create({
   },
   markPaidBtnText: {
     ...typography.labelMd,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 11,
+    lineHeight: 16,
   },
 });

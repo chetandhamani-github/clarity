@@ -427,6 +427,7 @@ const styles = StyleSheet.create({
   formatCardDesc: {
     ...typography.labelMd,
     fontSize: 11,
+    lineHeight: 16,
     textAlign: 'center',
   },
   presetGrid: {
@@ -451,6 +452,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     ...typography.labelMd,
     fontSize: 11,
+    lineHeight: 16,
     marginBottom: 4,
   },
   dateInput: {

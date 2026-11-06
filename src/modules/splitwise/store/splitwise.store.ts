@@ -202,7 +202,7 @@ export const useSplitwiseStore = create<SplitwiseState>()((set, get) => ({
     try {
       const created = await SplitwiseRepository.createDebt(dto);
       await Promise.all([
-        get().loadDebts(get().selectedPersonId || undefined),
+        get().loadDebts(),
         get().loadPeople(),
       ]);
       return created;
@@ -218,7 +218,7 @@ export const useSplitwiseStore = create<SplitwiseState>()((set, get) => ({
     try {
       const updated = await SplitwiseRepository.updateDebt(id, updates);
       await Promise.all([
-        get().loadDebts(get().selectedPersonId || undefined),
+        get().loadDebts(),
         get().loadPeople(),
       ]);
       return updated;
@@ -234,7 +234,7 @@ export const useSplitwiseStore = create<SplitwiseState>()((set, get) => ({
     try {
       await SplitwiseRepository.deleteDebt(id);
       await Promise.all([
-        get().loadDebts(get().selectedPersonId || undefined),
+        get().loadDebts(),
         get().loadPeople(),
       ]);
     } catch (error: unknown) {
@@ -249,7 +249,7 @@ export const useSplitwiseStore = create<SplitwiseState>()((set, get) => ({
     try {
       const created = await SplitwiseRepository.createSettlement(dto);
       await Promise.all([
-        get().loadSettlements(get().selectedPersonId || undefined),
+        get().loadSettlements(),
         get().loadPeople(),
       ]);
       return created;
@@ -265,7 +265,7 @@ export const useSplitwiseStore = create<SplitwiseState>()((set, get) => ({
     try {
       await SplitwiseRepository.deleteSettlement(id);
       await Promise.all([
-        get().loadSettlements(get().selectedPersonId || undefined),
+        get().loadSettlements(),
         get().loadPeople(),
       ]);
     } catch (error: unknown) {

@@ -23,9 +23,12 @@ export interface DetailedPersonBalance {
   totalReceivable: number; // Total money this person owes you (OWE_ME debts)
   totalPayable: number; // Total money you owe this person (I_OWE debts)
   totalSettled: number; // Total settlements recorded for this person
+  settledByThem?: number;
+  settledByYou?: number;
   grossBalance: number; // totalReceivable - totalPayable (before settlements)
-  netBalance: number; // (totalReceivable - totalPayable) - totalSettled
+  netBalance: number; // remainingReceivable - remainingPayable
   remainingReceivable: number; // Remaining amount owed to you after settlements
+  remainingPayable: number; // Remaining amount you owe after settlements
   status: BalanceStatus;
   statusLabel: string;
 }
@@ -33,6 +36,8 @@ export interface DetailedPersonBalance {
 export interface DetailedOverallSummary {
   totalReceivable: number;
   totalPayable: number;
+  remainingReceivable: number;
+  remainingPayable: number;
   totalSettled: number;
   netBalance: number;
   activePeopleCount: number;
@@ -83,7 +88,30 @@ export function calculateTotalSettled(settlements: Settlement[]): number {
 }
 
 /**
- * Calculates net balance: (totalReceivable - totalPayable) - totalSettled.
+ * Calculates remaining receivable after settlements received from the person.
+ * Example: OWE_ME ₹5,000 and Settlement (THEY_PAID) ₹1,000 -> Remaining ₹4,000.
+ */
+export function calculateRemainingReceivable(
+  totalReceivable: number,
+  settledByThem: number
+): number {
+  return roundCurrency(Math.max(0, totalReceivable - settledByThem));
+}
+
+/**
+ * Calculates remaining payable after settlements paid by user to the person.
+ * Example: I_OWE ₹500 and Settlement (YOU_PAID) ₹500 -> Remaining ₹0.
+ */
+export function calculateRemainingPayable(
+  totalPayable: number,
+  settledByYou: number
+): number {
+  return roundCurrency(Math.max(0, totalPayable - settledByYou));
+}
+
+/**
+ * Calculates net balance:
+ * (totalReceivable - settledByThem) - (totalPayable - settledByYou)
  * - Positive (> 0): The person owes you money.
  * - Negative (< 0): You owe the person money.
  * - Zero (=== 0): Fully settled.
@@ -91,21 +119,26 @@ export function calculateTotalSettled(settlements: Settlement[]): number {
 export function calculateNetBalance(
   totalReceivable: number,
   totalPayable: number,
-  totalSettled: number
+  settledByThemOrTotalSettled: number,
+  settledByYou?: number
 ): number {
-  const gross = totalReceivable - totalPayable;
-  return roundCurrency(gross - totalSettled);
-}
+  let byThem = settledByThemOrTotalSettled;
+  let byYou = settledByYou ?? 0;
 
-/**
- * Calculates remaining receivable after settlements.
- * Example: OWE_ME ₹5,000 and Settlement ₹1,000 -> Remaining ₹4,000.
- */
-export function calculateRemainingReceivable(
-  totalReceivable: number,
-  totalSettled: number
-): number {
-  return roundCurrency(Math.max(0, totalReceivable - totalSettled));
+  // If settledByYou is not explicitly provided, infer direction from receivable vs payable
+  if (settledByYou === undefined) {
+    if (totalPayable > totalReceivable) {
+      byYou = settledByThemOrTotalSettled;
+      byThem = 0;
+    } else {
+      byThem = settledByThemOrTotalSettled;
+      byYou = 0;
+    }
+  }
+
+  const remainingReceivable = Math.max(0, totalReceivable - byThem);
+  const remainingPayable = Math.max(0, totalPayable - byYou);
+  return roundCurrency(remainingReceivable - remainingPayable);
 }
 
 /**
@@ -147,10 +180,34 @@ export function calculatePersonBalance(
 
   const totalReceivable = calculateTotalReceivable(personDebts);
   const totalPayable = calculateTotalPayable(personDebts);
-  const totalSettled = calculateTotalSettled(personSettlements);
+
+  let settledByThem = 0;
+  let settledByYou = 0;
+
+  for (const s of personSettlements) {
+    const amt = Number(s.amount) || 0;
+    if (s.settlementType === 'YOU_PAID') {
+      settledByYou += amt;
+    } else if (s.settlementType === 'THEY_PAID') {
+      settledByThem += amt;
+    } else {
+      // Inferred for legacy or untyped settlements
+      if (totalPayable > totalReceivable) {
+        settledByYou += amt;
+      } else {
+        settledByThem += amt;
+      }
+    }
+  }
+
+  settledByThem = roundCurrency(settledByThem);
+  settledByYou = roundCurrency(settledByYou);
+  const totalSettled = roundCurrency(settledByThem + settledByYou);
+
   const grossBalance = roundCurrency(totalReceivable - totalPayable);
-  const netBalance = calculateNetBalance(totalReceivable, totalPayable, totalSettled);
-  const remainingReceivable = calculateRemainingReceivable(totalReceivable, totalSettled);
+  const remainingReceivable = calculateRemainingReceivable(totalReceivable, settledByThem);
+  const remainingPayable = calculateRemainingPayable(totalPayable, settledByYou);
+  const netBalance = roundCurrency(remainingReceivable - remainingPayable);
   const status = determineBalanceStatus(netBalance);
   const statusLabel = getStatusLabel(status, netBalance);
 
@@ -160,9 +217,12 @@ export function calculatePersonBalance(
     totalReceivable,
     totalPayable,
     totalSettled,
+    settledByThem,
+    settledByYou,
     grossBalance,
     netBalance,
     remainingReceivable,
+    remainingPayable,
     status,
     statusLabel,
   };
@@ -191,6 +251,8 @@ export function calculateOverallSummary(
 
   let totalReceivable = 0;
   let totalPayable = 0;
+  let remainingReceivable = 0;
+  let remainingPayable = 0;
   let totalSettled = 0;
   let netBalance = 0;
   let activePeopleCount = 0;
@@ -199,6 +261,8 @@ export function calculateOverallSummary(
   for (const pb of peopleBalances) {
     totalReceivable += pb.totalReceivable;
     totalPayable += pb.totalPayable;
+    remainingReceivable += pb.remainingReceivable;
+    remainingPayable += pb.remainingPayable;
     totalSettled += pb.totalSettled;
     netBalance += pb.netBalance;
 
@@ -212,6 +276,8 @@ export function calculateOverallSummary(
   return {
     totalReceivable: roundCurrency(totalReceivable),
     totalPayable: roundCurrency(totalPayable),
+    remainingReceivable: roundCurrency(remainingReceivable),
+    remainingPayable: roundCurrency(remainingPayable),
     totalSettled: roundCurrency(totalSettled),
     netBalance: roundCurrency(netBalance),
     activePeopleCount,
@@ -512,6 +578,7 @@ export const BalanceCalculator = {
   calculateTotalSettled,
   calculateNetBalance,
   calculateRemainingReceivable,
+  calculateRemainingPayable,
   determineBalanceStatus,
   getStatusLabel,
   calculatePersonBalance,

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
 import { Text, Header, DatePickerModal } from '@/components/ui';
@@ -21,10 +21,12 @@ import { formatCurrencyPrivacy } from '@/utils/format';
 import { useAppStore } from '@/store/use-app-store';
 import { useSplitwiseStore } from '../store/splitwise.store';
 import { BalanceCalculator } from '../services/BalanceCalculator';
+import type { SettlementType } from '../types/splitwise.types';
 
 export interface SettlementFormData {
   personId: string;
   amount: string;
+  type: SettlementType;
   description: string;
   date: string; // YYYY-MM-DD
 }
@@ -42,12 +44,13 @@ const QUICK_AMOUNTS = [100, 250, 500, 1000, 2000];
 
 export function SettlementScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
   const { hideBalances } = useAppStore();
 
   const params = useLocalSearchParams<{
     personId?: string;
+    type?: SettlementType;
     amount?: string;
     description?: string;
   }>();
@@ -89,13 +92,15 @@ export function SettlementScreen() {
     defaultValues: {
       personId: initialPersonId,
       amount: params.amount || '',
-      description: params.description || '⚡ UPI / GPay',
+      type: params.type || 'THEY_PAID',
+      description: params.description || '',
       date: todayStr,
     },
     mode: 'onTouched',
   });
 
   const selectedPersonId = watch('personId');
+  const selectedType = watch('type');
   const selectedDate = watch('date');
   const currentAmount = watch('amount');
 
@@ -126,6 +131,23 @@ export function SettlementScreen() {
     );
   }, [selectedPerson, debts, settlements]);
 
+  // Auto-detect direction and prefill amount from current balance if not user-specified
+  useEffect(() => {
+    if (personBalance && !params.type) {
+      if (personBalance.status === 'YOU_OWE' && selectedType !== 'YOU_PAID' && !params.amount) {
+        setValue('type', 'YOU_PAID');
+        if ((personBalance.remainingPayable ?? 0) > 0 && !currentAmount) {
+          setValue('amount', (personBalance.remainingPayable ?? Math.abs(personBalance.netBalance)).toString());
+        }
+      } else if (personBalance.status === 'OWED_TO_ME' && selectedType !== 'THEY_PAID' && !params.amount) {
+        setValue('type', 'THEY_PAID');
+        if (personBalance.remainingReceivable > 0 && !currentAmount) {
+          setValue('amount', personBalance.remainingReceivable.toString());
+        }
+      }
+    }
+  }, [personBalance, selectedType, currentAmount, params.amount, params.type, setValue]);
+
   const filteredPeople = useMemo(() => {
     if (!friendSearch.trim()) return people;
     const q = friendSearch.toLowerCase().trim();
@@ -141,8 +163,9 @@ export function SettlementScreen() {
   // Calculate projected balance after this settlement
   const projectedBalance = useMemo(() => {
     if (!personBalance) return 0;
-    return BalanceCalculator.roundCurrency(personBalance.netBalance - parsedAmount);
-  }, [personBalance, parsedAmount]);
+    const delta = selectedType === 'YOU_PAID' ? parsedAmount : -parsedAmount;
+    return BalanceCalculator.roundCurrency(personBalance.netBalance + delta);
+  }, [personBalance, parsedAmount, selectedType]);
 
   const onSubmit = async (data: SettlementFormData) => {
     if (!data.personId) {
@@ -169,6 +192,7 @@ export function SettlementScreen() {
       await addSettlement({
         personId: data.personId,
         amount: amt,
+        settlementType: data.type,
         description: data.description.trim() || undefined,
         createdAt: createdAtIso,
       });
@@ -337,6 +361,100 @@ export function SettlementScreen() {
           )}
         </View>
 
+        {/* Payment Direction Card */}
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: colors.surfaceContainerLow,
+              borderColor: colors.outlineVariant,
+            },
+          ]}
+        >
+          <View style={styles.labelWithIcon}>
+            <MaterialIcons name="swap-horiz" size={18} color="#06b6d4" />
+            <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>Payment Direction</Text>
+          </View>
+
+          <View style={[styles.toggleContainer, { backgroundColor: colors.surfaceContainerHigh }]}>
+            <TouchableOpacity
+              style={[
+                styles.toggleBtn,
+                selectedType === 'YOU_PAID' && {
+                  backgroundColor: '#06b6d4',
+                },
+              ]}
+              onPress={() => {
+                setValue('type', 'YOU_PAID');
+                if (personBalance && (personBalance.remainingPayable ?? 0) > 0) {
+                  setValue('amount', (personBalance.remainingPayable ?? Math.abs(personBalance.netBalance)).toString(), {
+                    shouldValidate: true,
+                  });
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons
+                name="call-made"
+                size={18}
+                color={selectedType === 'YOU_PAID' ? '#ffffff' : colors.onSurfaceVariant}
+              />
+              <Text
+                style={[
+                  styles.toggleText,
+                  {
+                    color: selectedType === 'YOU_PAID' ? '#ffffff' : colors.onSurfaceVariant,
+                    fontWeight: selectedType === 'YOU_PAID' ? '700' : '600',
+                  },
+                ]}
+              >
+                I paid {personFirstName}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.toggleBtn,
+                selectedType === 'THEY_PAID' && {
+                  backgroundColor: '#10b981',
+                },
+              ]}
+              onPress={() => {
+                setValue('type', 'THEY_PAID');
+                if (personBalance && personBalance.remainingReceivable > 0) {
+                  setValue('amount', personBalance.remainingReceivable.toString(), {
+                    shouldValidate: true,
+                  });
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons
+                name="call-received"
+                size={18}
+                color={selectedType === 'THEY_PAID' ? '#ffffff' : colors.onSurfaceVariant}
+              />
+              <Text
+                style={[
+                  styles.toggleText,
+                  {
+                    color: selectedType === 'THEY_PAID' ? '#ffffff' : colors.onSurfaceVariant,
+                    fontWeight: selectedType === 'THEY_PAID' ? '700' : '600',
+                  },
+                ]}
+              >
+                {personFirstName} paid me
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={[styles.toggleSubtitle, { color: colors.onSurfaceVariant }]}>
+            {selectedType === 'YOU_PAID'
+              ? `You paid ${personFirstName} to clear what you owe.`
+              : `${personFirstName} paid you to clear what they owe.`}
+          </Text>
+        </View>
+
         {/* Amount Input Card */}
         <View
           style={[
@@ -397,7 +515,10 @@ export function SettlementScreen() {
           )}
 
           {/* Quick Exact Balance Settle Buttons */}
-          {personBalance && personBalance.remainingReceivable > 0 && (
+          {personBalance && (
+            (selectedType === 'THEY_PAID' && personBalance.remainingReceivable > 0) ||
+            (selectedType === 'YOU_PAID' && (personBalance.remainingPayable ?? 0) > 0)
+          ) && (
             <View style={styles.balanceShortcutsRow}>
               <TouchableOpacity
                 style={[
@@ -407,19 +528,24 @@ export function SettlementScreen() {
                     borderColor: '#06b6d4',
                   },
                 ]}
-                onPress={() =>
-                  setValue('amount', personBalance.remainingReceivable.toString(), {
+                onPress={() => {
+                  const targetAmt = selectedType === 'YOU_PAID'
+                    ? (personBalance.remainingPayable ?? Math.abs(personBalance.netBalance))
+                    : personBalance.remainingReceivable;
+                  setValue('amount', targetAmt.toString(), {
                     shouldValidate: true,
-                  })
-                }
+                  });
+                }}
               >
                 <MaterialIcons name="done-all" size={16} color="#06b6d4" />
                 <Text style={styles.fullSettleBtnText}>
-                  Settle Full Balance: ₹{personBalance.remainingReceivable}
+                  Settle Full Balance: ₹{selectedType === 'YOU_PAID'
+                    ? (personBalance.remainingPayable ?? Math.abs(personBalance.netBalance))
+                    : personBalance.remainingReceivable}
                 </Text>
               </TouchableOpacity>
 
-              {personBalance.remainingReceivable > 200 && (
+              {((selectedType === 'YOU_PAID' ? (personBalance.remainingPayable ?? 0) : personBalance.remainingReceivable) > 200) && (
                 <TouchableOpacity
                   style={[
                     styles.halfSettleBtn,
@@ -428,16 +554,19 @@ export function SettlementScreen() {
                       borderColor: colors.outlineVariant,
                     },
                   ]}
-                  onPress={() =>
+                  onPress={() => {
+                    const baseAmt = selectedType === 'YOU_PAID'
+                      ? (personBalance.remainingPayable ?? Math.abs(personBalance.netBalance))
+                      : personBalance.remainingReceivable;
                     setValue(
                       'amount',
-                      (Math.round(personBalance.remainingReceivable / 2)).toString(),
+                      (Math.round(baseAmt / 2)).toString(),
                       { shouldValidate: true }
-                    )
-                  }
+                    );
+                  }}
                 >
                   <Text style={[styles.halfSettleBtnText, { color: colors.onSurface }]}>
-                    50% (₹{Math.round(personBalance.remainingReceivable / 2)})
+                    50% (₹{Math.round(((selectedType === 'YOU_PAID' ? (personBalance.remainingPayable ?? 0) : personBalance.remainingReceivable) / 2))})
                   </Text>
                 </TouchableOpacity>
               )}
@@ -650,7 +779,7 @@ export function SettlementScreen() {
                   Payment
                 </Text>
                 <Text style={[styles.previewValue, { color: '#06b6d4' }]}>
-                  -₹{parsedAmount}
+                  {selectedType === 'YOU_PAID' ? `+₹${parsedAmount}` : `-₹${parsedAmount}`}
                 </Text>
               </View>
 
@@ -954,6 +1083,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
+  toggleContainer: {
+    flexDirection: 'row',
+    borderRadius: radius.md,
+    padding: 4,
+    gap: 6,
+  },
+  toggleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: radius.sm,
+    gap: 6,
+  },
+  toggleText: {
+    ...typography.labelMd,
+    fontSize: 13,
+  },
+  toggleSubtitle: {
+    ...typography.bodyMd,
+    fontSize: 12,
+    marginTop: 10,
+    textAlign: 'center',
+  },
   card: {
     borderRadius: radius.lg,
     borderWidth: 1,
@@ -1050,15 +1204,15 @@ const styles = StyleSheet.create({
   },
   amountSymbol: {
     ...typography.headlineSm,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 26,
-    fontWeight: '800',
+    lineHeight: 34,
     marginRight: 8,
   },
   amountInput: {
     flex: 1,
-    ...typography.headlineSm,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 26,
-    fontWeight: '800',
     paddingVertical: 8,
   },
   balanceShortcutsRow: {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useTheme } from '@/theme';
 import { radius } from '@/theme/radius';
 import { Header } from './Header';
@@ -530,7 +530,7 @@ export function ListSkeleton() {
  */
 export function BillDetailSkeleton() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
 
   return (
     <View style={[styles.screenContainer, { paddingTop: insets.top, backgroundColor: colors.background }]}>

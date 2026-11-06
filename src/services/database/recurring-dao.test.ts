@@ -124,12 +124,18 @@ describe('recurring-dao', () => {
 
     beforeEach(() => {
       jest.clearAllMocks();
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-09-01T12:00:00Z'));
       mockDb = {
         runAsync: jest.fn().mockResolvedValue({}),
         getAllAsync: jest.fn(),
         getFirstAsync: jest.fn().mockResolvedValue(null),
       };
       (getDatabase as jest.Mock).mockReturnValue(mockDb);
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
     });
 
     it('processes due transactions and advances nextProcessDate', async () => {
@@ -174,6 +180,43 @@ describe('recurring-dao', () => {
       expect(mockDb.runAsync).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE recurring_transactions'),
         expect.arrayContaining(['2026-09-01', '2026-10-01', 'rec-1'])
+      );
+    });
+
+    it('matches an already recorded transaction within tolerance and avoids duplicate insertion', async () => {
+      const mockDue = [
+        {
+          id: 'rec-netflix',
+          account_id: 'acc-1',
+          to_account_id: null,
+          amount: 649,
+          type: 'expense',
+          merchant: 'Netflix',
+          category: 'Subscriptions',
+          frequency: 'monthly',
+          next_process_date: '2026-09-01',
+          last_processed_date: '2026-08-01',
+          is_active: 1,
+        },
+      ];
+
+      mockDb.getAllAsync.mockResolvedValueOnce(mockDue);
+      mockDb.getFirstAsync.mockResolvedValueOnce({
+        id: 'tx-existing-sms',
+        is_recurring: 0,
+      });
+
+      const processedCount = await processDueRecurringTransactions();
+
+      expect(processedCount).toBe(1);
+      expect(insertTransaction).not.toHaveBeenCalled();
+      expect(mockDb.runAsync).toHaveBeenCalledWith(
+        'UPDATE transactions SET is_recurring = 1 WHERE id = ?',
+        ['tx-existing-sms']
+      );
+      expect(mockDb.runAsync).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE recurring_transactions'),
+        expect.arrayContaining(['2026-09-01', '2026-10-01', 'rec-netflix'])
       );
     });
   });

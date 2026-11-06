@@ -25,6 +25,8 @@ import { getDatabase } from '@/services/database';
 import { TransactionExtractor } from '@/modules/sms/extractor/transactionExtractor';
 import { BillExtractor } from '@/modules/sms/extractor/billExtractor';
 import { mergeOrInsertSmsBill } from '@/services/database/bill-dao';
+import { BillService } from '@/modules/bills/services/BillService';
+import type { BillCategory } from '@/modules/bills/types/bill.types';
 import { BillSettlementEngine } from '@/modules/sms/services/billSettlementEngine';
 import { BillAlertEngine } from '@/services/notifications/bill-alert-engine';
 import { hasMeaningfulMerchant } from '@/utils/transaction-display';
@@ -304,6 +306,45 @@ export class SmsSyncService {
       try {
         const extractedBill = BillExtractor.extractBill(message);
         if (extractedBill) {
+          // 1. Save to modern Bills module (displayed in UI)
+          const billCategory: BillCategory =
+            extractedBill.billerCategory === 'electricity'
+              ? 'electricity'
+              : extractedBill.billerCategory === 'water'
+              ? 'water'
+              : extractedBill.billerCategory === 'mobile_postpaid'
+              ? 'mobile'
+              : extractedBill.billerCategory === 'broadband'
+              ? 'internet'
+              : extractedBill.billerCategory === 'credit_card'
+              ? 'credit_card'
+              : extractedBill.billerCategory === 'loan_emi'
+              ? 'emi'
+              : extractedBill.billerCategory === 'insurance'
+              ? 'insurance'
+              : extractedBill.billerCategory === 'rent'
+              ? 'rent'
+              : extractedBill.billerCategory === 'dth'
+              ? 'subscription'
+              : extractedBill.billerCategory === 'tuition'
+              ? 'education'
+              : 'other';
+
+          await BillService.mergeOrInsertExternalBill({
+            title: extractedBill.billerName,
+            provider: extractedBill.billerName,
+            category: billCategory,
+            amount: extractedBill.amountDue,
+            minAmount: extractedBill.minAmountDue,
+            dueDate: extractedBill.dueDate,
+            accountReference: extractedBill.accountReference,
+            paymentUrl: extractedBill.paymentUrl,
+            smsId: message.id,
+            source: 'sms',
+            notes: `Auto-detected from SMS: ${extractedBill.billerName}`,
+          });
+
+          // 2. Also keep legacy table in sync
           await mergeOrInsertSmsBill({
             ...extractedBill,
             smsId: message.id,
@@ -607,7 +648,12 @@ export class SmsSyncService {
       const accounts = await getAllAccounts();
 
       for (const account of accounts) {
-        if (account.type === 'borrowed' || account.type === 'loan' || account.type === 'credit') {
+        if (
+          account.type === 'borrowed' ||
+          account.type === 'loan' ||
+          account.type === 'credit' ||
+          account.type === 'lent'
+        ) {
           if (account.type === 'credit') {
             await updateAccountBalance(account.id, 0);
           }

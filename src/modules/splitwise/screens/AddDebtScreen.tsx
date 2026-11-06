@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
 import { Text, Header, DatePickerModal } from '@/components/ui';
@@ -43,7 +43,7 @@ const QUICK_AMOUNTS = [100, 250, 500, 1000, 2000];
 
 export function AddDebtScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
 
   const params = useLocalSearchParams<{
@@ -973,15 +973,15 @@ const styles = StyleSheet.create({
   },
   amountSymbol: {
     ...typography.headlineSm,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 26,
-    fontWeight: '800',
+    lineHeight: 34,
     marginRight: 8,
   },
   amountInput: {
     flex: 1,
-    ...typography.headlineSm,
+    fontFamily: 'Manrope_700Bold',
     fontSize: 26,
-    fontWeight: '800',
     paddingVertical: 8,
   },
   quickAmountsRow: {

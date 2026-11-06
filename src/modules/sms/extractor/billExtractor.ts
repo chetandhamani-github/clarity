@@ -45,6 +45,12 @@ export class BillExtractor {
     /\b(?:congratulations! you are eligible|pre[- ]approved|apply now|win up to)\b/i,
     /\b(?:rummy|casino|lottery|earn from home)\b/i,
     /\b(?:has been received with thanks|payment received for|thank you for paying|payment of rs.*was successful)\b/i,
+    // Completed transactions or debit alerts (handled as ledger transactions, not pending bills)
+    /\b(?:debited|debited by|debited from|withdrawn|charged to|spent on)\b/i,
+    /\b(?:has been debited|was debited|is debited|account debited)\b/i,
+    /\b(?:paid successfully|successfully paid|payment successful|transaction successful)\b/i,
+    /\b(?:payment received|received with thanks|thanks for payment|thank you for paying)\b/i,
+    /\b(?:credited to|deposited in)\b/i,
   ];
 
   // Bill indicator triggers
@@ -130,11 +136,17 @@ export class BillExtractor {
       minDue = parseFloat(minDueMatch[1].replace(/,/g, ''));
     }
 
-    // Pattern 2: Generic currency match if specific total due keyword wasn't explicit
+    // Pattern 2: Contextual currency match near bill or due keywords
     if (totalDue <= 0) {
-      const genericMatch = body.match(/(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)/i);
-      if (genericMatch) {
-        totalDue = parseFloat(genericMatch[1].replace(/,/g, ''));
+      const contextualMatch =
+        body.match(
+          /(?:bill|due|payable|pay|amount)[^\d\n\r]{0,25}(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)/i
+        ) ||
+        body.match(
+          /(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)[^\d\n\r]{0,25}(?:due|bill|payable)/i
+        );
+      if (contextualMatch) {
+        totalDue = parseFloat(contextualMatch[1].replace(/,/g, ''));
       }
     }
 
@@ -169,7 +181,7 @@ export class BillExtractor {
       }
     }
 
-    // 2. "DD-MM-YYYY" or "DD/MM/YYYY" or "DD-MM-YY"
+    // 2. "DD-MM-YYYY" or "DD/MM/YYYY" or "DD-MM-YY" after due/pay/before
     const numericDateMatch = body.match(
       /(?:due\s+(?:on|date|by)|pay\s+by|payable\s+by|valid\s+till|by|before)(?:\s+is|\s*:|:)?\s*(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{2,4})/i
     );
@@ -184,15 +196,15 @@ export class BillExtractor {
       }
     }
 
-    // 3. Fallback: Any standalone date format (e.g., 25-Sep-2026 or 25/09/2026) anywhere after "due" or "bill"
-    const standaloneMatch = body.match(
-      /(\d{1,2})(?:st|nd|rd|th)?[\s\-\/]([a-zA-Z]{3,9})[\s\-\/](\d{2,4})/i
+    // 3. Fallback: Contextual date near "due", "pay", or "bill"
+    const contextualDateMatch = body.match(
+      /(?:due|pay|bill|before|till)[^\d\n\r]{0,30}(\d{1,2})(?:st|nd|rd|th)?[\s\-\/]([a-zA-Z]{3,9})[\s\-\/](\d{2,4})/i
     );
-    if (standaloneMatch) {
-      const day = parseInt(standaloneMatch[1], 10);
-      const monthStr = standaloneMatch[2].toLowerCase();
+    if (contextualDateMatch) {
+      const day = parseInt(contextualDateMatch[1], 10);
+      const monthStr = contextualDateMatch[2].toLowerCase();
       const month = MONTH_MAP[monthStr];
-      let year = parseInt(standaloneMatch[3], 10);
+      let year = parseInt(contextualDateMatch[3], 10);
       if (year < 100) year += 2000;
 
       if (month && day >= 1 && day <= 31) {
@@ -272,14 +284,15 @@ export class BillExtractor {
     // 4. Credit Card Statement / Due
     if (
       text.includes('credit card') ||
-      text.includes('card ending') ||
       text.includes('card statement') ||
-      text.includes('total due') ||
-      text.includes('min due') ||
-      text.includes('hdfcbk') ||
       text.includes('sbicrd') ||
-      text.includes('icicib') ||
-      text.includes('axisbk')
+      (text.includes('card ending') &&
+        (text.includes('statement') ||
+          text.includes('due') ||
+          text.includes('total due') ||
+          text.includes('min due'))) ||
+      ((text.includes('total due') || text.includes('min due')) &&
+        (text.includes('card') || text.includes('statement')))
     ) {
       let name = 'Credit Card';
       if (text.includes('hdfc')) name = 'HDFC Bank Credit Card';

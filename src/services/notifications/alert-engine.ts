@@ -161,7 +161,7 @@ export async function checkUpcomingBillReminders(): Promise<void> {
     }>(
       `SELECT id, merchant, amount, next_process_date 
        FROM recurring_transactions 
-       WHERE is_active = 1 AND next_process_date > ? AND next_process_date <= ?`,
+       WHERE is_active = 1 AND type = 'expense' AND next_process_date > ? AND next_process_date <= ?`,
       [todayStr, in3DaysStr]
     );
 

@@ -47,6 +47,7 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: 'Manrope_700Bold',
     fontSize: 22,
+    lineHeight: 28,
     marginBottom: 12,
     textAlign: 'center',
   },

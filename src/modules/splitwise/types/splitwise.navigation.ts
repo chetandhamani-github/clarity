@@ -4,7 +4,7 @@
  * ============================================================================
  */
 
-import type { DebtType } from './splitwise.types';
+import type { DebtType, SettlementType } from './splitwise.types';
 
 /**
  * Type-safe parameter definitions for Splitwise screens
@@ -22,6 +22,7 @@ export interface AddSplitwiseDebtParams {
 
 export interface AddSplitwiseSettlementParams {
   personId?: string;
+  type?: SettlementType;
   amount?: string;
   description?: string;
 }

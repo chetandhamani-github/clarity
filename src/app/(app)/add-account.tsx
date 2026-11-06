@@ -329,9 +329,9 @@ const getStyles = (colors: ThemeColors) => {
     },
     submitBtnText: {
       ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
       fontSize: 15,
       lineHeight: 20,
-      fontWeight: '700',
       color: colors.onPrimary,
     },
     helperText: {

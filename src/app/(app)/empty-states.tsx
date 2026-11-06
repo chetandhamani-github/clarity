@@ -143,9 +143,9 @@ const getStyles = (colors: ThemeColors) => {
     },
     primaryBtnText: {
       ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
       fontSize: 14,
       lineHeight: 20,
-      fontWeight: '700',
       color: colors.onPrimary,
     },
     secondaryBtn: {
@@ -160,9 +160,9 @@ const getStyles = (colors: ThemeColors) => {
     },
     secondaryBtnText: {
       ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
       fontSize: 14,
       lineHeight: 20,
-      fontWeight: '700',
       color: colors.onSurface,
     },
   });

@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Text, Header, DatePickerModal, useToast } from '@/components/ui';
 import { typography, useTheme, ThemeColors, radius } from '@/theme';
@@ -18,7 +18,7 @@ import { BILL_CATEGORIES, BillCategory, BillFrequency, SubscriptionCycle } from 
 
 export function AddBillScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
   const { showToast } = useToast();
 
@@ -900,7 +900,8 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     ...typography.labelMd,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 16,
+    lineHeight: 22,
   },
 });

@@ -78,13 +78,23 @@ export default function ReportsScreen() {
                     <View style={styles.reportGrid}>
                       <View style={styles.gridItem}>
                         <Text style={styles.gridLabel}>Income</Text>
-                        <Text style={styles.gridValue} numberOfLines={1} adjustsFontSizeToFit>
+                        <Text
+                          style={styles.gridValue}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          minimumFontScale={0.75}
+                        >
                           {formatCurrency(report.income)}
                         </Text>
                       </View>
                       <View style={styles.gridItem}>
                         <Text style={styles.gridLabel}>Expenses</Text>
-                        <Text style={styles.gridValue} numberOfLines={1} adjustsFontSizeToFit>
+                        <Text
+                          style={styles.gridValue}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          minimumFontScale={0.75}
+                        >
                           {formatCurrency(report.expenses)}
                         </Text>
                       </View>
@@ -97,6 +107,7 @@ export default function ReportsScreen() {
                           ]}
                           numberOfLines={1}
                           adjustsFontSizeToFit
+                          minimumFontScale={0.75}
                         >
                           {savingsRate.toFixed(1)}%
                         </Text>
@@ -206,6 +217,7 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.headlineSm,
       color: colors.onSurface,
       fontSize: 18,
+      lineHeight: 24,
     },
   });
   return styles;

@@ -67,7 +67,7 @@ export const useBillsStore = create<BillsState>()(
         }
         try {
           await BillsRepository.ensureSchema();
-          await BillsRepository.seedSampleDataIfEmpty();
+          await BillsRepository.cleanupDummyData();
 
           const [bills, subscriptions, summary] = await Promise.all([
             BillsRepository.getAllBills(),

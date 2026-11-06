@@ -114,7 +114,8 @@ export class BillsRepository {
    */
   public static async ensureSchema(): Promise<void> {
     const db = getDatabase();
-    await db.execAsync(`
+    if (typeof db.execAsync === 'function') {
+      await db.execAsync(`
       CREATE TABLE IF NOT EXISTS bills (
         id TEXT PRIMARY KEY NOT NULL,
         title TEXT NOT NULL,
@@ -161,6 +162,7 @@ export class BillsRepository {
       CREATE INDEX IF NOT EXISTS idx_subscriptions_renewal ON subscriptions(next_renewal_date ASC);
       CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
     `);
+    }
   }
 
   public static async getAllBills(): Promise<Bill[]> {
@@ -685,146 +687,85 @@ export class BillsRepository {
   }
 
   public static calculateNextOccurrence(currentDate: string, frequency: BillFrequency): string {
-    const [y, m, d] = currentDate.split('-').map(Number);
-    const date = new Date(y, m - 1, d);
+    const [yStr, mStr, dStr] = currentDate.split('-');
+    let year = parseInt(yStr, 10);
+    let month = parseInt(mStr, 10);
+    let day = parseInt(dStr, 10);
     const pad = (n: number) => n.toString().padStart(2, '0');
 
     switch (frequency) {
-      case 'weekly':
+      case 'weekly': {
+        const date = new Date(year, month - 1, day);
         date.setDate(date.getDate() + 7);
-        break;
-      case 'monthly':
-        date.setMonth(date.getMonth() + 1);
-        break;
-      case 'quarterly':
-        date.setMonth(date.getMonth() + 3);
-        break;
-      case 'yearly':
-        date.setFullYear(date.getFullYear() + 1);
-        break;
-      default:
-        date.setMonth(date.getMonth() + 1);
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+      }
+      case 'monthly': {
+        month += 1;
+        if (month > 12) {
+          month = 1;
+          year += 1;
+        }
+        const maxDays = new Date(year, month, 0).getDate();
+        day = Math.min(day, maxDays);
+        return `${year}-${pad(month)}-${pad(day)}`;
+      }
+      case 'quarterly': {
+        month += 3;
+        if (month > 12) {
+          month -= 12;
+          year += 1;
+        }
+        const maxDays = new Date(year, month, 0).getDate();
+        day = Math.min(day, maxDays);
+        return `${year}-${pad(month)}-${pad(day)}`;
+      }
+      case 'yearly': {
+        year += 1;
+        const maxDays = new Date(year, month, 0).getDate();
+        day = Math.min(day, maxDays);
+        return `${year}-${pad(month)}-${pad(day)}`;
+      }
+      default: {
+        month += 1;
+        if (month > 12) {
+          month = 1;
+          year += 1;
+        }
+        const maxDays = new Date(year, month, 0).getDate();
+        day = Math.min(day, maxDays);
+        return `${year}-${pad(month)}-${pad(day)}`;
+      }
     }
-
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
   }
 
   /**
-   * Seeds sample bills and subscriptions if database is completely empty.
+   * Purges any previously seeded sample/dummy bills and subscriptions.
    */
-  public static async seedSampleDataIfEmpty(): Promise<void> {
+  public static async cleanupDummyData(): Promise<void> {
     await this.ensureSchema();
     const db = getDatabase();
-    const billCount = await db.getFirstAsync<{ count: number }>('SELECT count(*) as count FROM bills;');
-    const subCount = await db.getFirstAsync<{ count: number }>('SELECT count(*) as count FROM subscriptions;');
 
-    if ((!billCount || billCount.count === 0) && (!subCount || subCount.count === 0)) {
-      const now = new Date();
-      const pad = (n: number) => n.toString().padStart(2, '0');
-      const addDays = (days: number) => {
-        const d = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
-        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-      };
+    await db.runAsync(
+      `DELETE FROM bills WHERE 
+       account_reference IN ('CA-9482104', 'DSL-08041920', 'Card ending in 4821', 'Flat 402, Green Glen')
+       OR notes IN (
+         'Monthly domestic meter billing', 
+         '200 Mbps Unlimited broadband', 
+         'Total statement balance', 
+         'Transfer via UPI / IMPS by 5th'
+       )
+       OR (provider = 'BESCOM Electricity' AND title = 'Electricity Bill' AND amount = 1450)
+       OR (provider = 'Airtel Broadband' AND title = 'Airtel Xstream Fiber' AND amount = 1178)
+       OR (provider = 'HDFC Bank' AND title = 'HDFC Regalia Credit Card' AND amount = 18450)
+       OR (provider = 'Landlord Rent Transfer' AND title = 'Apartment Rent' AND amount = 25000);`
+    );
 
-      // Seed realistic sample bills
-      await this.insertBill({
-        title: 'Electricity Bill',
-        provider: 'BESCOM Electricity',
-        category: 'electricity',
-        amount: 1450,
-        dueDate: addDays(4),
-        reminderDays: 3,
-        isRecurring: true,
-        frequency: 'monthly',
-        accountReference: 'CA-9482104',
-        paymentUrl: 'https://bescom.org/pay',
-        notes: 'Monthly domestic meter billing',
-        source: 'manual',
-        status: 'upcoming',
-      });
-
-      await this.insertBill({
-        title: 'Airtel Xstream Fiber',
-        provider: 'Airtel Broadband',
-        category: 'internet',
-        amount: 1178,
-        dueDate: addDays(8),
-        reminderDays: 3,
-        isRecurring: true,
-        frequency: 'monthly',
-        accountReference: 'DSL-08041920',
-        paymentUrl: 'https://airtel.in/pay',
-        notes: '200 Mbps Unlimited broadband',
-        source: 'manual',
-        status: 'upcoming',
-      });
-
-      await this.insertBill({
-        title: 'HDFC Regalia Credit Card',
-        provider: 'HDFC Bank',
-        category: 'credit_card',
-        amount: 18450,
-        minAmount: 1850,
-        dueDate: addDays(12),
-        reminderDays: 7,
-        isRecurring: true,
-        frequency: 'monthly',
-        accountReference: 'Card ending in 4821',
-        paymentUrl: 'https://hdfcbank.com',
-        notes: 'Total statement balance',
-        source: 'manual',
-        status: 'upcoming',
-      });
-
-      await this.insertBill({
-        title: 'Apartment Rent',
-        provider: 'Landlord Rent Transfer',
-        category: 'rent',
-        amount: 25000,
-        dueDate: addDays(1),
-        reminderDays: 3,
-        isRecurring: true,
-        frequency: 'monthly',
-        accountReference: 'Flat 402, Green Glen',
-        notes: 'Transfer via UPI / IMPS by 5th',
-        source: 'manual',
-        status: 'upcoming',
-      });
-
-      // Sample subscriptions
-      await this.insertSubscription({
-        name: 'Netflix Premium 4K',
-        provider: 'Netflix',
-        amount: 649,
-        billingCycle: 'monthly',
-        nextRenewalDate: addDays(15),
-        category: 'subscription',
-        status: 'active',
-        paymentUrl: 'https://netflix.com',
-        notes: 'Auto-debit on credit card',
-      });
-
-      await this.insertSubscription({
-        name: 'Spotify Family Plan',
-        provider: 'Spotify',
-        amount: 179,
-        billingCycle: 'monthly',
-        nextRenewalDate: addDays(22),
-        category: 'subscription',
-        status: 'active',
-        paymentUrl: 'https://spotify.com',
-      });
-
-      await this.insertSubscription({
-        name: 'Google One 2TB',
-        provider: 'Google One',
-        amount: 6500,
-        billingCycle: 'yearly',
-        nextRenewalDate: addDays(65),
-        category: 'subscription',
-        status: 'active',
-        notes: 'Annual cloud storage plan',
-      });
-    }
+    await db.runAsync(
+      `DELETE FROM subscriptions WHERE
+       (name = 'Netflix Premium 4K' AND notes = 'Auto-debit on credit card')
+       OR (name = 'Spotify Family Plan' AND amount = 179)
+       OR (name = 'Google One 2TB' AND notes = 'Annual cloud storage plan')
+       OR name IN ('Netflix Premium 4K', 'Spotify Family Plan', 'Google One 2TB');`
+    );
   }
 }

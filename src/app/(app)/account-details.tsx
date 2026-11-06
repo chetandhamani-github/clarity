@@ -610,13 +610,13 @@ const getStyles = (colors: ThemeColors) => {
     },
     txRight: {
       alignItems: 'flex-end',
+      flexShrink: 0,
     },
     txAmount: {
       ...typography.dataLg,
       fontSize: 20,
       lineHeight: 28,
       color: colors.onSurface,
-      fontWeight: '500',
     },
     viewAllBtn: {
       padding: 16,

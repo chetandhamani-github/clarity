@@ -199,12 +199,22 @@ export default function AnalyticsScreen() {
                   </View>
 
                   <View style={styles.inOutRow}>
-                    <Text style={styles.inOutAmount} numberOfLines={1} adjustsFontSizeToFit>
+                    <Text
+                      style={styles.inOutAmount}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.75}
+                    >
                       {formatCurrency(totals.income)}
                     </Text>
                     <Text style={styles.inOutLabel}>In</Text>
                     <Text style={styles.inOutDivider}>/</Text>
-                    <Text style={styles.inOutAmountOut} numberOfLines={1} adjustsFontSizeToFit>
+                    <Text
+                      style={styles.inOutAmountOut}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.75}
+                    >
                       {formatCurrency(totals.expenses)}
                     </Text>
                     <Text style={styles.inOutLabel}>Out</Text>
@@ -507,6 +517,7 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.headlineSm,
       color: colors.onSurface,
       fontSize: 16,
+      lineHeight: 22,
     },
     exportButton: {
       backgroundColor: colors.primary,
@@ -560,6 +571,7 @@ const getStyles = (colors: ThemeColors) => {
     inOutAmount: {
       ...typography.dataLg,
       fontSize: 24,
+      lineHeight: 32,
       color: colors.onSurface,
       marginRight: 8,
       flexShrink: 1,
@@ -567,6 +579,7 @@ const getStyles = (colors: ThemeColors) => {
     inOutAmountOut: {
       ...typography.dataLg,
       fontSize: 24,
+      lineHeight: 32,
       color: colors.onSurface,
       opacity: 0.6,
       marginRight: 8,
@@ -628,6 +641,7 @@ const getStyles = (colors: ThemeColors) => {
     tooltipText: {
       color: colors.inverseOnSurface,
       fontSize: 10,
+      lineHeight: 14,
       fontWeight: '600',
     },
     netWorthCard: {

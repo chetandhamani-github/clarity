@@ -15,6 +15,7 @@ import type {
   SplitwiseOverallSummary,
   SplitwiseActivityItem,
   DebtType,
+  SettlementType,
 } from '../types/splitwise.types';
 
 function generateId(): string {
@@ -47,6 +48,7 @@ interface SettlementRow {
   person_id: string;
   amount: number;
   description: string | null;
+  settlement_type: string | null;
   created_at: string;
 }
 
@@ -58,6 +60,8 @@ interface PersonBalanceRow {
   person_created_at: string;
   total_owed_to_me: number | null;
   total_i_owe: number | null;
+  total_settled_by_them: number | null;
+  total_settled_by_you: number | null;
   total_settled: number | null;
 }
 
@@ -88,6 +92,7 @@ function mapSettlementRow(row: SettlementRow): SplitwiseSettlement {
     personId: row.person_id,
     amount: row.amount,
     description: row.description ?? undefined,
+    settlementType: (row.settlement_type as SettlementType) || undefined,
     createdAt: row.created_at,
   };
 }
@@ -450,10 +455,12 @@ export class SplitwiseRepository {
       throw new Error(`Person with id ${dto.personId} does not exist`);
     }
 
+    const settlementType = dto.settlementType || 'THEY_PAID';
+
     await db.runAsync(
-      `INSERT INTO splitwise_settlements (id, person_id, amount, description, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
-      [id, dto.personId, dto.amount, description, nowStr]
+      `INSERT INTO splitwise_settlements (id, person_id, amount, description, settlement_type, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, dto.personId, dto.amount, description, settlementType, nowStr]
     );
 
     DeviceEventEmitter.emit('splitwiseUpdated');
@@ -463,6 +470,7 @@ export class SplitwiseRepository {
       personId: dto.personId,
       amount: dto.amount,
       description: description ?? undefined,
+      settlementType,
       createdAt: nowStr,
     };
   }
@@ -547,6 +555,11 @@ export class SplitwiseRepository {
       params.push(updates.description ? updates.description.trim() : null);
     }
 
+    if (updates.settlementType !== undefined) {
+      sets.push('settlement_type = ?');
+      params.push(updates.settlementType);
+    }
+
     if (updates.createdAt !== undefined) {
       sets.push('created_at = ?');
       params.push(updates.createdAt);
@@ -609,8 +622,15 @@ export class SplitwiseRepository {
       [personId]
     );
 
-    const settlementStats = await db.getFirstAsync<{ total_settled: number | null }>(
-      `SELECT SUM(amount) AS total_settled
+    const settlementStats = await db.getFirstAsync<{
+      total_settled_by_them: number | null;
+      total_settled_by_you: number | null;
+      total_settled: number | null;
+    }>(
+      `SELECT 
+        SUM(CASE WHEN settlement_type = 'YOU_PAID' THEN 0 ELSE amount END) AS total_settled_by_them,
+        SUM(CASE WHEN settlement_type = 'YOU_PAID' THEN amount ELSE 0 END) AS total_settled_by_you,
+        SUM(amount) AS total_settled
        FROM splitwise_settlements
        WHERE person_id = ?`,
       [personId]
@@ -619,15 +639,39 @@ export class SplitwiseRepository {
     const totalOwedToMe = debtStats?.total_owed_to_me ?? 0;
     const totalIOwe = debtStats?.total_i_owe ?? 0;
     const totalSettled = settlementStats?.total_settled ?? 0;
-    const netBalance = (totalOwedToMe - totalIOwe) - totalSettled;
+
+    let settledByThem = settlementStats?.total_settled_by_them;
+    let settledByYou = settlementStats?.total_settled_by_you;
+
+    if (settledByThem === undefined || settledByThem === null) {
+      if (totalIOwe > totalOwedToMe) {
+        settledByYou = totalSettled;
+        settledByThem = 0;
+      } else {
+        settledByThem = totalSettled;
+        settledByYou = 0;
+      }
+    }
+
+    const remainingReceivable = Math.max(0, totalOwedToMe - (settledByThem ?? 0));
+    const remainingPayable = Math.max(0, totalIOwe - (settledByYou ?? 0));
+    const netBalance = remainingReceivable - remainingPayable;
 
     return {
       person,
       totalOwedToMe,
       totalIOwe,
       totalSettled,
+      remainingReceivable,
+      remainingPayable,
       netBalance,
     };
+  }
+
+  public static async getPersonBalanceSummary(
+    personId: string
+  ): Promise<PersonBalanceSummary | null> {
+    return this.getPersonBalance(personId);
   }
 
   /**
@@ -646,6 +690,8 @@ export class SplitwiseRepository {
         p.created_at AS person_created_at,
         d.total_owed_to_me,
         d.total_i_owe,
+        s.total_settled_by_them,
+        s.total_settled_by_you,
         s.total_settled
        FROM splitwise_people p
        LEFT JOIN (
@@ -659,6 +705,8 @@ export class SplitwiseRepository {
        LEFT JOIN (
          SELECT 
            person_id,
+           SUM(CASE WHEN settlement_type = 'YOU_PAID' THEN 0 ELSE amount END) AS total_settled_by_them,
+           SUM(CASE WHEN settlement_type = 'YOU_PAID' THEN amount ELSE 0 END) AS total_settled_by_you,
            SUM(amount) AS total_settled
          FROM splitwise_settlements
          GROUP BY person_id
@@ -677,14 +725,21 @@ export class SplitwiseRepository {
 
       const totalOwedToMe = row.total_owed_to_me ?? 0;
       const totalIOwe = row.total_i_owe ?? 0;
+      const settledByThem = row.total_settled_by_them ?? 0;
+      const settledByYou = row.total_settled_by_you ?? 0;
       const totalSettled = row.total_settled ?? 0;
-      const netBalance = (totalOwedToMe - totalIOwe) - totalSettled;
+
+      const remainingReceivable = Math.max(0, totalOwedToMe - settledByThem);
+      const remainingPayable = Math.max(0, totalIOwe - settledByYou);
+      const netBalance = remainingReceivable - remainingPayable;
 
       return {
         person,
         totalOwedToMe,
         totalIOwe,
         totalSettled,
+        remainingReceivable,
+        remainingPayable,
         netBalance,
       };
     });
@@ -711,14 +766,38 @@ export class SplitwiseRepository {
        FROM splitwise_debts`
     );
 
-    const settlementStats = await db.getFirstAsync<{ total_settled: number | null }>(
-      `SELECT SUM(amount) AS total_settled FROM splitwise_settlements`
+    const settlementStats = await db.getFirstAsync<{
+      total_settled_by_them: number | null;
+      total_settled_by_you: number | null;
+      total_settled: number | null;
+    }>(
+      `SELECT 
+        SUM(CASE WHEN settlement_type = 'YOU_PAID' THEN 0 ELSE amount END) AS total_settled_by_them,
+        SUM(CASE WHEN settlement_type = 'YOU_PAID' THEN amount ELSE 0 END) AS total_settled_by_you,
+        SUM(amount) AS total_settled
+       FROM splitwise_settlements`
     );
 
     const totalOwedToMe = debtStats?.total_owed_to_me ?? 0;
     const totalIOwe = debtStats?.total_i_owe ?? 0;
     const totalSettled = settlementStats?.total_settled ?? 0;
-    const netBalance = (totalOwedToMe - totalIOwe) - totalSettled;
+
+    let settledByThem = settlementStats?.total_settled_by_them;
+    let settledByYou = settlementStats?.total_settled_by_you;
+
+    if (settledByThem === undefined || settledByThem === null) {
+      if (totalIOwe > totalOwedToMe) {
+        settledByYou = totalSettled;
+        settledByThem = 0;
+      } else {
+        settledByThem = totalSettled;
+        settledByYou = 0;
+      }
+    }
+
+    const remainingReceivable = Math.max(0, totalOwedToMe - (settledByThem ?? 0));
+    const remainingPayable = Math.max(0, totalIOwe - (settledByYou ?? 0));
+    const netBalance = remainingReceivable - remainingPayable;
     const peopleCount = peopleCountRow?.count ?? 0;
 
     return {
@@ -746,6 +825,7 @@ export class SplitwiseRepository {
       person_name: string;
       amount: number;
       debt_type: string | null;
+      settlement_type: string | null;
       description: string | null;
       created_at: string;
     }
@@ -758,6 +838,7 @@ export class SplitwiseRepository {
         p.name AS person_name,
         d.amount,
         d.type AS debt_type,
+        NULL AS settlement_type,
         d.description,
         d.created_at
        FROM splitwise_debts d
@@ -773,6 +854,7 @@ export class SplitwiseRepository {
         p.name AS person_name,
         s.amount,
         NULL AS debt_type,
+        s.settlement_type,
         COALESCE(s.description, 'Settlement payment') AS description,
         s.created_at
        FROM splitwise_settlements s
@@ -790,6 +872,7 @@ export class SplitwiseRepository {
       personName: r.person_name,
       amount: r.amount,
       debtType: (r.debt_type as DebtType) || undefined,
+      settlementType: (r.settlement_type as SettlementType) || undefined,
       description: r.description || '',
       createdAt: r.created_at,
     }));
@@ -811,6 +894,7 @@ export class SplitwiseRepository {
       person_name: string;
       amount: number;
       debt_type: string | null;
+      settlement_type: string | null;
       description: string | null;
       created_at: string;
     }
@@ -823,6 +907,7 @@ export class SplitwiseRepository {
         p.name AS person_name,
         d.amount,
         d.type AS debt_type,
+        NULL AS settlement_type,
         d.description,
         d.created_at
        FROM splitwise_debts d
@@ -837,6 +922,7 @@ export class SplitwiseRepository {
         p.name AS person_name,
         s.amount,
         NULL AS debt_type,
+        s.settlement_type,
         COALESCE(s.description, 'Settlement payment') AS description,
         s.created_at
        FROM splitwise_settlements s
@@ -854,6 +940,7 @@ export class SplitwiseRepository {
       personName: r.person_name,
       amount: r.amount,
       debtType: (r.debt_type as DebtType) || undefined,
+      settlementType: (r.settlement_type as SettlementType) || undefined,
       description: r.description || '',
       createdAt: r.created_at,
     }));

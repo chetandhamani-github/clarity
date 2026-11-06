@@ -102,12 +102,13 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
         // Upsert settlements
         for (const s of payload.settlements || []) {
           await db.runAsync(
-            `INSERT INTO splitwise_settlements (id, person_id, amount, description, created_at)
-             VALUES (?, ?, ?, ?, ?)
+            `INSERT INTO splitwise_settlements (id, person_id, amount, description, settlement_type, created_at)
+             VALUES (?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
                amount = excluded.amount,
-               description = excluded.description;`,
-            [s.id, s.personId, s.amount, s.description ?? null, s.createdAt]
+               description = excluded.description,
+               settlement_type = excluded.settlement_type;`,
+            [s.id, s.personId, s.amount, s.description ?? null, s.settlementType || 'THEY_PAID', s.createdAt]
           );
         }
       });

@@ -16,6 +16,7 @@ import { GoogleDrivePromptModal } from '@/components/modals/GoogleDrivePromptMod
 import { SmsPermissionPromptModal } from '@/components/modals/SmsPermissionPromptModal';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/useTheme';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/lib/query-client';
@@ -183,7 +184,7 @@ export default function RootLayout() {
   }
 
   return (
-    <>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
       <QueryClientProvider client={queryClient}>
         <BackendProvider>
@@ -213,6 +214,6 @@ export default function RootLayout() {
           </ToastProvider>
         </BackendProvider>
       </QueryClientProvider>
-    </>
+    </SafeAreaProvider>
   );
 }
