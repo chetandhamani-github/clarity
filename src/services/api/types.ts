@@ -54,3 +54,75 @@ export interface HealthStatus {
   status: string;
   service: string;
 }
+
+export interface SplitSyncPayload {
+  installationId: string;
+  lastSyncedAt?: string | null;
+  people: Array<{
+    id: string;
+    name?: string;
+    phone?: string;
+    notes?: string;
+    avatarUrl?: string;
+    isDeleted?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
+  }>;
+  debts: Array<{
+    id: string;
+    personId?: string;
+    amount?: number;
+    type?: string;
+    description?: string;
+    isDeleted?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
+  }>;
+  settlements: Array<{
+    id: string;
+    personId?: string;
+    amount?: number;
+    settlementType?: string;
+    description?: string;
+    isDeleted?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
+  }>;
+}
+
+export interface SplitSyncResponse {
+  success: boolean;
+  syncedAt: string;
+  people: Array<{
+    id: string;
+    name: string;
+    phone?: string;
+    notes?: string;
+    avatarUrl?: string;
+    isDeleted?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
+  }>;
+  debts: Array<{
+    id: string;
+    personId: string;
+    amount: number;
+    type: string;
+    description: string;
+    isDeleted?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
+  }>;
+  settlements: Array<{
+    id: string;
+    personId: string;
+    amount: number;
+    settlementType?: string;
+    description?: string;
+    isDeleted?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
+  }>;
+  confirmedIds: string[];
+}
+

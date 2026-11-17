@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { AppState, type AppStateStatus, StyleSheet, View } from 'react-native';
 import { getInstallationId } from '@/utils/installationId';
 import { registerDevice, checkDeviceStatus } from '@/services/api/device.api';
 import { fetchRemoteConfig } from '@/services/api/config.api';
@@ -10,6 +11,7 @@ import { MaintenanceScreen } from '@/components/backend/MaintenanceScreen';
 import { ForceUpdateScreen } from '@/components/backend/ForceUpdateScreen';
 import { useRemoteConfigStore } from '@/store/remoteConfig.store';
 import { useFeatureFlagStore } from '@/store/featureFlag.store';
+import { SplitwiseSyncService } from '@/modules/splitwise/services/SplitwiseSyncService';
 
 interface BackendContextValue {
   installationId: string;
@@ -62,6 +64,9 @@ export function BackendProvider({ children }: BackendProviderProps) {
       if (flagsRes.status === 'fulfilled' && flagsRes.value) {
         setFlags(flagsRes.value);
       }
+
+      // 4. Trigger silent Splitwise sync in background
+      SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {});
     } catch (error) {
       if (__DEV__) {
         console.warn('⚠️ [BackendProvider] Startup sequence encountered an error, falling back to offline mode:', error);
@@ -80,22 +85,16 @@ export function BackendProvider({ children }: BackendProviderProps) {
 
   useEffect(() => {
     runStartupSequence();
+
+    // Automatically re-evaluate device status when user returns to app (e.g. from admin portal)
+    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      if (nextState === 'active') {
+        runStartupSequence();
+      }
+    });
+
+    return () => subscription.remove();
   }, [runStartupSequence]);
-
-  // Gate app access if device is explicitly blocked
-  if (deviceStatus?.blocked) {
-    return <FullScreenBlockedScreen />;
-  }
-
-  // Gate app access if backend is under maintenance
-  if (deviceStatus?.maintenanceMode) {
-    return <MaintenanceScreen onRetry={runStartupSequence} />;
-  }
-
-  // Gate app access if app version is below mandatory minimum version
-  if (deviceStatus?.forceUpdate) {
-    return <ForceUpdateScreen minimumVersion={deviceStatus.minimumVersion} />;
-  }
 
   return (
     <BackendContext.Provider
@@ -105,7 +104,22 @@ export function BackendProvider({ children }: BackendProviderProps) {
         refreshStatus: runStartupSequence,
       }}
     >
-      {children}
+      <View style={styles.container}>
+        {children}
+        {deviceStatus?.blocked && <FullScreenBlockedScreen onRetry={runStartupSequence} />}
+        {!deviceStatus?.blocked && deviceStatus?.maintenanceMode && (
+          <MaintenanceScreen onRetry={runStartupSequence} />
+        )}
+        {!deviceStatus?.blocked && !deviceStatus?.maintenanceMode && deviceStatus?.forceUpdate && (
+          <ForceUpdateScreen minimumVersion={deviceStatus.minimumVersion} />
+        )}
+      </View>
     </BackendContext.Provider>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});

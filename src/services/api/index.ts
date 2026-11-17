@@ -5,3 +5,4 @@ export * from './feature.api';
 export * from './device.api';
 export * from './announcement.api';
 export * from './health.api';
+export * from './splitwise.api';

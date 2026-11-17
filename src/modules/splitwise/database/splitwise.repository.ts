@@ -1,6 +1,42 @@
 import { DeviceEventEmitter } from 'react-native';
 import { getDatabase } from '@/services/database';
+import { mmkv } from '@/lib/storage';
 import { runSplitwiseMigrations } from './splitwise.migration';
+
+const SPLITWISE_DELETED_RECORDS_KEY = 'clarity_splitwise_deleted_records';
+
+export interface SplitwiseDeletedRecord {
+  id: string;
+  type: 'person' | 'debt' | 'settlement';
+  deletedAt: string;
+}
+
+export function getDeletedRecords(): SplitwiseDeletedRecord[] {
+  try {
+    const raw = mmkv.getString(SPLITWISE_DELETED_RECORDS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function trackDeletedRecord(id: string, type: 'person' | 'debt' | 'settlement'): void {
+  try {
+    const current = getDeletedRecords();
+    if (!current.some((r) => r.id === id)) {
+      current.push({ id, type, deletedAt: new Date().toISOString() });
+      mmkv.set(SPLITWISE_DELETED_RECORDS_KEY, JSON.stringify(current));
+    }
+  } catch {}
+}
+
+export function removeConfirmedDeletedRecords(confirmedIds: string[]): void {
+  try {
+    const current = getDeletedRecords();
+    const remaining = current.filter((r) => !confirmedIds.includes(r.id));
+    mmkv.set(SPLITWISE_DELETED_RECORDS_KEY, JSON.stringify(remaining));
+  } catch {}
+}
 import type {
   SplitwisePerson,
   SplitwiseDebt,
@@ -243,6 +279,24 @@ export class SplitwiseRepository {
   public static async deletePerson(id: string): Promise<void> {
     await this.ensureSchema();
     const db = getDatabase();
+
+    // Track deleted debts & settlements for this person before removing from SQLite
+    try {
+      const debts = await this.getDebtsByPerson(id);
+      for (const d of debts) {
+        trackDeletedRecord(d.id, 'debt');
+      }
+      const settlements = await this.getSettlementsByPerson(id);
+      for (const s of settlements) {
+        trackDeletedRecord(s.id, 'settlement');
+      }
+    } catch {
+      // Fallback if querying sub-records fails
+    }
+
+    trackDeletedRecord(id, 'person');
+    await db.runAsync(`DELETE FROM splitwise_debts WHERE person_id = ?`, [id]);
+    await db.runAsync(`DELETE FROM splitwise_settlements WHERE person_id = ?`, [id]);
     await db.runAsync(`DELETE FROM splitwise_people WHERE id = ?`, [id]);
     DeviceEventEmitter.emit('splitwiseUpdated');
   }
@@ -422,6 +476,7 @@ export class SplitwiseRepository {
   public static async deleteDebt(id: string): Promise<void> {
     await this.ensureSchema();
     const db = getDatabase();
+    trackDeletedRecord(id, 'debt');
     await db.runAsync(`DELETE FROM splitwise_debts WHERE id = ?`, [id]);
     DeviceEventEmitter.emit('splitwiseUpdated');
   }
@@ -587,6 +642,7 @@ export class SplitwiseRepository {
   public static async deleteSettlement(id: string): Promise<void> {
     await this.ensureSchema();
     const db = getDatabase();
+    trackDeletedRecord(id, 'settlement');
     await db.runAsync(`DELETE FROM splitwise_settlements WHERE id = ?`, [id]);
     DeviceEventEmitter.emit('splitwiseUpdated');
   }

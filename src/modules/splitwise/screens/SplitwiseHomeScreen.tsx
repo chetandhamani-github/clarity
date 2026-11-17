@@ -19,6 +19,7 @@ import { useAppStore } from '@/store/use-app-store';
 import { formatCurrencyPrivacy } from '@/utils/format';
 import { useSplitwiseStore } from '../store/splitwise.store';
 import { SplitwiseRepository } from '../database/splitwise.repository';
+import { SplitwiseSyncService } from '../services/SplitwiseSyncService';
 import {
   BalanceCalculator,
   DetailedPersonBalance,
@@ -61,7 +62,11 @@ export function SplitwiseHomeScreen() {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([loadAllData(), loadRecentActivities()]);
+    await Promise.all([
+      loadAllData(),
+      loadRecentActivities(),
+      SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {}),
+    ]);
     setRefreshing(false);
   }, [loadAllData, loadRecentActivities]);
 

@@ -1,10 +1,25 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/useTheme';
 
-export function FullScreenBlockedScreen() {
+interface FullScreenBlockedScreenProps {
+  onRetry?: () => Promise<void> | void;
+}
+
+export function FullScreenBlockedScreen({ onRetry }: FullScreenBlockedScreenProps) {
   const { colors } = useTheme();
+  const [loading, setLoading] = useState(false);
+
+  const handleRetry = async () => {
+    if (!onRetry || loading) return;
+    setLoading(true);
+    try {
+      await onRetry();
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -25,13 +40,31 @@ export function FullScreenBlockedScreen() {
         This device installation has been restricted from connecting to Clarity services.
         If you believe this is an error, please contact customer support.
       </Text>
+
+      {onRetry && (
+        <TouchableOpacity
+          style={[styles.retryButton, { backgroundColor: colors.primary }]}
+          onPress={handleRetry}
+          disabled={loading}
+          activeOpacity={0.8}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.onPrimary} />
+          ) : (
+            <Text style={[styles.retryText, { color: colors.onPrimary }]}>
+              Check Access Again
+            </Text>
+          )}
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 99999,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
@@ -56,5 +89,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
+    marginBottom: 28,
+  },
+  retryButton: {
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 14,
+    minWidth: 160,
+    alignItems: 'center',
+  },
+  retryText: {
+    fontFamily: 'Manrope_600SemiBold',
+    fontSize: 15,
+    lineHeight: 20,
   },
 });
