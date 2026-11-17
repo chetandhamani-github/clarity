@@ -9,6 +9,7 @@ import type {
 import { SmsDao } from '@/modules/sms/storage/smsDao';
 import { LocalCategorizerEngine } from '@/modules/sms/categorizer/localCategorizerEngine';
 import { SmsSyncService } from '@/modules/sms/services/smsSyncService';
+import { createReviewItem } from './reviewItemFactory';
 
 function generateId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -22,24 +23,7 @@ export class ReviewQueueService {
   /**
    * Create a review queue item from a failed or ambiguous SMS parse attempt.
    */
-  public static createReviewItem(
-    message: RawSmsMessage,
-    reason: ReviewReason,
-    confidence: number = 0.3,
-    extractedData?: Partial<ExtractedTransaction>
-  ): ReviewQueueItem {
-    return {
-      id: generateId(),
-      smsId: message.id,
-      sender: message.address,
-      body: message.body,
-      reason,
-      confidence,
-      extractedData,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-    };
-  }
+  public static createReviewItem = createReviewItem;
 
   /**
    * Fetch pending review items from database.

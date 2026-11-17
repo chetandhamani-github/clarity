@@ -1,4 +1,6 @@
-import { Header, HomeSkeleton, ProgressBar, Text, UpcomingBillsWidget, SplitwiseWidget } from '@/components/ui';
+import { Header, HomeSkeleton, ProgressBar, Text } from '@/components/ui';
+import { UpcomingBillsWidget } from '@/modules/bills';
+import { SplitwiseWidget } from '@/modules/splitwise';
 import { AnnouncementBanner } from '@/components/backend';
 import { radius, ThemeColors, typography, useTheme } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';

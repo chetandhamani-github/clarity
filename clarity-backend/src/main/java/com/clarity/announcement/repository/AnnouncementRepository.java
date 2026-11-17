@@ -11,4 +11,6 @@ import java.util.UUID;
 public interface AnnouncementRepository extends JpaRepository<Announcement, UUID> {
 
     List<Announcement> findByActiveTrueOrderByCreatedAtDesc();
+
+    List<Announcement> findAllByOrderByCreatedAtDesc();
 }

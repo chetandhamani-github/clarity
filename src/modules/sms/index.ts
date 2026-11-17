@@ -23,6 +23,7 @@ export * from './duplicate/duplicateDetectionEngine';
 export * from './categorizer/localCategorizerEngine';
 export * from './recurring/recurringDetectionEngine';
 export * from './storage/smsDao';
+export * from './reviewQueue/reviewItemFactory';
 export * from './reviewQueue/reviewQueueService';
 export * from './services/smsPipelineService';
 export * from './services/smsSyncService';

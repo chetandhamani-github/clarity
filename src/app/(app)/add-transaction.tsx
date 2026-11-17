@@ -1,35 +1,35 @@
-import React, { useState, useMemo } from 'react';
-import {
-  View,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
-  Switch,
-  ActivityIndicator,
-  ScrollView,
-  Platform,
-  Modal,
-} from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { Text, Header, DatePickerModal, useToast, useAlert } from '@/components/ui';
-import { typography, useTheme, ThemeColors } from '@/theme';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useSafeInsets } from '@/hooks/use-safe-insets';
-import {
-  useCreateTransaction,
-  useUpdateTransaction,
-  useTransaction,
-  useDeleteTransaction,
-  useCreateRecurringTransaction,
-} from '@/hooks/use-transactions';
+import { DatePickerModal, Header, Text, useAlert, useToast } from '@/components/ui';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useCategories } from '@/hooks/use-budget';
-import type { TransactionType, RecurringFrequency } from '@/types';
-import { getAccountTypeIcon, getCategoryIcon } from '@/utils/icons';
-import { getCurrencySymbol, formatLocalDate } from '@/utils/format';
-import { evaluateTransactionBudgetAlerts } from '@/services/notifications/alert-engine';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
+import {
+  useCreateRecurringTransaction,
+  useCreateTransaction,
+  useDeleteTransaction,
+  useTransaction,
+  useUpdateTransaction,
+} from '@/hooks/use-transactions';
 import { calculateNextDate } from '@/services/database/recurring-dao';
+import { evaluateTransactionBudgetAlerts } from '@/services/notifications/alert-engine';
+import { ThemeColors, typography, useTheme } from '@/theme';
+import type { RecurringFrequency, TransactionType } from '@/types';
+import { formatLocalDate, getCurrencySymbol } from '@/utils/format';
+import { getAccountTypeIcon, getCategoryIcon } from '@/utils/icons';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 
 const CATEGORIES = [
   'Groceries',
@@ -299,12 +299,23 @@ export default function AddTransactionScreen() {
   const selectedAccount = accounts.find((a) => a.id === accountId);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          paddingTop: insets.top,
+          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
+        },
+      ]}
+    >
       <Header showBack title={isEditing ? 'Edit Transaction' : 'Add Transaction'} />
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 140 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 16) + 160 },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}

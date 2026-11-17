@@ -2,6 +2,10 @@ server:
   port: ${PORT:8080}
   shutdown: graceful
 
+clarity:
+  admin:
+    secret-key: ${ADMIN_SECRET_KEY:clarity-admin-2026}
+
 spring:
   application:
     name: clarity-backend

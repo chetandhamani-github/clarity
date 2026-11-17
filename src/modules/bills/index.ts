@@ -8,6 +8,7 @@ export * from './components/BillStatusBadge';
 export * from './components/BillCard';
 export * from './components/SubscriptionCard';
 export * from './components/UpcomingBillsSection';
+export { UpcomingBillsSection as UpcomingBillsWidget } from './components/UpcomingBillsSection';
 export * from './screens/BillsScreen';
 export * from './screens/AddBillScreen';
 export * from './screens/BillDetailsScreen';

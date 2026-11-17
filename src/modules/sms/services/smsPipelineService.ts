@@ -8,7 +8,7 @@ import { SmsClassificationEngine } from '@/modules/sms/classifier/smsClassificat
 import { ParserRegistry } from '@/modules/sms/parser/parserRegistry';
 import { LocalCategorizerEngine } from '@/modules/sms/categorizer/localCategorizerEngine';
 import { DuplicateDetectionEngine } from '@/modules/sms/duplicate/duplicateDetectionEngine';
-import { ReviewQueueService } from '@/modules/sms/reviewQueue/reviewQueueService';
+import { createReviewItem } from '@/modules/sms/reviewQueue/reviewItemFactory';
 
 function generateId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -53,7 +53,7 @@ export class SmsPipelineService {
 
     if (!extracted) {
       // Message appeared financial but parser could not extract crucial fields
-      const reviewItem = ReviewQueueService.createReviewItem(
+      const reviewItem = createReviewItem(
         message,
         'UNRECOGNIZED_FORMAT',
         classification.confidence
@@ -66,7 +66,7 @@ export class SmsPipelineService {
 
     // Check if essential fields are missing
     if (extracted.amount <= 0) {
-      const reviewItem = ReviewQueueService.createReviewItem(
+      const reviewItem = createReviewItem(
         message,
         'MISSING_AMOUNT',
         0.4,
@@ -81,7 +81,7 @@ export class SmsPipelineService {
     const hasKnownBank = extracted.bank && extracted.bank !== 'Other Bank';
     const accountSuffix = extracted.accountMask.replace(/[^0-9]/g, '');
     if (!hasKnownBank || accountSuffix.length < 3) {
-      const reviewItem = ReviewQueueService.createReviewItem(
+      const reviewItem = createReviewItem(
         message,
         'MISSING_ACCOUNT',
         classification.confidence,

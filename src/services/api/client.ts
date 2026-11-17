@@ -73,15 +73,19 @@ function getFetchImplementation(): typeof fetch {
   return globalThis.fetch;
 }
 
+function normalizeBaseUrl(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
 class ApiClient {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = getDefaultBaseUrl();
+    this.baseUrl = normalizeBaseUrl(getDefaultBaseUrl());
   }
 
   public setBaseUrl(url: string) {
-    this.baseUrl = url;
+    this.baseUrl = normalizeBaseUrl(url);
   }
 
   public getBaseUrl(): string {
@@ -112,7 +116,9 @@ class ApiClient {
     body?: unknown,
     options?: RequestOptions
   ): Promise<T> {
-    const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
+    const cleanBaseUrl = this.baseUrl.replace(/\/+$/, '');
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = endpoint.startsWith('http') ? endpoint : `${cleanBaseUrl}${cleanEndpoint}`;
     const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
     const controller = new AbortController();
