@@ -53,7 +53,7 @@ export function SplitwiseWidget() {
       : 'rgba(6, 182, 212, 0.12)';
 
   const handlePress = () => {
-    router.push('/(app)/splitwise');
+    router.navigate('/(app)/splitwise');
   };
 
   return (
@@ -63,7 +63,7 @@ export function SplitwiseWidget() {
           <Text style={[styles.title, { color: colors.onSurface }]}>Splitwise</Text>
           {summary.activePeopleCount > 0 && (
             <View style={[styles.countBadge, { backgroundColor: colors.primaryContainer }]}>
-              <Text style={[styles.countBadgeText, { color: colors.onPrimaryContainer }]}>
+              <Text style={[styles.countBadgeText, { color: colors.onPrimaryContainer }]} numberOfLines={1}>
                 {summary.activePeopleCount} {summary.activePeopleCount === 1 ? 'friend' : 'friends'}
               </Text>
             </View>
@@ -170,15 +170,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
+    flexShrink: 0,
   },
   countBadgeText: {
     ...typography.labelMd,
     fontWeight: '700',
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 16,
   },
   viewAllButton: {
     paddingVertical: 4,
     paddingHorizontal: 4,
+    flexShrink: 0,
   },
   viewAllText: {
     ...typography.labelMd,

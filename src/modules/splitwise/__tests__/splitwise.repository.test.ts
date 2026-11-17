@@ -77,7 +77,7 @@ describe('SplitwiseRepository', () => {
       expect(results[0].name).toBe('Rahul Sharma');
       expect(mockDb.getAllAsync).toHaveBeenCalledWith(
         expect.stringContaining('name LIKE ?'),
-        ['%Rahul%', '%Rahul%']
+        ['%Rahul%', '%Rahul%', '%Rahul%']
       );
     });
 

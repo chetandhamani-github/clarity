@@ -69,7 +69,7 @@ export default function PlanScreen() {
           isMainTab
           title="Budget Plan"
           leftNode={
-            <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
+            <TouchableOpacity style={styles.avatarButton} onPress={() => router.navigate('/settings')}>
               <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
                 <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
               </View>
@@ -90,7 +90,7 @@ export default function PlanScreen() {
           isMainTab
           title="Budget Plan"
           leftNode={
-            <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
+            <TouchableOpacity style={styles.avatarButton} onPress={() => router.navigate('/settings')}>
               <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
                 <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
               </View>
@@ -110,7 +110,7 @@ export default function PlanScreen() {
           >
             Set up your monthly income and allocation to start tracking your budget.
           </Text>
-          <TouchableOpacity style={styles.editBtn} onPress={() => router.push('/budget-setup')}>
+          <TouchableOpacity style={styles.editBtn} onPress={() => router.navigate('/budget-setup')}>
             <Text style={styles.editBtnText}>Set Up Budget</Text>
           </TouchableOpacity>
         </View>
@@ -137,14 +137,14 @@ export default function PlanScreen() {
         isMainTab
         title="Budget Plan"
         leftNode={
-          <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
+          <TouchableOpacity style={styles.avatarButton} onPress={() => router.navigate('/settings')}>
             <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
               <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
             </View>
           </TouchableOpacity>
         }
         rightNode={
-          <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/reports')}>
+          <TouchableOpacity style={styles.iconButton} onPress={() => router.navigate('/reports')}>
             <MaterialIcons name="assessment" size={24} color={colors.onSurface} />
           </TouchableOpacity>
         }
@@ -165,7 +165,7 @@ export default function PlanScreen() {
                 <Text style={styles.sectionTitle}>{monthName} Plan</Text>
                 <Text style={styles.sectionSubtitle}>{daysRemaining} days remaining</Text>
               </View>
-              <TouchableOpacity style={styles.editBtn} onPress={() => router.push('/budget-setup')}>
+              <TouchableOpacity style={styles.editBtn} onPress={() => router.navigate('/budget-setup')}>
                 <Text style={styles.editBtnText}>Edit Allocation</Text>
               </TouchableOpacity>
             </View>
@@ -206,7 +206,7 @@ export default function PlanScreen() {
               {/* Needs */}
               <TouchableOpacity
                 style={styles.allocationCard}
-                onPress={() => router.push('/manage-categories')}
+                onPress={() => router.navigate('/manage-categories')}
               >
                 <View style={styles.allocationHeader}>
                   <View style={styles.allocationHeaderLeft}>
@@ -245,7 +245,7 @@ export default function PlanScreen() {
                       borderTopWidth: 1,
                       borderTopColor: colors.outlineVariant,
                     }}
-                    onPress={() => router.push('/(app)/bills')}
+                    onPress={() => router.navigate('/(app)/bills')}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <MaterialIcons name="receipt-long" size={16} color={colors.primary} />
@@ -263,7 +263,7 @@ export default function PlanScreen() {
               {/* Wants */}
               <TouchableOpacity
                 style={styles.allocationCard}
-                onPress={() => router.push('/manage-categories')}
+                onPress={() => router.navigate('/manage-categories')}
               >
                 <View style={styles.allocationHeader}>
                   <View style={styles.allocationHeaderLeft}>
@@ -295,7 +295,7 @@ export default function PlanScreen() {
               {/* Savings */}
               <TouchableOpacity
                 style={styles.allocationCard}
-                onPress={() => router.push('/manage-categories')}
+                onPress={() => router.navigate('/manage-categories')}
               >
                 <View style={styles.allocationHeader}>
                   <View style={styles.allocationHeaderLeft}>

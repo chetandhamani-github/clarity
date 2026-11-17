@@ -86,39 +86,42 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
         // Upsert people
         for (const p of payload.people || []) {
           await db.runAsync(
-            `INSERT INTO splitwise_people (id, name, phone, notes, created_at)
-             VALUES (?, ?, ?, ?, ?)
+            `INSERT INTO splitwise_people (id, name, email, phone, notes, created_at)
+             VALUES (?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
                name = excluded.name,
+               email = excluded.email,
                phone = excluded.phone,
                notes = excluded.notes;`,
-            [p.id, p.name, p.phone ?? null, p.notes ?? null, p.createdAt]
+            [p.id, p.name, p.email ?? null, p.phone ?? null, p.notes ?? null, p.createdAt]
           );
         }
 
         // Upsert debts
         for (const d of payload.debts || []) {
           await db.runAsync(
-            `INSERT INTO splitwise_debts (id, person_id, amount, type, description, created_at)
-             VALUES (?, ?, ?, ?, ?, ?)
+            `INSERT INTO splitwise_debts (id, person_id, amount, type, description, friend_email, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
                amount = excluded.amount,
                type = excluded.type,
-               description = excluded.description;`,
-            [d.id, d.personId, d.amount, d.type, d.description, d.createdAt]
+               description = excluded.description,
+               friend_email = excluded.friend_email;`,
+            [d.id, d.personId, d.amount, d.type, d.description, d.friendEmail ?? null, d.createdAt]
           );
         }
 
         // Upsert settlements
         for (const s of payload.settlements || []) {
           await db.runAsync(
-            `INSERT INTO splitwise_settlements (id, person_id, amount, description, settlement_type, created_at)
-             VALUES (?, ?, ?, ?, ?, ?)
+            `INSERT INTO splitwise_settlements (id, person_id, amount, description, settlement_type, friend_email, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
                amount = excluded.amount,
                description = excluded.description,
-               settlement_type = excluded.settlement_type;`,
-            [s.id, s.personId, s.amount, s.description ?? null, s.settlementType || 'THEY_PAID', s.createdAt]
+               settlement_type = excluded.settlement_type,
+               friend_email = excluded.friend_email;`,
+            [s.id, s.personId, s.amount, s.description ?? null, s.settlementType || 'THEY_PAID', s.friendEmail ?? null, s.createdAt]
           );
         }
       });
@@ -169,6 +172,7 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
           ...localData.people.map((p) => ({
             id: p.id,
             name: p.name,
+            email: p.email,
             phone: p.phone,
             notes: p.notes,
             avatarUrl: p.avatarUrl,
@@ -186,6 +190,7 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
           ...localData.debts.map((d) => ({
             id: d.id,
             personId: d.personId,
+            friendEmail: d.friendEmail,
             amount: d.amount,
             type: d.type,
             description: d.description,
@@ -203,6 +208,7 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
           ...localData.settlements.map((s) => ({
             id: s.id,
             personId: s.personId,
+            friendEmail: s.friendEmail,
             amount: s.amount,
             settlementType: s.settlementType,
             description: s.description,
@@ -233,13 +239,14 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
                 await db.runAsync('DELETE FROM splitwise_people WHERE id = ?', [p.id]);
               } else {
                 await db.runAsync(
-                  `INSERT INTO splitwise_people (id, name, phone, notes, created_at)
-                   VALUES (?, ?, ?, ?, ?)
+                  `INSERT INTO splitwise_people (id, name, email, phone, notes, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?)
                    ON CONFLICT(id) DO UPDATE SET
                      name = excluded.name,
+                     email = excluded.email,
                      phone = excluded.phone,
                      notes = excluded.notes;`,
-                  [p.id, p.name, p.phone ?? null, p.notes ?? null, p.createdAt || new Date().toISOString()]
+                  [p.id, p.name, p.email ?? null, p.phone ?? null, p.notes ?? null, p.createdAt || new Date().toISOString()]
                 );
               }
               serverAppliedCount.people++;
@@ -253,13 +260,14 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
                 await db.runAsync('DELETE FROM splitwise_debts WHERE id = ?', [d.id]);
               } else {
                 await db.runAsync(
-                  `INSERT INTO splitwise_debts (id, person_id, amount, type, description, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?)
+                  `INSERT INTO splitwise_debts (id, person_id, amount, type, description, friend_email, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(id) DO UPDATE SET
                      amount = excluded.amount,
                      type = excluded.type,
-                     description = excluded.description;`,
-                  [d.id, d.personId, d.amount, d.type, d.description, d.createdAt || new Date().toISOString()]
+                     description = excluded.description,
+                     friend_email = excluded.friend_email;`,
+                  [d.id, d.personId, d.amount, d.type, d.description, d.friendEmail ?? null, d.createdAt || new Date().toISOString()]
                 );
               }
               serverAppliedCount.debts++;
@@ -273,13 +281,14 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
                 await db.runAsync('DELETE FROM splitwise_settlements WHERE id = ?', [s.id]);
               } else {
                 await db.runAsync(
-                  `INSERT INTO splitwise_settlements (id, person_id, amount, description, settlement_type, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?)
+                  `INSERT INTO splitwise_settlements (id, person_id, amount, description, settlement_type, friend_email, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(id) DO UPDATE SET
                      amount = excluded.amount,
                      description = excluded.description,
-                     settlement_type = excluded.settlement_type;`,
-                  [s.id, s.personId, s.amount, s.description ?? null, s.settlementType || 'THEY_PAID', s.createdAt || new Date().toISOString()]
+                     settlement_type = excluded.settlement_type,
+                     friend_email = excluded.friend_email;`,
+                  [s.id, s.personId, s.amount, s.description ?? null, s.settlementType || 'THEY_PAID', s.friendEmail ?? null, s.createdAt || new Date().toISOString()]
                 );
               }
               serverAppliedCount.settlements++;

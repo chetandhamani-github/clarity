@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 public class SplitDebtDTO {
     private String id;
     private String personId;
+    private String friendEmail;
     private BigDecimal amount;
     private String type;
     private String description;

@@ -18,4 +18,8 @@ public interface SplitDebtRepository extends JpaRepository<SplitDebt, String> {
     Optional<SplitDebt> findByIdAndInstallationId(String id, String installationId);
 
     long countByInstallationIdAndIsDeletedFalse(String installationId);
+
+    List<SplitDebt> findByOwnerEmail(String ownerEmail);
+
+    List<SplitDebt> findByOwnerEmailAndUpdatedAtAfter(String ownerEmail, Instant since);
 }

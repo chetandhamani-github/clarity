@@ -18,4 +18,10 @@ public interface SplitPersonRepository extends JpaRepository<SplitPerson, String
     Optional<SplitPerson> findByIdAndInstallationId(String id, String installationId);
 
     long countByInstallationIdAndIsDeletedFalse(String installationId);
+
+    List<SplitPerson> findByOwnerEmail(String ownerEmail);
+
+    List<SplitPerson> findByOwnerEmailAndUpdatedAtAfter(String ownerEmail, Instant since);
+
+    Optional<SplitPerson> findByOwnerEmailAndEmail(String ownerEmail, String email);
 }

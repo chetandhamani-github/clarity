@@ -97,7 +97,7 @@ export default function TransactionsScreen() {
             isLastInSection && !isVeryLast && { borderBottomWidth: 0 },
           ]}
           onPress={() => {
-            router.push(`/(app)/add-transaction?id=${tx.id}`);
+            router.navigate(`/(app)/add-transaction?id=${tx.id}`);
           }}
         >
           <View style={styles.transactionLeft}>
@@ -145,13 +145,14 @@ export default function TransactionsScreen() {
                       styles.categoryBadgeText,
                       { color: colors.onSecondaryContainer },
                     ]}
+                    numberOfLines={1}
                   >
                     Split ({tx.splits.length})
                   </Text>
                 </View>
               )}
               <View style={styles.categoryBadge}>
-                <Text style={styles.categoryBadgeText}>{tx.category}</Text>
+                <Text style={styles.categoryBadgeText} numberOfLines={1}>{tx.category}</Text>
               </View>
             </View>
           </View>
@@ -164,7 +165,7 @@ export default function TransactionsScreen() {
   const renderListHeader = useMemo(
     () => (
       <View>
-        <TouchableOpacity style={styles.searchBar} onPress={() => router.push('/search')}>
+        <TouchableOpacity style={styles.searchBar} onPress={() => router.navigate('/search')}>
           <MaterialIcons name="search" size={20} color={colors.primary} />
           <Text style={styles.searchPlaceholder}>Search transactions...</Text>
         </TouchableOpacity>
@@ -223,7 +224,7 @@ export default function TransactionsScreen() {
         isMainTab
         title="Activity"
         leftNode={
-          <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
+          <TouchableOpacity style={styles.avatarButton} onPress={() => router.navigate('/settings')}>
             <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
               <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
             </View>
@@ -231,12 +232,12 @@ export default function TransactionsScreen() {
         }
         rightNode={
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/search')}>
+            <TouchableOpacity style={styles.iconButton} onPress={() => router.navigate('/search')}>
               <MaterialIcons name="search" size={24} color={colors.onSurface} />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.iconButton}
-              onPress={() => router.push('/add-transaction')}
+              onPress={() => router.navigate('/add-transaction')}
             >
               <MaterialIcons name="add" size={24} color={colors.onSurface} />
             </TouchableOpacity>
@@ -452,11 +453,12 @@ const getStyles = (colors: ThemeColors) => {
       paddingVertical: 2,
       borderRadius: 2,
       marginTop: 4,
+      flexShrink: 0,
     },
     categoryBadgeText: {
       fontFamily: 'Manrope_600SemiBold',
-      fontSize: 10,
-      lineHeight: 14,
+      fontSize: 11,
+      lineHeight: 15,
       color: colors.primary,
       textTransform: 'uppercase',
     },

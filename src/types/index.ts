@@ -6,6 +6,7 @@ export interface Account {
   institution: string;
   lastFour: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export type AccountType =

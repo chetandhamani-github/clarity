@@ -129,7 +129,7 @@ export default function BudgetSetupScreen() {
               <View style={styles.allocationHeader}>
                 <Text style={styles.allocationTitle}>Allocation Strategy</Text>
                 <View style={styles.strategyBadge}>
-                  <Text style={styles.strategyBadgeText}>Standard 50/30/20</Text>
+                  <Text style={styles.strategyBadgeText} numberOfLines={1}>Standard 50/30/20</Text>
                 </View>
               </View>
 
@@ -401,6 +401,7 @@ const getStyles = (colors: ThemeColors) => {
       paddingHorizontal: 8,
       paddingVertical: 4,
       borderRadius: 6,
+      flexShrink: 0,
     },
     strategyBadgeText: {
       ...typography.labelMd,

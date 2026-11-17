@@ -104,7 +104,7 @@ export function PeopleScreen() {
   }, [allPersonBalances, activeTab, searchQuery]);
 
   const handlePersonPress = (personId: string) => {
-    router.push({
+    router.navigate({
       pathname: '/(app)/splitwise-person-details',
       params: { personId },
     });
@@ -127,7 +127,7 @@ export function PeopleScreen() {
         rightNode={
           <TouchableOpacity
             style={[styles.headerAddBtn, { backgroundColor: colors.surfaceContainerLow }]}
-            onPress={() => router.push('/(app)/add-splitwise-person')}
+            onPress={() => router.navigate('/(app)/add-splitwise-person')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <MaterialIcons name="person-add" size={20} color={colors.primary} />
@@ -253,7 +253,7 @@ export function PeopleScreen() {
             {people.length === 0 && (
               <TouchableOpacity
                 style={[styles.emptyAddBtn, { backgroundColor: colors.primary }]}
-                onPress={() => router.push('/(app)/add-splitwise-person')}
+                onPress={() => router.navigate('/(app)/add-splitwise-person')}
                 activeOpacity={0.85}
               >
                 <MaterialIcons name="person-add" size={18} color={colors.onPrimary} />
@@ -351,7 +351,7 @@ function PeopleListItem({ balance, hideBalances, onPress }: PeopleListItemProps)
           </Text>
 
           <View style={[styles.statusBadge, { backgroundColor: badgeBg }]}>
-            <Text style={[styles.statusBadgeText, { color: badgeColor }]}>
+            <Text style={[styles.statusBadgeText, { color: badgeColor }]} numberOfLines={1}>
               {formattedStatusText}
             </Text>
           </View>
@@ -476,17 +476,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: radius.full,
+    flexShrink: 0,
   },
   statusBadgeText: {
     ...typography.labelMd,
     fontFamily: 'Manrope_700Bold',
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 11,
+    lineHeight: 15,
   },
   personCardRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    flexShrink: 0,
   },
   balanceAmountText: {
     ...typography.headlineSm,

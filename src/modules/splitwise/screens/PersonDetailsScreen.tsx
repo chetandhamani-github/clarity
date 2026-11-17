@@ -7,7 +7,6 @@ import {
   TextInput,
   RefreshControl,
   DeviceEventEmitter,
-  Alert,
   Modal,
   Platform,
   Linking,
@@ -16,11 +15,12 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Text, Header } from '@/components/ui';
+import { Text, Header, useAlert, useToast } from '@/components/ui';
 import { typography, useTheme, radius } from '@/theme';
 import { useAppStore } from '@/store/use-app-store';
 import { formatCurrencyPrivacy } from '@/utils/format';
 import { useSplitwiseStore } from '../store/splitwise.store';
+import { SplitwiseSyncService } from '../services/SplitwiseSyncService';
 import { BalanceCalculator } from '../services/BalanceCalculator';
 import type { Debt, Settlement } from '../types/splitwise.types';
 
@@ -39,6 +39,8 @@ export function PersonDetailsScreen() {
   const insets = useSafeInsets();
   const router = useRouter();
   const { hideBalances } = useAppStore();
+  const { showAlert } = useAlert();
+  const { showToast } = useToast();
   const { personId } = useLocalSearchParams<{ personId: string }>();
 
   const {
@@ -112,7 +114,7 @@ export function PersonDetailsScreen() {
 
   const handleSaveEditPerson = async () => {
     if (!person || !editName.trim()) {
-      Alert.alert('Required', 'Person name cannot be empty');
+      showAlert('Required', 'Person name cannot be empty');
       return;
     }
     setIsSubmitting(true);
@@ -123,9 +125,10 @@ export function PersonDetailsScreen() {
         notes: editNotes.trim() || undefined,
       });
       setShowEditPersonModal(false);
+      showToast('Friend details updated', 'success');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to update person';
-      Alert.alert('Error', msg);
+      showAlert('Error', msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -133,7 +136,7 @@ export function PersonDetailsScreen() {
 
   const handleDeletePerson = () => {
     if (!person) return;
-    Alert.alert(
+    showAlert(
       'Delete Friend',
       `Are you sure you want to delete ${person.name}? All associated debts and settlement records will also be removed.`,
       [
@@ -144,10 +147,12 @@ export function PersonDetailsScreen() {
           onPress: async () => {
             try {
               await deletePerson(person.id);
+              showToast('Friend deleted', 'success');
+              SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {});
               router.back();
             } catch (e: unknown) {
               const msg = e instanceof Error ? e.message : 'Failed to delete friend';
-              Alert.alert('Error', msg);
+              showAlert('Error', msg);
             }
           },
         },
@@ -156,7 +161,7 @@ export function PersonDetailsScreen() {
   };
 
   const handleDeleteDebt = (debt: Debt) => {
-    Alert.alert(
+    showAlert(
       'Delete Debt',
       `Are you sure you want to delete "${debt.description}" (₹${debt.amount})?`,
       [
@@ -167,9 +172,11 @@ export function PersonDetailsScreen() {
           onPress: async () => {
             try {
               await deleteDebt(debt.id);
+              showToast('Debt deleted', 'success');
+              SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {});
             } catch (e: unknown) {
               const msg = e instanceof Error ? e.message : 'Failed to delete debt';
-              Alert.alert('Error', msg);
+              showAlert('Error', msg);
             }
           },
         },
@@ -178,7 +185,7 @@ export function PersonDetailsScreen() {
   };
 
   const handleDeleteSettlement = (settlement: Settlement) => {
-    Alert.alert(
+    showAlert(
       'Delete Settlement',
       `Are you sure you want to delete this settlement record of ₹${settlement.amount}?`,
       [
@@ -189,9 +196,11 @@ export function PersonDetailsScreen() {
           onPress: async () => {
             try {
               await deleteSettlement(settlement.id);
+              showToast('Settlement deleted', 'success');
+              SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {});
             } catch (e: unknown) {
               const msg = e instanceof Error ? e.message : 'Failed to delete settlement';
-              Alert.alert('Error', msg);
+              showAlert('Error', msg);
             }
           },
         },
@@ -201,7 +210,7 @@ export function PersonDetailsScreen() {
 
   const handlePhoneCall = (phone: string) => {
     Linking.openURL(`tel:${phone}`).catch(() => {
-      Alert.alert('Unable to open dialer', `Phone: ${phone}`);
+      showAlert('Unable to open dialer', `Phone: ${phone}`);
     });
   };
 
@@ -470,7 +479,7 @@ export function PersonDetailsScreen() {
                   { backgroundColor: colors.primary },
                 ]}
                 onPress={() => {
-                  router.push({
+                  router.navigate({
                     pathname: '/add-splitwise-settlement',
                     params: {
                       personId: person.id,
@@ -496,7 +505,7 @@ export function PersonDetailsScreen() {
                   },
                 ]}
                 onPress={() => {
-                  router.push({
+                  router.navigate({
                     pathname: '/add-splitwise-debt',
                     params: { personId: person.id },
                   });
@@ -617,11 +626,11 @@ export function PersonDetailsScreen() {
                     {debt.description}
                   </Text>
                   <View style={styles.itemMetaRow}>
-                    <Text style={[styles.itemDate, { color: colors.onSurfaceVariant }]}>
+                    <Text style={[styles.itemDate, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
                       {formatDate(debt.createdAt)}
                     </Text>
                     <View style={[styles.metaDot, { backgroundColor: colors.outlineVariant }]} />
-                    <Text style={[styles.itemTypeTag, { color: itemColor }]}>
+                    <Text style={[styles.itemTypeTag, { color: itemColor }]} numberOfLines={1}>
                       {isOweMe ? 'Owed to you' : 'You owe'}
                     </Text>
                   </View>
@@ -683,11 +692,11 @@ export function PersonDetailsScreen() {
                     {settlement.description || title}
                   </Text>
                   <View style={styles.itemMetaRow}>
-                    <Text style={[styles.itemDate, { color: colors.onSurfaceVariant }]}>
+                    <Text style={[styles.itemDate, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
                       {formatDate(settlement.createdAt)}
                     </Text>
                     <View style={[styles.metaDot, { backgroundColor: colors.outlineVariant }]} />
-                    <Text style={[styles.itemTypeTag, { color: colors.primary }]}>
+                    <Text style={[styles.itemTypeTag, { color: colors.primary }]} numberOfLines={1}>
                       {isYouPaid ? 'Paid by you' : 'Received'}
                     </Text>
                   </View>
@@ -1002,6 +1011,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radius.full,
     marginTop: 6,
+    flexShrink: 0,
   },
   statusBadgeText: {
     ...typography.labelMd,
@@ -1123,8 +1133,9 @@ const styles = StyleSheet.create({
   },
   itemDate: {
     ...typography.bodyMd,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 16,
+    flexShrink: 0,
   },
   metaDot: {
     width: 3,
@@ -1133,13 +1144,15 @@ const styles = StyleSheet.create({
   },
   itemTypeTag: {
     ...typography.labelMd,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 16,
     fontFamily: 'Manrope_600SemiBold',
+    flexShrink: 0,
   },
   itemRight: {
     alignItems: 'flex-end',
     gap: 4,
+    flexShrink: 0,
   },
   itemAmount: {
     ...typography.headlineSm,

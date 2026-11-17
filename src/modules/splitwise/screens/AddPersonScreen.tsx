@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  Alert,
   Platform,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
@@ -13,12 +12,14 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
-import { Text, Header } from '@/components/ui';
+import { Text, Header, useAlert } from '@/components/ui';
 import { typography, useTheme, radius } from '@/theme';
 import { useSplitwiseStore } from '../store/splitwise.store';
+import { SplitwiseSyncService } from '../services/SplitwiseSyncService';
 
 export interface AddPersonFormData {
   name: string;
+  email?: string;
   phone?: string;
   notes?: string;
 }
@@ -27,6 +28,7 @@ export function AddPersonScreen() {
   const { colors } = useTheme();
   const insets = useSafeInsets();
   const router = useRouter();
+  const { showAlert } = useAlert();
   const { addPerson, isLoading } = useSplitwiseStore();
 
   const {
@@ -36,6 +38,7 @@ export function AddPersonScreen() {
   } = useForm<AddPersonFormData>({
     defaultValues: {
       name: '',
+      email: '',
       phone: '',
       notes: '',
     },
@@ -46,13 +49,15 @@ export function AddPersonScreen() {
     try {
       await addPerson({
         name: data.name.trim(),
+        email: data.email?.trim().toLowerCase() || undefined,
         phone: data.phone?.trim() || undefined,
         notes: data.notes?.trim() || undefined,
       });
+      SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {});
       router.back();
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Failed to add friend. Please try again.';
-      Alert.alert('Error', msg);
+      showAlert('Error', msg);
     }
   };
 
@@ -174,6 +179,45 @@ export function AddPersonScreen() {
                 <Text style={[styles.errorText, { color: colors.error }]}>{errors.name.message}</Text>
               </View>
             )}
+          </View>
+
+          <View style={[styles.fieldDivider, { backgroundColor: colors.outlineVariant }]} />
+
+          {/* Field: Email */}
+          <View style={styles.inputGroup}>
+            <View style={styles.labelRow}>
+              <MaterialIcons name="email" size={16} color={colors.primary} />
+              <Text style={[styles.inputLabel, { color: colors.onSurface }]}>
+                Google / Clarity Email{' '}
+                <Text style={[styles.optionalTag, { color: colors.onSurfaceVariant }]}>
+                  Optional (for auto-sync)
+                </Text>
+              </Text>
+            </View>
+
+            <Controller
+              control={control}
+              name="email"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <TextInput
+                  style={[
+                    styles.textInput,
+                    {
+                      color: colors.onSurface,
+                      backgroundColor: colors.surfaceContainerLowest,
+                      borderColor: colors.outlineVariant,
+                    },
+                  ]}
+                  placeholder="friend@gmail.com"
+                  placeholderTextColor={colors.onSurfaceVariant}
+                  onBlur={onBlur}
+                  onChangeText={onChange}
+                  value={value}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              )}
+            />
           </View>
 
           <View style={[styles.fieldDivider, { backgroundColor: colors.outlineVariant }]} />

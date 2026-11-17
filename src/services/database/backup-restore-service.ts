@@ -1,4 +1,6 @@
 import { getDatabase } from './index';
+import { useAppStore } from '@/store/use-app-store';
+import { mmkv } from '@/lib/storage';
 
 export interface ClarityBackupPayload {
   version: number;
@@ -20,6 +22,17 @@ export interface ClarityBackupPayload {
     splitwise_people?: any[];
     splitwise_debts?: any[];
     splitwise_settlements?: any[];
+    sms_messages?: any[];
+    parsed_transactions?: any[];
+    sms_review_queue?: any[];
+    sms_patterns?: any[];
+    preferences?: {
+      theme?: 'light' | 'dark' | 'system';
+      currency?: string;
+      biometricEnabled?: boolean;
+      timeoutSetting?: 'immediate' | '1min' | '5min' | 'never';
+      hideBalances?: boolean;
+    };
   };
 }
 
@@ -72,6 +85,8 @@ export function isMeaningfulDatabaseSnapshot(payload: ClarityBackupPayload | nul
   if (Array.isArray(data.subscriptions) && data.subscriptions.length > 0) return true;
   if (Array.isArray(data.splitwise_debts) && data.splitwise_debts.length > 0) return true;
   if (Array.isArray(data.splitwise_people) && data.splitwise_people.length > 0) return true;
+  if (Array.isArray(data.parsed_transactions) && data.parsed_transactions.length > 0) return true;
+  if (Array.isArray(data.sms_messages) && data.sms_messages.length > 0) return true;
 
   if (Array.isArray(data.accounts)) {
     if (data.accounts.length > 3) return true;
@@ -118,8 +133,26 @@ export async function generateDatabaseSnapshot(): Promise<ClarityBackupPayload> 
   const splitwise_people = await safeGetAll('SELECT * FROM splitwise_people');
   const splitwise_debts = await safeGetAll('SELECT * FROM splitwise_debts');
   const splitwise_settlements = await safeGetAll('SELECT * FROM splitwise_settlements');
+  const sms_messages = await safeGetAll('SELECT * FROM sms_messages');
+  const parsed_transactions = await safeGetAll('SELECT * FROM parsed_transactions');
+  const sms_review_queue = await safeGetAll('SELECT * FROM sms_review_queue');
+  const sms_patterns = await safeGetAll('SELECT * FROM sms_patterns');
 
-  const dataPayload = {
+  let preferences: ClarityBackupPayload['data']['preferences'];
+  try {
+    const appState = useAppStore.getState();
+    preferences = {
+      theme: appState.theme,
+      currency: appState.currency,
+      biometricEnabled: appState.biometricEnabled,
+      timeoutSetting: appState.timeoutSetting,
+      hideBalances: appState.hideBalances,
+    };
+  } catch {
+    // Graceful fallback if Zustand store unavailable in headless environment
+  }
+
+  const dataPayload: ClarityBackupPayload['data'] = {
     accounts,
     transactions,
     goals,
@@ -134,6 +167,11 @@ export async function generateDatabaseSnapshot(): Promise<ClarityBackupPayload> 
     splitwise_people,
     splitwise_debts,
     splitwise_settlements,
+    sms_messages,
+    parsed_transactions,
+    sms_review_queue,
+    sms_patterns,
+    preferences,
   };
 
   const checksum = computeChecksum(canonicalizeData(dataPayload));
@@ -212,20 +250,32 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
       // Ignore if some tables do not exist in older migrations
     }
 
+    try {
+      await db.execAsync(`
+        DELETE FROM sms_review_queue;
+        DELETE FROM parsed_transactions;
+        DELETE FROM sms_patterns;
+        DELETE FROM sms_messages;
+      `);
+    } catch {
+      // Ignore if some tables do not exist in older migrations
+    }
+
     // 2. Insert Accounts
     if (Array.isArray(data.accounts)) {
       for (const a of data.accounts) {
         await db.runAsync(
-          `INSERT INTO accounts (id, name, type, balance, institution, last_four, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO accounts (id, name, type, balance, institution, last_four, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             a.id,
             a.name,
             a.type,
             a.balance ?? 0,
             a.institution ?? '',
-            a.last_four ?? '',
-            a.created_at ?? new Date().toISOString(),
+            a.last_four ?? a.lastFour ?? '',
+            a.created_at ?? a.createdAt ?? new Date().toISOString(),
+            a.updated_at ?? a.updatedAt ?? a.created_at ?? new Date().toISOString(),
           ]
         );
       }
@@ -239,20 +289,20 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             t.id,
-            t.account_id,
+            t.account_id ?? t.accountId,
             t.amount,
             t.type,
             t.merchant,
             t.category,
             t.date,
-            t.is_recurring ? 1 : 0,
+            (t.is_recurring ?? t.isRecurring) ? 1 : 0,
             t.note ?? '',
-            t.to_account_id ?? null,
-            t.splits_json ?? null,
+            t.to_account_id ?? t.toAccountId ?? null,
+            t.splits_json ?? t.splitsJson ?? null,
             t.source ?? 'MANUAL',
             t.status ?? 'VERIFIED',
-            t.sms_id ?? null,
-            t.parsed_tx_id ?? null,
+            t.sms_id ?? t.smsId ?? null,
+            t.parsed_tx_id ?? t.parsedTxId ?? null,
           ]
         );
       }
@@ -268,12 +318,12 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
             g.id,
             g.name,
             g.icon ?? 'flag',
-            g.target_amount,
-            g.current_amount ?? 0,
-            g.target_date ?? '',
-            g.auto_save_amount ?? 0,
+            g.target_amount ?? g.targetAmount,
+            g.current_amount ?? g.currentAmount ?? 0,
+            g.target_date ?? g.targetDate ?? '',
+            g.auto_save_amount ?? g.autoSaveAmount ?? 0,
             g.category ?? '',
-            g.created_at ?? new Date().toISOString(),
+            g.created_at ?? g.createdAt ?? new Date().toISOString(),
           ]
         );
       }
@@ -287,11 +337,11 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
            VALUES (?, ?, ?, ?, ?, ?)`,
           [
             gc.id,
-            gc.goal_id,
+            gc.goal_id ?? gc.goalId,
             gc.amount,
             gc.description ?? '',
             gc.date ?? new Date().toISOString(),
-            gc.transaction_id ?? null,
+            gc.transaction_id ?? gc.transactionId ?? null,
           ]
         );
       }
@@ -305,10 +355,10 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [
             bp.id,
-            bp.monthly_income,
-            bp.needs_percent ?? 50,
-            bp.wants_percent ?? 30,
-            bp.savings_percent ?? 20,
+            bp.monthly_income ?? bp.monthlyIncome,
+            bp.needs_percent ?? bp.needsPercent ?? 50,
+            bp.wants_percent ?? bp.wantsPercent ?? 30,
+            bp.savings_percent ?? bp.savingsPercent ?? 20,
             bp.month,
             bp.year,
           ]
@@ -326,9 +376,9 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
             bc.id,
             bc.name,
             bc.icon ?? 'category',
-            bc.budget_limit ?? 0,
-            bc.bucket_type,
-            bc.sort_order ?? 0,
+            bc.budget_limit ?? bc.budgetLimit ?? 0,
+            bc.bucket_type ?? bc.bucketType,
+            bc.sort_order ?? bc.sortOrder ?? 0,
           ]
         );
       }
@@ -342,17 +392,17 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             rt.id,
-            rt.account_id,
-            rt.to_account_id ?? null,
+            rt.account_id ?? rt.accountId,
+            rt.to_account_id ?? rt.toAccountId ?? null,
             rt.amount,
             rt.type,
             rt.merchant,
             rt.category,
             rt.frequency,
-            rt.next_process_date,
-            rt.last_processed_date ?? null,
-            rt.is_active ?? 1,
-            rt.splits_json ?? null,
+            rt.next_process_date ?? rt.nextProcessDate,
+            rt.last_processed_date ?? rt.lastProcessedDate ?? null,
+            (rt.is_active ?? rt.isActive) ? 1 : 0,
+            rt.splits_json ?? rt.splitsJson ?? null,
           ]
         );
       }
@@ -369,9 +419,9 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
             n.title,
             n.description,
             n.type ?? 'default',
-            n.is_read ?? 0,
-            n.created_at ?? new Date().toISOString(),
-            n.action_url ?? '',
+            (n.is_read ?? n.isRead) ? 1 : 0,
+            n.created_at ?? n.createdAt ?? new Date().toISOString(),
+            n.action_url ?? n.actionUrl ?? '',
           ]
         );
       }
@@ -381,6 +431,16 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
     if (Array.isArray(data.bills)) {
       for (const b of data.bills) {
         try {
+          let billStatus = String(b.status ?? 'upcoming').toLowerCase();
+          if (billStatus === 'unpaid') billStatus = 'upcoming';
+          if (!['upcoming', 'paid', 'overdue', 'dismissed'].includes(billStatus)) billStatus = 'upcoming';
+
+          let billFreq = String(b.frequency ?? 'one_time').toLowerCase();
+          if (!['one_time', 'weekly', 'monthly', 'quarterly', 'yearly'].includes(billFreq)) billFreq = 'one_time';
+
+          let billSource = String(b.source ?? 'manual').toLowerCase();
+          if (!['manual', 'sms', 'email', 'future_api'].includes(billSource)) billSource = 'manual';
+
           await db.runAsync(
             `INSERT INTO bills (id, title, provider, category, amount, min_amount, due_date, reminder_days, status, notes, is_recurring, frequency, last_paid_date, paid_transaction_id, payment_url, account_reference, source, sms_id, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -390,21 +450,21 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
               b.provider ?? '',
               b.category ?? '',
               b.amount,
-              b.min_amount ?? null,
-              b.due_date,
-              b.reminder_days ?? 3,
-              b.status ?? 'upcoming',
+              b.min_amount ?? b.minAmount ?? null,
+              b.due_date ?? b.dueDate ?? new Date().toISOString().split('T')[0],
+              b.reminder_days ?? b.reminderDays ?? 3,
+              billStatus,
               b.notes ?? '',
-              b.is_recurring ? 1 : 0,
-              b.frequency ?? 'one_time',
-              b.last_paid_date ?? null,
-              b.paid_transaction_id ?? null,
-              b.payment_url ?? null,
-              b.account_reference ?? null,
-              b.source ?? 'manual',
-              b.sms_id ?? null,
-              b.created_at ?? new Date().toISOString(),
-              b.updated_at ?? new Date().toISOString(),
+              (b.is_recurring ?? b.isRecurring) ? 1 : 0,
+              billFreq,
+              b.last_paid_date ?? b.lastPaidDate ?? null,
+              b.paid_transaction_id ?? b.paidTransactionId ?? null,
+              b.payment_url ?? b.paymentUrl ?? null,
+              b.account_reference ?? b.accountReference ?? null,
+              billSource,
+              b.sms_id ?? b.smsId ?? null,
+              b.created_at ?? b.createdAt ?? new Date().toISOString(),
+              b.updated_at ?? b.updatedAt ?? b.created_at ?? new Date().toISOString(),
             ]
           );
         } catch {
@@ -417,27 +477,37 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
     if (Array.isArray(data.bill_reminders)) {
       for (const br of data.bill_reminders) {
         try {
+          let brSource = String(br.source ?? 'MANUAL').toUpperCase();
+          if (!['SMS', 'MANUAL'].includes(brSource)) brSource = 'MANUAL';
+
+          let brStatus = String(br.status ?? 'UNPAID').toUpperCase();
+          if (brStatus === 'UPCOMING') brStatus = 'UNPAID';
+          if (!['UNPAID', 'PAID', 'OVERDUE', 'DISMISSED'].includes(brStatus)) brStatus = 'UNPAID';
+
+          let brFreq = String(br.repeat_frequency ?? br.repeatFrequency ?? br.frequency ?? 'one_time').toLowerCase();
+          if (!['one_time', 'monthly', 'quarterly', 'yearly'].includes(brFreq)) brFreq = 'one_time';
+
           await db.runAsync(
             `INSERT INTO bill_reminders (id, source, biller_name, biller_category, amount_due, min_amount_due, due_date, repeat_frequency, account_reference, status, reminder_days_before, paid_date, paid_transaction_id, payment_url, note, sms_id, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               br.id,
-              br.source ?? 'MANUAL',
-              br.biller_name,
-              br.biller_category,
-              br.amount_due,
-              br.min_amount_due ?? null,
-              br.due_date,
-              br.repeat_frequency ?? 'one_time',
-              br.account_reference ?? null,
-              br.status ?? 'UNPAID',
-              br.reminder_days_before ?? 3,
-              br.paid_date ?? null,
-              br.paid_transaction_id ?? null,
-              br.payment_url ?? null,
-              br.note ?? '',
-              br.sms_id ?? null,
-              br.created_at ?? new Date().toISOString(),
+              brSource,
+              br.biller_name ?? br.billerName ?? br.title ?? 'Bill',
+              br.biller_category ?? br.billerCategory ?? br.category ?? 'other',
+              br.amount_due ?? br.amountDue ?? br.amount ?? 0,
+              br.min_amount_due ?? br.minAmountDue ?? br.min_amount ?? null,
+              br.due_date ?? br.dueDate ?? new Date().toISOString().split('T')[0],
+              brFreq,
+              br.account_reference ?? br.accountReference ?? null,
+              brStatus,
+              br.reminder_days_before ?? br.reminderDaysBefore ?? br.reminder_days ?? 3,
+              br.paid_date ?? br.paidDate ?? null,
+              br.paid_transaction_id ?? br.paidTransactionId ?? null,
+              br.payment_url ?? br.paymentUrl ?? null,
+              br.note ?? br.notes ?? '',
+              br.sms_id ?? br.smsId ?? null,
+              br.created_at ?? br.createdAt ?? new Date().toISOString(),
             ]
           );
         } catch {
@@ -450,6 +520,12 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
     if (Array.isArray(data.subscriptions)) {
       for (const s of data.subscriptions) {
         try {
+          let subCycle = String(s.billing_cycle ?? s.billingCycle ?? 'monthly').toLowerCase();
+          if (!['weekly', 'monthly', 'quarterly', 'yearly'].includes(subCycle)) subCycle = 'monthly';
+
+          let subStatus = String(s.status ?? 'active').toLowerCase();
+          if (!['active', 'paused', 'cancelled'].includes(subStatus)) subStatus = 'active';
+
           await db.runAsync(
             `INSERT INTO subscriptions (id, name, provider, amount, billing_cycle, next_renewal_date, category, status, payment_url, account_reference, notes, bill_id, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -458,16 +534,16 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
               s.name,
               s.provider ?? '',
               s.amount,
-              s.billing_cycle ?? 'monthly',
-              s.next_renewal_date,
+              subCycle,
+              s.next_renewal_date ?? s.nextRenewalDate ?? new Date().toISOString().split('T')[0],
               s.category ?? 'subscription',
-              s.status ?? 'active',
-              s.payment_url ?? null,
-              s.account_reference ?? null,
+              subStatus,
+              s.payment_url ?? s.paymentUrl ?? null,
+              s.account_reference ?? s.accountReference ?? null,
               s.notes ?? '',
-              s.bill_id ?? null,
-              s.created_at ?? new Date().toISOString(),
-              s.updated_at ?? new Date().toISOString(),
+              s.bill_id ?? s.billId ?? null,
+              s.created_at ?? s.createdAt ?? new Date().toISOString(),
+              s.updated_at ?? s.updatedAt ?? s.created_at ?? new Date().toISOString(),
             ]
           );
         } catch {
@@ -483,7 +559,7 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
           await db.runAsync(
             `INSERT INTO splitwise_people (id, name, phone, notes, created_at)
              VALUES (?, ?, ?, ?, ?)`,
-            [p.id, p.name, p.phone ?? null, p.notes ?? null, p.created_at ?? new Date().toISOString()]
+            [p.id, p.name, p.phone ?? null, p.notes ?? null, p.created_at ?? p.createdAt ?? new Date().toISOString()]
           );
         } catch {
           // Ignore
@@ -500,11 +576,11 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
              VALUES (?, ?, ?, ?, ?, ?)`,
             [
               d.id,
-              d.person_id,
+              d.person_id ?? d.personId,
               d.amount,
               d.type,
               d.description,
-              d.created_at ?? new Date().toISOString(),
+              d.created_at ?? d.createdAt ?? new Date().toISOString(),
             ]
           );
         } catch {
@@ -522,11 +598,119 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
              VALUES (?, ?, ?, ?, ?, ?)`,
             [
               st.id,
-              st.person_id,
+              st.person_id ?? st.personId,
               st.amount,
               st.description ?? null,
-              st.settlement_type ?? 'THEY_PAID',
-              st.created_at ?? new Date().toISOString(),
+              st.settlement_type ?? st.settlementType ?? 'THEY_PAID',
+              st.created_at ?? st.createdAt ?? new Date().toISOString(),
+            ]
+          );
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    // 16. Insert SMS Messages (if present)
+    if (Array.isArray(data.sms_messages)) {
+      for (const sm of data.sms_messages) {
+        try {
+          await db.runAsync(
+            `INSERT OR IGNORE INTO sms_messages (id, address, body, date, date_sent, status, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+              sm.id,
+              sm.address,
+              sm.body,
+              sm.date,
+              sm.date_sent ?? sm.dateSent ?? null,
+              sm.status ?? 'read',
+              sm.created_at ?? sm.createdAt ?? new Date().toISOString(),
+            ]
+          );
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    // 17. Insert Parsed Transactions (if present)
+    if (Array.isArray(data.parsed_transactions)) {
+      for (const pt of data.parsed_transactions) {
+        try {
+          const ptType = pt.type === 'CREDIT' ? 'CREDIT' : 'DEBIT';
+          await db.runAsync(
+            `INSERT OR IGNORE INTO parsed_transactions (id, sms_id, amount, type, merchant, category, bank, account_mask, reference_number, available_balance, transaction_date, confidence, is_duplicate, duplicate_of, transaction_id, raw_body, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              pt.id,
+              pt.sms_id ?? pt.smsId ?? null,
+              pt.amount,
+              ptType,
+              pt.merchant ?? 'Unknown Merchant',
+              pt.category ?? 'Uncategorized',
+              pt.bank ?? 'Bank / UPI',
+              pt.account_mask ?? pt.accountMask ?? 'XXXX',
+              pt.reference_number ?? pt.referenceNumber ?? null,
+              pt.available_balance ?? pt.availableBalance ?? null,
+              pt.transaction_date ?? pt.transactionDate ?? new Date().toISOString(),
+              pt.confidence ?? 1.0,
+              (pt.is_duplicate ?? pt.isDuplicate) ? 1 : 0,
+              pt.duplicate_of ?? pt.duplicateOf ?? null,
+              pt.transaction_id ?? pt.transactionId ?? null,
+              pt.raw_body ?? pt.rawBody ?? null,
+              pt.created_at ?? pt.createdAt ?? new Date().toISOString(),
+            ]
+          );
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    // 18. Insert SMS Patterns (if present)
+    if (Array.isArray(data.sms_patterns)) {
+      for (const sp of data.sms_patterns) {
+        try {
+          await db.runAsync(
+            `INSERT OR IGNORE INTO sms_patterns (id, bank, pattern_regex, pattern_type, mapping_json, is_active, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+              sp.id,
+              sp.bank,
+              sp.pattern_regex ?? sp.patternRegex,
+              sp.pattern_type ?? sp.patternType,
+              sp.mapping_json ?? sp.mappingJson,
+              (sp.is_active ?? sp.isActive) ? 1 : 0,
+              sp.created_at ?? sp.createdAt ?? new Date().toISOString(),
+            ]
+          );
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    // 19. Insert SMS Review Queue (if present)
+    if (Array.isArray(data.sms_review_queue)) {
+      for (const rq of data.sms_review_queue) {
+        try {
+          let rqStatus = String(rq.status ?? 'pending').toLowerCase();
+          if (!['pending', 'resolved', 'dismissed'].includes(rqStatus)) rqStatus = 'pending';
+
+          await db.runAsync(
+            `INSERT OR IGNORE INTO sms_review_queue (id, sms_id, sender, body, reason, confidence, extracted_data, status, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              rq.id,
+              rq.sms_id ?? rq.smsId,
+              rq.sender,
+              rq.body,
+              rq.reason ?? 'UNKNOWN',
+              rq.confidence ?? 0.0,
+              rq.extracted_data ?? rq.extractedData ?? null,
+              rqStatus,
+              rq.created_at ?? rq.createdAt ?? new Date().toISOString(),
             ]
           );
         } catch {
@@ -536,6 +720,44 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
     }
 
     await db.execAsync('COMMIT');
+
+    // 20. Restore Preferences into App Store
+    if (data.preferences) {
+      try {
+        const store = useAppStore.getState();
+        if (data.preferences.theme) store.setTheme(data.preferences.theme);
+        if (data.preferences.currency) store.setCurrency(data.preferences.currency);
+        if (typeof data.preferences.biometricEnabled === 'boolean') {
+          store.setBiometricEnabled(data.preferences.biometricEnabled);
+        }
+        if (data.preferences.timeoutSetting) {
+          store.setTimeoutSetting(data.preferences.timeoutSetting);
+        }
+        if (typeof data.preferences.hideBalances === 'boolean') {
+          store.setHideBalances(data.preferences.hideBalances);
+        }
+      } catch {
+        // Ignore store update failure in testing/headless mode
+      }
+    }
+
+    // 21. Restore SMS sync timestamp in MMKV to latest SMS timestamp
+    try {
+      if (Array.isArray(data.sms_messages) && data.sms_messages.length > 0) {
+        let maxDate = 0;
+        for (const msg of data.sms_messages) {
+          const dateVal = Number(msg.date);
+          if (Number.isFinite(dateVal) && dateVal > maxDate) {
+            maxDate = dateVal;
+          }
+        }
+        if (maxDate > 0) {
+          mmkv.set('clarity_last_sms_sync_timestamp', maxDate.toString());
+        }
+      }
+    } catch {
+      // Ignore MMKV error in testing
+    }
   } catch (error) {
     await db.execAsync('ROLLBACK');
     throw error;

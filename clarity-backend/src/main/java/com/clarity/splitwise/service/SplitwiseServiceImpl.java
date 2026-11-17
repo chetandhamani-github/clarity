@@ -1,5 +1,7 @@
 package com.clarity.splitwise.service;
 
+import com.clarity.auth.entity.User;
+import com.clarity.auth.repository.UserRepository;
 import com.clarity.exception.ApiException;
 import com.clarity.splitwise.dto.*;
 import com.clarity.splitwise.entity.SplitDebt;
@@ -27,12 +29,33 @@ public class SplitwiseServiceImpl implements SplitwiseService {
     private final SplitPersonRepository splitPersonRepository;
     private final SplitDebtRepository splitDebtRepository;
     private final SplitSettlementRepository splitSettlementRepository;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional
     public SplitSyncResponse sync(String installationId, SplitSyncRequest request) {
+        return sync(installationId, request, null);
+    }
+
+    @Override
+    @Transactional
+    public SplitSyncResponse sync(String installationId, SplitSyncRequest request, String authHeader) {
         if (installationId == null || installationId.trim().isEmpty()) {
             throw new ApiException("Installation ID is required for synchronization", HttpStatus.BAD_REQUEST);
+        }
+
+        // 0. Extract current authenticated user if Authorization token is provided
+        String currentUserEmail = null;
+        String currentUserName = null;
+        if (authHeader != null && !authHeader.trim().isEmpty()) {
+            String token = authHeader.trim().startsWith("Bearer ")
+                    ? authHeader.trim().substring(7).trim()
+                    : authHeader.trim();
+            Optional<User> userOpt = userRepository.findByAuthToken(token);
+            if (userOpt.isPresent()) {
+                currentUserEmail = userOpt.get().getEmail().toLowerCase().trim();
+                currentUserName = userOpt.get().getName();
+            }
         }
 
         Instant syncTimestamp = Instant.now();
@@ -40,6 +63,7 @@ public class SplitwiseServiceImpl implements SplitwiseService {
         Set<String> incomingPersonIds = new HashSet<>();
         Set<String> incomingDebtIds = new HashSet<>();
         Set<String> incomingSettlementIds = new HashSet<>();
+        Map<String, String> personEmailMap = new HashMap<>();
 
         // 1. Process incoming people
         if (request.getPeople() != null) {
@@ -51,7 +75,12 @@ public class SplitwiseServiceImpl implements SplitwiseService {
                 Instant recordUpdatedAt = parseInstant(p.getUpdatedAt(), syncTimestamp);
                 Instant recordCreatedAt = parseInstant(p.getCreatedAt(), syncTimestamp);
 
-                Optional<SplitPerson> existingOpt = splitPersonRepository.findByIdAndInstallationId(p.getId(), installationId);
+                String personEmail = p.getEmail() != null ? p.getEmail().trim().toLowerCase() : null;
+                if (personEmail != null && !personEmail.isEmpty()) {
+                    personEmailMap.put(p.getId(), personEmail);
+                }
+
+                Optional<SplitPerson> existingOpt = findAuthorizedPerson(p.getId(), installationId, currentUserEmail);
                 if (p.isDeleted()) {
                     if (existingOpt.isPresent()) {
                         SplitPerson person = existingOpt.get();
@@ -71,6 +100,8 @@ public class SplitwiseServiceImpl implements SplitwiseService {
                         .build());
 
                 person.setName(p.getName());
+                person.setEmail(personEmail);
+                person.setOwnerEmail(currentUserEmail);
                 person.setPhone(p.getPhone());
                 person.setNotes(p.getNotes());
                 person.setAvatarUrl(p.getAvatarUrl());
@@ -91,13 +122,27 @@ public class SplitwiseServiceImpl implements SplitwiseService {
                 Instant recordUpdatedAt = parseInstant(d.getUpdatedAt(), syncTimestamp);
                 Instant recordCreatedAt = parseInstant(d.getCreatedAt(), syncTimestamp);
 
-                Optional<SplitDebt> existingOpt = splitDebtRepository.findByIdAndInstallationId(d.getId(), installationId);
+                // Determine friend's email
+                String friendEmail = d.getFriendEmail() != null ? d.getFriendEmail().trim().toLowerCase() : personEmailMap.get(d.getPersonId());
+                if (friendEmail == null) {
+                    friendEmail = splitPersonRepository.findById(d.getPersonId()).map(SplitPerson::getEmail).orElse(null);
+                }
+
+                Optional<SplitDebt> existingOpt = findAuthorizedDebt(d.getId(), installationId, currentUserEmail);
                 if (d.isDeleted()) {
                     if (existingOpt.isPresent()) {
                         SplitDebt debt = existingOpt.get();
                         debt.setDeleted(true);
                         debt.setUpdatedAt(recordUpdatedAt);
                         splitDebtRepository.save(debt);
+                    }
+                    // Also soft-delete inverse mirrored debt if present
+                    if (currentUserEmail != null && friendEmail != null) {
+                        splitDebtRepository.findById(getInverseId(d.getId())).ifPresent(invDebt -> {
+                            invDebt.setDeleted(true);
+                            invDebt.setUpdatedAt(recordUpdatedAt);
+                            splitDebtRepository.save(invDebt);
+                        });
                     }
                     continue;
                 }
@@ -110,6 +155,8 @@ public class SplitwiseServiceImpl implements SplitwiseService {
                             .id(d.getPersonId())
                             .installationId(installationId)
                             .name("Friend")
+                            .email(friendEmail)
+                            .ownerEmail(currentUserEmail)
                             .createdAt(recordCreatedAt)
                             .updatedAt(recordUpdatedAt)
                             .build();
@@ -126,10 +173,17 @@ public class SplitwiseServiceImpl implements SplitwiseService {
                 debt.setAmount(d.getAmount());
                 debt.setType(d.getType() != null ? d.getType() : "OWE_ME");
                 debt.setDescription(d.getDescription() != null ? d.getDescription() : "");
+                debt.setFriendEmail(friendEmail);
+                debt.setOwnerEmail(currentUserEmail);
                 debt.setDeleted(false);
                 debt.setUpdatedAt(recordUpdatedAt);
 
                 splitDebtRepository.save(debt);
+
+                // 2.1 Collaborative Auto-Mirroring for the friend
+                if (currentUserEmail != null && friendEmail != null && !friendEmail.equalsIgnoreCase(currentUserEmail)) {
+                    mirrorDebtForFriend(currentUserEmail, currentUserName, friendEmail, d, recordCreatedAt, recordUpdatedAt);
+                }
             }
         }
 
@@ -143,13 +197,25 @@ public class SplitwiseServiceImpl implements SplitwiseService {
                 Instant recordUpdatedAt = parseInstant(s.getUpdatedAt(), syncTimestamp);
                 Instant recordCreatedAt = parseInstant(s.getCreatedAt(), syncTimestamp);
 
-                Optional<SplitSettlement> existingOpt = splitSettlementRepository.findByIdAndInstallationId(s.getId(), installationId);
+                String friendEmail = s.getFriendEmail() != null ? s.getFriendEmail().trim().toLowerCase() : personEmailMap.get(s.getPersonId());
+                if (friendEmail == null) {
+                    friendEmail = splitPersonRepository.findById(s.getPersonId()).map(SplitPerson::getEmail).orElse(null);
+                }
+
+                Optional<SplitSettlement> existingOpt = findAuthorizedSettlement(s.getId(), installationId, currentUserEmail);
                 if (s.isDeleted()) {
                     if (existingOpt.isPresent()) {
                         SplitSettlement settlement = existingOpt.get();
                         settlement.setDeleted(true);
                         settlement.setUpdatedAt(recordUpdatedAt);
                         splitSettlementRepository.save(settlement);
+                    }
+                    if (currentUserEmail != null && friendEmail != null) {
+                        splitSettlementRepository.findById(getInverseId(s.getId())).ifPresent(invSettlement -> {
+                            invSettlement.setDeleted(true);
+                            invSettlement.setUpdatedAt(recordUpdatedAt);
+                            splitSettlementRepository.save(invSettlement);
+                        });
                     }
                     continue;
                 }
@@ -162,6 +228,8 @@ public class SplitwiseServiceImpl implements SplitwiseService {
                             .id(s.getPersonId())
                             .installationId(installationId)
                             .name("Friend")
+                            .email(friendEmail)
+                            .ownerEmail(currentUserEmail)
                             .createdAt(recordCreatedAt)
                             .updatedAt(recordUpdatedAt)
                             .build();
@@ -178,54 +246,86 @@ public class SplitwiseServiceImpl implements SplitwiseService {
                 settlement.setAmount(s.getAmount());
                 settlement.setSettlementType(s.getSettlementType() != null ? s.getSettlementType() : "THEY_PAID");
                 settlement.setDescription(s.getDescription());
+                settlement.setFriendEmail(friendEmail);
+                settlement.setOwnerEmail(currentUserEmail);
                 settlement.setDeleted(false);
                 settlement.setUpdatedAt(recordUpdatedAt);
 
                 splitSettlementRepository.save(settlement);
+
+                // 3.1 Collaborative Auto-Mirroring for the friend's settlement
+                if (currentUserEmail != null && friendEmail != null && !friendEmail.equalsIgnoreCase(currentUserEmail)) {
+                    mirrorSettlementForFriend(currentUserEmail, currentUserName, friendEmail, s, recordCreatedAt, recordUpdatedAt);
+                }
             }
         }
 
-        // 4. Fetch delta changes from server that client hasn't sent
+        // 4. Calculate delta responses to return to client
         Instant since = null;
         if (request.getLastSyncedAt() != null && !request.getLastSyncedAt().trim().isEmpty()) {
             since = parseInstant(request.getLastSyncedAt(), null);
         }
 
-        List<SplitPerson> serverPeople = (since != null)
+        Map<String, SplitPerson> serverPeopleMap = new LinkedHashMap<>();
+        Map<String, SplitDebt> serverDebtsMap = new LinkedHashMap<>();
+        Map<String, SplitSettlement> serverSettlementsMap = new LinkedHashMap<>();
+
+        // By installation ID
+        List<SplitPerson> pInst = (since != null)
                 ? splitPersonRepository.findByInstallationIdAndUpdatedAtAfter(installationId, since)
                 : splitPersonRepository.findByInstallationId(installationId);
+        pInst.forEach(p -> serverPeopleMap.put(p.getId(), p));
 
-        List<SplitDebt> serverDebts = (since != null)
+        List<SplitDebt> dInst = (since != null)
                 ? splitDebtRepository.findByInstallationIdAndUpdatedAtAfter(installationId, since)
                 : splitDebtRepository.findByInstallationId(installationId);
+        dInst.forEach(d -> serverDebtsMap.put(d.getId(), d));
 
-        List<SplitSettlement> serverSettlements = (since != null)
+        List<SplitSettlement> sInst = (since != null)
                 ? splitSettlementRepository.findByInstallationIdAndUpdatedAtAfter(installationId, since)
                 : splitSettlementRepository.findByInstallationId(installationId);
+        sInst.forEach(s -> serverSettlementsMap.put(s.getId(), s));
+
+        // By authenticated owner email (collaborative updates)
+        if (currentUserEmail != null) {
+            List<SplitPerson> pEmail = (since != null)
+                    ? splitPersonRepository.findByOwnerEmailAndUpdatedAtAfter(currentUserEmail, since)
+                    : splitPersonRepository.findByOwnerEmail(currentUserEmail);
+            pEmail.forEach(p -> serverPeopleMap.put(p.getId(), p));
+
+            List<SplitDebt> dEmail = (since != null)
+                    ? splitDebtRepository.findByOwnerEmailAndUpdatedAtAfter(currentUserEmail, since)
+                    : splitDebtRepository.findByOwnerEmail(currentUserEmail);
+            dEmail.forEach(d -> serverDebtsMap.put(d.getId(), d));
+
+            List<SplitSettlement> sEmail = (since != null)
+                    ? splitSettlementRepository.findByOwnerEmailAndUpdatedAtAfter(currentUserEmail, since)
+                    : splitSettlementRepository.findByOwnerEmail(currentUserEmail);
+            sEmail.forEach(s -> serverSettlementsMap.put(s.getId(), s));
+        }
 
         boolean isInitialSync = (since == null);
 
-        List<SplitPersonDTO> deltaPeople = serverPeople.stream()
+        List<SplitPersonDTO> deltaPeople = serverPeopleMap.values().stream()
                 .filter(p -> !incomingPersonIds.contains(p.getId()))
                 .filter(p -> !isInitialSync || !p.isDeleted())
                 .map(this::mapPerson)
                 .toList();
 
-        List<SplitDebtDTO> deltaDebts = serverDebts.stream()
+        List<SplitDebtDTO> deltaDebts = serverDebtsMap.values().stream()
                 .filter(d -> !incomingDebtIds.contains(d.getId()))
                 .filter(d -> !isInitialSync || !d.isDeleted())
                 .map(this::mapDebt)
                 .toList();
 
-        List<SplitSettlementDTO> deltaSettlements = serverSettlements.stream()
+        List<SplitSettlementDTO> deltaSettlements = serverSettlementsMap.values().stream()
                 .filter(s -> !incomingSettlementIds.contains(s.getId()))
                 .filter(s -> !isInitialSync || !s.isDeleted())
                 .map(this::mapSettlement)
                 .toList();
 
-        log.info("Splitwise sync completed for installation {}: received (P:{}, D:{}, S:{}), sent delta (P:{}, D:{}, S:{})",
-                installationId,
-                incomingPersonIds.size(), incomingDebtIds.size(), incomingSettlementIds.size(),
+        log.info("Splitwise sync completed for installation {} / user {}: received (P:{}, D:{}, S:{}), sent delta (P:{}, D:{}, S:{})",
+                installationId, currentUserEmail, incomingPersonIds.size(), incomingDebtIds.size(), incomingSettlementIds.size(),
                 deltaPeople.size(), deltaDebts.size(), deltaSettlements.size());
 
         return SplitSyncResponse.builder()
@@ -236,6 +336,137 @@ public class SplitwiseServiceImpl implements SplitwiseService {
                 .settlements(deltaSettlements)
                 .confirmedIds(new ArrayList<>(confirmedIds))
                 .build();
+    }
+
+    private Optional<SplitPerson> findAuthorizedPerson(String id, String installationId, String currentUserEmail) {
+        return splitPersonRepository.findById(id)
+                .filter(p -> installationId.equals(p.getInstallationId())
+                        || (currentUserEmail != null && currentUserEmail.equalsIgnoreCase(p.getOwnerEmail())));
+    }
+
+    private Optional<SplitDebt> findAuthorizedDebt(String id, String installationId, String currentUserEmail) {
+        return splitDebtRepository.findById(id)
+                .filter(d -> installationId.equals(d.getInstallationId())
+                        || (currentUserEmail != null && currentUserEmail.equalsIgnoreCase(d.getOwnerEmail())));
+    }
+
+    private Optional<SplitSettlement> findAuthorizedSettlement(String id, String installationId, String currentUserEmail) {
+        return splitSettlementRepository.findById(id)
+                .filter(s -> installationId.equals(s.getInstallationId())
+                        || (currentUserEmail != null && currentUserEmail.equalsIgnoreCase(s.getOwnerEmail())));
+    }
+
+    private String getInverseId(String id) {
+        if (id == null) return null;
+        return id.endsWith("_inv") ? id.substring(0, id.length() - 4) : id + "_inv";
+    }
+
+    private void mirrorDebtForFriend(String userEmail, String userName, String friendEmail,
+                                     SplitDebtDTO originalDebt, Instant createdAt, Instant updatedAt) {
+        try {
+            // Reuse existing contact for friend if already present, otherwise create inverse contact
+            String inverseContactId = splitPersonRepository.findByOwnerEmailAndEmail(friendEmail, userEmail)
+                    .map(SplitPerson::getId)
+                    .orElseGet(() -> {
+                        String id = "p_collab_" + Math.abs((friendEmail + "_" + userEmail).hashCode());
+                        if (!splitPersonRepository.existsById(id)) {
+                            String displayName = userName != null && !userName.trim().isEmpty()
+                                    ? userName
+                                    : userEmail.split("@")[0];
+                            SplitPerson inverseContact = SplitPerson.builder()
+                                    .id(id)
+                                    .installationId("user_" + friendEmail)
+                                    .name(displayName)
+                                    .email(userEmail)
+                                    .ownerEmail(friendEmail)
+                                    .createdAt(createdAt)
+                                    .updatedAt(updatedAt)
+                                    .build();
+                            splitPersonRepository.save(inverseContact);
+                        }
+                        return id;
+                    });
+
+            String inverseDebtId = getInverseId(originalDebt.getId());
+            String inverseType = "OWE_ME".equalsIgnoreCase(originalDebt.getType()) ? "I_OWE" : "OWE_ME";
+
+            SplitDebt inverseDebt = splitDebtRepository.findById(inverseDebtId)
+                    .orElseGet(() -> SplitDebt.builder()
+                            .id(inverseDebtId)
+                            .installationId("user_" + friendEmail)
+                            .personId(inverseContactId)
+                            .createdAt(createdAt)
+                            .build());
+
+            inverseDebt.setPersonId(inverseContactId);
+            inverseDebt.setAmount(originalDebt.getAmount());
+            inverseDebt.setType(inverseType);
+            inverseDebt.setDescription(originalDebt.getDescription() != null ? originalDebt.getDescription() : "");
+            inverseDebt.setFriendEmail(userEmail);
+            inverseDebt.setOwnerEmail(friendEmail);
+            inverseDebt.setDeleted(originalDebt.isDeleted());
+            inverseDebt.setUpdatedAt(updatedAt);
+
+            splitDebtRepository.save(inverseDebt);
+            log.info("Mirrored collaborative debt {} for friend {}", inverseDebtId, friendEmail);
+        } catch (Exception e) {
+            log.error("Failed to mirror debt for friend {}: {}", friendEmail, e.getMessage());
+        }
+    }
+
+    private void mirrorSettlementForFriend(String userEmail, String userName, String friendEmail,
+                                           SplitSettlementDTO originalSettlement, Instant createdAt, Instant updatedAt) {
+        try {
+            // Reuse existing contact for friend if already present, otherwise create inverse contact
+            String inverseContactId = splitPersonRepository.findByOwnerEmailAndEmail(friendEmail, userEmail)
+                    .map(SplitPerson::getId)
+                    .orElseGet(() -> {
+                        String id = "p_collab_" + Math.abs((friendEmail + "_" + userEmail).hashCode());
+                        if (!splitPersonRepository.existsById(id)) {
+                            String displayName = userName != null && !userName.trim().isEmpty()
+                                    ? userName
+                                    : userEmail.split("@")[0];
+                            SplitPerson inverseContact = SplitPerson.builder()
+                                    .id(id)
+                                    .installationId("user_" + friendEmail)
+                                    .name(displayName)
+                                    .email(userEmail)
+                                    .ownerEmail(friendEmail)
+                                    .createdAt(createdAt)
+                                    .updatedAt(updatedAt)
+                                    .build();
+                            splitPersonRepository.save(inverseContact);
+                        }
+                        return id;
+                    });
+
+            String inverseSettlementId = getInverseId(originalSettlement.getId());
+            String inverseSettlementType = "THEY_PAID".equalsIgnoreCase(originalSettlement.getSettlementType())
+                    ? "YOU_PAID"
+                    : "THEY_PAID";
+
+            SplitSettlement inverseSettlement = splitSettlementRepository.findById(inverseSettlementId)
+                    .orElseGet(() -> SplitSettlement.builder()
+                            .id(inverseSettlementId)
+                            .installationId("user_" + friendEmail)
+                            .personId(inverseContactId)
+                            .createdAt(createdAt)
+                            .build());
+
+            inverseSettlement.setPersonId(inverseContactId);
+            inverseSettlement.setAmount(originalSettlement.getAmount());
+            inverseSettlement.setSettlementType(inverseSettlementType);
+            inverseSettlement.setDescription(originalSettlement.getDescription());
+            inverseSettlement.setFriendEmail(userEmail);
+            inverseSettlement.setOwnerEmail(friendEmail);
+            inverseSettlement.setDeleted(originalSettlement.isDeleted());
+            inverseSettlement.setUpdatedAt(updatedAt);
+
+            splitSettlementRepository.save(inverseSettlement);
+            log.info("Mirrored collaborative settlement {} for friend {}", inverseSettlementId, friendEmail);
+        } catch (Exception e) {
+            log.error("Failed to mirror settlement for friend {}: {}", friendEmail, e.getMessage());
+        }
     }
 
     @Override
@@ -315,7 +546,6 @@ public class SplitwiseServiceImpl implements SplitwiseService {
         if (text == null || text.trim().isEmpty()) return fallback;
         try {
             String formatted = text.trim();
-            // Handle SQLite format "YYYY-MM-DD HH:MM:SS"
             if (formatted.contains(" ") && !formatted.contains("T")) {
                 formatted = formatted.replace(" ", "T");
             }
@@ -332,6 +562,7 @@ public class SplitwiseServiceImpl implements SplitwiseService {
         return SplitPersonDTO.builder()
                 .id(p.getId())
                 .name(p.getName())
+                .email(p.getEmail())
                 .phone(p.getPhone())
                 .notes(p.getNotes())
                 .avatarUrl(p.getAvatarUrl())
@@ -345,6 +576,7 @@ public class SplitwiseServiceImpl implements SplitwiseService {
         return SplitDebtDTO.builder()
                 .id(d.getId())
                 .personId(d.getPersonId())
+                .friendEmail(d.getFriendEmail())
                 .amount(d.getAmount())
                 .type(d.getType())
                 .description(d.getDescription())
@@ -358,6 +590,7 @@ public class SplitwiseServiceImpl implements SplitwiseService {
         return SplitSettlementDTO.builder()
                 .id(s.getId())
                 .personId(s.getPersonId())
+                .friendEmail(s.getFriendEmail())
                 .amount(s.getAmount())
                 .settlementType(s.getSettlementType())
                 .description(s.getDescription())

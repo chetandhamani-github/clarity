@@ -32,7 +32,7 @@ export function SmsPermissionPromptModal({ visible, onDismiss }: Props) {
       const status = await requestPermission();
       if (status === 'granted') {
         setHasSeenSmsPrompt(true);
-        await startInitialSync();
+        await startInitialSync({ autoCreateClarityTransactions: false });
         showToast('SMS scan completed successfully!', 'success');
         onDismiss();
       } else if (status === 'permanently_denied') {

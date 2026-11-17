@@ -10,7 +10,8 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
       balance REAL NOT NULL DEFAULT 0,
       institution TEXT NOT NULL DEFAULT '',
       last_four TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS transactions (
@@ -312,6 +313,13 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
   `);
 
   await runSplitwiseMigrations(db);
+
+  try {
+    await db.execAsync('ALTER TABLE accounts ADD COLUMN updated_at TEXT;');
+    await db.execAsync("UPDATE accounts SET updated_at = created_at WHERE updated_at IS NULL;");
+  } catch {
+    // Column may already exist
+  }
 }
 
 

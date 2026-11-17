@@ -36,7 +36,7 @@ export function Header({
       if (router.canGoBack()) {
         router.back();
       } else {
-        router.push('/(app)/(tabs)');
+        router.navigate('/(app)/(tabs)');
       }
     }
   };

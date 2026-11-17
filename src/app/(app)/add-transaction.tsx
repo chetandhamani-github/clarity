@@ -283,9 +283,6 @@ export default function AddTransactionScreen() {
           onPress: () => {
             deleteTransaction(id, {
               onSuccess: () => {
-                if (transaction) {
-                  evaluateTransactionBudgetAlerts(transaction);
-                }
                 showToast('Transaction deleted', 'success');
                 router.back();
               },
@@ -367,14 +364,14 @@ export default function AddTransactionScreen() {
                     setAmountStr((curr + delta).toString());
                   }}
                 >
-                  <Text style={styles.quickChipText}>+{delta}</Text>
+                  <Text style={styles.quickChipText} numberOfLines={1}>+{delta}</Text>
                 </TouchableOpacity>
               ))}
               <TouchableOpacity
                 style={[styles.quickChip, { borderColor: colors.error + '44' }]}
                 onPress={() => setAmountStr('')}
               >
-                <Text style={[styles.quickChipText, { color: colors.error }]}>Clear</Text>
+                <Text style={[styles.quickChipText, { color: colors.error }]} numberOfLines={1}>Clear</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -722,6 +719,7 @@ export default function AddTransactionScreen() {
                         >
                           <Text
                             style={[styles.freqPillText, isSelected && styles.freqPillTextActive]}
+                            numberOfLines={1}
                           >
                             {freq.charAt(0).toUpperCase() + freq.slice(1)}
                           </Text>
@@ -890,7 +888,7 @@ export default function AddTransactionScreen() {
                 }}
                 onPress={() => {
                   setShowCategoryMenu(false);
-                  router.push('/manage-categories');
+                  router.navigate('/manage-categories');
                 }}
               >
                 <MaterialIcons name="add-circle-outline" size={20} color={colors.primary} />
@@ -1388,6 +1386,7 @@ const getStyles = (colors: ThemeColors) => {
       backgroundColor: colors.surfaceContainer,
       borderWidth: 1,
       borderColor: colors.surfaceVariant,
+      flexShrink: 0,
     },
     quickChipText: {
       ...typography.labelMd,

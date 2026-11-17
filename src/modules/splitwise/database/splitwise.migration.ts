@@ -14,6 +14,15 @@ export async function runSplitwiseMigrations(db: SQLite.SQLiteDatabase): Promise
   } catch {
     // Column already exists or table freshly created with column
   }
+  try {
+    await db.execAsync('ALTER TABLE splitwise_people ADD COLUMN email TEXT;');
+  } catch {}
+  try {
+    await db.execAsync('ALTER TABLE splitwise_debts ADD COLUMN friend_email TEXT;');
+  } catch {}
+  try {
+    await db.execAsync('ALTER TABLE splitwise_settlements ADD COLUMN friend_email TEXT;');
+  } catch {}
 }
 
 /**

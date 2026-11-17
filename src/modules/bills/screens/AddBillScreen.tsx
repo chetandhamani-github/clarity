@@ -521,6 +521,7 @@ export function AddBillScreen() {
                             },
                             isSelected && styles.freqChipTextSelected,
                           ]}
+                          numberOfLines={1}
                         >
                           {freq === 'one_time'
                             ? 'One Time'
@@ -563,6 +564,7 @@ export function AddBillScreen() {
                             },
                             isSelected && styles.freqChipTextSelected,
                           ]}
+                          numberOfLines={1}
                         >
                           {cycle.charAt(0).toUpperCase() + cycle.slice(1)}
                         </Text>
@@ -610,6 +612,7 @@ export function AddBillScreen() {
                           },
                           isSelected && styles.freqChipTextSelected,
                         ]}
+                        numberOfLines={1}
                       >
                         {item.label}
                       </Text>
@@ -890,6 +893,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
+    flexShrink: 0,
   },
   freqChipText: {
     ...typography.labelMd,

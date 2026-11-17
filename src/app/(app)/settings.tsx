@@ -6,6 +6,7 @@ import { useNotifications } from '@/hooks/use-notifications';
 import { useSmsSync } from '@/hooks/useSmsSync';
 import { clearDatabase } from '@/services/database';
 import { useAppStore } from '@/store/use-app-store';
+import { useAuthStore } from '@/store/use-auth-store';
 import { ThemeColors, typography, useTheme } from '@/theme';
 import { formatCurrency } from '@/utils/format';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -45,6 +46,7 @@ export default function SettingsScreen() {
     isConnecting: isConnectingDrive,
     isBackingUp: isBackingUpDrive,
     isRestoring: isRestoringDrive,
+    isDeletingBackups: isDeletingDriveBackups,
     isAutoSyncing,
     autoBackupEnabled,
     setAutoBackupEnabled,
@@ -52,6 +54,7 @@ export default function SettingsScreen() {
     disconnect: disconnectDrive,
     backupNow: backupDriveNow,
     restoreFromDrive,
+    deleteBackupsFromDrive,
   } = useGoogleDrive();
 
   const {
@@ -80,7 +83,7 @@ export default function SettingsScreen() {
           return;
         }
       }
-      await syncSms();
+      await syncSms({ autoCreateClarityTransactions: false });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       showToast('SMS scan completed successfully!', 'success');
@@ -146,6 +149,23 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleDeleteDriveBackups = () => {
+    showAlert(
+      'Delete Cloud Backups?',
+      'Are you sure you want to delete all Clarity backup snapshots from your Google Drive? This will permanently delete your cloud backup file. Your local device data will not be affected.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete All',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteBackupsFromDrive();
+          },
+        },
+      ]
+    );
+  };
+
   const handleResetData = () => {
     showAlert(
       'Reset App Data',
@@ -172,13 +192,29 @@ export default function SettingsScreen() {
     );
   };
 
+  const { user, isAuthenticated, signOut, isLoading: isAuthLoading } = useAuthStore();
+
+  const handleSignOut = () => {
+    showAlert('Sign Out', 'Are you sure you want to sign out of your account?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          await signOut();
+          showToast('Signed out successfully', 'success');
+        },
+      },
+    ]);
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <Header
         showBack
         title="Intelligence & System"
         rightNode={
-          <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/notifications')}>
+          <TouchableOpacity style={styles.iconButton} onPress={() => router.navigate('/notifications')}>
             <MaterialIcons name="notifications" size={24} color={colors.primary} />
           </TouchableOpacity>
         }
@@ -188,6 +224,52 @@ export default function SettingsScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
+        {/* Account Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account</Text>
+          <View style={styles.listCard}>
+            {isAuthenticated && user ? (
+              <View style={styles.accountCard}>
+                <View style={[styles.avatarCircle, { backgroundColor: colors.primaryContainer }]}>
+                  <Text style={[styles.avatarText, { color: colors.onPrimaryContainer }]}>
+                    {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                  </Text>
+                </View>
+                <View style={styles.accountInfo}>
+                  <Text style={styles.accountName}>{user.name}</Text>
+                  <Text style={styles.accountEmail}>{user.email}</Text>
+                  <View style={styles.badgeRow}>
+                    <MaterialIcons name="check-circle" size={14} color={colors.primary} />
+                    <Text style={[styles.badgeText, { color: colors.primary }]} numberOfLines={1}>Google Account</Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={[styles.signOutBtn, { borderColor: colors.outlineVariant }]}
+                  onPress={handleSignOut}
+                  disabled={isAuthLoading}
+                >
+                  <Text style={[styles.signOutText, { color: colors.error }]}>Sign Out</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.guestCard}>
+                <View style={[styles.avatarCircle, { backgroundColor: colors.surfaceContainerHigh }]}>
+                  <MaterialIcons name="person-outline" size={24} color={colors.onSurfaceVariant} />
+                </View>
+                <View style={styles.accountInfo}>
+                  <Text style={styles.accountName}>Guest Mode</Text>
+                  <Text style={styles.accountEmail}>Offline-only storage</Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.signInBtn, { backgroundColor: colors.primary }]}
+                  onPress={() => router.navigate('/(auth)/login')}
+                >
+                  <Text style={[styles.signInText, { color: colors.onPrimary }]}>Sign In</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
         {/* Intelligence Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Intelligence</Text>
@@ -238,7 +320,7 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Alerts</Text>
-            <TouchableOpacity onPress={() => router.push('/notifications')}>
+            <TouchableOpacity onPress={() => router.navigate('/notifications')}>
               <Text style={styles.actionText}>VIEW ALL</Text>
             </TouchableOpacity>
           </View>
@@ -248,7 +330,7 @@ export default function SettingsScreen() {
                 <TouchableOpacity
                   key={alert.id}
                   style={styles.listItem}
-                  onPress={() => router.push('/notifications')}
+                  onPress={() => router.navigate('/notifications')}
                 >
                   <View
                     style={[
@@ -313,7 +395,7 @@ export default function SettingsScreen() {
               </View>
               <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/security')}>
+            <TouchableOpacity style={styles.settingItem} onPress={() => router.navigate('/security')}>
               <View style={styles.settingItemLeft}>
                 <MaterialIcons name="lock" size={24} color={colors.secondary} />
                 <View style={styles.settingTextContainer}>
@@ -327,7 +409,7 @@ export default function SettingsScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.settingItem}
-              onPress={() => router.push('/(app)/bills')}
+              onPress={() => router.navigate('/(app)/bills')}
             >
               <View style={styles.settingItemLeft}>
                 <MaterialIcons name="receipt-long" size={24} color={colors.secondary} />
@@ -340,7 +422,7 @@ export default function SettingsScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.settingItem}
-              onPress={() => router.push('/(app)/splitwise')}
+              onPress={() => router.navigate('/(app)/splitwise')}
             >
               <View style={styles.settingItemLeft}>
                 <MaterialIcons name="group" size={24} color={colors.primary} />
@@ -354,7 +436,7 @@ export default function SettingsScreen() {
 
             <TouchableOpacity
               style={styles.settingItem}
-              onPress={() => router.push('/manage-categories')}
+              onPress={() => router.navigate('/manage-categories')}
             >
               <View style={styles.settingItemLeft}>
                 <MaterialIcons name="category" size={24} color={colors.secondary} />
@@ -434,7 +516,7 @@ export default function SettingsScreen() {
                   <TouchableOpacity
                     style={styles.btnPrimary}
                     onPress={backupDriveNow}
-                    disabled={isBackingUpDrive || isRestoringDrive}
+                    disabled={isBackingUpDrive || isRestoringDrive || isDeletingDriveBackups}
                   >
                     {isBackingUpDrive ? (
                       <ActivityIndicator size="small" color={colors.onPrimary} />
@@ -449,7 +531,7 @@ export default function SettingsScreen() {
                   <TouchableOpacity
                     style={styles.btnSecondary}
                     onPress={handleRestoreFromDrive}
-                    disabled={isBackingUpDrive || isRestoringDrive}
+                    disabled={isBackingUpDrive || isRestoringDrive || isDeletingDriveBackups}
                   >
                     {isRestoringDrive ? (
                       <ActivityIndicator size="small" color={colors.onSurface} />
@@ -463,10 +545,27 @@ export default function SettingsScreen() {
 
                   <TouchableOpacity
                     style={[styles.btnSecondary, { borderColor: colors.error, borderWidth: 1 }]}
-                    onPress={handleDisconnectDrive}
-                    disabled={isBackingUpDrive || isRestoringDrive}
+                    onPress={handleDeleteDriveBackups}
+                    disabled={isBackingUpDrive || isRestoringDrive || isDeletingDriveBackups}
                   >
-                    <Text style={[styles.btnSecondaryText, { color: colors.error }]}>
+                    {isDeletingDriveBackups ? (
+                      <ActivityIndicator size="small" color={colors.error} />
+                    ) : (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <MaterialIcons name="delete-forever" size={18} color={colors.error} />
+                        <Text style={[styles.btnSecondaryText, { color: colors.error }]}>
+                          DELETE CLOUD BACKUPS
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.btnSecondary, { borderColor: colors.outlineVariant, borderWidth: 1 }]}
+                    onPress={handleDisconnectDrive}
+                    disabled={isBackingUpDrive || isRestoringDrive || isDeletingDriveBackups}
+                  >
+                    <Text style={[styles.btnSecondaryText, { color: colors.onSurfaceVariant }]}>
                       DISCONNECT DRIVE
                     </Text>
                   </TouchableOpacity>
@@ -607,7 +706,7 @@ export default function SettingsScreen() {
             <View style={{ gap: 8 }}>
               <TouchableOpacity
                 style={styles.btnSecondary}
-                onPress={() => router.push('/export-statement')}
+                onPress={() => router.navigate('/export-statement')}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                   <MaterialIcons name="description" size={18} color={colors.onSurface} />
@@ -616,7 +715,7 @@ export default function SettingsScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.btnSecondary}
-                onPress={() => router.push('/export-success')}
+                onPress={() => router.navigate('/export-success')}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                   <MaterialIcons name="backup" size={18} color={colors.onSurface} />
@@ -832,6 +931,75 @@ const getStyles = (colors: ThemeColors) => {
       fontSize: 12,
       lineHeight: 16,
       marginTop: 4,
+    },
+    accountCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 16,
+      gap: 12,
+    },
+    guestCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 16,
+      gap: 12,
+    },
+    avatarCircle: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarText: {
+      ...typography.headlineSm,
+      fontWeight: '700',
+    },
+    accountInfo: {
+      flex: 1,
+    },
+    accountName: {
+      ...typography.bodyLg,
+      fontWeight: '600',
+      color: colors.onSurface,
+    },
+    accountEmail: {
+      ...typography.bodyMd,
+      color: colors.onSurfaceVariant,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    badgeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginTop: 2,
+      flexShrink: 0,
+    },
+    badgeText: {
+      ...typography.labelMd,
+      fontWeight: '600',
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    signOutBtn: {
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+    },
+    signOutText: {
+      ...typography.labelMd,
+      fontWeight: '600',
+    },
+    signInBtn: {
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+    },
+    signInText: {
+      ...typography.labelMd,
+      fontWeight: '700',
     },
   });
   return styles;

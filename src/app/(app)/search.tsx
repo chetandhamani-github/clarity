@@ -157,7 +157,7 @@ export default function SearchScreen() {
                             key={tx.id}
                             style={[styles.transactionItem, isLast && { borderBottomWidth: 0 }]}
                             onPress={() => {
-                              router.push(`/(app)/add-transaction?id=${tx.id}`);
+                              router.navigate(`/(app)/add-transaction?id=${tx.id}`);
                             }}
                           >
                             <View style={styles.txLeft}>
@@ -205,7 +205,7 @@ export default function SearchScreen() {
                                 {formatCurrency(tx.amount)}
                               </Text>
                               <View style={styles.categoryBadge}>
-                                <Text style={styles.categoryBadgeText}>{tx.category}</Text>
+                                <Text style={styles.categoryBadgeText} numberOfLines={1}>{tx.category}</Text>
                               </View>
                             </View>
                           </TouchableOpacity>
@@ -393,11 +393,12 @@ const getStyles = (colors: ThemeColors) => {
       paddingVertical: 2,
       borderRadius: 2,
       marginTop: 4,
+      flexShrink: 0,
     },
     categoryBadgeText: {
       ...typography.labelMd,
-      fontSize: 10,
-      lineHeight: 14,
+      fontSize: 11,
+      lineHeight: 15,
       color: colors.primary,
       textTransform: 'uppercase',
     },

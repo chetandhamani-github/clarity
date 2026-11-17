@@ -41,6 +41,14 @@ export interface SyncOptions {
   onProgress?: (progress: SmsSyncProgress) => void;
 }
 
+export interface SmsScanResult {
+  scannedCount: number;
+  parsedCount: number;
+  reviewCount: number;
+  duplicateCount: number;
+  newTransactions: ParsedTransaction[];
+}
+
 type AccountRecord = Awaited<ReturnType<typeof getAllAccounts>>[number];
 
 export class SmsSyncService {
@@ -67,12 +75,7 @@ export class SmsSyncService {
     }
   }
 
-  public static async runInitialScan(options: SyncOptions = {}): Promise<{
-    scannedCount: number;
-    parsedCount: number;
-    reviewCount: number;
-    duplicateCount: number;
-  }> {
+  public static async runInitialScan(options: SyncOptions = {}): Promise<SmsScanResult> {
     if (this.isSyncing) {
       throw new Error('SMS synchronization is already in progress');
     }
@@ -88,6 +91,7 @@ export class SmsSyncService {
     let duplicateCount = 0;
     let maxSeenTimestamp = 0;
     let batchIndex = 0;
+    const newTransactions: ParsedTransaction[] = [];
 
     const reportProgress = (
       phase: SmsSyncProgress['phase'],
@@ -136,6 +140,12 @@ export class SmsSyncService {
 
           if (options.autoCreateClarityTransactions !== false) {
             await this.syncToClarityTransactions(parsedBatch);
+          } else {
+            for (const tx of parsedBatch) {
+              if (!tx.isDuplicate && !tx.transactionId) {
+                newTransactions.push(tx);
+              }
+            }
           }
 
           scannedCount += batch.length;
@@ -149,7 +159,7 @@ export class SmsSyncService {
       );
 
       if (!this.shouldCancel) {
-        if (options.autoCreateClarityTransactions !== false) {
+        if (options.autoCreateClarityTransactions !== false && parsedCount > 0) {
           await this.autoRepairMisassignedAccounts();
         }
 
@@ -164,19 +174,14 @@ export class SmsSyncService {
         reportProgress('complete', scannedCount, scannedCount, batchIndex, batchIndex);
       }
 
-      return { scannedCount, parsedCount, reviewCount, duplicateCount };
+      return { scannedCount, parsedCount, reviewCount, duplicateCount, newTransactions };
     } finally {
       this.isSyncing = false;
       this.shouldCancel = false;
     }
   }
 
-  public static async runIncrementalScan(options: SyncOptions = {}): Promise<{
-    scannedCount: number;
-    parsedCount: number;
-    reviewCount: number;
-    duplicateCount: number;
-  }> {
+  public static async runIncrementalScan(options: SyncOptions = {}): Promise<SmsScanResult> {
     if (this.isSyncing) {
       throw new Error('SMS synchronization is already in progress');
     }
@@ -200,6 +205,7 @@ export class SmsSyncService {
     let reviewCount = 0;
     let duplicateCount = 0;
     let maxSeenTimestamp = lastSync;
+    const newTransactions: ParsedTransaction[] = [];
 
     try {
       if (options.autoCreateClarityTransactions !== false) {
@@ -226,6 +232,12 @@ export class SmsSyncService {
 
           if (options.autoCreateClarityTransactions !== false) {
             await this.syncToClarityTransactions(parsedBatch);
+          } else {
+            for (const tx of parsedBatch) {
+              if (!tx.isDuplicate && !tx.transactionId) {
+                newTransactions.push(tx);
+              }
+            }
           }
 
           scannedCount += batch.length;
@@ -240,7 +252,7 @@ export class SmsSyncService {
       );
 
       if (!this.shouldCancel) {
-        if (options.autoCreateClarityTransactions !== false) {
+        if (options.autoCreateClarityTransactions !== false && parsedCount > 0) {
           await this.autoRepairMisassignedAccounts();
         }
 
@@ -253,7 +265,7 @@ export class SmsSyncService {
         BillsRepository.deduplicateExistingBills().catch(() => {});
       }
 
-      return { scannedCount, parsedCount, reviewCount, duplicateCount };
+      return { scannedCount, parsedCount, reviewCount, duplicateCount, newTransactions };
     } finally {
       this.isSyncing = false;
       this.shouldCancel = false;
@@ -369,7 +381,7 @@ export class SmsSyncService {
   }
 
   private static isKnownBank(bank: string): boolean {
-    return Boolean(bank && bank !== 'Other Bank' && bank.trim().length > 0);
+    return Boolean(bank && bank.trim().length > 0);
   }
 
   private static normalizeMask(mask: string | undefined): string {
@@ -465,15 +477,9 @@ export class SmsSyncService {
 
     for (const transaction of validTransactions) {
       try {
-        if (!this.isKnownBank(transaction.bank)) {
-          continue;
-        }
-
-        const bankName = transaction.bank.trim();
+        const rawBank = (transaction.bank || '').trim();
+        const bankName = rawBank && rawBank !== 'Other Bank' ? rawBank : 'Bank / UPI';
         const accountMask = this.normalizeMask(transaction.accountMask);
-        if (!accountMask) {
-          continue;
-        }
 
         const isCard =
           (transaction.rawBody && TransactionExtractor.isCreditCard(transaction.rawBody)) ||
@@ -487,7 +493,19 @@ export class SmsSyncService {
           accountType
         );
 
-        if (matchedAccount && !this.normalizeMask(matchedAccount.lastFour)) {
+        if (!matchedAccount && !accountMask) {
+          // Fall back to a default account (e.g. Primary Bank Account or generic bank account)
+          matchedAccount =
+            accounts.find(
+              (account) =>
+                account.type === accountType &&
+                (account.name === 'Primary Bank Account' ||
+                  !account.institution ||
+                  account.institution === 'Bank / UPI')
+            ) || accounts.find((account) => account.type === accountType);
+        }
+
+        if (matchedAccount && accountMask && !this.normalizeMask(matchedAccount.lastFour)) {
           const accountName = bankName + ' (..' + accountMask + ')';
           await updateAccount(matchedAccount.id, {
             lastFour: accountMask,
@@ -520,7 +538,7 @@ export class SmsSyncService {
             canUpgradeStarter = (result?.count ?? 0) === 0;
           }
 
-          const accountName = bankName + ' (..' + accountMask + ')';
+          const accountName = accountMask ? `${bankName} (..${accountMask})` : bankName;
           if (canUpgradeStarter && starterAccount) {
             await updateAccount(starterAccount.id, {
               name: accountName,
@@ -644,16 +662,14 @@ export class SmsSyncService {
           account.type === 'credit' ||
           account.type === 'lent'
         ) {
-          if (account.type === 'credit') {
-            await updateAccountBalance(account.id, 0);
-          }
           continue;
         }
 
         const latestBalance = await database.getFirstAsync<{
           available_balance: number | null;
+          transaction_date: string | null;
         }>(
-          `SELECT p.available_balance
+          `SELECT p.available_balance, p.transaction_date
            FROM parsed_transactions p
            JOIN transactions t ON p.transaction_id = t.id
            WHERE t.account_id = ? AND p.available_balance IS NOT NULL
@@ -663,6 +679,15 @@ export class SmsSyncService {
         );
 
         if (latestBalance?.available_balance !== null && latestBalance?.available_balance !== undefined) {
+          // If the account was updated after this SMS was received, do NOT overwrite it
+          if (account.updatedAt && latestBalance.transaction_date) {
+            const updatedAtMs = new Date(account.updatedAt).getTime();
+            const txDateMs = new Date(latestBalance.transaction_date).getTime();
+            if (updatedAtMs > txDateMs) {
+              continue;
+            }
+          }
+
           await updateAccountBalance(account.id, latestBalance.available_balance);
         }
       }

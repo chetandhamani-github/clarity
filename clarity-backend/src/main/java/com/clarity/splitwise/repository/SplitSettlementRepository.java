@@ -18,4 +18,8 @@ public interface SplitSettlementRepository extends JpaRepository<SplitSettlement
     Optional<SplitSettlement> findByIdAndInstallationId(String id, String installationId);
 
     long countByInstallationIdAndIsDeletedFalse(String installationId);
+
+    List<SplitSettlement> findByOwnerEmail(String ownerEmail);
+
+    List<SplitSettlement> findByOwnerEmailAndUpdatedAtAfter(String ownerEmail, Instant since);
 }

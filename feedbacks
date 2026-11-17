@@ -1,0 +1,6 @@
+asking user to which details want to fetch without auto fetching everything.
+
+
+
+
+There is another issue that i updated the balance in an account then closed the app then again come so previous entry of balance showing in that account. i think issue is that coming back again, app is fetching google drive data.

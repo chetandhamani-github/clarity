@@ -129,7 +129,7 @@ export default function AnalyticsScreen() {
         rightNode={
           <TouchableOpacity
             style={styles.iconButton}
-            onPress={() => router.push('/export-statement')}
+            onPress={() => router.navigate('/export-statement')}
           >
             <MaterialIcons name="download" size={24} color={colors.primary} />
           </TouchableOpacity>
@@ -159,7 +159,7 @@ export default function AnalyticsScreen() {
                 </View>
                 <TouchableOpacity
                   style={styles.exportButton}
-                  onPress={() => router.push('/export-statement')}
+                  onPress={() => router.navigate('/export-statement')}
                 >
                   <Text style={styles.exportButtonText}>Export</Text>
                   <MaterialIcons name="download" size={16} color={colors.onPrimary} />
@@ -191,6 +191,7 @@ export default function AnalyticsScreen() {
                                 : colors.onErrorContainer,
                           },
                         ]}
+                        numberOfLines={1}
                       >
                         {netCashFlow >= 0 ? '+' : ''}
                         {formatCurrency(netCashFlow)}
@@ -420,7 +421,7 @@ export default function AnalyticsScreen() {
                     <Text style={styles.cardTitle}>Recurring</Text>
                     <TouchableOpacity
                       style={styles.addRecurringBtn}
-                      onPress={() => router.push('/add-transaction')}
+                      onPress={() => router.navigate('/add-transaction')}
                     >
                       <Text style={styles.addRecurringText}>Add</Text>
                       <MaterialIcons name="add" size={16} color={colors.primary} />
@@ -558,6 +559,7 @@ const getStyles = (colors: ThemeColors) => {
       paddingHorizontal: 8,
       paddingVertical: 4,
       borderRadius: 6,
+      flexShrink: 0,
     },
     cashFlowBadgeText: {
       ...typography.labelMd,

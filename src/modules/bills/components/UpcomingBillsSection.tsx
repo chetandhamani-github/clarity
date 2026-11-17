@@ -75,14 +75,14 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
           <Text style={[styles.title, { color: colors.onSurface }]}>Bills & Utilities</Text>
           {upcomingBills.length > 0 && (
             <View style={[styles.countBadge, { backgroundColor: colors.primaryContainer }]}>
-              <Text style={[styles.countBadgeText, { color: colors.onPrimaryContainer }]}>
+              <Text style={[styles.countBadgeText, { color: colors.onPrimaryContainer }]} numberOfLines={1}>
                 {upcomingBills.length}
               </Text>
             </View>
           )}
         </View>
         <TouchableOpacity
-          onPress={() => router.push('/(app)/bills')}
+          onPress={() => router.navigate('/(app)/bills')}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={styles.viewAllButton}
         >
@@ -99,7 +99,7 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
               borderColor: colors.surfaceVariant,
             },
           ]}
-          onPress={() => router.push('/(app)/add-bill')}
+          onPress={() => router.navigate('/(app)/add-bill')}
           activeOpacity={0.8}
         >
           <View style={styles.emptyIconBox}>
@@ -133,7 +133,7 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
                   },
                 ]}
                 onPress={() =>
-                  router.push({ pathname: '/(app)/bill-details', params: { billId: bill.id } })
+                  router.navigate({ pathname: '/(app)/bill-details', params: { billId: bill.id } })
                 }
                 activeOpacity={0.9}
               >
@@ -208,15 +208,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
+    flexShrink: 0,
   },
   countBadgeText: {
     ...typography.labelMd,
     fontWeight: '700',
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 16,
   },
   viewAllButton: {
     paddingVertical: 4,
     paddingHorizontal: 4,
+    flexShrink: 0,
   },
   viewAllText: {
     ...typography.labelMd,

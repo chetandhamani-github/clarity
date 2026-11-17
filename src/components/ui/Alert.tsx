@@ -1,5 +1,5 @@
 import { ThemeColors, typography, useTheme } from '@/theme';
-import React, { createContext, useCallback, useContext, useState } from 'react';
+import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 import { Modal, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import Animated, {
   Easing,
@@ -40,20 +40,29 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
   const [isVisible, setIsVisible] = useState(false);
   const { colors } = useTheme();
   const styles = getStyles(colors);
+  const alertIdRef = useRef(0);
 
   const opacity = useSharedValue(0);
   const scale = useSharedValue(0.9);
 
+  const finalizeClose = useCallback((closedId: number) => {
+    if (alertIdRef.current === closedId) {
+      setIsVisible(false);
+      setAlertState(null);
+    }
+  }, []);
+
   const hideAlert = useCallback(() => {
+    const currentId = alertIdRef.current;
     opacity.value = withTiming(0, { duration: 150 });
     scale.value = withTiming(0.9, { duration: 150 }, () => {
-      runOnJS(setIsVisible)(false);
-      runOnJS(setAlertState)(null);
+      runOnJS(finalizeClose)(currentId);
     });
-  }, [opacity, scale]);
+  }, [opacity, scale, finalizeClose]);
 
   const showAlert = useCallback(
     (title: string, message?: string, buttons?: AlertButton[]) => {
+      alertIdRef.current += 1;
       // Default to a single "OK" button if none provided
       const finalButtons =
         buttons && buttons.length > 0 ? buttons : [{ text: 'OK', style: 'default' as const }];

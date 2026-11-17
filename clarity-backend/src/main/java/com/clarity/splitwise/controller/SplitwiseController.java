@@ -25,13 +25,15 @@ public class SplitwiseController {
     public ResponseEntity<SplitSyncResponse> sync(
             @Parameter(description = "Device installation ID")
             @RequestHeader(value = "X-Installation-Id", required = false) String installationIdHeader,
+            @Parameter(description = "User authentication bearer token")
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
             @RequestBody SplitSyncRequest request) {
 
         String installationId = (installationIdHeader != null && !installationIdHeader.trim().isEmpty())
                 ? installationIdHeader.trim()
                 : (request.getInstallationId() != null ? request.getInstallationId().trim() : null);
 
-        SplitSyncResponse response = splitwiseService.sync(installationId, request);
+        SplitSyncResponse response = splitwiseService.sync(installationId, request, authHeader);
         return ResponseEntity.ok(response);
     }
 

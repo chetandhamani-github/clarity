@@ -28,7 +28,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
           <TouchableOpacity
             style={[styles.fab, { bottom: insets.bottom + 64 }]} // Float above the tab bar on the right
             onPress={() => {
-              router.push('/add-transaction');
+              router.navigate('/add-transaction');
             }}
             activeOpacity={0.8}
           >

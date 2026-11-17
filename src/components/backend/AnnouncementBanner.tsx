@@ -70,6 +70,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 10,
     marginTop: 2,
+    flexShrink: 0,
   },
   textContainer: {
     flex: 1,
@@ -89,5 +90,6 @@ const styles = StyleSheet.create({
   closeButton: {
     padding: 4,
     marginTop: 2,
+    flexShrink: 0,
   },
 });

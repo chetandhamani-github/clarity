@@ -63,7 +63,7 @@ export function BillsScreen() {
         rightNode={
           <TouchableOpacity
             style={styles.headerAddButton}
-            onPress={() => router.push('/(app)/add-bill')}
+            onPress={() => router.navigate('/(app)/add-bill')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <MaterialIcons name="add" size={24} color={colors.primary} />
@@ -231,6 +231,7 @@ export function BillsScreen() {
                     { color: isActive ? colors.onPrimary : colors.onSurfaceVariant },
                     isActive && styles.tabButtonTextActive,
                   ]}
+                  numberOfLines={1}
                 >
                   {tab.label}
                   {tab.count !== undefined && tab.count > 0 ? ` (${tab.count})` : ''}
@@ -296,6 +297,7 @@ export function BillsScreen() {
                 },
                 selectedCategory === 'all' && styles.categoryPillTextActive,
               ]}
+              numberOfLines={1}
             >
               All Categories
             </Text>
@@ -332,6 +334,7 @@ export function BillsScreen() {
                     },
                     isSelected && styles.categoryPillTextActive,
                   ]}
+                  numberOfLines={1}
                 >
                   {cat.label}
                 </Text>
@@ -361,7 +364,7 @@ export function BillsScreen() {
               </Text>
               <TouchableOpacity
                 style={[styles.emptyAddButton, { backgroundColor: colors.primary }]}
-                onPress={() => router.push('/(app)/add-bill')}
+                onPress={() => router.navigate('/(app)/add-bill')}
                 activeOpacity={0.85}
               >
                 <MaterialIcons name="add" size={18} color={colors.onPrimary} />
@@ -416,7 +419,7 @@ export function BillsScreen() {
               {selectedTab === 'upcoming' && (
                 <TouchableOpacity
                   style={[styles.emptyAddButton, { backgroundColor: colors.primary }]}
-                  onPress={() => router.push('/(app)/add-bill')}
+                  onPress={() => router.navigate('/(app)/add-bill')}
                   activeOpacity={0.85}
                 >
                   <MaterialIcons name="add" size={18} color={colors.onPrimary} />
@@ -445,7 +448,7 @@ export function BillsScreen() {
             bottom: Math.max(24, insets.bottom + 85),
           },
         ]}
-        onPress={() => router.push('/(app)/add-bill')}
+        onPress={() => router.navigate('/(app)/add-bill')}
         activeOpacity={0.85}
       >
         <MaterialIcons name="add" size={24} color={colors.onPrimary} />
@@ -533,7 +536,8 @@ const styles = StyleSheet.create({
   tabButtonText: {
     ...typography.labelMd,
     fontWeight: '600',
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 16,
   },
   tabButtonTextActive: {
     fontWeight: '700',
@@ -568,6 +572,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
+    flexShrink: 0,
   },
   categoryPillText: {
     ...typography.labelMd,

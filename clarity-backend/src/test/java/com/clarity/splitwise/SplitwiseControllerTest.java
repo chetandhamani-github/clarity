@@ -53,7 +53,7 @@ class SplitwiseControllerTest {
                 .settlements(List.of())
                 .build();
 
-        when(splitwiseService.sync(eq("inst-123"), any(SplitSyncRequest.class))).thenReturn(response);
+        when(splitwiseService.sync(eq("inst-123"), any(SplitSyncRequest.class), any())).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/splitwise/sync")
                         .header("X-Installation-Id", "inst-123")

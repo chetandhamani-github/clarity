@@ -424,4 +424,19 @@ export class SmsDao {
       parsedTxId,
     ]);
   }
+
+  /**
+   * Mark parsed transactions as user-denied so they are never imported into Clarity.
+   */
+  public static async markParsedTransactionsDenied(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    const db = getDatabase();
+    const placeholders = ids.map(() => '?').join(', ');
+    await db.runAsync(
+      `UPDATE parsed_transactions 
+       SET is_duplicate = 1, duplicate_of = 'USER_DENIED' 
+       WHERE id IN (${placeholders})`,
+      ids
+    );
+  }
 }

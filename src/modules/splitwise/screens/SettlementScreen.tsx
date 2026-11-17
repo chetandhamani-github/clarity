@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  Alert,
   Platform,
   ScrollView,
   Modal,
@@ -15,11 +14,12 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
-import { Text, Header, DatePickerModal } from '@/components/ui';
+import { Text, Header, DatePickerModal, useAlert } from '@/components/ui';
 import { typography, useTheme, radius } from '@/theme';
 import { formatCurrencyPrivacy } from '@/utils/format';
 import { useAppStore } from '@/store/use-app-store';
 import { useSplitwiseStore } from '../store/splitwise.store';
+import { SplitwiseSyncService } from '../services/SplitwiseSyncService';
 import { BalanceCalculator } from '../services/BalanceCalculator';
 import type { SettlementType } from '../types/splitwise.types';
 
@@ -53,6 +53,7 @@ export function SettlementScreen() {
   const insets = useSafeInsets();
   const router = useRouter();
   const { hideBalances } = useAppStore();
+  const { showAlert } = useAlert();
 
   const params = useLocalSearchParams<{
     personId?: string;
@@ -176,13 +177,13 @@ export function SettlementScreen() {
 
   const onSubmit = async (data: SettlementFormData) => {
     if (!data.personId) {
-      Alert.alert('Required', 'Please select a friend for this settlement');
+      showAlert('Required', 'Please select a friend for this settlement');
       return;
     }
 
     const amt = parseFloat(data.amount);
     if (isNaN(amt) || amt <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid settlement amount greater than 0');
+      showAlert('Invalid Amount', 'Please enter a valid settlement amount greater than 0');
       return;
     }
 
@@ -200,13 +201,15 @@ export function SettlementScreen() {
         amount: amt,
         settlementType: data.type,
         description: data.description.trim() || undefined,
+        friendEmail: selectedPerson?.email,
         createdAt: createdAtIso,
       });
 
+      SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {});
       router.back();
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Failed to record settlement';
-      Alert.alert('Error', msg);
+      showAlert('Error', msg);
     }
   };
 
@@ -788,6 +791,7 @@ export function SettlementScreen() {
                       fontFamily: selectedDate === todayStr ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
                     },
                   ]}
+                  numberOfLines={1}
                 >
                   Today
                 </Text>
@@ -813,6 +817,7 @@ export function SettlementScreen() {
                       fontFamily: selectedDate === yesterdayStr ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
                     },
                   ]}
+                  numberOfLines={1}
                 >
                   Yesterday
                 </Text>
@@ -1009,7 +1014,7 @@ export function SettlementScreen() {
                     style={[styles.addFriendPromptBtn, { backgroundColor: colors.primary }]}
                     onPress={() => {
                       setShowPersonPicker(false);
-                      router.push('/(app)/add-splitwise-person');
+                      router.navigate('/(app)/add-splitwise-person');
                     }}
                   >
                     <MaterialIcons name="person-add" size={16} color={colors.onPrimary} />
@@ -1346,16 +1351,20 @@ const styles = StyleSheet.create({
   quickDatesRow: {
     flexDirection: 'row',
     gap: 6,
+    flexShrink: 0,
   },
   quickDatePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: radius.full,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   quickDateText: {
     ...typography.labelMd,
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 12,
+    lineHeight: 16,
   },
   datePickerBtn: {
     flexDirection: 'row',

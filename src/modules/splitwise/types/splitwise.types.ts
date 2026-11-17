@@ -61,6 +61,7 @@ export type SplitwiseActivityType = 'debt' | 'settlement' | 'expense';
 export interface Person {
   id: string;
   name: string;
+  email?: string;
   phone?: string;
   notes?: string;
   avatarUrl?: string;
@@ -75,6 +76,7 @@ export interface Debt {
   amount: number;
   type: DebtType;
   description: string;
+  friendEmail?: string;
   groupId?: string;
   expenseId?: string;
   syncStatus?: SyncStatus;
@@ -88,6 +90,7 @@ export interface Settlement {
   amount: number;
   description?: string;
   settlementType?: SettlementType;
+  friendEmail?: string;
   groupId?: string;
   expenseId?: string;
   syncStatus?: SyncStatus;
@@ -265,6 +268,7 @@ export interface ISplitwiseCloudSyncService {
 
 export interface CreatePerson {
   name: string;
+  email?: string;
   phone?: string;
   notes?: string;
   avatarUrl?: string;
@@ -272,6 +276,7 @@ export interface CreatePerson {
 
 export interface UpdatePerson {
   name?: string;
+  email?: string;
   phone?: string;
   notes?: string;
   avatarUrl?: string;
@@ -282,6 +287,7 @@ export interface CreateDebt {
   amount: number;
   type: DebtType;
   description: string;
+  friendEmail?: string;
   groupId?: string;
   expenseId?: string;
   createdAt?: string;
@@ -292,6 +298,7 @@ export interface UpdateDebt {
   amount?: number;
   type?: DebtType;
   description?: string;
+  friendEmail?: string;
   groupId?: string;
   expenseId?: string;
   createdAt?: string;
@@ -302,6 +309,7 @@ export interface CreateSettlement {
   amount: number;
   description?: string;
   settlementType?: SettlementType;
+  friendEmail?: string;
   groupId?: string;
   expenseId?: string;
   createdAt?: string;
@@ -312,6 +320,7 @@ export interface UpdateSettlement {
   amount?: number;
   description?: string;
   settlementType?: SettlementType;
+  friendEmail?: string;
   groupId?: string;
   expenseId?: string;
   createdAt?: string;

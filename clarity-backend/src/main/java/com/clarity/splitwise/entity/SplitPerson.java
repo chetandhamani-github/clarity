@@ -31,6 +31,12 @@ public class SplitPerson {
     @Column(name = "name", nullable = false, length = 255)
     private String name;
 
+    @Column(name = "email", length = 255)
+    private String email;
+
+    @Column(name = "owner_email", length = 255)
+    private String ownerEmail;
+
     @Column(name = "phone", length = 50)
     private String phone;
 

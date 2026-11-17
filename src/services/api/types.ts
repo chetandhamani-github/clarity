@@ -61,6 +61,7 @@ export interface SplitSyncPayload {
   people: Array<{
     id: string;
     name?: string;
+    email?: string;
     phone?: string;
     notes?: string;
     avatarUrl?: string;
@@ -71,6 +72,7 @@ export interface SplitSyncPayload {
   debts: Array<{
     id: string;
     personId?: string;
+    friendEmail?: string;
     amount?: number;
     type?: string;
     description?: string;
@@ -81,6 +83,7 @@ export interface SplitSyncPayload {
   settlements: Array<{
     id: string;
     personId?: string;
+    friendEmail?: string;
     amount?: number;
     settlementType?: string;
     description?: string;
@@ -96,6 +99,7 @@ export interface SplitSyncResponse {
   people: Array<{
     id: string;
     name: string;
+    email?: string;
     phone?: string;
     notes?: string;
     avatarUrl?: string;
@@ -106,6 +110,7 @@ export interface SplitSyncResponse {
   debts: Array<{
     id: string;
     personId: string;
+    friendEmail?: string;
     amount: number;
     type: string;
     description: string;
@@ -116,6 +121,7 @@ export interface SplitSyncResponse {
   settlements: Array<{
     id: string;
     personId: string;
+    friendEmail?: string;
     amount: number;
     settlementType?: string;
     description?: string;
@@ -125,4 +131,25 @@ export interface SplitSyncResponse {
   }>;
   confirmedIds: string[];
 }
+
+export interface UserDTO {
+  id: string;
+  email: string;
+  name: string;
+  avatarUrl?: string;
+  createdAt: string;
+}
+
+export interface GoogleAuthPayload {
+  idToken: string;
+  email?: string;
+  name?: string;
+  avatarUrl?: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: UserDTO;
+}
+
 

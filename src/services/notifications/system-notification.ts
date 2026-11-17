@@ -27,7 +27,10 @@ export async function triggerLocalSystemNotification(
       content: {
         title: options.title,
         body: options.body,
-        data: options.data ?? {},
+        data: {
+          ...(options.data ?? {}),
+          isLocal: true,
+        },
         sound: true,
       },
       trigger: null,

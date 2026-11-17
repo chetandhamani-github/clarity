@@ -17,6 +17,7 @@ interface AccountRow {
   institution: string;
   last_four: string;
   created_at: string;
+  updated_at?: string;
 }
 
 function mapRow(row: AccountRow): Account {
@@ -28,6 +29,7 @@ function mapRow(row: AccountRow): Account {
     institution: row.institution,
     lastFour: row.last_four,
     createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
   };
 }
 
@@ -47,23 +49,26 @@ export async function insertAccount(data: Omit<Account, 'id' | 'createdAt'>): Pr
   const db = getDatabase();
   const id = generateId();
   const now = new Date().toISOString();
+  const updatedAt = data.updatedAt || now;
 
   await db.runAsync(
-    `INSERT INTO accounts (id, name, type, balance, institution, last_four, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [id, data.name, data.type, data.balance, data.institution, data.lastFour, now]
+    `INSERT INTO accounts (id, name, type, balance, institution, last_four, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, data.name, data.type, data.balance, data.institution, data.lastFour, now, updatedAt]
   );
 
   return {
     id,
     ...data,
     createdAt: now,
+    updatedAt,
   };
 }
 
 export async function updateAccountBalance(id: string, balance: number): Promise<void> {
   const db = getDatabase();
-  await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [balance, id]);
+  const now = new Date().toISOString();
+  await db.runAsync('UPDATE accounts SET balance = ?, updated_at = ? WHERE id = ?', [balance, now, id]);
 }
 
 export async function updateAccount(
@@ -97,6 +102,10 @@ export async function updateAccount(
   }
 
   if (sets.length === 0) return;
+
+  const now = data.updatedAt || new Date().toISOString();
+  sets.push('updated_at = ?');
+  params.push(now);
 
   params.push(id);
   await db.runAsync(`UPDATE accounts SET ${sets.join(', ')} WHERE id = ?`, params);

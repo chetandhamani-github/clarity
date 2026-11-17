@@ -223,6 +223,7 @@ export function DatePickerModal({
                       { color: colors.onSurfaceVariant },
                       isSelected && { color: colors.onPrimary, fontWeight: '700' },
                     ]}
+                    numberOfLines={1}
                   >
                     {shortcut.label}
                   </Text>
@@ -360,7 +361,9 @@ const styles = StyleSheet.create({
   shortcutChip: {
     flex: 1,
     paddingVertical: 8,
+    paddingHorizontal: 4,
     alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: radius.full,
     borderWidth: 1,
   },

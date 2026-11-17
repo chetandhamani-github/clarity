@@ -83,12 +83,21 @@ export function usePushNotifications() {
       (notification: any) => {
         setNotification(notification);
 
-        const payload = notification.request.content;
-        const data = payload.data as { type?: string; actionUrl?: string };
+        const payload = notification.request?.content;
+        const data = payload?.data as { type?: string; actionUrl?: string; isLocal?: boolean } | undefined;
+
+        // Skip locally generated notifications to prevent infinite feedback loops with insertNotification()
+        const isLocal =
+          data?.isLocal ||
+          !notification.request?.trigger ||
+          notification.request?.trigger?.type !== 'push';
+        if (isLocal) {
+          return;
+        }
 
         insertNotification({
-          title: payload.title || 'Notification',
-          description: payload.body || '',
+          title: payload?.title || 'Notification',
+          description: payload?.body || '',
           type: (data?.type as any) || 'default',
           actionUrl: data?.actionUrl || '',
         })
@@ -101,24 +110,14 @@ export function usePushNotifications() {
 
     responseListener.current = Notifications.addNotificationResponseReceivedListener(
       (response: any) => {
-        const payload = response.notification.request.content;
-        const data = payload.data as { type?: string; actionUrl?: string };
+        const payload = response.notification?.request?.content;
+        const data = payload?.data as { type?: string; actionUrl?: string } | undefined;
 
-        insertNotification({
-          title: payload.title || 'Notification',
-          description: payload.body || '',
-          type: (data?.type as any) || 'default',
-          actionUrl: data?.actionUrl || '',
-        })
-          .then(() => {
-            DeviceEventEmitter.emit('notificationsUpdated');
-          })
-          .catch(() => {});
-
+        // User clicking a notification should only navigate, never re-insert into the database
         if (data?.actionUrl) {
-          router.push(data.actionUrl as any);
+          router.navigate(data.actionUrl as any);
         } else {
-          router.push('/notifications');
+          router.navigate('/notifications');
         }
       }
     );

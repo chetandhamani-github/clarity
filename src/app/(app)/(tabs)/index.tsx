@@ -69,7 +69,7 @@ export default function DashboardScreen() {
   const handleEnableSms = async () => {
     const status = await requestSmsPermission();
     if (status === 'granted') {
-      await syncSms();
+      await syncSms({ autoCreateClarityTransactions: false });
       refetchTransactions();
       refetchAccounts();
       refetchTotals();
@@ -221,7 +221,7 @@ export default function DashboardScreen() {
         isMainTab
         title="Clarity Finance"
         leftNode={
-          <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
+          <TouchableOpacity style={styles.avatarButton} onPress={() => router.navigate('/settings')}>
             <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
               <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
             </View>
@@ -229,12 +229,12 @@ export default function DashboardScreen() {
         }
         rightNode={
           <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-            <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/analytics')}>
+            <TouchableOpacity style={styles.iconButton} onPress={() => router.navigate('/analytics')}>
               <MaterialIcons name="insights" size={24} color={colors.onSurface} />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.iconButton}
-              onPress={() => router.push('/notifications')}
+              onPress={() => router.navigate('/notifications')}
             >
               <MaterialIcons name="notifications-none" size={24} color={colors.onSurface} />
             </TouchableOpacity>
@@ -344,6 +344,7 @@ export default function DashboardScreen() {
                         styles.netWorthBadgeText,
                         { color: isPositiveTrend ? colors.primary : colors.error },
                       ]}
+                      numberOfLines={1}
                     >
                       {nwTrendStr}
                     </Text>
@@ -447,7 +448,7 @@ export default function DashboardScreen() {
                     <Text style={styles.recentActivityTitle}>Bank Accounts</Text>
                     <TouchableOpacity
                       style={styles.viewAllButton}
-                      onPress={() => router.push('/accounts')}
+                      onPress={() => router.navigate('/accounts')}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
                       <Text style={styles.viewAllText}>VIEW ALL</Text>
@@ -465,7 +466,7 @@ export default function DashboardScreen() {
                           key={acc.id}
                           style={styles.bankAccountCard}
                           onPress={() =>
-                            router.push({
+                            router.navigate({
                               pathname: '/account-details',
                               params: { accountId: acc.id },
                             })
@@ -565,7 +566,7 @@ export default function DashboardScreen() {
               <View style={styles.sectionContainer}>
                 <Text style={styles.sectionTitle}>Budget Allocation</Text>
                 {plan ? (
-                  <TouchableOpacity style={styles.budgetCard} onPress={() => router.push('/plan')}>
+                  <TouchableOpacity style={styles.budgetCard} onPress={() => router.navigate('/plan')}>
                     <View style={styles.budgetItem}>
                       <View style={styles.budgetRow}>
                         <Text style={styles.budgetType}>Needs ({plan.needsPercent}%)</Text>
@@ -617,7 +618,7 @@ export default function DashboardScreen() {
                 ) : (
                   <TouchableOpacity
                     style={styles.budgetCard}
-                    onPress={() => router.push('/budget-setup')}
+                    onPress={() => router.navigate('/budget-setup')}
                   >
                     <View style={{ alignItems: 'center', paddingVertical: 16 }}>
                       <Text
@@ -643,7 +644,7 @@ export default function DashboardScreen() {
                   <Text style={styles.recentActivityTitle}>Recent Activity</Text>
                   <TouchableOpacity
                     style={styles.viewAllButton}
-                    onPress={() => router.push('/transactions')}
+                    onPress={() => router.navigate('/transactions')}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
                     <Text style={styles.viewAllText}>VIEW ALL</Text>
@@ -673,7 +674,7 @@ export default function DashboardScreen() {
                         <TouchableOpacity
                           key={tx.id}
                           style={[styles.activityItem, isLast && styles.lastActivityItem]}
-                          onPress={() => router.push(`/(app)/add-transaction?id=${tx.id}`)}
+                          onPress={() => router.navigate(`/(app)/add-transaction?id=${tx.id}`)}
                         >
                           <View
                             style={[
@@ -697,7 +698,7 @@ export default function DashboardScreen() {
                               {subtitle}
                             </Text>
                           </View>
-                          <View style={{ alignItems: 'flex-end' }}>
+                          <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
                             <Text
                               style={
                                 tx.type === 'income'
@@ -720,6 +721,7 @@ export default function DashboardScreen() {
                                     styles.splitMiniBadgeText,
                                     { color: colors.onSecondaryContainer },
                                   ]}
+                                  numberOfLines={1}
                                 >
                                   Split ({tx.splits.length})
                                 </Text>
@@ -801,6 +803,7 @@ const getStyles = (colors: ThemeColors) => {
       paddingHorizontal: 8,
       paddingVertical: 4,
       borderRadius: radius.full,
+      flexShrink: 0,
     },
     netWorthBadgeText: {
       ...typography.labelMd,
@@ -947,10 +950,12 @@ const getStyles = (colors: ThemeColors) => {
       paddingVertical: 2,
       borderRadius: 6,
       alignSelf: 'flex-end',
+      flexShrink: 0,
     },
     splitMiniBadgeText: {
       ...typography.labelMd,
-      fontSize: 10,
+      fontSize: 11,
+      lineHeight: 15,
       fontWeight: '600',
     },
     bankAccountCard: {

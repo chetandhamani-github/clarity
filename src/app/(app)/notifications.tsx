@@ -51,7 +51,7 @@ export default function NotificationsScreen() {
       markAsRead(id);
     }
     if (url) {
-      router.push(url as any);
+      router.navigate(url as any);
     }
   };
 
@@ -156,7 +156,7 @@ export default function NotificationsScreen() {
             {unreadCount > 0 && (
               <View style={styles.topActions}>
                 <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadBadgeText}>
+                  <Text style={styles.unreadBadgeText} numberOfLines={1}>
                     {unreadCount} unread
                   </Text>
                 </View>
@@ -267,11 +267,12 @@ const getStyles = (colors: ThemeColors) => {
       paddingHorizontal: 10,
       paddingVertical: 4,
       borderRadius: 12,
+      flexShrink: 0,
     },
     unreadBadgeText: {
       ...typography.labelMd,
       color: colors.onPrimaryContainer,
-      fontSize: 11,
+      fontSize: 12,
       lineHeight: 16,
       fontWeight: '600',
     },

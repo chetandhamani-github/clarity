@@ -232,5 +232,38 @@ describe('SmsSyncService', () => {
     expect(result.parsedCount).toBe(0);
     expect(SmsDao.saveParsedTransactionsBatch).toHaveBeenCalledWith([]);
   });
+
+  it('syncs UPI transactions with missing mask to primary account without skipping', async () => {
+    const { insertTransaction } = require('@/services/database/transaction-dao');
+    const upiPending: ParsedTransaction = {
+      id: 'pending-upi-1',
+      smsId: 'sms-upi',
+      amount: 250,
+      type: 'DEBIT',
+      merchant: 'Chai Point',
+      category: 'Food & Dining',
+      bank: 'Bank / UPI',
+      accountMask: 'XXXX',
+      timestamp: 1705315200000,
+      confidence: 0.9,
+      isDuplicate: false,
+      createdAt: new Date().toISOString(),
+    };
+    (SmsDao.getUnlinkedParsedTransactions as jest.Mock).mockResolvedValue([upiPending]);
+
+    await SmsSyncService.runInitialScan({ autoCreateClarityTransactions: true });
+
+    expect(insertTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountId: 'acc-1',
+        amount: 250,
+        type: 'expense',
+        merchant: 'Chai Point',
+        source: 'SMS',
+      }),
+      expect.any(Object)
+    );
+    expect(SmsDao.linkClarityTransaction).toHaveBeenCalledWith('pending-upi-1', 'clarity-tx-1');
+  });
 });
 

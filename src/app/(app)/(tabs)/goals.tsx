@@ -80,7 +80,7 @@ export default function GoalsScreen() {
         isMainTab
         title="Goals"
         leftNode={
-          <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
+          <TouchableOpacity style={styles.avatarButton} onPress={() => router.navigate('/settings')}>
             <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
               <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
             </View>
@@ -173,15 +173,15 @@ export default function GoalsScreen() {
                 <Pressable
                   key={goal.id}
                   style={styles.goalCard}
-                  onPress={() => router.push(`/goal-details?id=${goal.id}`)}
+                  onPress={() => router.navigate(`/goal-details?id=${goal.id}`)}
                 >
                   <View style={styles.goalCardTop}>
                     <View style={styles.goalCardLeft}>
                       <View style={styles.iconBox}>
                         <MaterialIcons name={goal.icon as any} size={24} color={colors.primary} />
                       </View>
-                      <View>
-                        <Text style={styles.goalTitle}>{goal.name}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.goalTitle} numberOfLines={1}>{goal.name}</Text>
                         <Text style={styles.goalAmounts}>
                           {formatCurrency(goal.currentAmount)} / {formatCurrency(goal.targetAmount)}
                         </Text>
@@ -260,6 +260,8 @@ const getStyles = (colors: ThemeColors) => {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 16,
+      flex: 1,
+      marginRight: 8,
     },
     iconBox: {
       width: 48,
@@ -282,6 +284,7 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.bodyLg,
       fontWeight: '700',
       color: colors.primary,
+      flexShrink: 0,
     },
     goalCardBottom: {
       gap: 12,

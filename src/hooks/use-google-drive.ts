@@ -9,6 +9,7 @@ import {
   uploadBackup,
   downloadBackup,
   findBackupFile,
+  deleteAllBackups,
   getSavedTokens,
   type GoogleDriveBackupInfo,
 } from '@/services/cloud/google-drive-service';
@@ -38,6 +39,7 @@ export function useGoogleDrive() {
   const [isRestoring, setIsRestoring] = useState(false);
   const [isCheckingBackup, setIsCheckingBackup] = useState(false);
   const [isAutoSyncing, setIsAutoSyncing] = useState(false);
+  const [isDeletingBackups, setIsDeletingBackups] = useState(false);
 
   /**
    * Restore database from Google Drive backup.
@@ -260,6 +262,39 @@ export function useGoogleDrive() {
     }
   }, []);
 
+  /**
+   * Delete all backups from Google Drive private appDataFolder.
+   */
+  const deleteBackupsFromDrive = useCallback(async (): Promise<{
+    success: boolean;
+    count: number;
+    error?: string;
+  }> => {
+    setIsDeletingBackups(true);
+    try {
+      const res = await deleteAllBackups();
+      if (!res.success) {
+        showToast(res.error || 'Failed to remove backups from Drive', 'error');
+        return { success: false, count: 0, error: res.error };
+      }
+      setLastCloudBackupTime(null);
+      if (res.count > 0) {
+        showToast(
+          `Deleted ${res.count} cloud backup${res.count > 1 ? 's' : ''} from Google Drive.`,
+          'success'
+        );
+      } else {
+        showToast('No cloud backups found in Google Drive to delete.', 'info');
+      }
+      return { success: true, count: res.count };
+    } catch (error: any) {
+      showToast(error?.message || 'Error deleting backups from Drive', 'error');
+      return { success: false, count: 0, error: error?.message };
+    } finally {
+      setIsDeletingBackups(false);
+    }
+  }, [setLastCloudBackupTime, showToast]);
+
   return {
     isConnected,
     userEmail,
@@ -271,11 +306,13 @@ export function useGoogleDrive() {
     isRestoring,
     isCheckingBackup,
     isAutoSyncing,
+    isDeletingBackups,
     connect,
     disconnect,
     backupNow,
     performSilentAutoBackup,
     restoreFromDrive,
     checkAvailableBackup,
+    deleteBackupsFromDrive,
   };
 }

@@ -33,6 +33,12 @@ public class SplitDebt {
     @Column(name = "person_id", nullable = false, length = 255)
     private String personId;
 
+    @Column(name = "friend_email", length = 255)
+    private String friendEmail;
+
+    @Column(name = "owner_email", length = 255)
+    private String ownerEmail;
+
     @Column(name = "amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal amount;
 

@@ -3,6 +3,7 @@ import type {
   SmsPermissionStatus,
   SmsSyncProgress,
   SmsAnalytics,
+  ParsedTransaction,
 } from '@/modules/sms/types';
 import { SmsPermissionManager } from '@/modules/sms/permissions/smsPermissionManager';
 import { SmsSyncService, SyncOptions } from '@/modules/sms/services/smsSyncService';
@@ -17,6 +18,8 @@ interface SmsStoreState {
   analytics: SmsAnalytics | null;
   reviewQueueCount: number;
   error: string | null;
+  pendingTransactions: ParsedTransaction[];
+  isPromptVisible: boolean;
 
   // Actions
   checkPermission: () => Promise<SmsPermissionStatus>;
@@ -26,6 +29,11 @@ interface SmsStoreState {
   cancelSync: () => void;
   refreshAnalytics: () => Promise<void>;
   refreshReviewQueueCount: () => Promise<void>;
+  setPendingTransactions: (txs: ParsedTransaction[]) => void;
+  openTransactionPrompt: () => void;
+  closeTransactionPrompt: () => void;
+  importPendingTransactions: (selectedIds?: string[]) => Promise<number>;
+  dismissPendingTransactions: (idsToDismiss?: string[]) => Promise<void>;
 }
 
 export const useSmsStore = create<SmsStoreState>((set, get) => ({
@@ -42,6 +50,8 @@ export const useSmsStore = create<SmsStoreState>((set, get) => ({
   analytics: null,
   reviewQueueCount: 0,
   error: null,
+  pendingTransactions: [],
+  isPromptVisible: false,
 
   checkPermission: async () => {
     const status = await SmsPermissionManager.checkSmsPermission();
@@ -71,7 +81,7 @@ export const useSmsStore = create<SmsStoreState>((set, get) => ({
     });
 
     try {
-      await SmsSyncService.runInitialScan({
+      const result = await SmsSyncService.runInitialScan({
         ...options,
         onProgress: (progress) => {
           set({ progress });
@@ -84,6 +94,14 @@ export const useSmsStore = create<SmsStoreState>((set, get) => ({
         isSyncing: false,
         lastSyncTimestamp: lastSync,
       });
+
+      if (
+        options?.autoCreateClarityTransactions === false &&
+        result.newTransactions &&
+        result.newTransactions.length > 0
+      ) {
+        get().setPendingTransactions(result.newTransactions);
+      }
 
       await get().refreshAnalytics();
       await get().refreshReviewQueueCount();
@@ -108,7 +126,7 @@ export const useSmsStore = create<SmsStoreState>((set, get) => ({
     set({ isSyncing: true, error: null });
 
     try {
-      await SmsSyncService.runIncrementalScan({
+      const result = await SmsSyncService.runIncrementalScan({
         ...options,
         onProgress: (progress) => {
           set({ progress });
@@ -121,6 +139,14 @@ export const useSmsStore = create<SmsStoreState>((set, get) => ({
         isSyncing: false,
         lastSyncTimestamp: lastSync,
       });
+
+      if (
+        options?.autoCreateClarityTransactions === false &&
+        result.newTransactions &&
+        result.newTransactions.length > 0
+      ) {
+        get().setPendingTransactions(result.newTransactions);
+      }
 
       await get().refreshAnalytics();
       await get().refreshReviewQueueCount();
@@ -155,5 +181,65 @@ export const useSmsStore = create<SmsStoreState>((set, get) => ({
     } catch {
       // Failed to refresh review queue count
     }
+  },
+
+  setPendingTransactions: (txs: ParsedTransaction[]) => {
+    set({
+      pendingTransactions: txs,
+      isPromptVisible: txs.length > 0,
+    });
+  },
+
+  openTransactionPrompt: () => {
+    if (get().pendingTransactions.length > 0) {
+      set({ isPromptVisible: true });
+    }
+  },
+
+  closeTransactionPrompt: () => {
+    set({ isPromptVisible: false });
+  },
+
+  importPendingTransactions: async (selectedIds?: string[]) => {
+    const { pendingTransactions } = get();
+    if (pendingTransactions.length === 0) return 0;
+
+    const toImport = selectedIds
+      ? pendingTransactions.filter((tx) => selectedIds.includes(tx.id))
+      : pendingTransactions;
+    const toDeny = selectedIds
+      ? pendingTransactions.filter((tx) => !selectedIds.includes(tx.id))
+      : [];
+
+    if (toDeny.length > 0) {
+      await SmsDao.markParsedTransactionsDenied(toDeny.map((tx) => tx.id));
+    }
+
+    if (toImport.length > 0) {
+      await SmsSyncService.importParsedTransactions(toImport);
+    }
+
+    set({
+      pendingTransactions: [],
+      isPromptVisible: false,
+    });
+
+    await get().refreshAnalytics();
+    await get().refreshReviewQueueCount();
+
+    return toImport.length;
+  },
+
+  dismissPendingTransactions: async (idsToDismiss?: string[]) => {
+    const { pendingTransactions } = get();
+    const ids = idsToDismiss ?? pendingTransactions.map((tx) => tx.id);
+    if (ids.length > 0) {
+      await SmsDao.markParsedTransactionsDenied(ids);
+    }
+    set({
+      pendingTransactions: [],
+      isPromptVisible: false,
+    });
+    await get().refreshAnalytics();
   },
 }));

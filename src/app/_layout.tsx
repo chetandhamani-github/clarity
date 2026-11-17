@@ -15,6 +15,8 @@ import { initDatabase } from '@/services/database';
 import { ToastProvider, AlertProvider, AppLockModal } from '@/components/ui';
 import { GoogleDrivePromptModal } from '@/components/modals/GoogleDrivePromptModal';
 import { SmsPermissionPromptModal } from '@/components/modals/SmsPermissionPromptModal';
+import { SmsTransactionPromptModal } from '@/components/modals/SmsTransactionPromptModal';
+import { useSmsStore } from '@/store/useSmsStore';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
@@ -32,6 +34,8 @@ export default function RootLayout() {
   const [isAppLocked, setIsAppLocked] = useState(false);
   const [showDrivePrompt, setShowDrivePrompt] = useState(false);
   const [showSmsPrompt, setShowSmsPrompt] = useState(false);
+  const isTransactionPromptVisible = useSmsStore((state) => state.isPromptVisible);
+  const closeTransactionPrompt = useSmsStore((state) => state.closeTransactionPrompt);
   const lastBackgroundTime = useRef<number | null>(null);
 
   const biometricEnabled = useAppStore((state) => state.biometricEnabled);
@@ -104,17 +108,34 @@ export default function RootLayout() {
           await processDueRecurringTransactions();
           await checkUpcomingBillReminders();
 
-          // Auto-repair and consolidate duplicate SMS bank accounts
-          const { SmsSyncService } = await import('@/modules/sms/services/smsSyncService');
-          await SmsSyncService.autoRepairMisassignedAccounts();
-          queryClient.invalidateQueries({ queryKey: ['accounts'] });
-          queryClient.invalidateQueries({ queryKey: ['transactions'] });
-
           // Silent cloud backup sync on app launch
           const { syncDatabaseToDriveSilently } = await import(
             '@/services/cloud/google-drive-service'
           );
           syncDatabaseToDriveSilently('app-launch').catch(() => {});
+
+          // Initialize Google user session from secure storage
+          const { useAuthStore } = await import('@/store/use-auth-store');
+          await useAuthStore.getState().initializeAuth().catch(() => {});
+
+          // Silent incremental SMS scan on app launch (ask user if new transactions found)
+          const { SmsPermissionManager } = await import(
+            '@/modules/sms/permissions/smsPermissionManager'
+          );
+          const smsStatus = await SmsPermissionManager.checkSmsPermission();
+          if (smsStatus === 'granted') {
+            const { SmsSyncService } = await import('@/modules/sms/services/smsSyncService');
+            await SmsSyncService.runIncrementalScan({
+              autoCreateClarityTransactions: false,
+            }).catch(() => null);
+
+            const { SmsDao } = await import('@/modules/sms/storage/smsDao');
+            const unlinked = await SmsDao.getUnlinkedParsedTransactions();
+            if (unlinked.length > 0) {
+              const { useSmsStore } = await import('@/store/useSmsStore');
+              useSmsStore.getState().setPendingTransactions(unlinked);
+            }
+          }
         } catch {
           // Recurring processing error ignored
         }
@@ -158,10 +179,15 @@ export default function RootLayout() {
             const status = await SmsPermissionManager.checkSmsPermission();
             if (status === 'granted') {
               const { SmsSyncService } = await import('@/modules/sms/services/smsSyncService');
-              const scanResult = await SmsSyncService.runIncrementalScan().catch(() => null);
-              if (scanResult && (scanResult.parsedCount > 0 || scanResult.duplicateCount > 0)) {
-                queryClient.invalidateQueries({ queryKey: ['transactions'] });
-                queryClient.invalidateQueries({ queryKey: ['accounts'] });
+              await SmsSyncService.runIncrementalScan({
+                autoCreateClarityTransactions: false,
+              }).catch(() => null);
+
+              const { SmsDao } = await import('@/modules/sms/storage/smsDao');
+              const unlinked = await SmsDao.getUnlinkedParsedTransactions();
+              if (unlinked.length > 0) {
+                const { useSmsStore } = await import('@/store/useSmsStore');
+                useSmsStore.getState().setPendingTransactions(unlinked);
               }
             }
           })
@@ -208,6 +234,15 @@ export default function RootLayout() {
                 <SmsPermissionPromptModal
                   visible={showSmsPrompt && !isAppLocked && !showDrivePrompt}
                   onDismiss={() => setShowSmsPrompt(false)}
+                />
+                <SmsTransactionPromptModal
+                  visible={
+                    isTransactionPromptVisible &&
+                    !isAppLocked &&
+                    !showDrivePrompt &&
+                    !showSmsPrompt
+                  }
+                  onDismiss={closeTransactionPrompt}
                 />
               </ThemeProvider>
             </AlertProvider>

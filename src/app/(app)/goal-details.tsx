@@ -225,6 +225,7 @@ export default function GoalDetailsScreen() {
                               styles.accountChipText,
                               selectedAccountId === acc.id && { color: colors.onPrimary },
                             ]}
+                            numberOfLines={1}
                           >
                             {acc.name} ({formatCurrency(acc.balance)})
                           </Text>
@@ -565,6 +566,7 @@ const getStyles = (colors: ThemeColors) => {
       borderWidth: 1,
       borderColor: colors.outlineVariant,
       backgroundColor: colors.surfaceContainerLowest,
+      flexShrink: 0,
     },
     accountChipText: {
       ...typography.labelMd,

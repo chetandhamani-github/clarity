@@ -5,7 +5,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
@@ -187,6 +186,7 @@ export default function SecurityPrivacyScreen() {
                       styles.radioPillText,
                       timeoutSetting === 'immediate' && styles.radioPillTextActive,
                     ]}
+                    numberOfLines={1}
                   >
                     Immediate
                   </Text>
@@ -201,6 +201,7 @@ export default function SecurityPrivacyScreen() {
                       styles.radioPillText,
                       timeoutSetting === '1min' && styles.radioPillTextActive,
                     ]}
+                    numberOfLines={1}
                   >
                     1 Minute
                   </Text>
@@ -215,6 +216,7 @@ export default function SecurityPrivacyScreen() {
                       styles.radioPillText,
                       timeoutSetting === '5min' && styles.radioPillTextActive,
                     ]}
+                    numberOfLines={1}
                   >
                     5 Minutes
                   </Text>
@@ -233,6 +235,7 @@ export default function SecurityPrivacyScreen() {
                       styles.radioPillText,
                       timeoutSetting === 'never' && styles.radioPillTextActive,
                     ]}
+                    numberOfLines={1}
                   >
                     Never
                   </Text>
@@ -261,7 +264,7 @@ export default function SecurityPrivacyScreen() {
               </View>
               <TouchableOpacity
                 style={styles.outlineBtn}
-                onPress={() => router.push('/(app)/(tabs)/accounts')}
+                onPress={() => router.navigate('/(app)/(tabs)/accounts')}
               >
                 <Text style={styles.outlineBtnText}>Manage</Text>
               </TouchableOpacity>
@@ -423,6 +426,7 @@ const getStyles = (colors: ThemeColors) => {
       borderWidth: 1,
       borderColor: colors.outlineVariant,
       backgroundColor: 'transparent',
+      flexShrink: 0,
     },
     radioPillActive: {
       backgroundColor: colors.primary,

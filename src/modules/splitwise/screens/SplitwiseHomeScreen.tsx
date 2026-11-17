@@ -118,11 +118,11 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
   const openAction = (type: 'PERSON' | 'DEBT' | 'SETTLEMENT') => {
     setShowChooserModal(false);
     if (type === 'PERSON') {
-      router.push('/(app)/add-splitwise-person');
+      router.navigate('/(app)/add-splitwise-person');
     } else if (type === 'DEBT') {
-      router.push('/(app)/add-splitwise-debt');
+      router.navigate('/(app)/add-splitwise-debt');
     } else if (type === 'SETTLEMENT') {
-      router.push('/(app)/add-splitwise-settlement');
+      router.navigate('/(app)/add-splitwise-settlement');
     }
   };
 
@@ -433,7 +433,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
                 balance={item}
                 hideBalances={hideBalances}
                 onPress={() => {
-                  router.push({
+                  router.navigate({
                     pathname: '/(app)/splitwise-person-details',
                     params: { personId: item.personId },
                   });
@@ -444,7 +444,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
                     ? (item.remainingPayable ?? Math.abs(item.netBalance))
                     : item.remainingReceivable;
 
-                  router.push({
+                  router.navigate({
                     pathname: '/(app)/add-splitwise-settlement',
                     params: {
                       personId: item.personId,
@@ -736,7 +736,7 @@ function PersonCard({ balance, hideBalances, onPress, onSettlePress }: PersonCar
 
           <View style={styles.subRow}>
             <View style={[styles.statusBadge, { backgroundColor: badgeBg }]}>
-              <Text style={[styles.statusBadgeText, { color: badgeColor }]}>
+              <Text style={[styles.statusBadgeText, { color: badgeColor }]} numberOfLines={1}>
                 {balance.statusLabel}
               </Text>
             </View>
@@ -839,6 +839,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: radius.full,
+    flexShrink: 0,
   },
   peopleCountText: {
     ...typography.labelMd,
@@ -1018,21 +1019,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: radius.full,
+    flexShrink: 0,
   },
   statusBadgeText: {
     ...typography.labelMd,
     fontFamily: 'Manrope_700Bold',
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 11,
+    lineHeight: 15,
   },
   settledSubtext: {
     ...typography.bodyMd,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 16,
   },
   personCardRight: {
     alignItems: 'flex-end',
     gap: 4,
+    flexShrink: 0,
   },
   balanceAmount: {
     ...typography.headlineSm,

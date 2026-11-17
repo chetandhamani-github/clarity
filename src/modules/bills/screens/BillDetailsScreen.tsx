@@ -5,12 +5,11 @@ import {
   ScrollView,
   TouchableOpacity,
   Linking,
-  Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Text, Header, useToast, BillDetailSkeleton } from '@/components/ui';
+import { Text, Header, useToast, useAlert, BillDetailSkeleton } from '@/components/ui';
 import { typography, useTheme, radius } from '@/theme';
 import { useAppStore } from '@/store/use-app-store';
 import { formatCurrencyPrivacy } from '@/utils/format';
@@ -24,6 +23,7 @@ export function BillDetailsScreen() {
   const router = useRouter();
   const { hideBalances } = useAppStore();
   const { showToast } = useToast();
+  const { showAlert } = useAlert();
 
   const { billId } = useLocalSearchParams<{ billId: string }>();
   const { allBills, isLoading, markBillPaid, deleteBill, updateBill } = useBills();
@@ -87,7 +87,7 @@ export function BillDetailsScreen() {
   };
 
   const handleDelete = () => {
-    Alert.alert('Delete Bill', `Are you sure you want to delete ${bill.title}?`, [
+    showAlert('Delete Bill', `Are you sure you want to delete ${bill.title}?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -110,7 +110,7 @@ export function BillDetailsScreen() {
           <View style={{ flexDirection: 'row', gap: 6 }}>
             <TouchableOpacity
               style={styles.headerIconButton}
-              onPress={() => router.push({ pathname: '/(app)/add-bill', params: { billId: bill.id } })}
+              onPress={() => router.navigate({ pathname: '/(app)/add-bill', params: { billId: bill.id } })}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <MaterialIcons name="edit" size={20} color={colors.onSurface} />
@@ -164,7 +164,7 @@ export function BillDetailsScreen() {
             {bill.isRecurring && (
               <View style={[styles.recurringPill, { backgroundColor: colors.surfaceContainerHighest }]}>
                 <MaterialIcons name="repeat" size={13} color={colors.onSurfaceVariant} />
-                <Text style={[styles.recurringPillText, { color: colors.onSurfaceVariant }]}>
+                <Text style={[styles.recurringPillText, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
                   {bill.frequency.charAt(0).toUpperCase() + bill.frequency.slice(1)}
                 </Text>
               </View>
@@ -420,10 +420,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
+    flexShrink: 0,
   },
   recurringPillText: {
     ...typography.labelMd,
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '600',
   },
   sectionCard: {

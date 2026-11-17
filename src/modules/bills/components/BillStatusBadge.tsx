@@ -91,11 +91,11 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   badgeSm: {
-    paddingHorizontal: 7,
+    paddingHorizontal: 8,
     paddingVertical: 3,
   },
   badgeMd: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
   },
   text: {
@@ -104,11 +104,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   textSm: {
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 11,
+    lineHeight: 15,
   },
   textMd: {
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 16,
   },
 });

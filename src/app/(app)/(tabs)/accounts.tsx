@@ -122,14 +122,14 @@ export default function AccountsScreen() {
         isMainTab
         title="Accounts"
         leftNode={
-          <TouchableOpacity style={styles.avatarButton} onPress={() => router.push('/settings')}>
+          <TouchableOpacity style={styles.avatarButton} onPress={() => router.navigate('/settings')}>
             <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
               <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
             </View>
           </TouchableOpacity>
         }
         rightNode={
-          <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/add-account')}>
+          <TouchableOpacity style={styles.iconButton} onPress={() => router.navigate('/add-account')}>
             <MaterialIcons name="add" size={24} color={colors.onSurface} />
           </TouchableOpacity>
         }
@@ -146,7 +146,7 @@ export default function AccountsScreen() {
           </Text>
           <TouchableOpacity
             style={[styles.emptyButton, { backgroundColor: colors.primary }]}
-            onPress={() => router.push('/add-account')}
+            onPress={() => router.navigate('/add-account')}
           >
             <MaterialIcons name="add" size={20} color={colors.onPrimary} />
             <Text style={[styles.emptyButtonText, { color: colors.onPrimary }]}>Add Account</Text>
@@ -257,13 +257,13 @@ export default function AccountsScreen() {
                       colors={colors}
                       styles={styles}
                       onViewDetails={() =>
-                        router.push({
+                        router.navigate({
                           pathname: '/account-details',
                           params: { accountId: selectedAccount.id },
                         })
                       }
                       onSettleDebt={() =>
-                        router.push({
+                        router.navigate({
                           pathname: '/(app)/add-transaction',
                           params: {
                             type: 'transfer',
@@ -376,7 +376,7 @@ function AccountDetailCard({
           <TouchableOpacity
             style={styles.moreButton}
             onPress={() =>
-              router.push({
+              router.navigate({
                 pathname: '/add-account',
                 params: { id: account.id },
               })
@@ -620,6 +620,7 @@ const getStyles = (colors: ThemeColors) => {
       fontWeight: '700',
       textTransform: 'uppercase',
       marginTop: 2,
+      flexShrink: 0,
     },
     payBillButton: {
       backgroundColor: 'rgba(255, 255, 255, 0.2)',
@@ -811,9 +812,11 @@ const getStyles = (colors: ThemeColors) => {
       paddingVertical: 1.5,
       borderRadius: 4,
       alignSelf: 'flex-start',
+      flexShrink: 0,
     },
     bankBadgeText: {
-      fontSize: 10,
+      fontSize: 11,
+      lineHeight: 15,
       fontWeight: '700',
       letterSpacing: 0.5,
     },

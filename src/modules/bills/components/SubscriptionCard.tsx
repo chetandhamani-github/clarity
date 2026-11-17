@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Text, useToast } from '@/components/ui';
+import { Text, useToast, useAlert } from '@/components/ui';
 import { useTheme, typography, radius } from '@/theme';
 import { useAppStore } from '@/store/use-app-store';
 import { formatCurrencyPrivacy } from '@/utils/format';
@@ -18,6 +18,7 @@ export function SubscriptionCard({ subscription, onPress }: SubscriptionCardProp
   const { colors } = useTheme();
   const { hideBalances } = useAppStore();
   const { showToast } = useToast();
+  const { showAlert } = useAlert();
   const { deleteSubscription } = useBills();
 
   const monthlyCost = BillService.calculateMonthlyNormalizedCost(
@@ -66,7 +67,7 @@ export function SubscriptionCard({ subscription, onPress }: SubscriptionCardProp
   else if (diffDays < 0) renewalText = 'Renewal Due';
 
   const handleDelete = () => {
-    Alert.alert('Delete Subscription', `Remove ${subscription.name}?`, [
+    showAlert('Delete Subscription', `Remove ${subscription.name}?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -137,12 +138,13 @@ export function SubscriptionCard({ subscription, onPress }: SubscriptionCardProp
                       subscription.status === 'active' ? '#10b981' : '#f59e0b',
                   },
                 ]}
+                numberOfLines={1}
               >
                 {subscription.status.toUpperCase()}
               </Text>
             </View>
 
-            <Text style={[styles.dateLabel, { color: colors.onSurfaceVariant }]}>
+            <Text style={[styles.dateLabel, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
               Next: {subscription.nextRenewalDate}
             </Text>
           </View>
@@ -219,14 +221,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
+    flexShrink: 0,
   },
   statusText: {
     ...typography.labelMd,
     fontWeight: '700',
-    fontSize: 10,
+    fontSize: 11,
+    lineHeight: 15,
   },
   dateLabel: {
     ...typography.bodyMd,
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 16,
+    flexShrink: 0,
   },
 });

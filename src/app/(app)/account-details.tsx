@@ -5,7 +5,6 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   Dimensions,
 } from 'react-native';
 import { Text, Header, DetailSkeleton } from '@/components/ui';
@@ -81,7 +80,7 @@ export default function AccountDetailsScreen() {
 
   const handleEdit = () => {
     setShowMenu(false);
-    router.push(`/(app)/add-account?id=${accountId}`);
+    router.navigate(`/(app)/add-account?id=${accountId}`);
   };
 
   // Format history for LineChart
@@ -245,7 +244,7 @@ export default function AccountDetailsScreen() {
                 <TouchableOpacity
                   style={styles.payBillBtn}
                   onPress={() =>
-                    router.push({
+                    router.navigate({
                       pathname: '/(app)/add-transaction',
                       params: {
                         type: 'transfer',
@@ -370,7 +369,7 @@ export default function AccountDetailsScreen() {
                             <TouchableOpacity
                               key={tx.id}
                               style={[styles.transactionItem, isLast && { borderBottomWidth: 0 }]}
-                              onPress={() => router.push(`/(app)/add-transaction?id=${tx.id}`)}
+                              onPress={() => router.navigate(`/(app)/add-transaction?id=${tx.id}`)}
                             >
                               <View style={styles.txLeft}>
                                 <View

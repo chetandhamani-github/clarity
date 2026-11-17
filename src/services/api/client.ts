@@ -79,6 +79,7 @@ function normalizeBaseUrl(url: string): string {
 
 class ApiClient {
   private baseUrl: string;
+  private authToken: string | null = null;
 
   constructor() {
     this.baseUrl = normalizeBaseUrl(getDefaultBaseUrl());
@@ -90,6 +91,14 @@ class ApiClient {
 
   public getBaseUrl(): string {
     return this.baseUrl;
+  }
+
+  public setAuthToken(token: string | null) {
+    this.authToken = token;
+  }
+
+  public getAuthToken(): string | null {
+    return this.authToken;
   }
 
   private logRequest(_method: string, _url: string, _body?: unknown) {}
@@ -117,6 +126,7 @@ class ApiClient {
     const headers: Record<string, string> = {
       Accept: 'application/json',
       'Content-Type': 'application/json',
+      ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
       ...options?.headers,
     };
 

@@ -276,6 +276,20 @@ export class TransactionExtractor {
       if (/^(?:EQUITAS|EQITAS)/i.test(token)) return 'Equitas Small Finance Bank';
       if (/^(?:UJJIVAN|UJJIVN)/i.test(token)) return 'Ujjivan Small Finance Bank';
       if (/^INDIANB/i.test(token)) return 'Indian Bank';
+      if (/^(?:PAYTMB|PAYTMBNK)/i.test(token)) return 'Paytm Payments Bank';
+      if (/^(?:AIRTELB|AIRTELBK)/i.test(token)) return 'Airtel Payments Bank';
+      if (/^(?:IPPB|IPPBNK)/i.test(token)) return 'India Post Payments Bank';
+      if (/^(?:FIBANK|FIMONEY)/i.test(token)) return 'Fi Money';
+      if (/^JUPITR/i.test(token)) return 'Jupiter Money';
+      if (/^SLICE/i.test(token)) return 'Slice';
+      if (/^CRED/i.test(token)) return 'CRED';
+      if (/^AMEX/i.test(token)) return 'American Express';
+      if (/^SCAPIA/i.test(token)) return 'Scapia Federal Bank';
+      if (/^ONECRD/i.test(token)) return 'OneCard';
+      if (/^KARNAT/i.test(token)) return 'Karnataka Bank';
+      if (/^SVCBNK/i.test(token)) return 'SVC Co-operative Bank';
+      if (/^SARASW/i.test(token)) return 'Saraswat Bank';
+      if (/^COSMOS/i.test(token)) return 'Cosmos Bank';
     }
 
     // Direct mapping lookup fallback
@@ -389,10 +403,22 @@ export class TransactionExtractor {
 
     // Sanitize merchant string
     merchant = merchant
-      .replace(/^(?:info[-:]\s*|vps\*|bil\/|upi\/|payment to\s+|(?:upi|vpa)\s+)/i, '')
-      .replace(/(?:\s+vpa\b.*|\s+on\s+\d{1,2}.*|\s+for\s+(?:rs\.?|inr|₹|\$|€|£).*|\s+upi\s+ref.*|\s+ref\s+no.*|\s+upi$)/i, '')
+      .replace(/^(?:UPI\/\d+\/|info[-:]\s*|vps\*|bil\/|upi\/|payment to\s+|(?:upi|vpa)\s+|to\s+vpa\s+|vpa\s+to\s+)/i, '')
+      .replace(/(?:\s+vpa\b.*|\s+via\s+upi\b.*|\s+using\s+upi\b.*|\s+on\s+\d{1,2}.*|\s+for\s+(?:rs\.?|inr|₹|\$|€|£).*|\s+upi\s+ref.*|\s+ref\s+no.*|\s+upi$)/i, '')
       .replace(/[^\w\s@&.'-]/g, '')
       .trim();
+
+    // If merchant is a raw UPI VPA (e.g. "zomato@hdfcbank" or "user@okaxis")
+    if (merchant.includes('@')) {
+      const parts = merchant.split('@');
+      const handle = parts[0]?.trim() || '';
+      const nameMatch = handle.replace(/[-_.]/g, ' ').replace(/\d+$/, '').trim();
+      if (nameMatch.length >= 3 && !/^\d+$/.test(nameMatch)) {
+        merchant = nameMatch;
+      } else if (handle.length >= 3) {
+        merchant = handle;
+      }
+    }
 
     // If cleaned merchant is empty or just generic keywords
     if (!merchant || /^(?:your|the|account|card|bank)$/i.test(merchant)) {

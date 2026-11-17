@@ -263,7 +263,7 @@ export default function ManageCategoriesScreen() {
                             { backgroundColor: bucketColor + '20', borderColor: bucketColor + '40' },
                           ]}
                         >
-                          <Text style={[styles.bucketBadgeText, { color: bucketColor }]}>
+                          <Text style={[styles.bucketBadgeText, { color: bucketColor }]} numberOfLines={1}>
                             {cat.bucketType.toUpperCase()}
                           </Text>
                         </View>
@@ -539,12 +539,13 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
     borderWidth: 1,
+    flexShrink: 0,
   },
   bucketBadgeText: {
     ...typography.labelMd,
     fontFamily: 'Manrope_700Bold',
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 11,
+    lineHeight: 15,
   },
   limitText: {
     ...typography.labelMd,

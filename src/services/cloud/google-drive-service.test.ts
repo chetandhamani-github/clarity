@@ -1,4 +1,4 @@
-import { findBackupFile, uploadBackup, downloadBackup } from './google-drive-service';
+import { findBackupFile, uploadBackup, downloadBackup, deleteAllBackups } from './google-drive-service';
 import type { ClarityBackupPayload } from '@/services/database/backup-restore-service';
 
 // Mock dependencies
@@ -307,5 +307,71 @@ describe('google-drive-service', () => {
     expect(res.isRecoveredFromRevision).toBe(true);
     expect(res.data?.data.transactions.length).toBe(1);
     expect(res.data?.data.accounts[0].name).toBe('HDFC Bank');
+  });
+
+  describe('deleteAllBackups', () => {
+    it('deletes all Clarity backup files from Google Drive appDataFolder', async () => {
+      const SecureStore = require('expo-secure-store');
+      SecureStore.getItemAsync.mockImplementation((key: string) => {
+        if (key === 'gdrive_access_token') return Promise.resolve('valid-token');
+        if (key === 'gdrive_token_expires_at') return Promise.resolve(String(Date.now() + 3600000));
+        return Promise.resolve(null);
+      });
+
+      const deletedUrls: string[] = [];
+      const mockFetch = jest.fn().mockImplementation((url: string, options?: RequestInit) => {
+        if (options?.method === 'DELETE') {
+          deletedUrls.push(url);
+          return Promise.resolve({
+            status: 204,
+            ok: true,
+          });
+        }
+        // Listing files in appDataFolder
+        return Promise.resolve({
+          status: 200,
+          ok: true,
+          json: async () => ({
+            files: [
+              { id: 'backup-file-1', name: 'clarity_backup.json' },
+              { id: 'backup-file-2', name: 'clarity_backup_old.json' },
+              { id: 'other-file', name: 'unrelated.json' },
+            ],
+          }),
+        });
+      });
+      globalThis.fetch = mockFetch as unknown as typeof fetch;
+
+      const result = await deleteAllBackups();
+
+      expect(result.success).toBe(true);
+      expect(result.count).toBe(2);
+      expect(deletedUrls).toHaveLength(2);
+      expect(deletedUrls[0]).toContain('/backup-file-1');
+      expect(deletedUrls[1]).toContain('/backup-file-2');
+    });
+
+    it('returns count 0 if no backup files exist in appDataFolder', async () => {
+      const SecureStore = require('expo-secure-store');
+      SecureStore.getItemAsync.mockImplementation((key: string) => {
+        if (key === 'gdrive_access_token') return Promise.resolve('valid-token');
+        if (key === 'gdrive_token_expires_at') return Promise.resolve(String(Date.now() + 3600000));
+        return Promise.resolve(null);
+      });
+
+      const mockFetch = jest.fn().mockResolvedValue({
+        status: 200,
+        ok: true,
+        json: async () => ({
+          files: [],
+        }),
+      });
+      globalThis.fetch = mockFetch as unknown as typeof fetch;
+
+      const result = await deleteAllBackups();
+
+      expect(result.success).toBe(true);
+      expect(result.count).toBe(0);
+    });
   });
 });

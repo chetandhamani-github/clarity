@@ -577,6 +577,78 @@ export async function downloadBackup(): Promise<{
   }
 }
 
+/**
+ * Delete all Clarity backup files from Google Drive AppData folder.
+ */
+export async function deleteAllBackups(
+  accessToken?: string
+): Promise<{ success: boolean; count: number; error?: string }> {
+  try {
+    let token = accessToken || (await getValidAccessToken());
+    if (!token) {
+      return { success: false, count: 0, error: 'Google Drive is not connected or token expired.' };
+    }
+
+    // 1. List all files in the private appDataFolder
+    const listUrl = `${DRIVE_FILES_ENDPOINT}?spaces=appDataFolder&fields=files(id,name)&pageSize=100`;
+    let listResponse = await fetch(listUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (listResponse.status === 401) {
+      token = await getValidAccessToken(true);
+      if (token) {
+        listResponse = await fetch(listUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+    }
+
+    if (!listResponse.ok) {
+      return {
+        success: false,
+        count: 0,
+        error: `Failed to list Drive backups: ${listResponse.statusText}`,
+      };
+    }
+
+    const listData = await listResponse.json();
+    const files: Array<{ id: string; name: string }> = listData.files || [];
+
+    // Filter to Clarity backup files
+    const backupFiles = files.filter(
+      (f) => f.name === BACKUP_FILE_NAME || f.name.startsWith('clarity_')
+    );
+
+    if (backupFiles.length === 0) {
+      return { success: true, count: 0 };
+    }
+
+    let deletedCount = 0;
+    for (const file of backupFiles) {
+      try {
+        const delResponse = await fetch(`${DRIVE_FILES_ENDPOINT}/${file.id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (delResponse.ok || delResponse.status === 204 || delResponse.status === 404) {
+          deletedCount++;
+        }
+      } catch {
+        // Individual file deletion error ignored
+      }
+    }
+
+    return { success: true, count: deletedCount };
+  } catch (error: any) {
+    return {
+      success: false,
+      count: 0,
+      error: error?.message || 'Failed to delete backups from Google Drive.',
+    };
+  }
+}
+
 let autoBackupDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**

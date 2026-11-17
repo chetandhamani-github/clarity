@@ -54,4 +54,24 @@ describe('SmsPipelineService', () => {
     // Lacks amount -> goes to UNKNOWN or REVIEW
     expect(result.type === 'IGNORED' || result.type === 'REVIEW').toBe(true);
   });
+
+  it('successfully parses transactions with missing mask or unknown bank instead of discarding', async () => {
+    const msg: RawSmsMessage = {
+      id: 'tx-upi-generic',
+      address: 'UNKNOWN-SENDER',
+      body: 'Paid Rs.250.00 to Chai Point on 10-Nov-2024 via UPI. Ref 12345678',
+      date: 1705315200000,
+    };
+
+    const result = await SmsPipelineService.processMessage(msg, {
+      checkDatabaseDuplicates: false,
+    });
+    expect(result.type).toBe('PARSED');
+    if (result.type === 'PARSED') {
+      expect(result.transaction.amount).toBe(250);
+      expect(result.transaction.type).toBe('DEBIT');
+      expect(result.transaction.bank).toBe('Bank / UPI');
+      expect(result.transaction.accountMask).toBe('XXXX');
+    }
+  });
 });

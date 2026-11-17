@@ -29,7 +29,7 @@ export default function ReportsScreen() {
         rightNode={
           <TouchableOpacity
             style={styles.iconButton}
-            onPress={() => router.push('/export-statement')}
+            onPress={() => router.navigate('/export-statement')}
           >
             <MaterialIcons name="download" size={24} color={colors.onSurface} />
           </TouchableOpacity>
@@ -60,7 +60,7 @@ export default function ReportsScreen() {
                     key={report.datePrefix}
                     style={styles.reportCard}
                     onPress={() =>
-                      router.push({ pathname: '/analytics', params: { month: m, year: y } })
+                      router.navigate({ pathname: '/analytics', params: { month: m, year: y } })
                     }
                     activeOpacity={0.7}
                   >

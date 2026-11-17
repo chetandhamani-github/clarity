@@ -78,19 +78,14 @@ export class SmsPipelineService {
       };
     }
 
-    const hasKnownBank = extracted.bank && extracted.bank !== 'Other Bank';
-    const accountSuffix = extracted.accountMask.replace(/[^0-9]/g, '');
-    if (!hasKnownBank || accountSuffix.length < 3) {
-      const reviewItem = createReviewItem(
-        message,
-        'MISSING_ACCOUNT',
-        classification.confidence,
-        extracted
-      );
-      return {
-        type: 'REVIEW',
-        reviewItem,
-      };
+    // If bank is unknown or account mask is absent/short, fall back to safe defaults rather than
+    // silently discarding to review queue so valid transactions always reflect in Clarity.
+    if (!extracted.bank || extracted.bank === 'Other Bank') {
+      extracted.bank = 'Bank / UPI';
+    }
+    const accountSuffix = (extracted.accountMask || '').replace(/[^0-9]/g, '');
+    if (!extracted.accountMask || accountSuffix.length < 3) {
+      extracted.accountMask = extracted.accountMask && extracted.accountMask !== 'XXXX' ? extracted.accountMask : 'XXXX';
     }
 
     // 3. Local Categorization

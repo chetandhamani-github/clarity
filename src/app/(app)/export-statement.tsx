@@ -219,6 +219,7 @@ export default function ExportStatementScreen() {
                       { color: colors.onSurface },
                       isSelected && { color: colors.onPrimary, fontWeight: '700' },
                     ]}
+                    numberOfLines={1}
                   >
                     {p.label}
                   </Text>
@@ -291,6 +292,7 @@ export default function ExportStatementScreen() {
                   { color: colors.onSurface },
                   selectedAccountId === 'all' && { color: colors.onPrimary, fontWeight: '700' },
                 ]}
+                numberOfLines={1}
               >
                 All Accounts
               </Text>
@@ -320,6 +322,7 @@ export default function ExportStatementScreen() {
                       { color: colors.onSurface },
                       isSelected && { color: colors.onPrimary, fontWeight: '700' },
                     ]}
+                    numberOfLines={1}
                   >
                     {acc.name}
                   </Text>
@@ -449,6 +452,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
+    flexShrink: 0,
   },
   presetChipText: {
     ...typography.labelMd,
@@ -476,6 +480,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
+    flexShrink: 0,
   },
   accountChipText: {
     ...typography.labelMd,

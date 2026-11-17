@@ -12,6 +12,7 @@ export const CREATE_SPLITWISE_PEOPLE_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS splitwise_people (
     id TEXT PRIMARY KEY NOT NULL,
     name TEXT NOT NULL,
+    email TEXT,
     phone TEXT,
     notes TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -25,6 +26,7 @@ export const CREATE_SPLITWISE_DEBTS_TABLE_SQL = `
     amount REAL NOT NULL,
     type TEXT NOT NULL CHECK(type IN ('OWE_ME', 'I_OWE')),
     description TEXT NOT NULL,
+    friend_email TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (person_id) REFERENCES splitwise_people(id) ON DELETE CASCADE
   );
@@ -37,6 +39,7 @@ export const CREATE_SPLITWISE_SETTLEMENTS_TABLE_SQL = `
     amount REAL NOT NULL,
     description TEXT,
     settlement_type TEXT DEFAULT 'THEY_PAID',
+    friend_email TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (person_id) REFERENCES splitwise_people(id) ON DELETE CASCADE
   );

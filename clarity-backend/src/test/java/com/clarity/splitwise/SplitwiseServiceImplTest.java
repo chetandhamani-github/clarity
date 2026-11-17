@@ -38,6 +38,9 @@ class SplitwiseServiceImplTest {
     @Mock
     private SplitSettlementRepository splitSettlementRepository;
 
+    @Mock
+    private com.clarity.auth.repository.UserRepository userRepository;
+
     @InjectMocks
     private SplitwiseServiceImpl splitwiseService;
 
@@ -46,9 +49,9 @@ class SplitwiseServiceImplTest {
     @Test
     @DisplayName("sync: creates records and placeholder person if person does not exist")
     void syncShouldCreateRecordsAndPlaceholders() {
-        when(splitPersonRepository.findByIdAndInstallationId(eq("p1"), eq(installationId))).thenReturn(Optional.empty());
+        when(splitPersonRepository.findById(eq("p1"))).thenReturn(Optional.empty());
         when(splitPersonRepository.existsById("p1")).thenReturn(true);
-        when(splitDebtRepository.findByIdAndInstallationId(eq("d1"), eq(installationId))).thenReturn(Optional.empty());
+        when(splitDebtRepository.findById(eq("d1"))).thenReturn(Optional.empty());
 
         SplitSyncRequest request = SplitSyncRequest.builder()
                 .installationId(installationId)
@@ -78,7 +81,7 @@ class SplitwiseServiceImplTest {
                 .isDeleted(false)
                 .build();
 
-        when(splitDebtRepository.findByIdAndInstallationId(eq("d1"), eq(installationId))).thenReturn(Optional.of(existingDebt));
+        when(splitDebtRepository.findById(eq("d1"))).thenReturn(Optional.of(existingDebt));
 
         SplitSyncRequest request = SplitSyncRequest.builder()
                 .installationId(installationId)
@@ -118,5 +121,43 @@ class SplitwiseServiceImplTest {
         assertThat(summary.getTotalOwedToMe()).isEqualByComparingTo(new BigDecimal("60.00"));
         assertThat(summary.getTotalIOwe()).isEqualByComparingTo(new BigDecimal("70.00"));
         assertThat(summary.getNetBalance()).isEqualByComparingTo(new BigDecimal("-10.00"));
+    }
+
+    @Test
+    @DisplayName("sync: collaboratively mirrors debt when user and friend emails exist")
+    void syncShouldMirrorDebtCollaboratively() {
+        com.clarity.auth.entity.User userAlice = com.clarity.auth.entity.User.builder()
+                .email("alice@gmail.com")
+                .name("Alice")
+                .authToken("token-alice")
+                .build();
+
+        when(userRepository.findByAuthToken("token-alice")).thenReturn(Optional.of(userAlice));
+        when(splitPersonRepository.findById(eq("p-bob"))).thenReturn(Optional.empty());
+        when(splitPersonRepository.existsById("p-bob")).thenReturn(true);
+        when(splitDebtRepository.findById(eq("d1"))).thenReturn(Optional.empty());
+
+        SplitSyncRequest request = SplitSyncRequest.builder()
+                .installationId(installationId)
+                .people(List.of(SplitPersonDTO.builder().id("p-bob").name("Bob").email("bob@gmail.com").build()))
+                .debts(List.of(SplitDebtDTO.builder()
+                        .id("d1")
+                        .personId("p-bob")
+                        .friendEmail("bob@gmail.com")
+                        .amount(new BigDecimal("200.00"))
+                        .type("OWE_ME")
+                        .description("Dinner")
+                        .build()))
+                .build();
+
+        SplitSyncResponse response = splitwiseService.sync(installationId, request, "Bearer token-alice");
+
+        assertThat(response.isSuccess()).isTrue();
+        // Verify mirrored inverse debt was saved for Bob
+        verify(splitDebtRepository, atLeastOnce()).save(argThat(debt ->
+                "bob@gmail.com".equals(debt.getOwnerEmail()) &&
+                "I_OWE".equals(debt.getType()) &&
+                debt.getId().endsWith("_inv")
+        ));
     }
 }

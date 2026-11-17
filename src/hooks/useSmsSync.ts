@@ -9,11 +9,18 @@ export function useSmsSync() {
     progress,
     lastSyncTimestamp,
     error,
+    pendingTransactions,
+    isPromptVisible,
     checkPermission,
     requestPermission,
     startInitialSync,
     startIncrementalSync,
     cancelSync,
+    setPendingTransactions,
+    openTransactionPrompt,
+    closeTransactionPrompt,
+    importPendingTransactions,
+    dismissPendingTransactions,
   } = useSmsStore();
 
   useEffect(() => {
@@ -41,11 +48,18 @@ export function useSmsSync() {
     progress,
     lastSyncTimestamp,
     error,
+    pendingTransactions,
+    isPromptVisible,
     requestPermission,
     checkPermission,
     sync,
     startInitialSync,
     startIncrementalSync,
     cancelSync,
+    setPendingTransactions,
+    openTransactionPrompt,
+    closeTransactionPrompt,
+    importPendingTransactions,
+    dismissPendingTransactions,
   };
 }

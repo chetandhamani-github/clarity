@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Linking, Alert } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Linking } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Text, useToast } from '@/components/ui';
+import { Text, useToast, useAlert } from '@/components/ui';
 import { useTheme, typography, radius } from '@/theme';
 import { useAppStore } from '@/store/use-app-store';
 import { formatCurrencyPrivacy } from '@/utils/format';
@@ -21,6 +21,7 @@ export function BillCard({ bill, onPress }: BillCardProps) {
   const router = useRouter();
   const { hideBalances } = useAppStore();
   const { showToast } = useToast();
+  const { showAlert } = useAlert();
   const { markBillPaid, deleteBill } = useBills();
 
   const branding = getBillerBranding(bill.provider || bill.title, bill.category);
@@ -46,20 +47,20 @@ export function BillCard({ bill, onPress }: BillCardProps) {
   };
 
   const handleMoreOptions = () => {
-    Alert.alert('Bill Options', bill.title, [
+    showAlert('Bill Options', bill.title, [
       {
         text: 'View Details',
-        onPress: () => router.push({ pathname: '/(app)/bill-details', params: { billId: bill.id } }),
+        onPress: () => router.navigate({ pathname: '/(app)/bill-details', params: { billId: bill.id } }),
       },
       {
         text: 'Edit',
-        onPress: () => router.push({ pathname: '/(app)/add-bill', params: { billId: bill.id } }),
+        onPress: () => router.navigate({ pathname: '/(app)/add-bill', params: { billId: bill.id } }),
       },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
-          Alert.alert('Confirm Delete', `Remove reminder for ${bill.title}?`, [
+          showAlert('Confirm Delete', `Remove reminder for ${bill.title}?`, [
             { text: 'Cancel', style: 'cancel' },
             {
               text: 'Delete',
@@ -80,7 +81,7 @@ export function BillCard({ bill, onPress }: BillCardProps) {
     if (onPress) {
       onPress();
     } else {
-      router.push({ pathname: '/(app)/bill-details', params: { billId: bill.id } });
+      router.navigate({ pathname: '/(app)/bill-details', params: { billId: bill.id } });
     }
   };
 
@@ -136,14 +137,14 @@ export function BillCard({ bill, onPress }: BillCardProps) {
         {bill.isRecurring && bill.frequency && bill.frequency !== 'one_time' && (
           <View style={[styles.pillBadge, { backgroundColor: colors.surfaceContainerHighest }]}>
             <MaterialIcons name="repeat" size={12} color={colors.onSurfaceVariant} />
-            <Text style={[styles.pillBadgeText, { color: colors.onSurfaceVariant }]}>
+            <Text style={[styles.pillBadgeText, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
               {bill.frequency.charAt(0).toUpperCase() + bill.frequency.slice(1)}
             </Text>
           </View>
         )}
 
         <View style={[styles.sourcePill, { backgroundColor: colors.surfaceContainerHighest }]}>
-          <Text style={[styles.sourcePillText, { color: colors.onSurfaceVariant }]}>
+          <Text style={[styles.sourcePillText, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
             {bill.source.toUpperCase()}
           </Text>
         </View>
@@ -268,20 +269,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
+    flexShrink: 0,
   },
   pillBadgeText: {
     ...typography.labelMd,
-    fontSize: 10,
+    fontSize: 11,
+    lineHeight: 15,
     fontWeight: '600',
   },
   sourcePill: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
+    flexShrink: 0,
   },
   sourcePillText: {
     ...typography.labelMd,
-    fontSize: 9,
+    fontSize: 10,
+    lineHeight: 14,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
