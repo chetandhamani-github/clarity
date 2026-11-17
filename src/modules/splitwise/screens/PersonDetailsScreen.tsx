@@ -51,6 +51,7 @@ export function PersonDetailsScreen() {
     loadAllData,
     updatePerson,
     deletePerson,
+    updateDebt,
     deleteDebt,
     deleteSettlement,
   } = useSplitwiseStore();
@@ -64,6 +65,11 @@ export function PersonDetailsScreen() {
   const [editPhone, setEditPhone] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Modal states - Edit Debt
+  const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
+  const [editDebtAmount, setEditDebtAmount] = useState('');
+  const [editDebtDescription, setEditDebtDescription] = useState('');
 
   const person = useMemo(() => people.find((p) => p.id === personId), [people, personId]);
 
@@ -128,6 +134,41 @@ export function PersonDetailsScreen() {
       showToast('Friend details updated', 'success');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to update person';
+      showAlert('Error', msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const openEditDebtModal = (debt: Debt) => {
+    setEditingDebt(debt);
+    setEditDebtAmount(debt.amount.toString());
+    setEditDebtDescription(debt.description || '');
+  };
+
+  const handleSaveEditDebt = async () => {
+    if (!editingDebt) return;
+    const parsedAmount = parseFloat(editDebtAmount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      showAlert('Invalid Amount', 'Please enter a valid amount greater than 0');
+      return;
+    }
+    if (!editDebtDescription.trim()) {
+      showAlert('Required', 'Please enter a description');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await updateDebt(editingDebt.id, {
+        amount: parsedAmount,
+        description: editDebtDescription.trim(),
+      });
+      setEditingDebt(null);
+      showToast('Debt updated', 'success');
+      SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {});
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to update debt';
       showAlert('Error', msg);
     } finally {
       setIsSubmitting(false);
@@ -641,13 +682,22 @@ export function PersonDetailsScreen() {
                     {isOweMe ? '+' : '-'}
                     {formatCurrencyPrivacy(debt.amount, hideBalances)}
                   </Text>
-                  <TouchableOpacity
-                    style={styles.itemDeleteBtn}
-                    onPress={() => handleDeleteDebt(debt)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <MaterialIcons name="delete-outline" size={16} color={colors.onSurfaceVariant} />
-                  </TouchableOpacity>
+                  <View style={styles.itemActions}>
+                    <TouchableOpacity
+                      style={styles.itemActionBtn}
+                      onPress={() => openEditDebtModal(debt)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <MaterialIcons name="edit" size={15} color={colors.onSurfaceVariant} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.itemActionBtn}
+                      onPress={() => handleDeleteDebt(debt)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <MaterialIcons name="delete-outline" size={16} color={colors.onSurfaceVariant} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             );
@@ -857,6 +907,89 @@ export function PersonDetailsScreen() {
         </KeyboardAwareScrollView>
       </View>
     </Modal>
+
+      {/* EDIT DEBT MODAL */}
+      <Modal
+        visible={!!editingDebt}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditingDebt(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <KeyboardAwareScrollView
+            contentContainerStyle={styles.modalScrollContainer}
+            keyboardShouldPersistTaps="handled"
+            enableOnAndroid
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            <View
+              style={[
+                styles.modalContent,
+                {
+                  backgroundColor: colors.surfaceContainerLowest,
+                  borderColor: colors.outlineVariant,
+                  paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 40 : 24),
+                },
+              ]}
+            >
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Edit Expense</Text>
+                <TouchableOpacity
+                  onPress={() => setEditingDebt(null)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>Description *</Text>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: colors.surfaceContainerLow,
+                    borderColor: colors.outlineVariant,
+                    color: colors.onSurface,
+                  },
+                ]}
+                value={editDebtDescription}
+                onChangeText={setEditDebtDescription}
+                placeholder="e.g. Dinner, Groceries, Movie"
+                placeholderTextColor={colors.onSurfaceVariant}
+              />
+
+              <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>Amount (₹) *</Text>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: colors.surfaceContainerLow,
+                    borderColor: colors.outlineVariant,
+                    color: colors.onSurface,
+                  },
+                ]}
+                value={editDebtAmount}
+                onChangeText={setEditDebtAmount}
+                placeholder="e.g. 500"
+                placeholderTextColor={colors.onSurfaceVariant}
+                keyboardType="decimal-pad"
+              />
+
+              <TouchableOpacity
+                style={[styles.submitBtn, { backgroundColor: colors.primary }]}
+                onPress={handleSaveEditDebt}
+                disabled={isSubmitting}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.submitBtnText, { color: colors.onPrimary }]}>
+                  {isSubmitting ? 'Saving...' : 'Save Changes'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </KeyboardAwareScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1161,6 +1294,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_700Bold',
   },
   itemDeleteBtn: {
+    padding: 2,
+  },
+  itemActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  itemActionBtn: {
     padding: 2,
   },
   emptyCard: {

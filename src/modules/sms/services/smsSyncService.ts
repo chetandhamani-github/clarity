@@ -138,6 +138,9 @@ export class SmsSyncService {
           await SmsDao.saveParsedTransactionsBatch(parsedBatch);
           await SmsDao.saveReviewQueueBatch(reviewBatch);
 
+          // Unconditionally auto-fetch and sync bank accounts from SMS messages
+          await this.syncBankAccountsFromParsedBatch(parsedBatch);
+
           if (options.autoCreateClarityTransactions !== false) {
             await this.syncToClarityTransactions(parsedBatch);
           } else {
@@ -159,7 +162,7 @@ export class SmsSyncService {
       );
 
       if (!this.shouldCancel) {
-        if (options.autoCreateClarityTransactions !== false && parsedCount > 0) {
+        if (parsedCount > 0) {
           await this.autoRepairMisassignedAccounts();
         }
 
@@ -230,6 +233,9 @@ export class SmsSyncService {
           await SmsDao.saveParsedTransactionsBatch(parsedBatch);
           await SmsDao.saveReviewQueueBatch(reviewBatch);
 
+          // Unconditionally auto-fetch and sync bank accounts from SMS messages
+          await this.syncBankAccountsFromParsedBatch(parsedBatch);
+
           if (options.autoCreateClarityTransactions !== false) {
             await this.syncToClarityTransactions(parsedBatch);
           } else {
@@ -252,7 +258,7 @@ export class SmsSyncService {
       );
 
       if (!this.shouldCancel) {
-        if (options.autoCreateClarityTransactions !== false && parsedCount > 0) {
+        if (parsedCount > 0) {
           await this.autoRepairMisassignedAccounts();
         }
 
@@ -462,6 +468,130 @@ export class SmsSyncService {
     return sameBank.length === 1 ? sameBank[0] : undefined;
   }
 
+  /**
+   * Auto-fetch and sync bank accounts discovered from parsed SMS messages.
+   * Runs unconditionally so accounts and their balances are always auto-fetched.
+   */
+  public static async syncBankAccountsFromParsedBatch(
+    parsedBatch: ParsedTransaction[]
+  ): Promise<void> {
+    if (parsedBatch.length === 0) return;
+
+    const database = getDatabase();
+    let accounts = await getAllAccounts();
+
+    for (const transaction of parsedBatch) {
+      if (transaction.isDuplicate) continue;
+
+      try {
+        const rawBank = (transaction.bank || '').trim();
+        const bankName = rawBank && rawBank !== 'Other Bank' ? rawBank : 'Bank / UPI';
+        const accountMask = this.normalizeMask(transaction.accountMask);
+
+        const isCard =
+          (transaction.rawBody && TransactionExtractor.isCreditCard(transaction.rawBody)) ||
+          /\b(?:card|crd|credit)\b/i.test(bankName);
+        const accountType = isCard ? 'credit' : 'savings';
+
+        let matchedAccount = this.findMatchingAccount(
+          accounts,
+          bankName,
+          accountMask,
+          accountType
+        );
+
+        if (!matchedAccount && !accountMask) {
+          matchedAccount =
+            accounts.find(
+              (account) =>
+                account.type === accountType &&
+                (account.name === 'Primary Bank Account' ||
+                  !account.institution ||
+                  account.institution === 'Bank / UPI')
+            ) || accounts.find((account) => account.type === accountType);
+        }
+
+        if (matchedAccount && accountMask && !this.normalizeMask(matchedAccount.lastFour)) {
+          const accountName = bankName + ' (..' + accountMask + ')';
+          await updateAccount(matchedAccount.id, {
+            lastFour: accountMask,
+            name: accountName,
+          });
+          matchedAccount = {
+            ...matchedAccount,
+            lastFour: accountMask,
+            name: accountName,
+          };
+          accounts = accounts.map((account) =>
+            account.id === matchedAccount?.id ? matchedAccount : account
+          );
+        }
+
+        if (!matchedAccount) {
+          const starterAccount = accounts.find(
+            (account) =>
+              account.name === 'Primary Bank Account' &&
+              (!account.institution || account.institution === 'Bank / UPI') &&
+              !this.normalizeMask(account.lastFour)
+          );
+
+          let canUpgradeStarter = false;
+          if (starterAccount) {
+            const result = await database.getFirstAsync<{ count: number }>(
+              'SELECT COUNT(*) as count FROM transactions WHERE account_id = ?',
+              [starterAccount.id]
+            );
+            canUpgradeStarter = (result?.count ?? 0) === 0;
+          }
+
+          const accountName = accountMask ? `${bankName} (..${accountMask})` : bankName;
+          if (canUpgradeStarter && starterAccount) {
+            await updateAccount(starterAccount.id, {
+              name: accountName,
+              type: accountType,
+              institution: bankName,
+              lastFour: accountMask,
+            });
+            if (accountType === 'credit') {
+              await updateAccountBalance(starterAccount.id, 0);
+            }
+            matchedAccount = {
+              ...starterAccount,
+              name: accountName,
+              type: accountType,
+              institution: bankName,
+              lastFour: accountMask,
+            };
+            accounts = accounts.map((account) =>
+              account.id === matchedAccount?.id ? matchedAccount : account
+            );
+          } else {
+            matchedAccount = await insertAccount({
+              name: accountName,
+              type: accountType,
+              balance: accountType === 'credit' ? 0 : (transaction.availableBalance ?? 0),
+              institution: bankName,
+              lastFour: accountMask,
+            });
+            accounts = [...accounts, matchedAccount];
+          }
+        }
+
+        // Auto-update account balance if SMS has available balance snapshot
+        if (
+          matchedAccount &&
+          accountType !== 'credit' &&
+          transaction.availableBalance !== undefined &&
+          transaction.availableBalance !== null
+        ) {
+          await updateAccountBalance(matchedAccount.id, transaction.availableBalance);
+        }
+      } catch {
+        // Account auto-fetch error ignored
+      }
+    }
+  }
+
   private static async syncToClarityTransactions(
     parsedTransactions: ParsedTransaction[]
   ): Promise<void> {
@@ -471,6 +601,9 @@ export class SmsSyncService {
     if (validTransactions.length === 0) {
       return;
     }
+
+    // Ensure accounts exist and are synced first
+    await this.syncBankAccountsFromParsedBatch(validTransactions);
 
     const database = getDatabase();
     let accounts = await getAllAccounts();
@@ -665,7 +798,7 @@ export class SmsSyncService {
           continue;
         }
 
-        const latestBalance = await database.getFirstAsync<{
+        let latestBalance = await database.getFirstAsync<{
           available_balance: number | null;
           transaction_date: string | null;
         }>(
@@ -677,6 +810,20 @@ export class SmsSyncService {
            LIMIT 1`,
           [account.id]
         );
+
+        if (!latestBalance && account.lastFour) {
+          latestBalance = await database.getFirstAsync<{
+            available_balance: number | null;
+            transaction_date: string | null;
+          }>(
+            `SELECT available_balance, transaction_date
+             FROM parsed_transactions
+             WHERE account_mask LIKE ? AND available_balance IS NOT NULL
+             ORDER BY transaction_date DESC, created_at DESC
+             LIMIT 1`,
+            [`%${account.lastFour}`]
+          );
+        }
 
         if (latestBalance?.available_balance !== null && latestBalance?.available_balance !== undefined) {
           // If the account was updated after this SMS was received, do NOT overwrite it

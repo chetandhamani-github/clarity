@@ -129,6 +129,11 @@ export default function RootLayout() {
               autoCreateClarityTransactions: false,
             }).catch(() => null);
 
+            // Bank accounts and bills auto-fetch immediately
+            queryClient.invalidateQueries({ queryKey: ['accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['bills'] });
+
+            // Only transactions await user confirmation
             const { SmsDao } = await import('@/modules/sms/storage/smsDao');
             const unlinked = await SmsDao.getUnlinkedParsedTransactions();
             if (unlinked.length > 0) {
@@ -183,6 +188,11 @@ export default function RootLayout() {
                 autoCreateClarityTransactions: false,
               }).catch(() => null);
 
+              // Bank accounts and bills auto-fetch immediately
+              queryClient.invalidateQueries({ queryKey: ['accounts'] });
+              queryClient.invalidateQueries({ queryKey: ['bills'] });
+
+              // Only transactions await user confirmation
               const { SmsDao } = await import('@/modules/sms/storage/smsDao');
               const unlinked = await SmsDao.getUnlinkedParsedTransactions();
               if (unlinked.length > 0) {
