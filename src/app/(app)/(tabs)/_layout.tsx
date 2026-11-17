@@ -5,6 +5,15 @@ import { Tabs, useRouter } from 'expo-router';
 import { Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
+  index: 'home',
+  transactions: 'receipt-long',
+  accounts: 'account-balance',
+  plan: 'analytics',
+  goals: 'track-changes',
+  splitwise: 'group',
+};
+
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -50,13 +59,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             }
           };
 
-          let iconName: keyof typeof MaterialIcons.glyphMap = 'home';
-          if (route.name === 'index') iconName = 'home';
-          else if (route.name === 'transactions') iconName = 'receipt-long';
-          else if (route.name === 'splitwise') iconName = 'group';
-          else if (route.name === 'plan') iconName = 'analytics';
-          else if (route.name === 'goals') iconName = 'track-changes';
-          else if (route.name === 'accounts') iconName = 'account-balance';
+          const iconName = TAB_ICONS[route.name] || 'home';
 
           return (
             <TouchableOpacity
@@ -101,11 +104,11 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
-      <Tabs.Screen name="splitwise" options={{ title: 'Splitwise' }} />
       <Tabs.Screen name="transactions" options={{ title: 'Activity' }} />
+      <Tabs.Screen name="accounts" options={{ title: 'Accounts' }} />
       <Tabs.Screen name="plan" options={{ title: 'Plan' }} />
       <Tabs.Screen name="goals" options={{ title: 'Goals' }} />
-      <Tabs.Screen name="accounts" options={{ title: 'Accounts' }} />
+      <Tabs.Screen name="splitwise" options={{ title: 'Splitwise' }} />
     </Tabs>
   );
 }
