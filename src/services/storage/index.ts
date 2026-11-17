@@ -4,8 +4,7 @@ export const storage = {
   async getItem(key: string): Promise<string | null> {
     try {
       return await SecureStore.getItemAsync(key);
-    } catch (error) {
-      console.error(`Error reading ${key} from SecureStore:`, error);
+    } catch {
       return null;
     }
   },
@@ -13,16 +12,16 @@ export const storage = {
   async setItem(key: string, value: string): Promise<void> {
     try {
       await SecureStore.setItemAsync(key, value);
-    } catch (error) {
-      console.error(`Error writing ${key} to SecureStore:`, error);
+    } catch {
+      // Ignored
     }
   },
 
   async removeItem(key: string): Promise<void> {
     try {
       await SecureStore.deleteItemAsync(key);
-    } catch (error) {
-      console.error(`Error removing ${key} from SecureStore:`, error);
+    } catch {
+      // Ignored
     }
   },
 };

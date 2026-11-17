@@ -96,8 +96,8 @@ export async function evaluateTransactionBudgetAlerts(
         DeviceEventEmitter.emit('notificationsUpdated');
       }
     }
-  } catch (error) {
-    console.error('Error evaluating budget alerts:', error);
+  } catch {
+    // Error evaluating budget alerts
   }
 }
 
@@ -138,8 +138,8 @@ export async function evaluateGoalMilestoneAlerts(
       });
       DeviceEventEmitter.emit('notificationsUpdated');
     }
-  } catch (error) {
-    console.error('Error evaluating goal milestones:', error);
+  } catch {
+    // Error evaluating goal milestones
   }
 }
 
@@ -187,7 +187,7 @@ export async function checkUpcomingBillReminders(): Promise<void> {
     // Also evaluate dedicated bill reminders (utility bills, credit cards, rent, etc.)
     const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
     await BillAlertEngine.evaluateUpcomingBillAlerts();
-  } catch (error) {
-    console.error('Error checking upcoming bill reminders:', error);
+  } catch {
+    // Error checking upcoming bill reminders
   }
 }

@@ -175,7 +175,6 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
     const canonicalHash = computeChecksum(canonicalizeData(payload.data));
     const rawHash = computeChecksum(JSON.stringify(payload.data));
     if (payload.checksum !== canonicalHash && payload.checksum !== rawHash) {
-      console.warn('Backup checksum does not match canonical hash. Validating schema format...');
       if (!Array.isArray(payload.data.accounts) || !Array.isArray(payload.data.transactions)) {
         throw new Error('Backup integrity verification failed: Corrupted or invalid backup file.');
       }

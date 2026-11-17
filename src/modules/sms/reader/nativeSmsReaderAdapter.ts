@@ -33,8 +33,7 @@ export class NativeSmsReaderAdapter implements ISmsReaderAdapter {
     try {
       const results = await bridge.getSms(options as Record<string, unknown>);
       return results || [];
-    } catch (err) {
-      console.warn('[NativeSmsReaderAdapter] Failed to fetch SMS:', err);
+    } catch {
       return [];
     }
   }
@@ -48,8 +47,7 @@ export class NativeSmsReaderAdapter implements ISmsReaderAdapter {
     try {
       const results = await bridge.getSmsSince(timestamp, limit);
       return results || [];
-    } catch (err) {
-      console.warn('[NativeSmsReaderAdapter] Failed to fetch SMS since:', err);
+    } catch {
       return [];
     }
   }

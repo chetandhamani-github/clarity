@@ -353,8 +353,8 @@ export class SmsSyncService {
             smsId: message.id,
           });
         }
-      } catch (billError) {
-        console.warn('[SmsSyncService] Failed to extract bill reminder:', billError);
+      } catch {
+        // Ignored
       }
     }
 
@@ -466,20 +466,12 @@ export class SmsSyncService {
     for (const transaction of validTransactions) {
       try {
         if (!this.isKnownBank(transaction.bank)) {
-          console.warn(
-            '[SmsSyncService] Skipped SMS transaction without a known bank:',
-            transaction.id
-          );
           continue;
         }
 
         const bankName = transaction.bank.trim();
         const accountMask = this.normalizeMask(transaction.accountMask);
         if (!accountMask) {
-          console.warn(
-            '[SmsSyncService] Skipped SMS transaction without an account suffix:',
-            transaction.id
-          );
           continue;
         }
 
@@ -622,13 +614,8 @@ export class SmsSyncService {
             category: transaction.category,
           }).catch(() => {});
         }
-      } catch (error) {
-        console.warn(
-          '[SmsSyncService] Failed to create Clarity transaction for tx ' +
-            transaction.id +
-            ':',
-          error
-        );
+      } catch {
+        // Failed to create transaction
       }
     }
   }
@@ -679,8 +666,8 @@ export class SmsSyncService {
           await updateAccountBalance(account.id, latestBalance.available_balance);
         }
       }
-    } catch (error) {
-      console.warn('[SmsSyncService] Unable to reconcile SMS balances:', error);
+    } catch {
+      // Balance reconciliation error ignored
     }
   }
 

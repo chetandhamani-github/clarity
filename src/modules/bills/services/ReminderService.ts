@@ -127,8 +127,7 @@ export class ReminderService {
       }
 
       return alertedCount;
-    } catch (err) {
-      console.warn('[ReminderService] Error evaluating reminders:', err);
+    } catch {
       return 0;
     }
   }

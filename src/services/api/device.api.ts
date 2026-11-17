@@ -66,16 +66,10 @@ export async function registerDevice(
         '/api/v1/devices/register',
         payload
       );
-      if (__DEV__) {
-        console.log('📱 [Device API] Device registered successfully:', response);
-      }
       return response;
-    } catch (error) {
+    } catch {
       attempt++;
       if (attempt > maxRetries) {
-        if (__DEV__) {
-          console.warn('⚠️ [Device API] Device registration failed after retries:', error);
-        }
         return null;
       }
       // Exponential backoff
@@ -115,10 +109,7 @@ export async function checkDeviceStatus(customInstallationId?: string): Promise<
       minimumVersion: remoteConfig.minVersion,
       status: deviceStatusRes.status,
     };
-  } catch (error) {
-    if (__DEV__) {
-      console.warn('⚠️ [Device API] Status check failed (offline or network error), defaulting to allowed:', error);
-    }
+  } catch {
     // Offline resilience: allow local usage if network is unreachable
     return {
       allowed: true,

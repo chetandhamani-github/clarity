@@ -49,7 +49,6 @@ export function AppLockModal({ visible, onUnlock }: AppLockModalProps) {
         }
       }
     } catch (e: any) {
-      console.error('Biometric authentication failed:', e);
       setErrorMessage(e?.message || 'Authentication error occurred.');
     } finally {
       setIsAuthenticating(false);

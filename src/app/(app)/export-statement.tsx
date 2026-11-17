@@ -92,7 +92,6 @@ export default function ExportStatementScreen() {
         showToast(res.message || 'Failed to generate statement', 'error');
       }
     } catch (e: any) {
-      console.error('Export statement error:', e);
       showToast(e?.message || 'Error generating statement', 'error');
     } finally {
       setIsExporting(false);

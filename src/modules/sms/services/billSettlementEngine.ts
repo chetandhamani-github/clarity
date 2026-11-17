@@ -32,8 +32,8 @@ export class BillSettlementEngine {
             transaction.id
           );
         }
-      } catch (err) {
-        console.warn('[BillSettlementEngine] Error in modern bill settlement:', err);
+      } catch {
+        // Fallback or ignore error
       }
 
       // 2. Settle in legacy bill-dao
@@ -71,8 +71,7 @@ export class BillSettlementEngine {
         bill: updatedBill,
         nextBill,
       };
-    } catch (error) {
-      console.warn('[BillSettlementEngine] Error matching bill settlement:', error);
+    } catch {
       return { settled: false };
     }
   }

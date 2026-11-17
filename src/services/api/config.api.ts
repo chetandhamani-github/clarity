@@ -40,10 +40,7 @@ export async function fetchRemoteConfig(): Promise<RemoteConfig> {
     const config = await apiClient.get<RemoteConfig>('/api/v1/config');
     cacheRemoteConfig(config);
     return config;
-  } catch (error) {
-    if (__DEV__) {
-      console.warn('⚠️ [Config API] Remote config request failed, using cached config:', error);
-    }
+  } catch {
     return getCachedRemoteConfig();
   }
 }

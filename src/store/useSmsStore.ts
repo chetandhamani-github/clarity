@@ -143,8 +143,8 @@ export const useSmsStore = create<SmsStoreState>((set, get) => ({
     try {
       const analytics = await SmsAnalyticsService.getAnalytics();
       set({ analytics });
-    } catch (err) {
-      console.warn('[useSmsStore] Failed to refresh analytics:', err);
+    } catch {
+      // Failed to refresh analytics
     }
   },
 
@@ -152,8 +152,8 @@ export const useSmsStore = create<SmsStoreState>((set, get) => ({
     try {
       const stats = await SmsDao.getSmsStats();
       set({ reviewQueueCount: stats.totalReview });
-    } catch (err) {
-      console.warn('[useSmsStore] Failed to refresh review queue count:', err);
+    } catch {
+      // Failed to refresh review queue count
     }
   },
 }));

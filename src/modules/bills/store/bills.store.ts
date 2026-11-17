@@ -81,8 +81,7 @@ export const useBillsStore = create<BillsState>()(
             summary,
             isLoading: false,
           });
-        } catch (error) {
-          console.warn('[useBillsStore] Failed to load bills:', error);
+        } catch {
           set({ isLoading: false });
         }
       },

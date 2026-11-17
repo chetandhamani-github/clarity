@@ -161,8 +161,7 @@ export default function SettingsScreen() {
               await clearDatabase();
               queryClient.clear();
               showToast('App data has been reset to defaults', 'success');
-            } catch (error) {
-              console.error(error);
+            } catch {
               showToast('Failed to reset app data', 'error');
             } finally {
               setIsResetting(false);

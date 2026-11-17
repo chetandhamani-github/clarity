@@ -92,23 +92,11 @@ class ApiClient {
     return this.baseUrl;
   }
 
-  private logRequest(method: string, url: string, body?: unknown) {
-    if (__DEV__) {
-      console.log(`🌐 [API Request] ${method} ${url}`, body ?? '');
-    }
-  }
+  private logRequest(_method: string, _url: string, _body?: unknown) {}
 
-  private logResponse(method: string, url: string, status: number, data?: unknown) {
-    if (__DEV__) {
-      console.log(`✅ [API Response] ${method} ${url} [${status}]`, data ?? '');
-    }
-  }
+  private logResponse(_method: string, _url: string, _status: number, _data?: unknown) {}
 
-  private logError(method: string, url: string, error: unknown) {
-    if (__DEV__) {
-      console.warn(`❌ [API Error] ${method} ${url}:`, error);
-    }
-  }
+  private logError(_method: string, _url: string, _error: unknown) {}
 
   private async request<T>(
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',

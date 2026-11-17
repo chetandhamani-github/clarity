@@ -284,8 +284,8 @@ export async function processDueRecurringTransactions(): Promise<number> {
             [lastProcessed, currentDate, rt.id]
           );
         }
-      } catch (error) {
-        console.error(`Failed to process recurring transaction ${rt.id}:`, error);
+      } catch {
+        // Failed to process recurring transaction
       }
     }
 

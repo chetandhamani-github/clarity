@@ -98,7 +98,6 @@ export async function exportTransactionsToCSV(): Promise<{
 
     return { success: true, uri: fileUri };
   } catch (error: any) {
-    console.error('Failed to export CSV:', error);
     return { success: false, message: error?.message || 'Failed to export CSV' };
   }
 }
@@ -151,7 +150,6 @@ export async function exportFullBackupToJSON(): Promise<{
 
     return { success: true, uri: fileUri };
   } catch (error: any) {
-    console.error('Failed to export JSON backup:', error);
     return { success: false, message: error?.message || 'Failed to export JSON' };
   }
 }
@@ -249,7 +247,6 @@ export async function exportFinancialSummaryReport(
 
     return { success: true, uri: fileUri };
   } catch (error: any) {
-    console.error('Failed to export summary report:', error);
     return { success: false, message: error?.message || 'Failed to export report' };
   }
 }
@@ -469,7 +466,6 @@ export async function exportCustomStatement(options: StatementExportOptions): Pr
       return { success: true, uri: pdfUri };
     }
   } catch (error: any) {
-    console.error('Failed to export statement:', error);
     return { success: false, message: error?.message || 'Failed to export statement' };
   }
 }

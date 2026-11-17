@@ -322,9 +322,6 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
         error: 'Backend returned unsuccessful sync response',
       };
     } catch (error: unknown) {
-      if (__DEV__) {
-        console.warn('⚠️ [SplitwiseSync] Cloud sync error (offline?):', error);
-      }
       return {
         success: false,
         syncedAt: new Date().toISOString(),

@@ -42,8 +42,8 @@ export function SmsPermissionPromptModal({ visible, onDismiss }: Props) {
       } else {
         showToast('SMS access was not granted.', 'info');
       }
-    } catch (err: unknown) {
-      console.warn('[SmsPermissionPromptModal] Enable failed:', err);
+    } catch {
+      // Enable failed
     } finally {
       setIsProcessing(false);
     }

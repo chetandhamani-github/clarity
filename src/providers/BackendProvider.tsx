@@ -43,9 +43,7 @@ export function BackendProvider({ children }: BackendProviderProps) {
   const runStartupSequence = useCallback(async () => {
     try {
       // 1. Register device silently in background (non-blocking)
-      registerDevice().catch((err) => {
-        if (__DEV__) console.log('Silent device registration error (offline?):', err);
-      });
+      registerDevice().catch(() => {});
 
       // 2. Check device status & lifecycle constraints
       const statusResult = await checkDeviceStatus(installationId);
@@ -67,10 +65,7 @@ export function BackendProvider({ children }: BackendProviderProps) {
 
       // 4. Trigger silent Splitwise sync in background
       SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {});
-    } catch (error) {
-      if (__DEV__) {
-        console.warn('⚠️ [BackendProvider] Startup sequence encountered an error, falling back to offline mode:', error);
-      }
+    } catch {
       // Offline resilience: allow normal app usage
       setDeviceStatus({
         allowed: true,

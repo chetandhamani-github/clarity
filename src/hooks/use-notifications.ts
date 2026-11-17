@@ -12,8 +12,8 @@ export function useNotifications() {
     try {
       const data = await notificationDao.getNotifications();
       setNotifications(data);
-    } catch (error) {
-      console.error('Failed to fetch notifications:', error);
+    } catch {
+      // Failed to fetch notifications
     } finally {
       if (showLoader) setIsLoading(false);
     }
@@ -44,7 +44,6 @@ export function useMarkNotificationAsRead() {
       DeviceEventEmitter.emit('notificationsUpdated');
       options?.onSuccess?.();
     } catch (error) {
-      console.error('Failed to mark notification as read:', error);
       throw error;
     } finally {
       setIsPending(false);
@@ -64,7 +63,6 @@ export function useMarkAllNotificationsAsRead() {
       DeviceEventEmitter.emit('notificationsUpdated');
       options?.onSuccess?.();
     } catch (error) {
-      console.error('Failed to mark all notifications as read:', error);
       throw error;
     } finally {
       setIsPending(false);
@@ -84,7 +82,6 @@ export function useClearAllNotifications() {
       DeviceEventEmitter.emit('notificationsUpdated');
       options?.onSuccess?.();
     } catch (error) {
-      console.error('Failed to clear notifications:', error);
       throw error;
     } finally {
       setIsPending(false);

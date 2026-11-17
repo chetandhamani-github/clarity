@@ -115,13 +115,12 @@ export default function RootLayout() {
             '@/services/cloud/google-drive-service'
           );
           syncDatabaseToDriveSilently('app-launch').catch(() => {});
-        } catch (e) {
-          console.error('Failed to process recurring transactions / bills:', e);
+        } catch {
+          // Recurring processing error ignored
         }
         setDbReady(true);
       })
-      .catch((err) => {
-        console.error('Failed to initialize database:', err);
+      .catch(() => {
         setDbReady(true);
       });
   }, []);
@@ -150,7 +149,7 @@ export default function RootLayout() {
         // Process due recurring transactions and bill reminders when resuming app
         import('@/services/database/recurring-dao')
           .then(({ processDueRecurringTransactions }) => processDueRecurringTransactions())
-          .catch((e) => console.error('Foreground recurring sync failed:', e));
+          .catch(() => {});
         checkUpcomingBillReminders().catch(() => {});
 
         // Silent incremental SMS scan on app resume

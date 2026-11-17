@@ -192,8 +192,7 @@ export function AddBillScreen() {
         }
       }
       router.back();
-    } catch (e) {
-      console.warn('Failed to save bill/subscription:', e);
+    } catch {
       showToast('Failed to save', 'error');
     } finally {
       setIsSubmitting(false);

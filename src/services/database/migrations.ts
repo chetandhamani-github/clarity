@@ -162,8 +162,8 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
     if (!hasSplitsJson) {
       await db.execAsync('ALTER TABLE recurring_transactions ADD COLUMN splits_json TEXT;');
     }
-  } catch (e) {
-    console.warn('Could not add splits_json to recurring_transactions:', e);
+  } catch {
+    // splits_json column may already exist
   }
 
   // Create performance index
@@ -172,8 +172,8 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_recurring_due 
       ON recurring_transactions(is_active, next_process_date);
     `);
-  } catch (e) {
-    console.warn('Could not create idx_recurring_due:', e);
+  } catch {
+    // idx_recurring_due index may already exist
   }
 
   // SMS Intelligence Engine tables

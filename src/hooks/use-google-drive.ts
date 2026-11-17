@@ -92,7 +92,6 @@ export function useGoogleDrive() {
 
       return { success: true, summary };
     } catch (error: any) {
-      console.error('Restore error:', error);
       showToast(error?.message || 'Failed to restore backup from Drive', 'error');
       return { success: false, error: error?.message };
     } finally {
@@ -158,13 +157,12 @@ export function useGoogleDrive() {
               setLastCloudBackupTime(uploadRes.modifiedTime);
             }
           }
-        } catch (syncErr) {
-          console.error('[GoogleDrive] Initial sync check error:', syncErr);
+        } catch {
+          // Initial sync check error ignored
         }
 
         return true;
       } catch (error: any) {
-        console.error('Connect error:', error);
         if (!options?.silent) {
           showToast(error?.message || 'Error connecting to Google Drive', 'error');
         }
@@ -184,8 +182,7 @@ export function useGoogleDrive() {
       await clearTokens();
       setGoogleDriveConnected(false, null);
       showToast('Google Drive disconnected', 'info');
-    } catch (error: any) {
-      console.error('Disconnect error:', error);
+    } catch {
       showToast('Failed to disconnect Google Drive', 'error');
     }
   }, [setGoogleDriveConnected, showToast]);
@@ -209,7 +206,6 @@ export function useGoogleDrive() {
       showToast('Backup saved to Google Drive successfully!', 'success');
       return true;
     } catch (error: any) {
-      console.error('Backup error:', error);
       showToast(error?.message || 'Error uploading backup', 'error');
       return false;
     } finally {
@@ -221,7 +217,7 @@ export function useGoogleDrive() {
    * Perform silent background auto-backup without disrupting user.
    */
   const performSilentAutoBackup = useCallback(
-    async (reason = 'auto-sync'): Promise<boolean> => {
+    async (_reason = 'auto-sync'): Promise<boolean> => {
       const currentState = useAppStore.getState();
       if (!currentState.googleDriveConnected || !currentState.autoBackupEnabled) {
         return false;
@@ -239,8 +235,7 @@ export function useGoogleDrive() {
           return true;
         }
         return false;
-      } catch (err) {
-        console.warn(`[AutoBackup:${reason}] Silent backup error:`, err);
+      } catch {
         return false;
       } finally {
         setIsAutoSyncing(false);
@@ -258,8 +253,7 @@ export function useGoogleDrive() {
       const { accessToken } = await getSavedTokens();
       if (!accessToken) return null;
       return await findBackupFile(accessToken);
-    } catch (e) {
-      console.error('Check backup error:', e);
+    } catch {
       return null;
     } finally {
       setIsCheckingBackup(false);

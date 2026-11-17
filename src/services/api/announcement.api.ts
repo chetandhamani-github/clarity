@@ -64,10 +64,7 @@ export async function fetchAnnouncements(): Promise<AnnouncementItem[]> {
       return announcements;
     }
     return [];
-  } catch (error) {
-    if (__DEV__) {
-      console.warn('⚠️ [Announcement API] Fetch failed, using cached announcements:', error);
-    }
+  } catch {
     return getCachedAnnouncements();
   }
 }

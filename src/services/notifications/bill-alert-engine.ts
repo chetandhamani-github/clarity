@@ -75,8 +75,7 @@ export class BillAlertEngine {
       }
 
       return alertedCount;
-    } catch (error) {
-      console.warn('[BillAlertEngine] Error evaluating bill alerts:', error);
+    } catch {
       return 0;
     }
   }

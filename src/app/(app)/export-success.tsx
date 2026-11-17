@@ -30,7 +30,7 @@ export default function ExportSuccessScreen() {
   });
 
   useEffect(() => {
-    getExportStats().then(setStats).catch(console.error);
+    getExportStats().then(setStats).catch(() => {});
   }, []);
 
   const handleExport = async () => {
@@ -53,7 +53,6 @@ export default function ExportSuccessScreen() {
         showToast(result.message || 'Could not complete file export', 'error');
       }
     } catch (err: any) {
-      console.error('Export error:', err);
       showToast(err?.message || 'An unexpected error occurred during export', 'error');
     } finally {
       setIsExporting(false);

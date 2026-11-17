@@ -19,8 +19,8 @@ if (!isExpoGo) {
         shouldShowList: true,
       }),
     });
-  } catch (e) {
-    console.warn('expo-notifications not available', e);
+  } catch {
+    // expo-notifications not available
   }
 }
 
@@ -44,7 +44,6 @@ async function registerForPushNotificationsAsync() {
       finalStatus = status;
     }
     if (finalStatus !== 'granted') {
-      console.log('Failed to get push token for push notification!');
       return;
     }
     const projectId =
@@ -57,12 +56,10 @@ async function registerForPushNotificationsAsync() {
           })
         ).data;
         token = pushTokenString;
-      } catch (e: unknown) {
-        console.log('Error getting push token', e);
+      } catch {
+        // Error getting push token
       }
     }
-  } else {
-    console.log('Must use physical device for Push Notifications or missing Notifications module');
   }
 
   return token;
@@ -80,7 +77,7 @@ export function usePushNotifications() {
 
     registerForPushNotificationsAsync()
       .then((token) => setExpoPushToken(token))
-      .catch((err) => console.log('registerForPushNotificationsAsync error:', err));
+      .catch(() => {});
 
     notificationListener.current = Notifications.addNotificationReceivedListener(
       (notification: any) => {
@@ -98,7 +95,7 @@ export function usePushNotifications() {
           .then(() => {
             DeviceEventEmitter.emit('notificationsUpdated');
           })
-          .catch((err) => console.error('Failed to insert push notification into DB:', err));
+          .catch(() => {});
       }
     );
 
@@ -116,7 +113,7 @@ export function usePushNotifications() {
           .then(() => {
             DeviceEventEmitter.emit('notificationsUpdated');
           })
-          .catch((err) => console.error('Failed to insert push notification into DB:', err));
+          .catch(() => {});
 
         if (data?.actionUrl) {
           router.push(data.actionUrl as any);

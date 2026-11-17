@@ -50,10 +50,7 @@ export async function fetchFeatureFlags(): Promise<FeatureFlagsMap> {
 
     cacheFeatureFlags(flagsMap);
     return flagsMap;
-  } catch (error) {
-    if (__DEV__) {
-      console.warn('⚠️ [Features API] Fetch failed, using cached feature flags:', error);
-    }
+  } catch {
     return getCachedFeatureFlags();
   }
 }

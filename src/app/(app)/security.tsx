@@ -75,8 +75,7 @@ export default function SecurityPrivacyScreen() {
       } else {
         showToast('Could not verify biometrics', 'error');
       }
-    } catch (error: any) {
-      console.error(error);
+    } catch {
       showToast('Failed to enable biometrics', 'error');
     }
   };
@@ -111,8 +110,7 @@ export default function SecurityPrivacyScreen() {
               await clearDatabase();
               showToast('All local data was permanently cleared', 'success');
               router.replace('/(app)/(tabs)/dashboard' as any);
-            } catch (err) {
-              console.error(err);
+            } catch {
               showToast('Failed to clear local data', 'error');
             }
           },

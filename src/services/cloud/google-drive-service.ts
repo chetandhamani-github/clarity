@@ -133,10 +133,8 @@ export async function authenticateWithGoogle(): Promise<{
     // 2. Explicitly request Drive AppData scope if needed
     try {
       await GoogleSignin.addScopes({ scopes: [DRIVE_SCOPE] });
-    } catch (scopeErr) {
-      if (__DEV__) {
-        console.log('[GoogleDrive] addScopes notification:', scopeErr);
-      }
+    } catch {
+      // Scopes may already be granted
     }
 
     // 3. Obtain access token for Drive API calls
@@ -168,7 +166,6 @@ export async function authenticateWithGoogle(): Promise<{
     if (error?.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
       return { success: false, error: 'Google Play Services is not available on this device.' };
     }
-    console.error('Google authentication error:', error);
     return {
       success: false,
       error: error?.message || 'Failed to authenticate with Google.',
@@ -213,17 +210,14 @@ export async function getValidAccessToken(forceRefresh = false): Promise<string 
         });
         return tokenResult.accessToken;
       }
-    } catch (silentErr) {
-      if (__DEV__) {
-        console.log('[GoogleDrive] Silent token refresh attempt:', silentErr);
-      }
+    } catch {
+      // Silent refresh fallback
     }
 
     // 2. Interactive sign-in fallback
     const auth = await authenticateWithGoogle();
     return auth.success && auth.accessToken ? auth.accessToken : null;
-  } catch (err) {
-    console.error('[GoogleDrive] getValidAccessToken error:', err);
+  } catch {
     return null;
   }
 }
@@ -272,9 +266,6 @@ export async function findBackupFile(accessToken: string): Promise<GoogleDriveBa
           size: file.size ? parseInt(file.size, 10) : undefined,
         };
       }
-    } else {
-      const errText = await response.text();
-      console.warn('[GoogleDrive] AppData folder query failed:', response.status, errText);
     }
 
     // 2. Fallback: list all files in appDataFolder and filter client-side
@@ -322,7 +313,6 @@ export async function findBackupFile(accessToken: string): Promise<GoogleDriveBa
     if (e?.message === 'UNAUTHORIZED') {
       throw e;
     }
-    console.warn('[GoogleDrive] Error finding backup file:', e);
   }
 
   return null;
@@ -362,7 +352,6 @@ export async function uploadBackup(
 
     // Safeguard: Never overwrite an existing cloud backup with an empty/cleared local database
     if (existingFile && !isMeaningful && !options?.allowEmptyOverwrite) {
-      console.warn('[GoogleDrive] Blocked attempt to overwrite existing cloud backup with empty/cleared local database.');
       return {
         success: false,
         error: 'Aborted: Cloud backup contains data, but current local device data is empty. Prevented accidental overwrite.',
@@ -446,20 +435,14 @@ export async function uploadBackup(
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error('[GoogleDrive] Upload failed HTTP', response.status, errText);
       return { success: false, error: `Google Drive upload failed (${response.status}): ${errText}` };
     }
 
     const resData = await response.json();
     const modifiedTime = resData.modifiedTime || new Date().toISOString();
 
-    if (__DEV__) {
-      console.log('[GoogleDrive] Backup uploaded successfully at:', modifiedTime);
-    }
-
     return { success: true, modifiedTime };
   } catch (error: any) {
-    console.error('[GoogleDrive] Failed to upload backup:', error);
     return { success: false, error: error?.message || 'Failed to upload backup to Google Drive.' };
   }
 }
@@ -562,9 +545,6 @@ export async function downloadBackup(): Promise<{
                 try {
                   const revPayload = JSON.parse(revText);
                   if (isMeaningfulDatabaseSnapshot(revPayload)) {
-                    console.log(
-                      `[GoogleDrive] Recovered backup from revision history: ${rev.id} (${rev.modifiedTime})`
-                    );
                     return {
                       success: true,
                       data: revPayload,
@@ -582,8 +562,8 @@ export async function downloadBackup(): Promise<{
             }
           }
         }
-      } catch (revError) {
-        console.warn('[GoogleDrive] Revision recovery attempt error:', revError);
+      } catch {
+        // Revision recovery attempt error ignored
       }
     }
 
@@ -593,7 +573,6 @@ export async function downloadBackup(): Promise<{
       metadata: backupInfo,
     };
   } catch (error: any) {
-    console.error('[GoogleDrive] Failed to download backup:', error);
     return { success: false, error: error?.message || 'Download failed.' };
   }
 }
@@ -619,9 +598,6 @@ export async function syncDatabaseToDriveSilently(reason = 'auto-sync'): Promise
 
     // Safeguard: Never auto-sync an empty/cleared local database to the cloud
     if (!isMeaningfulDatabaseSnapshot(snapshot)) {
-      if (__DEV__) {
-        console.log(`[AutoBackup:${reason}] Skipped silent sync: local database is empty/cleared.`);
-      }
       return false;
     }
 
@@ -631,8 +607,7 @@ export async function syncDatabaseToDriveSilently(reason = 'auto-sync'): Promise
       return true;
     }
     return false;
-  } catch (err) {
-    console.warn(`[AutoBackup:${reason}] Failed silent sync:`, err);
+  } catch {
     return false;
   }
 }
