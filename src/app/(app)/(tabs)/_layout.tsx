@@ -105,10 +105,10 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
       <Tabs.Screen name="transactions" options={{ title: 'Activity' }} />
-      <Tabs.Screen name="accounts" options={{ title: 'Accounts' }} />
       <Tabs.Screen name="plan" options={{ title: 'Plan' }} />
       <Tabs.Screen name="goals" options={{ title: 'Goals' }} />
       <Tabs.Screen name="splitwise" options={{ title: 'Splitwise' }} />
+      <Tabs.Screen name="accounts" options={{ title: 'Accounts' }} />
     </Tabs>
   );
 }
@@ -141,7 +141,7 @@ const getStyles = (colors: ThemeColors) => {
       height: 64, // Reduced base height, safe area added via paddingBottom
       alignItems: 'center',
       justifyContent: 'space-around',
-      paddingHorizontal: 8,
+      paddingHorizontal: 4,
       position: 'relative',
     },
     tabItem: {
@@ -149,6 +149,7 @@ const getStyles = (colors: ThemeColors) => {
       alignItems: 'center',
       justifyContent: 'center',
       height: '100%',
+      paddingHorizontal: 2,
     },
     icon: {
       marginBottom: 4,
@@ -157,6 +158,8 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       fontSize: 10,
       lineHeight: 14,
+      letterSpacing: -0.2,
+      textAlign: 'center',
     },
     fab: {
       position: 'absolute',

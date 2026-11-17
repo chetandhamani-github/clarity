@@ -282,11 +282,11 @@ export class SplitwiseRepository {
 
     // Track deleted debts & settlements for this person before removing from SQLite
     try {
-      const debts = await this.getDebtsByPerson(id);
+      const debts = await this.getDebtsByPersonId(id);
       for (const d of debts) {
         trackDeletedRecord(d.id, 'debt');
       }
-      const settlements = await this.getSettlementsByPerson(id);
+      const settlements = await this.getSettlementsByPersonId(id);
       for (const s of settlements) {
         trackDeletedRecord(s.id, 'settlement');
       }

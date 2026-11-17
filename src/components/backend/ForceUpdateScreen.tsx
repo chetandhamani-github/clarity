@@ -64,7 +64,7 @@ export function ForceUpdateScreen({ minimumVersion }: ForceUpdateScreenProps) {
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 99999,
     alignItems: 'center',
     justifyContent: 'center',

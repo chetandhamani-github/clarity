@@ -30,7 +30,11 @@ import type {
 
 type FilterTab = 'ALL' | 'OWE_ME' | 'I_OWE' | 'SETTLED';
 
-export function SplitwiseHomeScreen() {
+export interface SplitwiseHomeScreenProps {
+  isMainTab?: boolean;
+}
+
+export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenProps = {}) {
   const { colors } = useTheme();
   const insets = useSafeInsets();
   const router = useRouter();
@@ -134,13 +138,14 @@ export function SplitwiseHomeScreen() {
         {
           backgroundColor: colors.background,
           paddingTop: insets.top,
-          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
+          paddingBottom: isMainTab ? 0 : Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
         },
       ]}
     >
       <Header
         title="Splitwise & Shared"
-        showBack
+        showBack={!isMainTab}
+        isMainTab={isMainTab}
         rightNode={
           <TouchableOpacity
             style={[styles.headerAddBtn, { backgroundColor: colors.surfaceContainerLow }]}
@@ -155,7 +160,7 @@ export function SplitwiseHomeScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, 16) + 40 },
+          { paddingBottom: isMainTab ? insets.bottom + 120 : Math.max(insets.bottom, 16) + 40 },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
