@@ -323,7 +323,7 @@ export function AddGroupScreen() {
             <View style={styles.labelWithIcon}>
               <MaterialIcons name="person-add" size={18} color={colors.primary} />
               <Text style={[styles.cardSectionTitle, { color: colors.onSurface }]}>
-                Group Members ({selectedMemberIds.length})
+                Group Members ({selectedMemberIds.length + 1})
               </Text>
             </View>
 
@@ -385,6 +385,59 @@ export function AddGroupScreen() {
             </View>
           ) : (
             <View style={styles.membersList}>
+              {/* You (Pinned as Creator) */}
+              <View
+                style={[
+                  styles.memberRow,
+                  {
+                    backgroundColor: colors.primaryContainer + '25',
+                    borderColor: colors.primary + '60',
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.avatarCircle,
+                    { backgroundColor: colors.primary },
+                  ]}
+                >
+                  <Text style={[styles.avatarText, { color: colors.onPrimary }]}>
+                    YOU
+                  </Text>
+                </View>
+
+                <View style={styles.memberInfo}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={[styles.memberName, { color: colors.onSurface }]}>
+                      You
+                    </Text>
+                    <View
+                      style={{
+                        backgroundColor: colors.primary,
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        borderRadius: 4,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: colors.onPrimary,
+                          fontSize: 10,
+                          fontFamily: 'Manrope_700Bold',
+                        }}
+                      >
+                        ADMIN
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.memberPhone, { color: colors.onSurfaceVariant }]}>
+                    Group creator (always included)
+                  </Text>
+                </View>
+
+                <MaterialIcons name="check-box" size={22} color={colors.primary} />
+              </View>
+
               {filteredPeople.map((person) => {
                 const isChecked = selectedMemberIds.includes(person.id);
                 return (

@@ -18,7 +18,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { BalanceCalculator } from '../services/BalanceCalculator';
 import { useSplitwiseStore } from '../store/splitwise.store';
 import type { ExpenseSplit } from '../types/splitwise.types';
-import { SplitType } from '../types/splitwise.types';
+import { SplitType, CURRENT_USER_ID, CURRENT_USER_PERSON } from '../types/splitwise.types';
 
 const EXPENSE_CATEGORIES = [
   { label: 'Dinner / Food', icon: 'restaurant' as const },
@@ -71,17 +71,17 @@ export function AddExpenseScreen() {
     [groups, selectedGroupId]
   );
 
-  // Available participants: members of group or all people if no group
+  // Available participants: always includes "You" (CURRENT_USER_PERSON) plus group members or all people
   const availableParticipants = useMemo(() => {
-    if (selectedGroup) {
-      return people.filter((p) => selectedGroup.memberIds.includes(p.id));
-    }
-    return people;
+    const list = selectedGroup
+      ? people.filter((p) => selectedGroup.memberIds.includes(p.id))
+      : people;
+    return [CURRENT_USER_PERSON, ...list.filter((p) => p.id !== CURRENT_USER_ID)];
   }, [people, selectedGroup]);
 
   // Selected participant IDs for splitting
   const [participantIds, setParticipantIds] = useState<string[]>([]);
-  const [payerId, setPayerId] = useState<string>('');
+  const [payerId, setPayerId] = useState<string>(CURRENT_USER_ID);
 
   // Split strategy
   const [splitType, setSplitType] = useState<SplitType>(SplitType.EQUAL);
@@ -105,7 +105,7 @@ export function AddExpenseScreen() {
       const ids = availableParticipants.map((p) => p.id);
       setParticipantIds(ids);
       if (!payerId || !ids.includes(payerId)) {
-        setPayerId(ids[0]);
+        setPayerId(CURRENT_USER_ID);
       }
     }
   }, [availableParticipants]);
@@ -620,7 +620,7 @@ export function AddExpenseScreen() {
                       ]}
                       numberOfLines={1}
                     >
-                      {person.name}
+                      {person.id === CURRENT_USER_ID ? 'You (Me)' : person.name}
                     </Text>
                   </TouchableOpacity>
 

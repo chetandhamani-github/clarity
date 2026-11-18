@@ -169,18 +169,39 @@ export function getStatusLabel(status: BalanceStatus, netBalance: number): strin
 
 /**
  * Calculates full detailed balance metrics for a single person.
+ * Optionally includes shared group expenses where the person was involved.
  */
 export function calculatePersonBalance(
   personId: string,
   debts: Debt[],
   settlements: Settlement[],
-  person?: Person
+  person?: Person,
+  sharedExpenses?: ExpenseWithSplits[]
 ): DetailedPersonBalance {
   const personDebts = debts.filter((d) => d.personId === personId);
   const personSettlements = settlements.filter((s) => s.personId === personId);
 
-  const totalReceivable = calculateTotalReceivable(personDebts);
-  const totalPayable = calculateTotalPayable(personDebts);
+  let expenseReceivable = 0;
+  let expensePayable = 0;
+
+  if (sharedExpenses && sharedExpenses.length > 0) {
+    for (const exp of sharedExpenses) {
+      if (exp.payerId === 'current_user' && exp.splits) {
+        const split = exp.splits.find((s) => s.personId === personId);
+        if (split) {
+          expenseReceivable += split.owedAmount;
+        }
+      } else if (exp.payerId === personId && exp.splits) {
+        const split = exp.splits.find((s) => s.personId === 'current_user');
+        if (split) {
+          expensePayable += split.owedAmount;
+        }
+      }
+    }
+  }
+
+  const totalReceivable = roundCurrency(calculateTotalReceivable(personDebts) + expenseReceivable);
+  const totalPayable = roundCurrency(calculateTotalPayable(personDebts) + expensePayable);
 
   let settledByThem = 0;
   let settledByYou = 0;
@@ -235,9 +256,12 @@ export function calculatePersonBalance(
 export function calculatePeopleBalances(
   people: Person[],
   debts: Debt[],
-  settlements: Settlement[]
+  settlements: Settlement[],
+  sharedExpenses?: ExpenseWithSplits[]
 ): DetailedPersonBalance[] {
-  return people.map((person) => calculatePersonBalance(person.id, debts, settlements, person));
+  return people.map((person) =>
+    calculatePersonBalance(person.id, debts, settlements, person, sharedExpenses)
+  );
 }
 
 /**
@@ -246,9 +270,10 @@ export function calculatePeopleBalances(
 export function calculateOverallSummary(
   people: Person[],
   debts: Debt[],
-  settlements: Settlement[]
+  settlements: Settlement[],
+  sharedExpenses?: ExpenseWithSplits[]
 ): DetailedOverallSummary {
-  const peopleBalances = calculatePeopleBalances(people, debts, settlements);
+  const peopleBalances = calculatePeopleBalances(people, debts, settlements, sharedExpenses);
 
   let totalReceivable = 0;
   let totalPayable = 0;

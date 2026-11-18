@@ -27,8 +27,10 @@ export const CREATE_SPLITWISE_DEBTS_TABLE_SQL = `
     type TEXT NOT NULL CHECK(type IN ('OWE_ME', 'I_OWE')),
     description TEXT NOT NULL,
     friend_email TEXT,
+    group_id TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (person_id) REFERENCES splitwise_people(id) ON DELETE CASCADE
+    FOREIGN KEY (person_id) REFERENCES splitwise_people(id) ON DELETE CASCADE,
+    FOREIGN KEY (group_id) REFERENCES splitwise_groups(id) ON DELETE SET NULL
   );
 `;
 
@@ -40,8 +42,10 @@ export const CREATE_SPLITWISE_SETTLEMENTS_TABLE_SQL = `
     description TEXT,
     settlement_type TEXT DEFAULT 'THEY_PAID',
     friend_email TEXT,
+    group_id TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (person_id) REFERENCES splitwise_people(id) ON DELETE CASCADE
+    FOREIGN KEY (person_id) REFERENCES splitwise_people(id) ON DELETE CASCADE,
+    FOREIGN KEY (group_id) REFERENCES splitwise_groups(id) ON DELETE SET NULL
   );
 `;
 
@@ -124,7 +128,9 @@ export const CREATE_SPLITWISE_INDEXES_SQL = `
   CREATE INDEX IF NOT EXISTS idx_splitwise_debts_person ON splitwise_debts(person_id);
   CREATE INDEX IF NOT EXISTS idx_splitwise_debts_type ON splitwise_debts(type);
   CREATE INDEX IF NOT EXISTS idx_splitwise_debts_created ON splitwise_debts(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_splitwise_debts_group ON splitwise_debts(group_id);
   CREATE INDEX IF NOT EXISTS idx_splitwise_settlements_person ON splitwise_settlements(person_id);
+  CREATE INDEX IF NOT EXISTS idx_splitwise_settlements_group ON splitwise_settlements(group_id);
   CREATE INDEX IF NOT EXISTS idx_splitwise_settlements_created ON splitwise_settlements(created_at DESC);
 
   CREATE INDEX IF NOT EXISTS idx_splitwise_groups_name ON splitwise_groups(name);

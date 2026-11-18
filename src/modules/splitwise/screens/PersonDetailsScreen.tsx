@@ -47,6 +47,7 @@ export function PersonDetailsScreen() {
     people,
     debts,
     settlements,
+    expenses,
     isLoading,
     loadAllData,
     updatePerson,
@@ -91,8 +92,8 @@ export function PersonDetailsScreen() {
 
   const personBalance = useMemo(() => {
     if (!person) return null;
-    return BalanceCalculator.calculatePersonBalance(person.id, debts, settlements, person);
-  }, [person, debts, settlements]);
+    return BalanceCalculator.calculatePersonBalance(person.id, debts, settlements, person, expenses);
+  }, [person, debts, settlements, expenses]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);

@@ -98,6 +98,7 @@ interface DebtRow {
   type: string;
   description: string;
   friend_email: string | null;
+  group_id?: string | null;
   created_at: string;
 }
 
@@ -108,6 +109,7 @@ interface SettlementRow {
   description: string | null;
   settlement_type: string | null;
   friend_email: string | null;
+  group_id?: string | null;
   created_at: string;
 }
 
@@ -144,6 +146,7 @@ function mapDebtRow(row: DebtRow): SplitwiseDebt {
     type: row.type as DebtType,
     description: row.description,
     friendEmail: row.friend_email ?? undefined,
+    groupId: row.group_id ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -156,6 +159,7 @@ function mapSettlementRow(row: SettlementRow): SplitwiseSettlement {
     description: row.description ?? undefined,
     settlementType: (row.settlement_type as SettlementType) || undefined,
     friendEmail: row.friend_email ?? undefined,
+    groupId: row.group_id ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -377,11 +381,12 @@ export class SplitwiseRepository {
     }
 
     const friendEmail = dto.friendEmail?.trim().toLowerCase() || (person.email ?? null);
+    const groupId = dto.groupId || null;
 
     await db.runAsync(
-      `INSERT INTO splitwise_debts (id, person_id, amount, type, description, friend_email, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [id, dto.personId, dto.amount, dto.type, description, friendEmail, nowStr]
+      `INSERT INTO splitwise_debts (id, person_id, amount, type, description, friend_email, group_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, dto.personId, dto.amount, dto.type, description, friendEmail, groupId, nowStr]
     );
 
     DeviceEventEmitter.emit('splitwiseUpdated');
@@ -393,6 +398,7 @@ export class SplitwiseRepository {
       type: dto.type,
       description,
       friendEmail: friendEmail ?? undefined,
+      groupId: groupId ?? undefined,
       createdAt: nowStr,
     };
   }
@@ -557,11 +563,12 @@ export class SplitwiseRepository {
 
     const settlementType = dto.settlementType || 'THEY_PAID';
     const friendEmail = dto.friendEmail?.trim().toLowerCase() || (person.email ?? null);
+    const groupId = dto.groupId || null;
 
     await db.runAsync(
-      `INSERT INTO splitwise_settlements (id, person_id, amount, description, settlement_type, friend_email, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [id, dto.personId, dto.amount, description, settlementType, friendEmail, nowStr]
+      `INSERT INTO splitwise_settlements (id, person_id, amount, description, settlement_type, friend_email, group_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, dto.personId, dto.amount, description, settlementType, friendEmail, groupId, nowStr]
     );
 
     DeviceEventEmitter.emit('splitwiseUpdated');
@@ -573,6 +580,7 @@ export class SplitwiseRepository {
       description: description ?? undefined,
       settlementType,
       friendEmail: friendEmail ?? undefined,
+      groupId: groupId ?? undefined,
       createdAt: nowStr,
     };
   }
@@ -1753,16 +1761,7 @@ export class SplitwiseRepository {
       [groupId]
     );
 
-    return rows.map((r) => ({
-      id: r.id,
-      personId: r.person_id,
-      amount: r.amount,
-      description: r.description || undefined,
-      settlementType: (r.settlement_type as SettlementType) || undefined,
-      friendEmail: r.friend_email || undefined,
-      groupId: groupId,
-      createdAt: r.created_at,
-    }));
+    return rows.map(mapSettlementRow);
   }
 
   /**

@@ -30,6 +30,7 @@ export interface SplitwiseState {
   debts: Debt[];
   settlements: Settlement[];
   groups: Group[];
+  expenses: ExpenseWithSplits[];
   activeGroupId: string | null;
   activeGroupExpenses: ExpenseWithSplits[];
   activeGroupBalances: GroupBalanceSummary | null;
@@ -96,6 +97,7 @@ export const useSplitwiseStore = create<SplitwiseState>()((set, get) => ({
   debts: [],
   settlements: [],
   groups: [],
+  expenses: [],
   activeGroupId: null,
   activeGroupExpenses: [],
   activeGroupBalances: null,
@@ -197,13 +199,14 @@ export const useSplitwiseStore = create<SplitwiseState>()((set, get) => ({
     try {
       await SplitwiseRepository.ensureSchema();
 
-      const [people, peopleWithBalances, debts, settlements, groups, overallSummary] =
+      const [people, peopleWithBalances, debts, settlements, groups, expenses, overallSummary] =
         await Promise.all([
           SplitwiseRepository.getAllPeople(),
           SplitwiseRepository.getAllPeopleWithBalances(),
           SplitwiseRepository.getAllDebts(),
           SplitwiseRepository.getAllSettlements(),
           SplitwiseRepository.getAllGroups(),
+          SplitwiseRepository.getAllExpenses(),
           SplitwiseRepository.getOverallSummary(),
         ]);
 
@@ -213,6 +216,7 @@ export const useSplitwiseStore = create<SplitwiseState>()((set, get) => ({
         debts,
         settlements,
         groups,
+        expenses,
         overallSummary,
         isLoading: false,
       });
@@ -314,10 +318,15 @@ export const useSplitwiseStore = create<SplitwiseState>()((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const created = await SplitwiseRepository.createSettlement(dto);
-      await Promise.all([
+      const reloadPromises: Promise<any>[] = [
         get().loadSettlements(),
         get().loadPeople(),
-      ]);
+        get().loadAllData(),
+      ];
+      if (dto.groupId) {
+        reloadPromises.push(get().loadGroupDetails(dto.groupId));
+      }
+      await Promise.all(reloadPromises);
       return created;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to add settlement';

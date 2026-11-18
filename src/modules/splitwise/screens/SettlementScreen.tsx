@@ -59,6 +59,7 @@ export function SettlementScreen() {
 
   const params = useLocalSearchParams<{
     personId?: string;
+    groupId?: string;
     type?: SettlementType;
     amount?: string;
     description?: string;
@@ -68,6 +69,7 @@ export function SettlementScreen() {
     people,
     debts,
     settlements,
+    expenses,
     addSettlement,
     loadAllData,
     isLoading,
@@ -147,9 +149,10 @@ export function SettlementScreen() {
       selectedPerson.id,
       debts,
       settlements,
-      selectedPerson
+      selectedPerson,
+      expenses
     );
-  }, [selectedPerson, debts, settlements]);
+  }, [selectedPerson, debts, settlements, expenses]);
 
   // Auto-detect direction and prefill amount from current balance if not user-specified
   useEffect(() => {
@@ -210,6 +213,7 @@ export function SettlementScreen() {
 
       await addSettlement({
         personId: data.personId,
+        groupId: params.groupId || undefined,
         amount: amt,
         settlementType: data.type,
         description: data.description.trim() || undefined,

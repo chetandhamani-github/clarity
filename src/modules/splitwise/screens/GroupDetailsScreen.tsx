@@ -130,6 +130,7 @@ export function GroupDetailsScreen() {
 
   const totalSpend = activeGroupBalances?.totalGroupSpend || 0;
   const memberCount = activeGroupMembers.length;
+  const myBalance = activeGroupBalances?.myBalance ?? 0;
 
   return (
     <View
@@ -196,7 +197,7 @@ export function GroupDetailsScreen() {
           <View style={styles.statsRow}>
             <View style={styles.statCol}>
               <Text style={[styles.statLabel, { color: colors.onSurfaceVariant }]}>
-                TOTAL GROUP SPEND
+                TOTAL SPEND
               </Text>
               <Text style={[styles.statValue, { color: colors.onSurface }]}>
                 {formatCurrencyPrivacy(totalSpend, hideBalances)}
@@ -205,10 +206,35 @@ export function GroupDetailsScreen() {
 
             <View style={styles.statCol}>
               <Text style={[styles.statLabel, { color: colors.onSurfaceVariant }]}>
-                TOTAL EXPENSES
+                EXPENSES
               </Text>
               <Text style={[styles.statValue, { color: colors.primary }]}>
                 {activeGroupExpenses.length}
+              </Text>
+            </View>
+
+            <View style={styles.statCol}>
+              <Text style={[styles.statLabel, { color: colors.onSurfaceVariant }]}>
+                YOUR POSITION
+              </Text>
+              <Text
+                style={[
+                  styles.statValue,
+                  {
+                    color:
+                      myBalance > 0.009
+                        ? '#10b981'
+                        : myBalance < -0.009
+                          ? '#ef4444'
+                          : colors.onSurfaceVariant,
+                  },
+                ]}
+              >
+                {myBalance > 0.009
+                  ? `+${formatCurrencyPrivacy(myBalance, hideBalances)}`
+                  : myBalance < -0.009
+                    ? `-${formatCurrencyPrivacy(Math.abs(myBalance), hideBalances)}`
+                    : 'Settled'}
               </Text>
             </View>
           </View>
@@ -426,35 +452,93 @@ export function GroupDetailsScreen() {
                 </View>
               ) : (
                 <View style={styles.simplifiedList}>
-                  {simplifiedDebts.map((item, idx) => (
-                    <View
-                      key={idx}
-                      style={[
-                        styles.simplifiedItemCard,
-                        {
-                          backgroundColor: colors.surfaceContainerLowest,
-                          borderColor: colors.surfaceVariant,
-                        },
-                      ]}
-                    >
-                      <View style={styles.simplifiedWhoRow}>
-                        <Text style={[styles.debtorName, { color: '#ef4444' }]}>
-                          {item.fromPersonName || 'Member'}
-                        </Text>
-                        <MaterialIcons
-                          name="arrow-forward"
-                          size={16}
-                          color={colors.onSurfaceVariant}
-                        />
-                        <Text style={[styles.creditorName, { color: '#10b981' }]}>
-                          {item.toPersonName || 'Member'}
-                        </Text>
+                  {simplifiedDebts.map((item, idx) => {
+                    const isYouDebtor = item.fromPersonId === 'current_user';
+                    const isYouCreditor = item.toPersonId === 'current_user';
+
+                    return (
+                      <View
+                        key={idx}
+                        style={[
+                          styles.simplifiedItemCard,
+                          {
+                            backgroundColor: colors.surfaceContainerLowest,
+                            borderColor: colors.surfaceVariant,
+                          },
+                        ]}
+                      >
+                        <View style={styles.simplifiedTopRow}>
+                          <View style={styles.simplifiedWhoRow}>
+                            <Text
+                              style={[
+                                styles.debtorName,
+                                {
+                                  color: '#ef4444',
+                                  fontFamily: isYouDebtor ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
+                                },
+                              ]}
+                            >
+                              {isYouDebtor ? 'You' : item.fromPersonName || 'Member'}
+                            </Text>
+                            <MaterialIcons
+                              name="arrow-forward"
+                              size={16}
+                              color={colors.onSurfaceVariant}
+                            />
+                            <Text
+                              style={[
+                                styles.creditorName,
+                                {
+                                  color: '#10b981',
+                                  fontFamily: isYouCreditor ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
+                                },
+                              ]}
+                            >
+                              {isYouCreditor ? 'You' : item.toPersonName || 'Member'}
+                            </Text>
+                          </View>
+                          <Text style={[styles.simplifiedAmount, { color: colors.onSurface }]}>
+                            {formatCurrencyPrivacy(item.amount, hideBalances)}
+                          </Text>
+                        </View>
+
+                        {/* Direct Action Button if Current User is Involved */}
+                        {isYouDebtor && (
+                          <TouchableOpacity
+                            style={[styles.settleInGroupBtn, { backgroundColor: '#ef4444' }]}
+                            onPress={() => {
+                              router.navigate(
+                                `/(app)/add-splitwise-settlement?personId=${item.toPersonId}&groupId=${groupId}&amount=${item.amount}&type=YOU_PAID`
+                              );
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <MaterialIcons name="payment" size={14} color="#ffffff" />
+                            <Text style={styles.settleInGroupBtnText}>
+                              Settle Up with {item.toPersonName || 'Member'}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+
+                        {isYouCreditor && (
+                          <TouchableOpacity
+                            style={[styles.settleInGroupBtn, { backgroundColor: '#10b981' }]}
+                            onPress={() => {
+                              router.navigate(
+                                `/(app)/add-splitwise-settlement?personId=${item.fromPersonId}&groupId=${groupId}&amount=${item.amount}&type=THEY_PAID`
+                              );
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <MaterialIcons name="done-all" size={14} color="#ffffff" />
+                            <Text style={styles.settleInGroupBtnText}>
+                              Record Received from {item.fromPersonName || 'Member'}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
-                      <Text style={[styles.simplifiedAmount, { color: colors.onSurface }]}>
-                        {formatCurrencyPrivacy(item.amount, hideBalances)}
-                      </Text>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </View>
               )}
             </View>
@@ -501,7 +585,7 @@ export function GroupDetailsScreen() {
                     >
                       <View style={styles.memberBalanceInfo}>
                         <Text style={[styles.memberBalanceName, { color: colors.onSurface }]}>
-                          {m.person.name}
+                          {m.person.id === 'current_user' ? 'You' : m.person.name}
                         </Text>
                         <Text style={[styles.memberTotalPaid, { color: colors.onSurfaceVariant }]}>
                           Total paid: {formatCurrencyPrivacy(m.totalOwedToMe, hideBalances)}
@@ -755,12 +839,29 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   simplifiedItemCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     padding: 12,
     borderRadius: radius.lg,
     borderWidth: 1,
+    gap: 10,
+  },
+  simplifiedTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  settleInGroupBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: radius.md,
+  },
+  settleInGroupBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontFamily: 'Manrope_700Bold',
   },
   simplifiedWhoRow: {
     flexDirection: 'row',

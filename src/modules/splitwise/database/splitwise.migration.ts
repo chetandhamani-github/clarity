@@ -21,7 +21,13 @@ export async function runSplitwiseMigrations(db: SQLite.SQLiteDatabase): Promise
     await db.execAsync('ALTER TABLE splitwise_debts ADD COLUMN friend_email TEXT;');
   } catch {}
   try {
+    await db.execAsync('ALTER TABLE splitwise_debts ADD COLUMN group_id TEXT REFERENCES splitwise_groups(id) ON DELETE SET NULL;');
+  } catch {}
+  try {
     await db.execAsync('ALTER TABLE splitwise_settlements ADD COLUMN friend_email TEXT;');
+  } catch {}
+  try {
+    await db.execAsync('ALTER TABLE splitwise_settlements ADD COLUMN group_id TEXT REFERENCES splitwise_groups(id) ON DELETE SET NULL;');
   } catch {}
 }
 

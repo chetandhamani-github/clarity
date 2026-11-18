@@ -552,7 +552,7 @@ export default function DashboardScreen() {
                   activeOpacity={0.7}
                 >
                   <View style={styles.quickActionIconBox}>
-                    <MaterialIcons name="mic" size={18} color={colors.primary} />
+                    <MaterialIcons name="mic" size={18} color={colors.onPrimaryContainer} />
                   </View>
                   <View style={styles.quickActionTextBox}>
                     <Text style={styles.quickActionTitle}>Voice Add</Text>
@@ -605,7 +605,7 @@ export default function DashboardScreen() {
                       </Text>
                     </View>
                   </View>
-                  <MaterialIcons name="chevron-right" size={22} color={colors.primary} />
+                  <MaterialIcons name="chevron-right" size={22} color={colors.onPrimaryContainer} />
                 </TouchableOpacity>
               )}
 

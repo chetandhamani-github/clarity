@@ -45,6 +45,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
     debts,
     settlements,
     groups,
+    expenses,
     isLoading,
     loadAllData,
   } = useSplitwiseStore();
@@ -88,15 +89,15 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
     };
   }, [handleRefresh, loadAllData, loadRecentActivities]);
 
-  // Overall summary calculated safely with pure functions
+  // Overall summary calculated safely with pure functions including shared expenses
   const overallSummary = useMemo(() => {
-    return BalanceCalculator.calculateOverallSummary(people, debts, settlements);
-  }, [people, debts, settlements]);
+    return BalanceCalculator.calculateOverallSummary(people, debts, settlements, expenses);
+  }, [people, debts, settlements, expenses]);
 
-  // Person balances calculated with pure functions
+  // Person balances calculated with pure functions including shared expenses
   const allPersonBalances = useMemo(() => {
-    return BalanceCalculator.calculatePeopleBalances(people, debts, settlements);
-  }, [people, debts, settlements]);
+    return BalanceCalculator.calculatePeopleBalances(people, debts, settlements, expenses);
+  }, [people, debts, settlements, expenses]);
 
   // Filtered person balances
   const filteredPersonBalances = useMemo(() => {
@@ -163,6 +164,15 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
         title="Splitwise & Shared"
         showBack={!isMainTab}
         isMainTab={isMainTab}
+        leftNode={
+          isMainTab ? (
+            <TouchableOpacity style={styles.avatarButton} onPress={() => router.navigate('/settings')}>
+              <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
+                <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
+              </View>
+            </TouchableOpacity>
+          ) : undefined
+        }
         rightNode={
           <TouchableOpacity
             style={[styles.headerAddBtn, { backgroundColor: colors.surfaceContainerLow }]}
@@ -1057,6 +1067,18 @@ function formatDate(iso: string): string {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  avatarButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  avatarFallback: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerAddBtn: {
     width: 36,

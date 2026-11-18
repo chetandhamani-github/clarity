@@ -326,7 +326,7 @@ export function SmsTransactionPromptModal({ visible, onDismiss }: Props) {
 }
 
 const getStyles = (colors: ThemeColors) => {
-  return StyleSheet.create({
+  const styles = StyleSheet.create({
     overlay: {
       flex: 1,
       backgroundColor: 'rgba(0, 0, 0, 0.65)',
@@ -506,4 +506,5 @@ const getStyles = (colors: ThemeColors) => {
       fontSize: 13,
     },
   });
+  return styles;
 };
