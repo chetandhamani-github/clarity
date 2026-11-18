@@ -22,16 +22,19 @@ import { formatCurrencyPrivacy, parseDateSafely } from '@/utils/format';
 import { useSplitwiseStore } from '../store/splitwise.store';
 import { SplitwiseSyncService } from '../services/SplitwiseSyncService';
 import { BalanceCalculator } from '../services/BalanceCalculator';
-import type { Debt, Settlement } from '../types/splitwise.types';
+import type { Debt, Settlement, ExpenseWithSplits } from '../types/splitwise.types';
 
 type ActivityTab = 'ALL' | 'DEBTS' | 'SETTLEMENTS';
 
 interface ActivityItem {
   id: string;
-  kind: 'debt' | 'settlement';
+  kind: 'debt' | 'settlement' | 'expense';
   createdAt: string;
   debt?: Debt;
   settlement?: Settlement;
+  expense?: ExpenseWithSplits;
+  expenseSplitAmount?: number;
+  expenseType?: 'OWE_ME' | 'I_OWE';
 }
 
 export function PersonDetailsScreen() {
@@ -269,6 +272,34 @@ export function PersonDetailsScreen() {
           debt: d,
         });
       }
+
+      for (const exp of expenses) {
+        if (exp.payerId === 'current_user' && exp.splits) {
+          const sp = exp.splits.find((s) => s.personId === personId);
+          if (sp) {
+            list.push({
+              id: `expense-${exp.id}`,
+              kind: 'expense',
+              createdAt: exp.date || exp.createdAt,
+              expense: exp,
+              expenseSplitAmount: sp.owedAmount,
+              expenseType: 'OWE_ME',
+            });
+          }
+        } else if (exp.payerId === personId && exp.splits) {
+          const sp = exp.splits.find((s) => s.personId === 'current_user');
+          if (sp) {
+            list.push({
+              id: `expense-${exp.id}`,
+              kind: 'expense',
+              createdAt: exp.date || exp.createdAt,
+              expense: exp,
+              expenseSplitAmount: sp.owedAmount,
+              expenseType: 'I_OWE',
+            });
+          }
+        }
+      }
     }
 
     if (activeTab === 'ALL' || activeTab === 'SETTLEMENTS') {
@@ -285,7 +316,7 @@ export function PersonDetailsScreen() {
     return list.sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
-  }, [personDebts, personSettlements, activeTab]);
+  }, [personDebts, personSettlements, expenses, personId, activeTab]);
 
   if (!person || !personBalance) {
     return (
@@ -295,7 +326,6 @@ export function PersonDetailsScreen() {
           {
             backgroundColor: colors.background,
             paddingTop: insets.top,
-            paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
           },
         ]}
       >
@@ -346,7 +376,6 @@ export function PersonDetailsScreen() {
         {
           backgroundColor: colors.background,
           paddingTop: insets.top,
-          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
         },
       ]}
     >
@@ -387,7 +416,7 @@ export function PersonDetailsScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, 16) + 40 },
+          { paddingBottom: insets.bottom + 32 },
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -769,6 +798,56 @@ export function PersonDetailsScreen() {
                   >
                     <MaterialIcons name="delete-outline" size={16} color={colors.onSurfaceVariant} />
                   </TouchableOpacity>
+                </View>
+              </View>
+            );
+          }
+
+          if (item.kind === 'expense' && item.expense) {
+            const exp = item.expense;
+            const isPayerYou = exp.payerId === 'current_user';
+            const itemColor = isPayerYou ? '#10b981' : '#ef4444';
+            const itemBg = isPayerYou ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)';
+            const splitAmt = item.expenseSplitAmount || exp.amount;
+
+            return (
+              <View
+                style={[
+                  styles.itemCard,
+                  {
+                    backgroundColor: colors.surfaceContainerLowest,
+                    borderColor: colors.surfaceVariant,
+                  },
+                ]}
+              >
+                <View style={[styles.iconCircle, { backgroundColor: itemBg }]}>
+                  <MaterialIcons
+                    name="receipt-long"
+                    size={20}
+                    color={itemColor}
+                  />
+                </View>
+
+                <View style={styles.itemDetails}>
+                  <Text style={[styles.itemTitle, { color: colors.onSurface }]} numberOfLines={1}>
+                    {exp.description}
+                  </Text>
+                  <View style={styles.itemMetaRow}>
+                    <Text style={[styles.itemDate, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
+                      {formatDate(exp.date || exp.createdAt)}
+                    </Text>
+                    <View style={[styles.metaDot, { backgroundColor: colors.outlineVariant }]} />
+                    <Text style={[styles.itemTypeTag, { color: itemColor }]} numberOfLines={1}>
+                      {isPayerYou ? 'You paid (Shared)' : `${personFirstName} paid (Shared)`}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.itemRight}>
+                  <Text style={[styles.itemAmount, { color: itemColor }]}>
+                    {isPayerYou ? '+' : '-'}
+                    {formatCurrencyPrivacy(splitAmt, hideBalances)}
+                  </Text>
                 </View>
               </View>
             );

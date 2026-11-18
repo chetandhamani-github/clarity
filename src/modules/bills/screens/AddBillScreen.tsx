@@ -205,7 +205,6 @@ export function AddBillScreen() {
         styles.container,
         {
           paddingTop: insets.top,
-          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
           backgroundColor: colors.background,
         },
       ]}
@@ -225,7 +224,7 @@ export function AddBillScreen() {
         style={styles.keyboardView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, 16) + 140 },
+          { paddingBottom: insets.bottom + 32 },
         ]}
         showsVerticalScrollIndicator={false}
         enableOnAndroid={true}

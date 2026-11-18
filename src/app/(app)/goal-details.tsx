@@ -60,7 +60,6 @@ export default function GoalDetailsScreen() {
           {
             backgroundColor: colors.background,
             paddingTop: insets.top,
-            paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
             justifyContent: 'center',
             alignItems: 'center',
           },
@@ -135,7 +134,6 @@ export default function GoalDetailsScreen() {
         {
           backgroundColor: colors.background,
           paddingTop: insets.top,
-          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
         },
       ]}
     >
@@ -160,7 +158,7 @@ export default function GoalDetailsScreen() {
       {goal && (
         <KeyboardAwareScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 140 }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           enableOnAndroid={true}

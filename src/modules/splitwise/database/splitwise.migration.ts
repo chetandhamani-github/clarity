@@ -1,6 +1,7 @@
 import type * as SQLite from 'expo-sqlite';
 import {
-  CREATE_ALL_SPLITWISE_SCHEMA_SQL,
+  CREATE_ALL_SPLITWISE_TABLES_SQL,
+  CREATE_SPLITWISE_INDEXES_SQL,
   DROP_ALL_SPLITWISE_TABLES_SQL,
 } from './splitwise.schema';
 
@@ -8,27 +9,41 @@ import {
  * Runs migration to create all Splitwise tables and indexes if they do not exist.
  */
 export async function runSplitwiseMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
-  await db.execAsync(CREATE_ALL_SPLITWISE_SCHEMA_SQL);
+  // 1. Create base tables
+  await db.execAsync(CREATE_ALL_SPLITWISE_TABLES_SQL);
+
+  // 2. Safely add missing columns for existing databases
   try {
     await db.execAsync("ALTER TABLE splitwise_settlements ADD COLUMN settlement_type TEXT DEFAULT 'THEY_PAID';");
-  } catch {
-    // Column already exists or table freshly created with column
-  }
+  } catch {}
   try {
     await db.execAsync('ALTER TABLE splitwise_people ADD COLUMN email TEXT;');
+  } catch {}
+  try {
+    await db.execAsync('ALTER TABLE splitwise_people ADD COLUMN phone TEXT;');
+  } catch {}
+  try {
+    await db.execAsync('ALTER TABLE splitwise_people ADD COLUMN notes TEXT;');
   } catch {}
   try {
     await db.execAsync('ALTER TABLE splitwise_debts ADD COLUMN friend_email TEXT;');
   } catch {}
   try {
-    await db.execAsync('ALTER TABLE splitwise_debts ADD COLUMN group_id TEXT REFERENCES splitwise_groups(id) ON DELETE SET NULL;');
+    await db.execAsync('ALTER TABLE splitwise_debts ADD COLUMN group_id TEXT;');
   } catch {}
   try {
     await db.execAsync('ALTER TABLE splitwise_settlements ADD COLUMN friend_email TEXT;');
   } catch {}
   try {
-    await db.execAsync('ALTER TABLE splitwise_settlements ADD COLUMN group_id TEXT REFERENCES splitwise_groups(id) ON DELETE SET NULL;');
+    await db.execAsync('ALTER TABLE splitwise_settlements ADD COLUMN group_id TEXT;');
   } catch {}
+
+  // 3. Create all indexes after columns are guaranteed to exist
+  try {
+    await db.execAsync(CREATE_SPLITWISE_INDEXES_SQL);
+  } catch (err) {
+    console.warn('Failed to create splitwise indexes:', err);
+  }
 }
 
 /**

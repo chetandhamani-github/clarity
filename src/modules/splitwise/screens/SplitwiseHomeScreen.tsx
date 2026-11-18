@@ -156,7 +156,6 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
         {
           backgroundColor: colors.background,
           paddingTop: insets.top,
-          paddingBottom: isMainTab ? 0 : Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
         },
       ]}
     >
@@ -187,7 +186,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: isMainTab ? insets.bottom + 120 : Math.max(insets.bottom, 16) + 40 },
+          { paddingBottom: isMainTab ? insets.bottom + 120 : insets.bottom + 32 },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"

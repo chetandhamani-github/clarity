@@ -8,6 +8,7 @@ import {
   DeviceEventEmitter,
   Platform,
   Alert,
+  Modal,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
@@ -32,12 +33,14 @@ export function GroupDetailsScreen() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
 
   const {
+    people,
     groups,
     activeGroupId,
     activeGroupExpenses,
     activeGroupBalances,
     activeGroupMembers,
     loadGroupDetails,
+    addGroupMembers,
     deleteGroup,
     deleteExpense,
     loadAllData,
@@ -45,8 +48,15 @@ export function GroupDetailsScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<GroupTab>('EXPENSES');
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [selectedAddMemberIds, setSelectedAddMemberIds] = useState<string[]>([]);
 
   const group = useMemo(() => groups.find((g) => g.id === groupId), [groups, groupId]);
+
+  const candidateFriends = useMemo(() => {
+    const existingIds = new Set(activeGroupMembers.map((m) => m.id));
+    return people.filter((p) => !existingIds.has(p.id) && p.id !== 'current_user');
+  }, [people, activeGroupMembers]);
 
   const loadData = useCallback(async () => {
     if (!groupId) return;
@@ -78,6 +88,25 @@ export function GroupDetailsScreen() {
       }))
     );
   }, [activeGroupBalances]);
+
+  const handleAddMembers = async () => {
+    if (!groupId || selectedAddMemberIds.length === 0) return;
+    try {
+      await addGroupMembers(groupId, selectedAddMemberIds);
+      showToast('Members added to group', 'success');
+      setSelectedAddMemberIds([]);
+      setShowAddMemberModal(false);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to add members';
+      showAlert('Error', msg);
+    }
+  };
+
+  const toggleSelectCandidate = (personId: string) => {
+    setSelectedAddMemberIds((prev) =>
+      prev.includes(personId) ? prev.filter((id) => id !== personId) : [...prev, personId]
+    );
+  };
 
   const handleDeleteGroup = () => {
     showAlert(
@@ -139,7 +168,6 @@ export function GroupDetailsScreen() {
         {
           backgroundColor: colors.background,
           paddingTop: insets.top,
-          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
         },
       ]}
     >
@@ -313,7 +341,7 @@ export function GroupDetailsScreen() {
         style={styles.scrollArea}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, 16) + 100 },
+          { paddingBottom: insets.bottom + 80 },
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -555,10 +583,25 @@ export function GroupDetailsScreen() {
               ]}
             >
               <View style={styles.sectionHeaderRow}>
-                <MaterialIcons name="people" size={18} color={colors.primary} />
-                <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>
-                  Member Net Positions
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialIcons name="people" size={18} color={colors.primary} />
+                  <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>
+                    Member Net Positions
+                  </Text>
+                </View>
+
+                {candidateFriends.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setShowAddMemberModal(true)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    <MaterialIcons name="person-add" size={16} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontSize: 13, fontFamily: 'Manrope_700Bold' }}>
+                      + Add
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               <View style={styles.membersBalancesList}>
@@ -610,7 +653,15 @@ export function GroupDetailsScreen() {
       </ScrollView>
 
       {/* FLOATING ACTION BUTTON */}
-      <View style={[styles.bottomBar, { backgroundColor: colors.background }]}>
+      <View
+        style={[
+          styles.bottomBar,
+          {
+            backgroundColor: colors.background,
+            paddingBottom: Math.max(insets.bottom, 12),
+          },
+        ]}
+      >
         <TouchableOpacity
           style={[styles.addExpenseFab, { backgroundColor: colors.primary }]}
           onPress={() => router.navigate(`/(app)/add-splitwise-expense?groupId=${groupId}`)}
@@ -622,6 +673,93 @@ export function GroupDetailsScreen() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* ADD MEMBER MODAL */}
+      <Modal
+        visible={showAddMemberModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAddMemberModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalContainer,
+              {
+                backgroundColor: colors.surfaceContainerLow,
+                borderColor: colors.outlineVariant,
+              },
+            ]}
+          >
+            <View style={styles.modalHeaderRow}>
+              <Text style={[styles.modalTitle, { color: colors.onSurface }]}>
+                Add Friends to Group
+              </Text>
+              <TouchableOpacity onPress={() => setShowAddMemberModal(false)}>
+                <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 300 }}>
+              {candidateFriends.length === 0 ? (
+                <Text style={{ color: colors.onSurfaceVariant, padding: 16, textAlign: 'center' }}>
+                  All your friends are already in this group!
+                </Text>
+              ) : (
+                candidateFriends.map((friend) => {
+                  const isSelected = selectedAddMemberIds.includes(friend.id);
+                  return (
+                    <TouchableOpacity
+                      key={friend.id}
+                      style={[
+                        styles.candidateRow,
+                        {
+                          backgroundColor: isSelected
+                            ? colors.primaryContainer + '30'
+                            : colors.surfaceContainerLowest,
+                          borderColor: isSelected ? colors.primary : colors.surfaceVariant,
+                        },
+                      ]}
+                      onPress={() => toggleSelectCandidate(friend.id)}
+                    >
+                      <Text style={[styles.candidateName, { color: colors.onSurface }]}>
+                        {friend.name}
+                      </Text>
+                      <MaterialIcons
+                        name={isSelected ? 'check-box' : 'check-box-outline-blank'}
+                        size={22}
+                        color={isSelected ? colors.primary : colors.outline}
+                      />
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[
+                styles.addMemberSubmitBtn,
+                {
+                  backgroundColor:
+                    selectedAddMemberIds.length > 0 ? colors.primary : colors.surfaceVariant,
+                },
+              ]}
+              disabled={selectedAddMemberIds.length === 0}
+              onPress={handleAddMembers}
+            >
+              <Text
+                style={{
+                  color: selectedAddMemberIds.length > 0 ? colors.onPrimary : colors.outline,
+                  fontFamily: 'Manrope_700Bold',
+                  fontSize: 14,
+                }}
+              >
+                Add {selectedAddMemberIds.length > 0 ? `(${selectedAddMemberIds.length}) ` : ''}to Group
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -927,6 +1065,48 @@ const styles = StyleSheet.create({
   addExpenseFabText: {
     fontSize: 15,
     fontFamily: 'Manrope_700Bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: 20,
+    borderWidth: 1,
+    maxHeight: '80%',
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontFamily: 'Manrope_700Bold',
+  },
+  candidateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  candidateName: {
+    fontSize: 14,
+    fontFamily: 'Manrope_600SemiBold',
+  },
+  addMemberSubmitBtn: {
+    marginTop: 16,
+    height: 48,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

@@ -128,7 +128,6 @@ export function AddGroupScreen() {
         {
           backgroundColor: colors.background,
           paddingTop: insets.top,
-          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
         },
       ]}
     >
@@ -155,7 +154,7 @@ export function AddGroupScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, 16) + 140 },
+          { paddingBottom: insets.bottom + 32 },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
