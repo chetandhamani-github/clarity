@@ -9,7 +9,7 @@ import { ParsedVoiceTransaction, parseVoiceTranscript, UserAccountRef } from '@/
 import { ThemeColors, typography, useTheme } from '@/theme';
 import { getCurrencySymbol } from '@/utils/format';
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -96,7 +96,6 @@ export function VoiceTransactionModal({
       if (timer) clearTimeout(timer);
       stopSpeechRecognition();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   // Voice recording pulse & audio waveform animation
@@ -311,7 +310,7 @@ export function VoiceTransactionModal({
             <View style={styles.headerRow}>
               <View style={styles.headerTitleRow}>
                 <View style={styles.micIconCircle}>
-                  <MaterialIcons name="mic" size={20} color={colors.primary} />
+                  <MaterialIcons name="mic" size={20} color={colors.onPrimaryContainer} />
                 </View>
                 <View>
                   <Text style={styles.title}>Voice Transaction</Text>
@@ -423,7 +422,7 @@ export function VoiceTransactionModal({
                       onPress={handleStartListening}
                       activeOpacity={0.8}
                     >
-                      <MaterialIcons name="mic" size={36} color={colors.primary} />
+                      <MaterialIcons name="mic" size={36} color={colors.onPrimaryContainer} />
                     </TouchableOpacity>
                     <Text style={styles.tapToSpeakText}>Tap to Record Voice</Text>
                     <Text style={styles.dictateHintText}>

@@ -7,29 +7,22 @@ import { getSpentByCategory } from '@/services/database/budget-dao';
 import { formatCurrency } from '@/utils/format';
 import type { Transaction } from '@/types';
 
-export async function evaluateTransactionBudgetAlerts(
-  transaction: Omit<Transaction, 'id'> | Transaction
+export async function evaluateCategoryBudgetAlert(
+  categoryNameInput: string,
+  month: number,
+  year: number
 ): Promise<void> {
-  if (transaction.type !== 'expense') return;
-
   try {
     const db = getDatabase();
-
-    // Safely extract year and month without timezone drift
-    const dateParts = transaction.date.split('T')[0].split('-');
-    const year = parseInt(dateParts[0], 10);
-    const month = parseInt(dateParts[1], 10);
     const monthStr = month.toString().padStart(2, '0');
     const datePrefix = `${year}-${monthStr}`;
 
-    // 1. Check category budget limit (case-insensitive & trimmed)
     const categoryRow = await db.getFirstAsync<{ id: string; name: string; budget_limit: number }>(
       'SELECT id, name, budget_limit FROM budget_categories WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))',
-      [transaction.category]
+      [categoryNameInput]
     );
 
     if (categoryRow && categoryRow.budget_limit > 0) {
-      // Calculate true category spent (including splits and exact month transactions)
       const spentDict = await getSpentByCategory(month, year);
 
       let totalSpent = 0;
@@ -44,7 +37,6 @@ export async function evaluateTransactionBudgetAlerts(
       const categoryName = categoryRow.name;
 
       // Clean up previous budget alert notifications for this category in current month
-      // so user always sees the up-to-date spent value rather than stale historical values
       await db.runAsync(
         `DELETE FROM notifications 
          WHERE type = 'alert' 
@@ -57,7 +49,7 @@ export async function evaluateTransactionBudgetAlerts(
         ]
       );
 
-        if (percentage >= 100) {
+      if (percentage >= 100) {
         await insertNotification({
           title: `Budget Exceeded: ${categoryName}`,
           description: `You have spent ${formatCurrency(totalSpent)} which exceeds your ${formatCurrency(limit)} limit for ${categoryName}.`,
@@ -75,6 +67,28 @@ export async function evaluateTransactionBudgetAlerts(
         DeviceEventEmitter.emit('notificationsUpdated');
       }
     }
+  } catch (error) {
+    console.error('Error evaluating category budget alert:', error);
+  }
+}
+
+export async function evaluateTransactionBudgetAlerts(
+  transaction: Omit<Transaction, 'id'> | Transaction
+): Promise<void> {
+  if (transaction.type !== 'expense') return;
+
+  try {
+    const db = getDatabase();
+
+    // Safely extract year and month without timezone drift
+    const dateParts = transaction.date.split('T')[0].split('-');
+    const year = parseInt(dateParts[0], 10);
+    const month = parseInt(dateParts[1], 10);
+    const monthStr = month.toString().padStart(2, '0');
+    const datePrefix = `${year}-${monthStr}`;
+
+    // 1. Check category budget limit
+    await evaluateCategoryBudgetAlert(transaction.category, month, year);
 
     // 2. Check high-value transaction alert (e.g. single spend >= ₹15,000)
     if (transaction.amount >= 15000) {
@@ -352,6 +366,22 @@ export async function evaluateAccountBalanceAlerts(account: {
               title: `High Credit Utilization: ${account.name}`,
               description: `You have used ${Math.round(utilization)}% (${formatCurrency(spent)} of ${formatCurrency(limit)}) of your credit limit. Keep utilization under 30% to maintain a strong credit score.`,
               type: 'alert',
+              actionUrl: '/(app)/(tabs)/accounts',
+            });
+            DeviceEventEmitter.emit('notificationsUpdated');
+          }
+        } else if (utilization >= 30) {
+          const existingWarning = await db.getFirstAsync<{ id: string }>(
+            `SELECT id FROM notifications 
+             WHERE type = 'budget' AND title LIKE ? AND created_at >= date('now', '-5 days')`,
+            [`%Credit Utilization Alert: ${account.name}%`]
+          );
+
+          if (!existingWarning) {
+            await insertNotification({
+              title: `Credit Utilization Alert: ${account.name}`,
+              description: `You have used ${Math.round(utilization)}% (${formatCurrency(spent)} of ${formatCurrency(limit)}) of your credit limit on ${account.name}. Credit bureaus recommend keeping utilization under 30% to maintain a strong credit score.`,
+              type: 'budget',
               actionUrl: '/(app)/(tabs)/accounts',
             });
             DeviceEventEmitter.emit('notificationsUpdated');

@@ -58,6 +58,8 @@ export default function SettingsScreen() {
     isAutoSyncing,
     autoBackupEnabled,
     setAutoBackupEnabled,
+    autoBackupOnlyWifi,
+    setAutoBackupOnlyWifi,
     connect: connectDrive,
     disconnect: disconnectDrive,
     backupNow: backupDriveNow,
@@ -585,6 +587,34 @@ export default function SettingsScreen() {
                     thumbColor={colors.onPrimary}
                   />
                 </View>
+
+                {autoBackupEnabled && (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: 12,
+                      backgroundColor: colors.surfaceContainerLowest,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.surfaceVariant,
+                    }}
+                  >
+                    <View style={{ flex: 1, marginRight: 12 }}>
+                      <Text style={styles.settingTitle}>Only on Wi-Fi</Text>
+                      <Text style={styles.settingSub}>
+                        Prevent cloud backups over cellular mobile data.
+                      </Text>
+                    </View>
+                    <Switch
+                      value={autoBackupOnlyWifi}
+                      onValueChange={(val) => setAutoBackupOnlyWifi(val)}
+                      trackColor={{ false: colors.surfaceContainerHighest, true: colors.primary }}
+                      thumbColor={colors.onPrimary}
+                    />
+                  </View>
+                )}
 
                 {!hasCustomBackupPassphrase ? (
                   <View

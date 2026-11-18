@@ -434,7 +434,7 @@ export default function AnalyticsScreen() {
                     onPress={handleOpenCopilot}
                     activeOpacity={0.7}
                   >
-                    <MaterialIcons name="chat" size={16} color={colors.primary} />
+                    <MaterialIcons name="chat" size={16} color={colors.onPrimaryContainer} />
                     <Text style={styles.copilotBtnText}>Ask Copilot</Text>
                   </TouchableOpacity>
                 </View>
@@ -1065,7 +1065,7 @@ const getStyles = (colors: ThemeColors) => {
     },
     copilotBtnText: {
       ...typography.labelMd,
-      color: colors.primary,
+      color: colors.onPrimaryContainer,
       fontWeight: '600',
     },
     aiLoadingBox: {

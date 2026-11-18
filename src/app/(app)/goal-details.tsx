@@ -13,7 +13,7 @@ import { Text, Header, useToast, useAlert, DetailSkeleton } from '@/components/u
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import Svg, { Path } from 'react-native-svg';
 import {
   useGoal,
@@ -30,7 +30,7 @@ export default function GoalDetailsScreen() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { showAlert } = useAlert();
   const { showToast } = useToast();
@@ -54,7 +54,18 @@ export default function GoalDetailsScreen() {
 
   if (!goal && !isLoading) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      <View
+        style={[
+          styles.container,
+          {
+            backgroundColor: colors.background,
+            paddingTop: insets.top,
+            paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
+            justifyContent: 'center',
+            alignItems: 'center',
+          },
+        ]}
+      >
         <Text style={{ color: colors.error }}>Goal not found</Text>
       </View>
     );
@@ -118,7 +129,16 @@ export default function GoalDetailsScreen() {
   const strokeDash = `${progress}, 100`;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background,
+          paddingTop: insets.top,
+          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16),
+        },
+      ]}
+    >
       <Header
         showBack
         title={goal?.name ?? 'Goal Details'}

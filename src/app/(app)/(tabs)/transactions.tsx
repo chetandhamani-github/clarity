@@ -6,20 +6,29 @@ import {
   TouchableOpacity,
   SectionList,
   Platform,
+  Modal,
 } from 'react-native';
-import { Text, Header, TransactionsSkeleton } from '@/components/ui';
+import { Text, Header, TransactionsSkeleton, useToast, useAlert } from '@/components/ui';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { useTransactions } from '@/hooks/use-transactions';
+import {
+  useTransactions,
+  useBulkDeleteTransactions,
+  useBulkUpdateCategory,
+  useBulkUpdateAccount,
+  useCreateTransaction,
+} from '@/hooks/use-transactions';
 import { useAccounts } from '@/hooks/use-accounts';
+import { useCategories } from '@/hooks/use-budget';
 import { formatCurrency, formatLocalDate, getTransactionSign, groupTransactionsByDate } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
 import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
 import { TransactionFilterModal, ActiveFilters, DatePreset } from '@/components/modals/TransactionFilterModal';
 import { ReviewQueueModal } from '@/components/modals/ReviewQueueModal';
 import { useSmsStore } from '@/store/useSmsStore';
+import { haptics } from '@/utils/haptics';
 import type { TransactionFilters } from '@/types';
 
 const FILTERS = [
@@ -29,7 +38,11 @@ const FILTERS = [
   { id: 'transfer', label: 'Transfers', icon: 'swap-horiz' },
 ];
 
-export default function TransactionsScreen() {
+interface TransactionsScreenProps {
+  showBack?: boolean;
+}
+
+export default function TransactionsScreen({ showBack = false }: TransactionsScreenProps = {}) {
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const insets = useSafeAreaInsets();
@@ -44,6 +57,18 @@ export default function TransactionsScreen() {
     datePreset: 'all',
     type: 'all',
   });
+
+  const { showToast } = useToast();
+  const { showAlert } = useAlert();
+  const { categories } = useCategories();
+  const { mutate: bulkDelete } = useBulkDeleteTransactions();
+  const { mutate: bulkUpdateCat } = useBulkUpdateCategory();
+  const { mutate: bulkUpdateAcc } = useBulkUpdateAccount();
+  const { mutate: restoreTx } = useCreateTransaction();
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkCategoryModalVisible, setBulkCategoryModalVisible] = useState(false);
+  const [bulkAccountModalVisible, setBulkAccountModalVisible] = useState(false);
 
   const dateRange = useMemo<{ dateFrom?: string; dateTo?: string }>(() => {
     const today = new Date();
@@ -76,6 +101,7 @@ export default function TransactionsScreen() {
       type: filters.type === 'all' ? undefined : filters.type,
       accountId: filters.accountId,
       category: filters.category,
+      tag: filters.tag,
       dateFrom: dateRange.dateFrom,
       dateTo: dateRange.dateTo,
     };
@@ -88,6 +114,124 @@ export default function TransactionsScreen() {
       refetch();
       refreshReviewQueueCount();
     }, [refetch, refreshReviewQueueCount])
+  );
+
+  const toggleSelect = useCallback((id: string) => {
+    haptics.selection();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleToggleSelectAll = useCallback(() => {
+    haptics.light();
+    if (selectedIds.size === transactions.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(transactions.map((t) => t.id)));
+    }
+  }, [selectedIds.size, transactions]);
+
+  const handleBulkDelete = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    haptics.warning();
+
+    showAlert(
+      'Delete Transactions',
+      `Are you sure you want to delete ${count} selected transaction${count > 1 ? 's' : ''}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            const idsToDelete = Array.from(selectedIds);
+            const backupList = transactions.filter((t) => selectedIds.has(t.id));
+
+            bulkDelete(idsToDelete, {
+              onSuccess: () => {
+                setSelectedIds(new Set());
+                showToast(
+                  `Deleted ${count} transaction${count > 1 ? 's' : ''}`,
+                  'info',
+                  {
+                    label: 'UNDO',
+                    onPress: () => {
+                      backupList.forEach((item) => {
+                        restoreTx(item);
+                      });
+                      showToast(`Restored ${count} transaction${count > 1 ? 's' : ''}`, 'success');
+                    },
+                  }
+                );
+              },
+              onError: () => {
+                showToast('Failed to delete transactions', 'error');
+              },
+            });
+          },
+        },
+      ]
+    );
+  }, [selectedIds, transactions, bulkDelete, restoreTx, showToast, showAlert]);
+
+  const handleSelectBulkCategory = useCallback(
+    (catName: string) => {
+      if (selectedIds.size === 0) return;
+      const count = selectedIds.size;
+      const ids = Array.from(selectedIds);
+
+      bulkUpdateCat(
+        { ids, category: catName },
+        {
+          onSuccess: () => {
+            haptics.success();
+            showToast(`Updated category to ${catName} for ${count} items`, 'success');
+            setSelectedIds(new Set());
+            setBulkCategoryModalVisible(false);
+          },
+          onError: () => {
+            showToast('Failed to update category', 'error');
+          },
+        }
+      );
+    },
+    [selectedIds, bulkUpdateCat, showToast]
+  );
+
+  const handleSelectBulkAccount = useCallback(
+    (accId: string) => {
+      if (selectedIds.size === 0) return;
+      const count = selectedIds.size;
+      const ids = Array.from(selectedIds);
+      const targetAcc = accounts.find((a) => a.id === accId);
+
+      bulkUpdateAcc(
+        { ids, accountId: accId },
+        {
+          onSuccess: () => {
+            haptics.success();
+            showToast(
+              `Moved ${count} item${count > 1 ? 's' : ''} to ${targetAcc?.name || 'account'}`,
+              'success'
+            );
+            setSelectedIds(new Set());
+            setBulkAccountModalVisible(false);
+          },
+          onError: () => {
+            showToast('Failed to move transactions', 'error');
+          },
+        }
+      );
+    },
+    [selectedIds, accounts, bulkUpdateAcc, showToast]
   );
 
   const groupedTransactions = useMemo(
@@ -134,18 +278,36 @@ export default function TransactionsScreen() {
             ? `${tx.accountName} • ${tx.category}`
             : tx.accountName || '';
 
+      const isSelected = selectedIds.has(tx.id);
+
       return (
         <TouchableOpacity
           key={tx.id}
           style={[
             styles.transactionItem,
+            isSelected && { backgroundColor: colors.primaryContainer + '30' },
             isVeryLast && styles.lastTransactionItem,
             isLastInSection && !isVeryLast && { borderBottomWidth: 0 },
           ]}
           onPress={() => {
-            router.navigate(`/(app)/add-transaction?id=${tx.id}`);
+            if (selectedIds.size > 0) {
+              toggleSelect(tx.id);
+            } else {
+              router.navigate(`/(app)/add-transaction?id=${tx.id}`);
+            }
           }}
+          onLongPress={() => toggleSelect(tx.id)}
+          delayLongPress={200}
         >
+          {selectedIds.size > 0 && (
+            <View style={styles.selectionCheckbox}>
+              <MaterialIcons
+                name={isSelected ? 'check-circle' : 'radio-button-unchecked'}
+                size={22}
+                color={isSelected ? colors.primary : colors.outline}
+              />
+            </View>
+          )}
           <View style={styles.transactionLeft}>
             <View
               style={[
@@ -200,19 +362,32 @@ export default function TransactionsScreen() {
               <View style={styles.categoryBadge}>
                 <Text style={styles.categoryBadgeText} numberOfLines={1}>{tx.category}</Text>
               </View>
+              {tx.tags && tx.tags.length > 0 && (
+                <View style={[styles.categoryBadge, { backgroundColor: colors.secondaryContainer, paddingHorizontal: 6 }]}>
+                  <Text style={[styles.categoryBadgeText, { color: colors.onSecondaryContainer }]} numberOfLines={1}>
+                    #{tx.tags[0]}{tx.tags.length > 1 ? ` +${tx.tags.length - 1}` : ''}
+                  </Text>
+                </View>
+              )}
+              {tx.receiptUri ? (
+                <View style={[styles.categoryBadge, { backgroundColor: colors.surfaceContainerHighest, paddingHorizontal: 5 }]}>
+                  <MaterialIcons name="receipt" size={12} color={colors.primary} />
+                </View>
+              ) : null}
             </View>
           </View>
         </TouchableOpacity>
       );
     },
-    [colors, styles, router]
+    [colors, styles, router, selectedIds, toggleSelect]
   );
 
   const activeCount =
     (filters.type && filters.type !== 'all' ? 1 : 0) +
     (filters.datePreset !== 'all' ? 1 : 0) +
     (filters.accountId ? 1 : 0) +
-    (filters.category ? 1 : 0);
+    (filters.category ? 1 : 0) +
+    (filters.tag ? 1 : 0);
 
   const selectedAccount = useMemo(() => {
     if (!filters.accountId) return null;
@@ -233,6 +408,13 @@ export default function TransactionsScreen() {
         id: 'category',
         label: `Category: ${filters.category}`,
         onRemove: () => setFilters((prev) => ({ ...prev, category: undefined })),
+      });
+    }
+    if (filters.tag) {
+      list.push({
+        id: 'tag',
+        label: `Tag: #${filters.tag}`,
+        onRemove: () => setFilters((prev) => ({ ...prev, tag: undefined })),
       });
     }
     if (filters.datePreset !== 'all') {
@@ -386,27 +568,49 @@ export default function TransactionsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <Header
-        isMainTab
-        title="Activity"
+        isMainTab={selectedIds.size === 0 && !showBack}
+        showBack={selectedIds.size > 0 || showBack}
+        onBack={selectedIds.size > 0 ? () => setSelectedIds(new Set()) : undefined}
+        title={selectedIds.size > 0 ? `${selectedIds.size} Selected` : 'Activity'}
         leftNode={
-          <TouchableOpacity style={styles.avatarButton} onPress={() => router.navigate('/settings')}>
-            <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
-              <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
-            </View>
-          </TouchableOpacity>
-        }
-        rightNode={
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity style={styles.iconButton} onPress={() => router.navigate('/search')}>
-              <MaterialIcons name="search" size={24} color={colors.onSurface} />
-            </TouchableOpacity>
+          selectedIds.size > 0 ? (
             <TouchableOpacity
               style={styles.iconButton}
-              onPress={() => router.navigate('/add-transaction')}
+              onPress={() => setSelectedIds(new Set())}
             >
-              <MaterialIcons name="add" size={24} color={colors.onSurface} />
+              <MaterialIcons name="close" size={24} color={colors.onSurface} />
             </TouchableOpacity>
-          </View>
+          ) : showBack ? undefined : (
+            <TouchableOpacity style={styles.avatarButton} onPress={() => router.navigate('/settings')}>
+              <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
+                <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
+              </View>
+            </TouchableOpacity>
+          )
+        }
+        rightNode={
+          selectedIds.size > 0 ? (
+            <TouchableOpacity
+              style={styles.selectAllBtn}
+              onPress={handleToggleSelectAll}
+            >
+              <Text style={[styles.selectAllText, { color: colors.primary }]}>
+                {selectedIds.size === transactions.length ? 'Deselect All' : 'Select All'}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity style={styles.iconButton} onPress={() => router.navigate('/search')}>
+                <MaterialIcons name="search" size={24} color={colors.onSurface} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={() => router.navigate('/add-transaction')}
+              >
+                <MaterialIcons name="add" size={24} color={colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+          )
         }
       />
 
@@ -437,6 +641,120 @@ export default function TransactionsScreen() {
         visible={reviewModalVisible}
         onClose={() => setReviewModalVisible(false)}
       />
+
+      {/* Floating Bulk Action Drawer */}
+      {selectedIds.size > 0 && (
+        <View style={[styles.bulkActionBar, { bottom: insets.bottom + 16, backgroundColor: colors.surfaceContainerHighest }]}>
+          <TouchableOpacity
+            style={styles.bulkActionItem}
+            onPress={handleBulkDelete}
+          >
+            <View style={[styles.bulkIconCircle, { backgroundColor: colors.error + '20' }]}>
+              <MaterialIcons name="delete-outline" size={20} color={colors.error} />
+            </View>
+            <Text style={[styles.bulkActionLabel, { color: colors.error }]}>Delete</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.bulkActionItem}
+            onPress={() => setBulkCategoryModalVisible(true)}
+          >
+            <View style={[styles.bulkIconCircle, { backgroundColor: colors.primaryContainer }]}>
+              <MaterialIcons name="category" size={20} color={colors.onPrimaryContainer} />
+            </View>
+            <Text style={[styles.bulkActionLabel, { color: colors.onSurface }]}>Category</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.bulkActionItem}
+            onPress={() => setBulkAccountModalVisible(true)}
+          >
+            <View style={[styles.bulkIconCircle, { backgroundColor: colors.primaryContainer }]}>
+              <MaterialIcons name="account-balance" size={20} color={colors.onPrimaryContainer} />
+            </View>
+            <Text style={[styles.bulkActionLabel, { color: colors.onSurface }]}>Account</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Bulk Category Picker Modal */}
+      <Modal
+        visible={bulkCategoryModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setBulkCategoryModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setBulkCategoryModalVisible(false)}
+        >
+          <View style={[styles.bulkModalSheet, { backgroundColor: colors.surfaceContainerLowest }]}>
+            <View style={styles.bulkModalHeader}>
+              <Text style={[styles.bulkModalTitle, { color: colors.onSurface }]}>Change Category</Text>
+              <TouchableOpacity onPress={() => setBulkCategoryModalVisible(false)}>
+                <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+              {categories.map((cat) => (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={[styles.bulkOptionItem, { borderBottomColor: colors.surfaceVariant }]}
+                  onPress={() => handleSelectBulkCategory(cat.name)}
+                >
+                  <View style={[styles.bulkOptionIcon, { backgroundColor: colors.surfaceContainerLow }]}>
+                    <MaterialIcons name={getCategoryIcon(cat.name) as any} size={20} color={colors.primary} />
+                  </View>
+                  <Text style={[styles.bulkOptionText, { color: colors.onSurface }]}>{cat.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Bulk Account Picker Modal */}
+      <Modal
+        visible={bulkAccountModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setBulkAccountModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setBulkAccountModalVisible(false)}
+        >
+          <View style={[styles.bulkModalSheet, { backgroundColor: colors.surfaceContainerLowest }]}>
+            <View style={styles.bulkModalHeader}>
+              <Text style={[styles.bulkModalTitle, { color: colors.onSurface }]}>Move to Account</Text>
+              <TouchableOpacity onPress={() => setBulkAccountModalVisible(false)}>
+                <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+              {accounts.map((acc) => (
+                <TouchableOpacity
+                  key={acc.id}
+                  style={[styles.bulkOptionItem, { borderBottomColor: colors.surfaceVariant }]}
+                  onPress={() => handleSelectBulkAccount(acc.id)}
+                >
+                  <View style={[styles.bulkOptionIcon, { backgroundColor: colors.surfaceContainerLow }]}>
+                    <MaterialIcons name="account-balance" size={20} color={colors.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.bulkOptionText, { color: colors.onSurface }]}>{acc.name}</Text>
+                    <Text style={[styles.bulkOptionSubtext, { color: colors.onSurfaceVariant }]}>
+                      {formatCurrency(acc.balance)}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -744,6 +1062,98 @@ const getStyles = (colors: ThemeColors) => {
       lineHeight: 15,
       color: colors.primary,
       textTransform: 'uppercase',
+    },
+    selectionCheckbox: {
+      marginRight: 10,
+      justifyContent: 'center',
+    },
+    selectAllBtn: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+      justifyContent: 'center',
+    },
+    selectAllText: {
+      ...typography.labelMd,
+      fontWeight: '700',
+      fontSize: 13,
+    },
+    bulkActionBar: {
+      position: 'absolute',
+      left: 20,
+      right: 20,
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      alignItems: 'center',
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      borderRadius: 20,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.2,
+      shadowRadius: 16,
+      elevation: 10,
+    },
+    bulkActionItem: {
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 12,
+    },
+    bulkIconCircle: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    bulkActionLabel: {
+      ...typography.labelMd,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    modalBackdrop: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    bulkModalSheet: {
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      padding: 20,
+      gap: 12,
+    },
+    bulkModalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingBottom: 8,
+    },
+    bulkModalTitle: {
+      ...typography.headlineSm,
+      fontSize: 18,
+    },
+    bulkOptionItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    bulkOptionIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    bulkOptionText: {
+      ...typography.bodyMd,
+      fontWeight: '600',
+      fontSize: 14,
+    },
+    bulkOptionSubtext: {
+      ...typography.labelMd,
+      fontSize: 11,
     },
   });
   return styles;

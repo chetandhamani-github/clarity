@@ -126,7 +126,7 @@ export default function NotificationsScreen() {
       case 'bill':
         return {
           iconName: 'receipt-long' as const,
-          iconColor: isRead ? colors.onSurfaceVariant : colors.primary,
+          iconColor: isRead ? colors.onSurfaceVariant : colors.onPrimaryContainer,
           iconBg: isRead ? colors.surfaceContainerHighest : colors.primaryContainer,
           indicatorColor: colors.primary,
         };
@@ -140,7 +140,7 @@ export default function NotificationsScreen() {
       case 'milestone':
         return {
           iconName: 'emoji-events' as const,
-          iconColor: isRead ? colors.onSurfaceVariant : colors.primary,
+          iconColor: isRead ? colors.onSurfaceVariant : colors.onPrimaryContainer,
           iconBg: isRead ? colors.surfaceContainerHighest : colors.primaryContainer,
           indicatorColor: colors.primary,
         };

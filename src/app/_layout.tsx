@@ -128,6 +128,12 @@ export default function RootLayout() {
           await checkUpcomingBillReminders();
           await checkUpcomingGoalDeadlines();
 
+          // Initialize opportunistic background daily auto-backup scheduler
+          const { initScheduledBackupListener } = await import(
+            '@/services/cloud/auto-backup-scheduler'
+          );
+          initScheduledBackupListener();
+
           // Silent cloud backup sync on app launch
           const { syncDatabaseToDriveSilently } = await import(
             '@/services/cloud/google-drive-service'

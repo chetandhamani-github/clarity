@@ -2,6 +2,7 @@ import { DatePickerModal, Header, Text, useAlert, useToast } from '@/components/
 import { useAccounts } from '@/hooks/use-accounts';
 import { useCategories } from '@/hooks/use-budget';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
+import { useTags } from '@/hooks/use-tags';
 import {
   useCreateRecurringTransaction,
   useCreateTransaction,
@@ -27,6 +28,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Modal,
   Platform,
   ScrollView,
@@ -79,6 +81,7 @@ export default function AddTransactionScreen() {
 
   const { accounts, isLoading: isLoadingAccounts } = useAccounts();
   const { categories: dbCategories } = useCategories();
+  const { tags: availableTags } = useTags();
   const { mutate: createTransaction, isPending: isCreating } = useCreateTransaction();
   const { mutate: updateTransaction, isPending: isUpdating } = useUpdateTransaction();
   const { mutate: deleteTransaction, isPending: isDeleting } = useDeleteTransaction();
@@ -125,7 +128,27 @@ export default function AddTransactionScreen() {
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [showToAccountMenu, setShowToAccountMenu] = useState(false);
   const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [receiptUri, setReceiptUri] = useState<string | null>(null);
+  const [showFullReceiptModal, setShowFullReceiptModal] = useState(false);
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
   const [initialized, setInitialized] = useState(false);
+
+  const handlePickReceiptImage = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ['image/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (res.canceled || !res.assets || res.assets.length === 0) return;
+      const asset = res.assets[0];
+      setReceiptUri(asset.uri);
+      showToast('Receipt attached!', 'success');
+    } catch {
+      showToast('Could not attach receipt image', 'error');
+    }
+  };
 
   const handleApplyVoiceParsed = (parsed: ParsedVoiceTransaction) => {
     if (parsed.amount > 0) {
@@ -177,6 +200,12 @@ export default function AddTransactionScreen() {
             amount: s.amount.toString(),
           }))
         );
+      }
+      if (transaction.receiptUri) {
+        setReceiptUri(transaction.receiptUri);
+      }
+      if (transaction.tags && transaction.tags.length > 0) {
+        setTags(transaction.tags);
       }
       setInitialized(true);
     }
@@ -263,6 +292,8 @@ export default function AddTransactionScreen() {
       isRecurring,
       splits: splitsToSave,
       note: note.trim(),
+      receiptUri: receiptUri || undefined,
+      tags: tags.length > 0 ? tags : undefined,
     };
 
     const now = new Date();
@@ -363,9 +394,25 @@ export default function AddTransactionScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
+            const backupData = transaction ? { ...transaction } : null;
             deleteTransaction(id, {
               onSuccess: () => {
-                showToast('Transaction deleted', 'success');
+                showToast(
+                  'Transaction deleted',
+                  'info',
+                  backupData
+                    ? {
+                        label: 'UNDO',
+                        onPress: () => {
+                          createTransaction(backupData, {
+                            onSuccess: () => {
+                              showToast('Transaction restored!', 'success');
+                            },
+                          });
+                        },
+                      }
+                    : undefined
+                );
                 router.back();
               },
             });
@@ -412,6 +459,8 @@ export default function AddTransactionScreen() {
               isRecurring: false,
               splits: splitsToSave,
               note: note.trim(),
+              receiptUri: transaction?.receiptUri,
+              tags: tags.length > 0 ? tags : undefined,
               source: 'MANUAL' as const,
               status: 'VERIFIED' as const,
             };
@@ -430,6 +479,19 @@ export default function AddTransactionScreen() {
         },
       ]
     );
+  };
+
+  const handleAddTag = (rawTag: string) => {
+    const cleaned = rawTag.trim().toLowerCase().replace(/^#/, '');
+    if (!cleaned) return;
+    if (!tags.includes(cleaned)) {
+      setTags((prev) => [...prev, cleaned]);
+    }
+    setTagInput('');
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    setTags((prev) => prev.filter((t) => t !== tagToRemove));
   };
 
   const handleScanReceipt = async () => {
@@ -517,6 +579,7 @@ export default function AddTransactionScreen() {
           setIsSplitMode(false);
         }
 
+        setReceiptUri(asset.uri);
         showToast('Receipt details auto-filled by AI!', 'success');
       }
     } catch (err: unknown) {
@@ -553,38 +616,33 @@ export default function AddTransactionScreen() {
           isEditing ? (
             <TouchableOpacity
               onPress={handleDuplicate}
-              style={styles.headerDuplicateBtn}
+              style={styles.headerIconButton}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityLabel="Duplicate Transaction"
             >
-              <MaterialIcons name="content-copy" size={22} color={colors.onSurface} />
+              <MaterialIcons name="content-copy" size={20} color={colors.onSurface} />
             </TouchableOpacity>
           ) : (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            <View style={styles.headerActionsRow}>
               <TouchableOpacity
                 onPress={() => setShowVoiceModal(true)}
-                style={styles.headerScanBtn}
+                style={styles.headerIconButton}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityLabel="Voice Add"
               >
-                <View style={styles.headerScanContent}>
-                  <MaterialIcons name="mic" size={16} color={colors.primary} />
-                  <Text style={styles.headerScanText} numberOfLines={1}>Voice</Text>
-                </View>
+                <MaterialIcons name="mic" size={20} color={colors.primary} />
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleScanReceipt}
                 disabled={isScanningReceipt}
-                style={styles.headerScanBtn}
+                style={styles.headerIconButton}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityLabel="AI Receipt Scan"
               >
                 {isScanningReceipt ? (
                   <ActivityIndicator size="small" color={colors.primary} />
                 ) : (
-                  <View style={styles.headerScanContent}>
-                    <MaterialIcons name="document-scanner" size={16} color={colors.primary} />
-                    <Text style={styles.headerScanText} numberOfLines={1}>AI Scan</Text>
-                  </View>
+                  <MaterialIcons name="document-scanner" size={20} color={colors.primary} />
                 )}
               </TouchableOpacity>
             </View>
@@ -617,7 +675,7 @@ export default function AddTransactionScreen() {
                 activeOpacity={0.7}
               >
                 <View style={styles.smartActionIconBox}>
-                  <MaterialIcons name="mic" size={18} color={colors.primary} />
+                  <MaterialIcons name="mic" size={18} color={colors.onPrimaryContainer} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.smartActionTitle}>Voice Add</Text>
@@ -639,7 +697,7 @@ export default function AddTransactionScreen() {
                     <MaterialIcons
                       name={!isConnected ? 'wifi-off' : 'auto-awesome'}
                       size={18}
-                      color={!isConnected ? colors.onSurfaceVariant : colors.primary}
+                      color={!isConnected ? colors.onSurfaceVariant : colors.onPrimaryContainer}
                     />
                   )}
                 </View>
@@ -1020,6 +1078,52 @@ export default function AddTransactionScreen() {
               )}
             </View>
 
+            {/* Receipt / Bill Photo Attachment */}
+            <View style={styles.attachmentSection}>
+              <View style={styles.attachmentHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialIcons name="receipt-long" size={18} color={colors.onSurfaceVariant} />
+                  <Text style={styles.attachmentTitle}>Receipt / Bill Photo</Text>
+                </View>
+                {!receiptUri && (
+                  <TouchableOpacity
+                    style={styles.attachBtn}
+                    onPress={handlePickReceiptImage}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialIcons name="add-photo-alternate" size={16} color={colors.primary} />
+                    <Text style={[styles.attachBtnText, { color: colors.primary }]}>Attach Photo</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {receiptUri ? (
+                <View style={[styles.receiptPreviewCard, { backgroundColor: colors.surfaceContainerLow, borderColor: colors.surfaceVariant }]}>
+                  <TouchableOpacity
+                    style={styles.receiptThumbWrapper}
+                    onPress={() => setShowFullReceiptModal(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Image source={{ uri: receiptUri }} style={styles.receiptThumbnail} resizeMode="cover" />
+                    <View style={styles.zoomOverlayBadge}>
+                      <MaterialIcons name="zoom-in" size={14} color="#FFFFFF" />
+                    </View>
+                  </TouchableOpacity>
+                  <View style={styles.receiptInfoCol}>
+                    <Text style={[styles.receiptAttachedText, { color: colors.onSurface }]}>Receipt Attached</Text>
+                    <Text style={[styles.receiptSubtext, { color: colors.onSurfaceVariant }]}>Tap image to preview full size</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.removeReceiptBtn, { backgroundColor: colors.surfaceContainerHighest }]}
+                    onPress={() => setReceiptUri(null)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <MaterialIcons name="delete-outline" size={18} color={colors.error} />
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+            </View>
+
             {/* Recurring Toggle */}
             <View style={styles.recurringContainer}>
               <View>
@@ -1083,6 +1187,81 @@ export default function AddTransactionScreen() {
                   onChangeText={setNote}
                 />
               </View>
+            </View>
+
+            {/* Custom Cross-Category Tags */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>
+                Tags{' '}
+                <Text style={{ color: colors.outline, fontWeight: '400' }}>(Optional)</Text>
+              </Text>
+              <View style={styles.textInputWrapper}>
+                <MaterialIcons
+                  name="label-outline"
+                  size={22}
+                  color={colors.onSurfaceVariant}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={[styles.textInput, { flex: 1 }]}
+                  placeholder="e.g. trip, medical, tax-saving"
+                  placeholderTextColor={colors.outline}
+                  value={tagInput}
+                  onChangeText={setTagInput}
+                  onSubmitEditing={() => handleAddTag(tagInput)}
+                  returnKeyType="done"
+                />
+                {tagInput.trim().length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => handleAddTag(tagInput)}
+                    style={styles.addTagInlineBtn}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <MaterialIcons name="add" size={20} color={colors.primary} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Selected Tags Chips */}
+              {tags.length > 0 && (
+                <View style={styles.tagChipsContainer}>
+                  {tags.map((t) => (
+                    <View key={t} style={styles.selectedTagChip}>
+                      <Text style={styles.selectedTagText}>#{t}</Text>
+                      <TouchableOpacity
+                        onPress={() => handleRemoveTag(t)}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      >
+                        <MaterialIcons name="close" size={14} color={colors.primary} />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Quick Tag Suggestions */}
+              {availableTags.length > 0 && availableTags.some((t) => !tags.includes(t.name)) && (
+                <View style={styles.tagSuggestionsRow}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 6 }}
+                  >
+                    {availableTags
+                      .filter((t) => !tags.includes(t.name))
+                      .slice(0, 8)
+                      .map((t) => (
+                        <TouchableOpacity
+                          key={t.id}
+                          style={styles.suggestionTagChip}
+                          onPress={() => handleAddTag(t.name)}
+                        >
+                          <Text style={styles.suggestionTagText}>#{t.name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                  </ScrollView>
+                </View>
+              )}
             </View>
           </View>
 
@@ -1438,6 +1617,35 @@ export default function AddTransactionScreen() {
         onApply={handleApplyVoiceParsed}
         accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
       />
+
+      {/* Fullscreen Receipt Viewer Modal */}
+      {receiptUri && (
+        <Modal
+          visible={showFullReceiptModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowFullReceiptModal(false)}
+        >
+          <View style={styles.fullscreenModalBackdrop}>
+            <View style={styles.fullscreenModalHeader}>
+              <Text style={styles.fullscreenModalTitle}>Receipt Photo</Text>
+              <TouchableOpacity
+                style={styles.fullscreenCloseBtn}
+                onPress={() => setShowFullReceiptModal(false)}
+              >
+                <MaterialIcons name="close" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.fullscreenImageContainer}>
+              <Image
+                source={{ uri: receiptUri }}
+                style={styles.fullscreenImage}
+                resizeMode="contain"
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -1642,9 +1850,6 @@ const getStyles = (colors: ThemeColors) => {
       lineHeight: 20,
       color: colors.primary,
     },
-    headerDuplicateBtn: {
-      padding: 4,
-    },
     deleteButton: {
       marginTop: 16,
       height: 48,
@@ -1661,6 +1866,48 @@ const getStyles = (colors: ThemeColors) => {
       fontSize: 15,
       lineHeight: 20,
       color: colors.error,
+    },
+    addTagInlineBtn: {
+      padding: 4,
+      marginRight: 6,
+    },
+    tagChipsContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginTop: 10,
+    },
+    selectedTagChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 14,
+      backgroundColor: colors.primaryContainer,
+    },
+    selectedTagText: {
+      ...typography.labelMd,
+      color: colors.onPrimaryContainer,
+      fontWeight: '600',
+      fontSize: 12,
+    },
+    tagSuggestionsRow: {
+      marginTop: 10,
+    },
+    suggestionTagChip: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 12,
+      backgroundColor: colors.surfaceContainer,
+      borderWidth: 1,
+      borderColor: colors.surfaceVariant,
+    },
+    suggestionTagText: {
+      ...typography.labelMd,
+      color: colors.onSurfaceVariant,
+      fontSize: 11,
+      fontWeight: '500',
     },
     modalBackdrop: {
       flex: 1,
@@ -1869,29 +2116,21 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       fontWeight: '600',
     },
-    headerScanBtn: {
-      paddingHorizontal: 8,
-      paddingVertical: 5,
-      borderRadius: 14,
+    headerActionsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      flexShrink: 0,
+    },
+    headerIconButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
       backgroundColor: colors.surfaceContainerLow,
       borderWidth: 1,
       borderColor: colors.outlineVariant,
-      flexShrink: 0,
-    },
-    headerScanContent: {
-      flexDirection: 'row',
       alignItems: 'center',
-      gap: 3,
-      flexShrink: 0,
-    },
-    headerScanText: {
-      ...typography.labelMd,
-      color: colors.primary,
-      fontWeight: '700',
-      fontSize: 11,
-      lineHeight: 15,
-      letterSpacing: 0,
-      ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
+      justifyContent: 'center',
     },
     smartActionsRow: {
       flexDirection: 'row',
@@ -1928,6 +2167,113 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       fontSize: 10,
       color: colors.onSurfaceVariant,
+    },
+    attachmentSection: {
+      gap: 8,
+    },
+    attachmentHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    attachmentTitle: {
+      ...typography.labelMd,
+      color: colors.onSurfaceVariant,
+    },
+    attachBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingVertical: 4,
+      paddingHorizontal: 8,
+    },
+    attachBtnText: {
+      ...typography.labelMd,
+      fontWeight: '700',
+      fontSize: 12,
+    },
+    receiptPreviewCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderRadius: 14,
+      padding: 10,
+      gap: 12,
+    },
+    receiptThumbWrapper: {
+      width: 52,
+      height: 52,
+      borderRadius: 8,
+      overflow: 'hidden',
+      position: 'relative',
+    },
+    receiptThumbnail: {
+      width: '100%',
+      height: '100%',
+    },
+    zoomOverlayBadge: {
+      position: 'absolute',
+      bottom: 2,
+      right: 2,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      borderRadius: 4,
+      padding: 2,
+    },
+    receiptInfoCol: {
+      flex: 1,
+      gap: 2,
+    },
+    receiptAttachedText: {
+      ...typography.labelMd,
+      fontWeight: '700',
+      fontSize: 13,
+    },
+    receiptSubtext: {
+      ...typography.bodyMd,
+      fontSize: 11,
+    },
+    removeReceiptBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    fullscreenModalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.92)',
+      justifyContent: 'space-between',
+    },
+    fullscreenModalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingTop: 50,
+      paddingBottom: 16,
+    },
+    fullscreenModalTitle: {
+      ...typography.headlineSm,
+      color: '#FFFFFF',
+      fontSize: 18,
+    },
+    fullscreenCloseBtn: {
+      width: 40,
+      height: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 20,
+      backgroundColor: 'rgba(255,255,255,0.2)',
+    },
+    fullscreenImageContainer: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 16,
+    },
+    fullscreenImage: {
+      width: '100%',
+      height: '100%',
     },
   });
   return styles;

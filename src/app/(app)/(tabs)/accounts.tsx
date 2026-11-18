@@ -27,11 +27,16 @@ import type { Account } from '@/types';
 import { useAppStore } from '@/store/use-app-store';
 import { ReorderableAccountSection } from '@/components/common';
 
-export default function AccountsScreen() {
+interface AccountsScreenProps {
+  showBack?: boolean;
+}
+
+export default function AccountsScreen({ showBack = false }: AccountsScreenProps = {}) {
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
   const { accounts, isLoading, refetch } = useAccounts();
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [isDraggingAccounts, setIsDraggingAccounts] = useState(false);
@@ -59,14 +64,17 @@ export default function AccountsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <Header
-        isMainTab
+        isMainTab={!showBack}
+        showBack={showBack}
         title="Accounts"
         leftNode={
-          <TouchableOpacity style={styles.avatarButton} onPress={() => router.navigate('/settings')}>
-            <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
-              <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
-            </View>
-          </TouchableOpacity>
+          showBack ? undefined : (
+            <TouchableOpacity style={styles.avatarButton} onPress={() => router.navigate('/settings')}>
+              <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
+                <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
+              </View>
+            </TouchableOpacity>
+          )
         }
         rightNode={
           <TouchableOpacity style={styles.iconButton} onPress={() => router.navigate('/add-account')}>
@@ -286,6 +294,51 @@ function AccountDetailCard({
 
   const branding = getBankBranding(account.institution || account.name);
 
+  const creditDetails = React.useMemo(() => {
+    if (account.type !== 'credit') return null;
+    const limit = account.creditLimit || 0;
+    const spent = Math.abs(account.balance);
+    const utilization = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
+    const available = limit > 0 ? Math.max(0, limit - spent) : 0;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let nextStatementText = '—';
+    if (account.billingCycleDay) {
+      const year = today.getFullYear();
+      const month = today.getMonth();
+      let candidate = new Date(year, month, account.billingCycleDay);
+      if (candidate < today) {
+        candidate = new Date(year, month + 1, account.billingCycleDay);
+      }
+      nextStatementText = candidate.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+    }
+
+    let nextDueDateText = '—';
+    let daysUntilDue: number | null = null;
+    if (account.dueDay) {
+      const year = today.getFullYear();
+      const month = today.getMonth();
+      let candidate = new Date(year, month, account.dueDay);
+      if (candidate < today) {
+        candidate = new Date(year, month + 1, account.dueDay);
+      }
+      nextDueDateText = candidate.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+      daysUntilDue = Math.ceil((candidate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    return {
+      limit,
+      spent,
+      utilization,
+      available,
+      nextStatementText,
+      nextDueDateText,
+      daysUntilDue,
+    };
+  }, [account]);
+
   return (
     <View style={styles.sectionCard}>
       <View style={styles.detailsHeader}>
@@ -426,6 +479,130 @@ function AccountDetailCard({
           </Text>
         </View>
       </View>
+
+      {/* Credit Card Specific Stats: Utilization & Cycle */}
+      {creditDetails && (
+        <View style={styles.creditCardDetailsBox}>
+          {creditDetails.limit > 0 ? (
+            <View style={styles.utilizationContainer}>
+              <View style={styles.utilizationHeaderRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialIcons name="credit-card" size={16} color={colors.onSurfaceVariant} />
+                  <Text style={[styles.statLabel, { marginBottom: 0 }]}>Credit Utilization</Text>
+                </View>
+                <View
+                  style={[
+                    styles.utilizationBadge,
+                    {
+                      backgroundColor:
+                        creditDetails.utilization >= 80
+                          ? colors.error + '20'
+                          : creditDetails.utilization > 30
+                          ? '#F59E0B20'
+                          : '#10B98120',
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.utilizationBadgeText,
+                      {
+                        color:
+                          creditDetails.utilization >= 80
+                            ? colors.error
+                            : creditDetails.utilization > 30
+                            ? '#F59E0B'
+                            : '#10B981',
+                      },
+                    ]}
+                  >
+                    {creditDetails.utilization}% {creditDetails.utilization > 30 ? (creditDetails.utilization >= 80 ? 'Critical' : 'Caution') : 'Safe (<30%)'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.utilizationProgressTrack}>
+                <View
+                  style={[
+                    styles.utilizationProgressFill,
+                    {
+                      width: `${creditDetails.utilization}%`,
+                      backgroundColor:
+                        creditDetails.utilization >= 80
+                          ? colors.error
+                          : creditDetails.utilization > 30
+                          ? '#F59E0B'
+                          : '#10B981',
+                    },
+                  ]}
+                />
+              </View>
+
+              <View style={styles.utilizationFooterRow}>
+                <Text style={styles.utilizationSubtext}>
+                  Used: {formatCurrency(creditDetails.spent)} / Limit: {formatCurrency(creditDetails.limit)}
+                </Text>
+                <Text style={[styles.utilizationSubtext, { color: colors.primary, fontWeight: '700' }]}>
+                  {formatCurrency(creditDetails.available)} available
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.setLimitBanner}
+              onPress={() => router.navigate({ pathname: '/add-account', params: { id: account.id } })}
+            >
+              <MaterialIcons name="tune" size={16} color={colors.primary} />
+              <Text style={[styles.setLimitBannerText, { color: colors.primary }]}>
+                Set credit limit & billing cycle to track utilization
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Statement & Due Date Row */}
+          {(account.billingCycleDay || account.dueDay) && (
+            <View style={styles.cycleGrid}>
+              {account.billingCycleDay ? (
+                <View style={styles.cycleBox}>
+                  <Text style={styles.cycleLabel}>Statement Date</Text>
+                  <Text style={styles.cycleValue}>{creditDetails.nextStatementText}</Text>
+                </View>
+              ) : null}
+              {account.dueDay ? (
+                <View style={styles.cycleBox}>
+                  <Text style={styles.cycleLabel}>Payment Due Date</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.cycleValue}>{creditDetails.nextDueDateText}</Text>
+                    {creditDetails.daysUntilDue !== null && (
+                      <View
+                        style={[
+                          styles.dueBadge,
+                          {
+                            backgroundColor:
+                              creditDetails.daysUntilDue <= 3 ? colors.error + '20' : colors.primaryContainer,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.dueBadgeText,
+                            {
+                              color:
+                                creditDetails.daysUntilDue <= 3 ? colors.error : colors.onPrimaryContainer,
+                            },
+                          ]}
+                        >
+                          {creditDetails.daysUntilDue === 0 ? 'Due Today' : `${creditDetails.daysUntilDue}d left`}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          )}
+        </View>
+      )}
 
       {hasOutstandingDebt && onSettleDebt && (
         <TouchableOpacity style={styles.payBillButton} onPress={onSettleDebt}>
@@ -671,6 +848,94 @@ const getStyles = (colors: ThemeColors) => {
       lineHeight: 15,
       fontWeight: '700',
       letterSpacing: 0.5,
+    },
+    creditCardDetailsBox: {
+      marginTop: 12,
+      gap: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.outlineVariant,
+    },
+    utilizationContainer: {
+      gap: 6,
+    },
+    utilizationHeaderRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    utilizationBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 10,
+    },
+    utilizationBadgeText: {
+      ...typography.labelMd,
+      fontSize: 10,
+      fontWeight: '700',
+    },
+    utilizationProgressTrack: {
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colors.surfaceContainer,
+      overflow: 'hidden',
+    },
+    utilizationProgressFill: {
+      height: '100%',
+      borderRadius: 3,
+    },
+    utilizationFooterRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    utilizationSubtext: {
+      ...typography.bodyMd,
+      fontSize: 11,
+      color: colors.onSurfaceVariant,
+    },
+    setLimitBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingVertical: 6,
+    },
+    setLimitBannerText: {
+      ...typography.labelMd,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    cycleGrid: {
+      flexDirection: 'row',
+      gap: 10,
+      backgroundColor: colors.surfaceContainerLow,
+      borderRadius: 12,
+      padding: 10,
+    },
+    cycleBox: {
+      flex: 1,
+    },
+    cycleLabel: {
+      ...typography.labelMd,
+      fontSize: 10,
+      color: colors.onSurfaceVariant,
+      marginBottom: 2,
+    },
+    cycleValue: {
+      ...typography.labelMd,
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.onSurface,
+    },
+    dueBadge: {
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: 6,
+    },
+    dueBadgeText: {
+      ...typography.labelMd,
+      fontSize: 10,
+      fontWeight: '700',
     },
   });
   return styles;

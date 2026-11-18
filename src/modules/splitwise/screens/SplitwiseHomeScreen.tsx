@@ -44,13 +44,16 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
     people,
     debts,
     settlements,
+    groups,
     isLoading,
     loadAllData,
   } = useSplitwiseStore();
 
   const [refreshing, setRefreshing] = useState(false);
+  const [mainView, setMainView] = useState<'GROUPS' | 'FRIENDS'>('GROUPS');
   const [activeTab, setActiveTab] = useState<FilterTab>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [groupSearchQuery, setGroupSearchQuery] = useState('');
   const [recentActivities, setRecentActivities] = useState<SplitwiseActivityItem[]>([]);
   const [showChooserModal, setShowChooserModal] = useState(false);
 
@@ -115,9 +118,23 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
     return list;
   }, [allPersonBalances, activeTab, searchQuery]);
 
-  const openAction = (type: 'PERSON' | 'DEBT' | 'SETTLEMENT') => {
+  const filteredGroups = useMemo(() => {
+    if (!groupSearchQuery.trim()) return groups;
+    const q = groupSearchQuery.toLowerCase().trim();
+    return groups.filter(
+      (g) =>
+        g.name.toLowerCase().includes(q) ||
+        (g.description && g.description.toLowerCase().includes(q))
+    );
+  }, [groups, groupSearchQuery]);
+
+  const openAction = (type: 'EXPENSE' | 'GROUP' | 'PERSON' | 'DEBT' | 'SETTLEMENT') => {
     setShowChooserModal(false);
-    if (type === 'PERSON') {
+    if (type === 'EXPENSE') {
+      router.navigate('/(app)/add-splitwise-expense');
+    } else if (type === 'GROUP') {
+      router.navigate('/(app)/add-splitwise-group');
+    } else if (type === 'PERSON') {
       router.navigate('/(app)/add-splitwise-person');
     } else if (type === 'DEBT') {
       router.navigate('/(app)/add-splitwise-debt');
@@ -251,12 +268,12 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
         <View style={styles.quickActionRow}>
           <TouchableOpacity
             style={[styles.quickActionBtn, { backgroundColor: colors.primary }]}
-            onPress={() => openAction('DEBT')}
+            onPress={() => openAction('EXPENSE')}
             activeOpacity={0.85}
           >
-            <MaterialIcons name="add" size={18} color={colors.onPrimary} />
+            <MaterialIcons name="receipt-long" size={18} color={colors.onPrimary} />
             <Text style={[styles.quickActionBtnText, { color: colors.onPrimary }]}>
-              Add Debt
+              Split Expense
             </Text>
           </TouchableOpacity>
 
@@ -269,12 +286,12 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
                 borderWidth: 1,
               },
             ]}
-            onPress={() => openAction('SETTLEMENT')}
+            onPress={() => openAction('GROUP')}
             activeOpacity={0.85}
           >
-            <MaterialIcons name="handshake" size={18} color={colors.primary} />
+            <MaterialIcons name="group-add" size={18} color={colors.primary} />
             <Text style={[styles.quickActionBtnText, { color: colors.onSurface }]}>
-              Settle Up
+              + Group
             </Text>
           </TouchableOpacity>
 
@@ -287,22 +304,215 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
                 borderWidth: 1,
               },
             ]}
-            onPress={() => openAction('PERSON')}
+            onPress={() => openAction('SETTLEMENT')}
             activeOpacity={0.85}
           >
-            <MaterialIcons name="person-add" size={18} color={colors.primary} />
+            <MaterialIcons name="handshake" size={18} color={colors.primary} />
           </TouchableOpacity>
         </View>
 
-        {/* FRIENDS SECTION HEADER */}
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>
-            Friends & Balances
-          </Text>
-          <Text style={[styles.sectionSubtitle, { color: colors.onSurfaceVariant }]}>
-            {overallSummary.activePeopleCount} active · {overallSummary.settledPeopleCount} settled
-          </Text>
+        {/* VIEW SEGMENT CONTROL: GROUPS vs FRIENDS */}
+        <View
+          style={[
+            styles.viewSegmentControl,
+            {
+              backgroundColor: colors.surfaceContainerHigh,
+              borderColor: colors.outlineVariant,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            style={[
+              styles.segmentBtn,
+              mainView === 'GROUPS' && [
+                styles.activeSegmentBtn,
+                { backgroundColor: colors.surfaceContainerLowest },
+              ],
+            ]}
+            onPress={() => setMainView('GROUPS')}
+          >
+            <MaterialIcons
+              name="groups"
+              size={18}
+              color={mainView === 'GROUPS' ? colors.primary : colors.onSurfaceVariant}
+            />
+            <Text
+              style={[
+                styles.segmentBtnText,
+                {
+                  color: mainView === 'GROUPS' ? colors.onSurface : colors.onSurfaceVariant,
+                  fontFamily: mainView === 'GROUPS' ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
+                },
+              ]}
+            >
+              Groups ({groups.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.segmentBtn,
+              mainView === 'FRIENDS' && [
+                styles.activeSegmentBtn,
+                { backgroundColor: colors.surfaceContainerLowest },
+              ],
+            ]}
+            onPress={() => setMainView('FRIENDS')}
+          >
+            <MaterialIcons
+              name="people"
+              size={18}
+              color={mainView === 'FRIENDS' ? colors.primary : colors.onSurfaceVariant}
+            />
+            <Text
+              style={[
+                styles.segmentBtnText,
+                {
+                  color: mainView === 'FRIENDS' ? colors.onSurface : colors.onSurfaceVariant,
+                  fontFamily: mainView === 'FRIENDS' ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
+                },
+              ]}
+            >
+              Friends ({overallSummary.totalPeopleCount})
+            </Text>
+          </TouchableOpacity>
         </View>
+
+        {/* GROUPS TAB VIEW */}
+        {mainView === 'GROUPS' && (
+          <View>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>
+                Your Groups
+              </Text>
+              <TouchableOpacity onPress={() => openAction('GROUP')}>
+                <Text style={{ color: colors.primary, fontFamily: 'Manrope_700Bold', fontSize: 13 }}>
+                  + Create Group
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Groups Search Bar */}
+            {groups.length > 3 && (
+              <View
+                style={[
+                  styles.searchBar,
+                  {
+                    backgroundColor: colors.surfaceContainerLow,
+                    borderColor: colors.outlineVariant,
+                  },
+                ]}
+              >
+                <MaterialIcons name="search" size={20} color={colors.onSurfaceVariant} />
+                <TextInput
+                  style={[styles.searchInput, { color: colors.onSurface }]}
+                  placeholder="Search groups..."
+                  placeholderTextColor={colors.onSurfaceVariant}
+                  value={groupSearchQuery}
+                  onChangeText={setGroupSearchQuery}
+                />
+                {groupSearchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setGroupSearchQuery('')}>
+                    <MaterialIcons name="close" size={18} color={colors.onSurfaceVariant} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
+            {filteredGroups.length === 0 ? (
+              <View
+                style={[
+                  styles.emptyContainer,
+                  {
+                    backgroundColor: colors.surfaceContainerLow,
+                    borderColor: colors.outlineVariant,
+                    borderWidth: 1,
+                    borderRadius: radius.xl,
+                    padding: 24,
+                  },
+                ]}
+              >
+                <View style={[styles.emptyIconCircle, { backgroundColor: colors.surfaceContainerHigh }]}>
+                  <MaterialIcons name="groups" size={32} color={colors.primary} />
+                </View>
+                <Text style={[styles.emptyTitle, { color: colors.onSurface }]}>
+                  {groups.length === 0 ? 'No groups yet' : 'No matching groups'}
+                </Text>
+                <Text style={[styles.emptySubtitle, { color: colors.onSurfaceVariant }]}>
+                  {groups.length === 0
+                    ? 'Create a group for trips, roommates, or outings to easily split bills across multiple people.'
+                    : 'Try adjusting your search query.'}
+                </Text>
+                {groups.length === 0 && (
+                  <TouchableOpacity
+                    style={[styles.emptyAddBtn, { backgroundColor: colors.primary }]}
+                    onPress={() => openAction('GROUP')}
+                    activeOpacity={0.85}
+                  >
+                    <MaterialIcons name="group-add" size={18} color={colors.onPrimary} />
+                    <Text style={[styles.emptyAddBtnText, { color: colors.onPrimary }]}>
+                      Create Your First Group
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : (
+              <View style={styles.groupsList}>
+                {filteredGroups.map((g) => (
+                  <TouchableOpacity
+                    key={g.id}
+                    style={[
+                      styles.groupCard,
+                      {
+                        backgroundColor: colors.surfaceContainerLow,
+                        borderColor: colors.outlineVariant,
+                      },
+                    ]}
+                    onPress={() => router.navigate(`/(app)/splitwise-group-details?groupId=${g.id}`)}
+                    activeOpacity={0.75}
+                  >
+                    <View
+                      style={[
+                        styles.groupAvatarCircle,
+                        { backgroundColor: colors.primaryContainer },
+                      ]}
+                    >
+                      <MaterialIcons
+                        name={(g.icon as any) || 'group'}
+                        size={22}
+                        color={colors.onPrimaryContainer}
+                      />
+                    </View>
+
+                    <View style={styles.groupCardInfo}>
+                      <Text style={[styles.groupCardName, { color: colors.onSurface }]}>
+                        {g.name}
+                      </Text>
+                      <Text style={[styles.groupCardMeta, { color: colors.onSurfaceVariant }]}>
+                        {g.memberIds.length} {g.memberIds.length === 1 ? 'member' : 'members'}
+                        {g.category ? ` • ${g.category.toUpperCase()}` : ''}
+                      </Text>
+                    </View>
+
+                    <MaterialIcons name="chevron-right" size={22} color={colors.onSurfaceVariant} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* FRIENDS TAB VIEW */}
+        {mainView === 'FRIENDS' && (
+          <View>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>
+                Friends & Balances
+              </Text>
+              <Text style={[styles.sectionSubtitle, { color: colors.onSurfaceVariant }]}>
+                {overallSummary.activePeopleCount} active · {overallSummary.settledPeopleCount} settled
+              </Text>
+            </View>
 
         {/* Search Bar */}
         <View
@@ -483,6 +693,8 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
             )}
           </View>
         )}
+      </View>
+    )}
 
         {/* RECENT ACTIVITY STREAM */}
         <View style={[styles.sectionHeader, { marginTop: 24 }]}>
@@ -619,17 +831,53 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
             <View style={styles.chooserContainer}>
               <TouchableOpacity
                 style={[styles.chooserItem, { backgroundColor: colors.surfaceContainerLow }]}
-                onPress={() => openAction('DEBT')}
+                onPress={() => openAction('EXPENSE')}
               >
                 <View style={[styles.chooserIconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
                   <MaterialIcons name="receipt-long" size={22} color="#10b981" />
                 </View>
                 <View style={styles.chooserTextCol}>
                   <Text style={[styles.chooserItemTitle, { color: colors.onSurface }]}>
-                    Add Split / Debt
+                    Split Group Expense
                   </Text>
                   <Text style={[styles.chooserItemSub, { color: colors.onSurfaceVariant }]}>
-                    Record a shared bill or IOU with a friend
+                    Split a bill across a group or multiple friends
+                  </Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.chooserItem, { backgroundColor: colors.surfaceContainerLow }]}
+                onPress={() => openAction('GROUP')}
+              >
+                <View style={[styles.chooserIconCircle, { backgroundColor: 'rgba(99, 102, 241, 0.12)' }]}>
+                  <MaterialIcons name="group-add" size={22} color="#6366f1" />
+                </View>
+                <View style={styles.chooserTextCol}>
+                  <Text style={[styles.chooserItemTitle, { color: colors.onSurface }]}>
+                    Create Group
+                  </Text>
+                  <Text style={[styles.chooserItemSub, { color: colors.onSurfaceVariant }]}>
+                    Trips, flatmates, office lunch & clubs
+                  </Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.chooserItem, { backgroundColor: colors.surfaceContainerLow }]}
+                onPress={() => openAction('DEBT')}
+              >
+                <View style={[styles.chooserIconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+                  <MaterialIcons name="call-made" size={22} color="#f59e0b" />
+                </View>
+                <View style={styles.chooserTextCol}>
+                  <Text style={[styles.chooserItemTitle, { color: colors.onSurface }]}>
+                    1-on-1 Debt / IOU
+                  </Text>
+                  <Text style={[styles.chooserItemSub, { color: colors.onSurfaceVariant }]}>
+                    Direct debt between you and a single friend
                   </Text>
                 </View>
                 <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
@@ -942,6 +1190,63 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontFamily: 'Manrope_700Bold',
+  },
+  viewSegmentControl: {
+    flexDirection: 'row',
+    borderRadius: radius.lg,
+    padding: 3,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  segmentBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: radius.md,
+  },
+  activeSegmentBtn: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  segmentBtnText: {
+    fontSize: 13,
+  },
+  groupsList: {
+    gap: 10,
+    marginBottom: 16,
+  },
+  groupCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    gap: 12,
+  },
+  groupAvatarCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupCardInfo: {
+    flex: 1,
+  },
+  groupCardName: {
+    fontSize: 15,
+    fontFamily: 'Manrope_700Bold',
+    marginBottom: 2,
+  },
+  groupCardMeta: {
+    fontSize: 12,
+    fontFamily: 'Manrope_500Medium',
   },
   sectionHeader: {
     marginBottom: 10,

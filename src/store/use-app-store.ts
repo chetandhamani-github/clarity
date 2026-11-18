@@ -26,6 +26,7 @@ interface AppState {
   googleDriveUserEmail: string | null;
   lastCloudBackupTime: string | null;
   autoBackupEnabled: boolean;
+  autoBackupOnlyWifi: boolean;
   hasSeenDrivePrompt: boolean;
   hasSeenSmsPrompt: boolean;
   hideBalances: boolean;
@@ -40,6 +41,7 @@ interface AppState {
   setGoogleDriveConnected: (connected: boolean, email?: string | null) => void;
   setLastCloudBackupTime: (time: string | null) => void;
   setAutoBackupEnabled: (enabled: boolean) => void;
+  setAutoBackupOnlyWifi: (value: boolean) => void;
   setHasSeenDrivePrompt: (seen: boolean) => void;
   setHasSeenSmsPrompt: (seen: boolean) => void;
   setHideBalances: (value: boolean) => void;
@@ -61,6 +63,7 @@ export const useAppStore = create<AppState>()(
       googleDriveUserEmail: null,
       lastCloudBackupTime: null,
       autoBackupEnabled: true,
+      autoBackupOnlyWifi: true,
       hasSeenDrivePrompt: false,
       hasSeenSmsPrompt: false,
       hideBalances: false,
@@ -80,6 +83,7 @@ export const useAppStore = create<AppState>()(
         }),
       setLastCloudBackupTime: (time) => set({ lastCloudBackupTime: time }),
       setAutoBackupEnabled: (enabled) => set({ autoBackupEnabled: enabled }),
+      setAutoBackupOnlyWifi: (value) => set({ autoBackupOnlyWifi: value }),
       setHasSeenDrivePrompt: (seen) => set({ hasSeenDrivePrompt: seen }),
       setHasSeenSmsPrompt: (seen) => set({ hasSeenSmsPrompt: seen }),
       setHideBalances: (value) => set({ hideBalances: value }),

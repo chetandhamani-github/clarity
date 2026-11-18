@@ -12,6 +12,14 @@ import type {
   PersonBalanceSummary,
   SplitwiseOverallSummary,
   DebtType,
+  Group,
+  Expense,
+  ExpenseWithSplits,
+  CreateGroupDTO,
+  UpdateGroupDTO,
+  CreateExpenseDTO,
+  UpdateExpenseDTO,
+  GroupBalanceSummary,
 } from '../types/splitwise.types';
 
 export type SplitwiseFilter = 'ALL' | 'OWE_ME' | 'I_OWE';
@@ -21,6 +29,11 @@ export interface SplitwiseState {
   peopleWithBalances: PersonBalanceSummary[];
   debts: Debt[];
   settlements: Settlement[];
+  groups: Group[];
+  activeGroupId: string | null;
+  activeGroupExpenses: ExpenseWithSplits[];
+  activeGroupBalances: GroupBalanceSummary | null;
+  activeGroupMembers: Person[];
   overallSummary: SplitwiseOverallSummary;
   selectedPersonId: string | null;
   selectedFilter: SplitwiseFilter;
@@ -32,6 +45,8 @@ export interface SplitwiseState {
   loadPeople: () => Promise<void>;
   loadDebts: (personId?: string, type?: DebtType) => Promise<void>;
   loadSettlements: (personId?: string) => Promise<void>;
+  loadGroups: () => Promise<void>;
+  loadGroupDetails: (groupId: string) => Promise<void>;
   loadAllData: () => Promise<void>;
 
   // Actions - People
@@ -48,7 +63,19 @@ export interface SplitwiseState {
   addSettlement: (dto: CreateSettlement) => Promise<Settlement>;
   deleteSettlement: (id: string) => Promise<void>;
 
+  // Actions - Groups
+  createGroup: (dto: CreateGroupDTO) => Promise<Group>;
+  updateGroup: (id: string, updates: UpdateGroupDTO) => Promise<Group>;
+  deleteGroup: (id: string) => Promise<void>;
+  addGroupMembers: (groupId: string, personIds: string[]) => Promise<void>;
+  removeGroupMember: (groupId: string, personId: string) => Promise<void>;
+
+  // Actions - Shared Expenses
+  createExpense: (dto: CreateExpenseDTO) => Promise<ExpenseWithSplits>;
+  deleteExpense: (id: string) => Promise<void>;
+
   // Actions - UI State
+  setActiveGroupId: (id: string | null) => void;
   setSelectedPersonId: (id: string | null) => void;
   setSelectedFilter: (filter: SplitwiseFilter) => void;
   setSearchQuery: (query: string) => void;
@@ -68,6 +95,11 @@ export const useSplitwiseStore = create<SplitwiseState>()((set, get) => ({
   peopleWithBalances: [],
   debts: [],
   settlements: [],
+  groups: [],
+  activeGroupId: null,
+  activeGroupExpenses: [],
+  activeGroupBalances: null,
+  activeGroupMembers: [],
   overallSummary: defaultSummary,
   selectedPersonId: null,
   selectedFilter: 'ALL',
@@ -128,17 +160,50 @@ export const useSplitwiseStore = create<SplitwiseState>()((set, get) => ({
     }
   },
 
+  loadGroups: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const groups = await SplitwiseRepository.getAllGroups();
+      set({ groups, isLoading: false });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load groups';
+      set({ error: message, isLoading: false });
+    }
+  },
+
+  loadGroupDetails: async (groupId: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const [members, expenses, balances] = await Promise.all([
+        SplitwiseRepository.getGroupMembers(groupId),
+        SplitwiseRepository.getExpensesByGroupId(groupId),
+        SplitwiseRepository.getGroupBalanceSummary(groupId),
+      ]);
+      set({
+        activeGroupId: groupId,
+        activeGroupMembers: members,
+        activeGroupExpenses: expenses,
+        activeGroupBalances: balances,
+        isLoading: false,
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load group details';
+      set({ error: message, isLoading: false });
+    }
+  },
+
   loadAllData: async () => {
     set({ isLoading: true, error: null });
     try {
       await SplitwiseRepository.ensureSchema();
 
-      const [people, peopleWithBalances, debts, settlements, overallSummary] =
+      const [people, peopleWithBalances, debts, settlements, groups, overallSummary] =
         await Promise.all([
           SplitwiseRepository.getAllPeople(),
           SplitwiseRepository.getAllPeopleWithBalances(),
           SplitwiseRepository.getAllDebts(),
           SplitwiseRepository.getAllSettlements(),
+          SplitwiseRepository.getAllGroups(),
           SplitwiseRepository.getOverallSummary(),
         ]);
 
@@ -147,6 +212,7 @@ export const useSplitwiseStore = create<SplitwiseState>()((set, get) => ({
         peopleWithBalances,
         debts,
         settlements,
+        groups,
         overallSummary,
         isLoading: false,
       });
@@ -275,6 +341,117 @@ export const useSplitwiseStore = create<SplitwiseState>()((set, get) => ({
     }
   },
 
+  createGroup: async (dto: CreateGroupDTO) => {
+    set({ isLoading: true, error: null });
+    try {
+      const created = await SplitwiseRepository.createGroup(dto);
+      await get().loadGroups();
+      return created;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to create group';
+      set({ error: message, isLoading: false });
+      throw error;
+    }
+  },
+
+  updateGroup: async (id: string, updates: UpdateGroupDTO) => {
+    set({ isLoading: true, error: null });
+    try {
+      const updated = await SplitwiseRepository.updateGroup(id, updates);
+      await get().loadGroups();
+      if (get().activeGroupId === id) {
+        await get().loadGroupDetails(id);
+      }
+      return updated;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to update group';
+      set({ error: message, isLoading: false });
+      throw error;
+    }
+  },
+
+  deleteGroup: async (id: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      await SplitwiseRepository.deleteGroup(id);
+      if (get().activeGroupId === id) {
+        set({
+          activeGroupId: null,
+          activeGroupExpenses: [],
+          activeGroupBalances: null,
+          activeGroupMembers: [],
+        });
+      }
+      await get().loadGroups();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to delete group';
+      set({ error: message, isLoading: false });
+      throw error;
+    }
+  },
+
+  addGroupMembers: async (groupId: string, personIds: string[]) => {
+    set({ isLoading: true, error: null });
+    try {
+      await SplitwiseRepository.addGroupMembers(groupId, personIds);
+      await Promise.all([
+        get().loadGroups(),
+        get().loadGroupDetails(groupId),
+      ]);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to add group members';
+      set({ error: message, isLoading: false });
+      throw error;
+    }
+  },
+
+  removeGroupMember: async (groupId: string, personId: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      await SplitwiseRepository.removeGroupMember(groupId, personId);
+      await Promise.all([
+        get().loadGroups(),
+        get().loadGroupDetails(groupId),
+      ]);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to remove group member';
+      set({ error: message, isLoading: false });
+      throw error;
+    }
+  },
+
+  createExpense: async (dto: CreateExpenseDTO) => {
+    set({ isLoading: true, error: null });
+    try {
+      const created = await SplitwiseRepository.createExpense(dto);
+      if (dto.groupId) {
+        await get().loadGroupDetails(dto.groupId);
+      }
+      await get().loadAllData();
+      return created;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to create expense';
+      set({ error: message, isLoading: false });
+      throw error;
+    }
+  },
+
+  deleteExpense: async (id: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      await SplitwiseRepository.deleteExpense(id);
+      if (get().activeGroupId) {
+        await get().loadGroupDetails(get().activeGroupId!);
+      }
+      await get().loadAllData();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to delete expense';
+      set({ error: message, isLoading: false });
+      throw error;
+    }
+  },
+
+  setActiveGroupId: (activeGroupId: string | null) => set({ activeGroupId }),
   setSelectedPersonId: (selectedPersonId: string | null) => set({ selectedPersonId }),
   setSelectedFilter: (selectedFilter: SplitwiseFilter) => set({ selectedFilter }),
   setSearchQuery: (searchQuery: string) => set({ searchQuery }),

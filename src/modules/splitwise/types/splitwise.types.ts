@@ -18,6 +18,15 @@ export const DebtType = {
 
 export type DebtType = (typeof DebtType)[keyof typeof DebtType];
 
+export const CURRENT_USER_ID = 'current_user';
+export const CURRENT_USER_NAME = 'You';
+
+export const CURRENT_USER_PERSON: Person = {
+  id: CURRENT_USER_ID,
+  name: CURRENT_USER_NAME,
+  createdAt: '2000-01-01T00:00:00.000Z',
+};
+
 export const SettlementType = {
   THEY_PAID: 'THEY_PAID', // Friend paid user (settles OWE_ME debt)
   YOU_PAID: 'YOU_PAID',   // User paid friend (settles I_OWE debt)
@@ -410,6 +419,14 @@ export interface PersonBalanceSummary {
   remainingReceivable?: number;
   remainingPayable?: number;
   netBalance: number;
+}
+
+export interface SimplifiedDebt {
+  fromPersonId: string;
+  fromPersonName?: string;
+  toPersonId: string;
+  toPersonName?: string;
+  amount: number;
 }
 
 export interface GroupBalanceSummary {

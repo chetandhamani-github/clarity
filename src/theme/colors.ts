@@ -3,8 +3,8 @@ import { Appearance } from 'react-native';
 const lightTheme = {
   primary: '#785600',
   onPrimary: '#ffffff',
-  primaryContainer: '#ffdea5',
-  onPrimaryContainer: '#543b00',
+  primaryContainer: '#785600',
+  onPrimaryContainer: '#ffffff',
   secondary: '#5f5e5e',
   onSecondary: '#ffffff',
   secondaryContainer: '#e2dfde',

@@ -10,6 +10,7 @@ import {
   getSpentByCategory,
 } from '@/services/database/budget-dao';
 import { queueAutoBackup } from '@/services/cloud/google-drive-service';
+import { evaluateCategoryBudgetAlert } from '@/services/notifications/alert-engine';
 
 export function useBudgetPlan() {
   const { data, isLoading, refetch } = useQuery({
@@ -72,8 +73,17 @@ export function useUpdateCategory() {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Omit<BudgetCategory, 'id'>> }) =>
-      updateCategory(id, data),
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Omit<BudgetCategory, 'id'>> }) => {
+      await updateCategory(id, data);
+      if (data.limit !== undefined) {
+        const categories = await getAllCategories();
+        const target = categories.find((c) => c.id === id);
+        if (target) {
+          const now = new Date();
+          await evaluateCategoryBudgetAlert(target.name, now.getMonth() + 1, now.getFullYear());
+        }
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
@@ -122,6 +132,7 @@ export function useCategorySpending(month: number, year: number) {
       const categoryNamesSet = new Set(categories.map((c) => c.name));
 
       const spendingData: CategorySpending[] = categories.map((cat) => ({
+        id: cat.id,
         category: cat.name,
         icon: cat.icon,
         limit: cat.limit,

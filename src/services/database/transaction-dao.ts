@@ -10,6 +10,11 @@ import type {
 } from '@/types';
 import { getAccountById } from './account-dao';
 import { getDatabase } from './index';
+import {
+  getAllTransactionTagsMap,
+  getTagsForTransaction,
+  setTransactionTags,
+} from './tag-dao';
 
 function generateId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -35,6 +40,7 @@ interface TransactionRow {
   status?: string;
   sms_id?: string;
   parsed_tx_id?: string;
+  receipt_uri?: string;
   account_name?: string; // from JOIN
   to_account_name?: string; // from JOIN
 }
@@ -65,6 +71,7 @@ function mapRow(row: TransactionRow): TransactionWithAccount {
     status: (row.status as TransactionStatus) || 'VERIFIED',
     smsId: row.sms_id,
     parsedTxId: row.parsed_tx_id,
+    receiptUri: row.receipt_uri || undefined,
     accountName: row.account_name ?? 'Unknown Account',
     toAccountName: row.to_account_name,
   };
@@ -91,6 +98,16 @@ export async function getTransactions(
   if (filters?.category) {
     query += ` AND t.category = ?`;
     params.push(filters.category);
+  }
+  if (filters?.tag) {
+    const cleanTag = filters.tag.trim().toLowerCase().replace(/^#/, '');
+    query += ` AND t.id IN (
+      SELECT tt.transaction_id 
+      FROM transaction_tags tt 
+      JOIN tags tg ON tt.tag_id = tg.id 
+      WHERE LOWER(tg.name) = ?
+    )`;
+    params.push(cleanTag);
   }
   if (filters?.type) {
     query += ` AND t.type = ?`;
@@ -121,7 +138,11 @@ export async function getTransactions(
   }
 
   const rows = await db.getAllAsync<TransactionRow>(query, params);
-  return rows.map(mapRow);
+  const tagsMap = await getAllTransactionTagsMap();
+  return rows.map((row) => ({
+    ...mapRow(row),
+    tags: tagsMap[row.id] || [],
+  }));
 }
 
 export async function getTransactionById(id: string): Promise<TransactionWithAccount | null> {
@@ -134,7 +155,12 @@ export async function getTransactionById(id: string): Promise<TransactionWithAcc
      WHERE t.id = ?`,
     [id]
   );
-  return row ? mapRow(row) : null;
+  if (!row) return null;
+  const tags = await getTagsForTransaction(id);
+  return {
+    ...mapRow(row),
+    tags,
+  };
 }
 
 export interface InsertTransactionOptions {
@@ -173,8 +199,8 @@ export async function insertTransaction(
   // 2. Insert transaction and update account balance atomically
   const executeInsert = async () => {
     await db.runAsync(
-      `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, to_account_id, splits_json, source, status, sms_id, parsed_tx_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, to_account_id, splits_json, source, status, sms_id, parsed_tx_id, receipt_uri)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         data.accountId,
@@ -191,6 +217,7 @@ export async function insertTransaction(
         status,
         data.smsId || null,
         data.parsedTxId || null,
+        data.receiptUri || null,
       ]
     );
 
@@ -238,6 +265,14 @@ export async function insertTransaction(
         }).catch(() => {});
       })
       .catch(() => {});
+  }
+
+  if (data.tags && data.tags.length > 0) {
+    try {
+      await setTransactionTags(id, data.tags);
+    } catch {
+      // ignore
+    }
   }
 
   return { id, ...data, source, status };
@@ -375,6 +410,10 @@ export async function updateTransaction(
       sets.push('parsed_tx_id = ?');
       params.push(data.parsedTxId);
     }
+    if (data.receiptUri !== undefined) {
+      sets.push('receipt_uri = ?');
+      params.push(data.receiptUri);
+    }
 
     if (sets.length > 0) {
       params.push(id);
@@ -413,6 +452,14 @@ export async function updateTransaction(
     } catch (error) {
       await db.execAsync('ROLLBACK');
       throw error;
+    }
+  }
+
+  if (data.tags !== undefined) {
+    try {
+      await setTransactionTags(id, data.tags);
+    } catch {
+      // ignore
     }
   }
 }
@@ -481,6 +528,28 @@ export async function deleteTransaction(id: string): Promise<void> {
       await db.execAsync('ROLLBACK');
       throw error;
     }
+  }
+}
+
+export async function bulkDeleteTransactions(ids: string[]): Promise<void> {
+  for (const id of ids) {
+    await deleteTransaction(id);
+  }
+}
+
+export async function bulkUpdateCategory(ids: string[], category: string): Promise<void> {
+  if (ids.length === 0) return;
+  const db = getDatabase();
+  const placeholders = ids.map(() => '?').join(',');
+  await db.runAsync(
+    `UPDATE transactions SET category = ? WHERE id IN (${placeholders})`,
+    [category, ...ids]
+  );
+}
+
+export async function bulkUpdateAccount(ids: string[], targetAccountId: string): Promise<void> {
+  for (const id of ids) {
+    await updateTransaction(id, { accountId: targetAccountId });
   }
 }
 

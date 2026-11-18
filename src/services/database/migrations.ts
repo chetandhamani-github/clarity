@@ -134,6 +134,36 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
   }
 
   try {
+    await db.execAsync('ALTER TABLE transactions ADD COLUMN receipt_uri TEXT;');
+  } catch (e) {
+    // Column might already exist, ignore error
+  }
+
+  try {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS tags (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL UNIQUE,
+        color TEXT DEFAULT NULL,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS transaction_tags (
+        transaction_id TEXT NOT NULL,
+        tag_id TEXT NOT NULL,
+        PRIMARY KEY (transaction_id, tag_id),
+        FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
+        FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_trans_tags_tag ON transaction_tags(tag_id);
+      CREATE INDEX IF NOT EXISTS idx_trans_tags_tx ON transaction_tags(transaction_id);
+    `);
+  } catch (e) {
+    // Tables might already exist, ignore error
+  }
+
+  try {
     await db.execAsync(`
       CREATE INDEX IF NOT EXISTS idx_transactions_matching 
       ON transactions(account_id, amount, source, date);

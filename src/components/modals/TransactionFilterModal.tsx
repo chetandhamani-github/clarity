@@ -13,12 +13,14 @@ import { useTheme, typography, ThemeColors } from '@/theme';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useCategories } from '@/hooks/use-budget';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
+import { useTags } from '@/hooks/use-tags';
 
 export type DatePreset = 'all' | 'this_month' | 'last_month' | 'last_90_days';
 
 export interface ActiveFilters {
   accountId?: string;
   category?: string;
+  tag?: string;
   datePreset: DatePreset;
   type?: 'all' | 'expense' | 'income' | 'transfer';
 }
@@ -49,6 +51,7 @@ export function TransactionFilterModal({ visible, filters, onClose, onApply }: P
   const styles = getStyles(colors);
   const { accounts } = useAccounts();
   const { categories } = useCategories();
+  const { tags } = useTags();
 
   const [selectedType, setSelectedType] = useState<'all' | 'expense' | 'income' | 'transfer'>(
     filters.type || 'all'
@@ -62,6 +65,9 @@ export function TransactionFilterModal({ visible, filters, onClose, onApply }: P
   const [selectedCategory, setSelectedCategory] = useState<string | undefined>(
     filters.category
   );
+  const [selectedTag, setSelectedTag] = useState<string | undefined>(
+    filters.tag
+  );
 
   useEffect(() => {
     if (visible) {
@@ -69,6 +75,7 @@ export function TransactionFilterModal({ visible, filters, onClose, onApply }: P
       setSelectedDatePreset(filters.datePreset || 'all');
       setSelectedAccountId(filters.accountId);
       setSelectedCategory(filters.category);
+      setSelectedTag(filters.tag);
     }
   }, [visible, filters]);
 
@@ -79,6 +86,7 @@ export function TransactionFilterModal({ visible, filters, onClose, onApply }: P
     setSelectedDatePreset('all');
     setSelectedAccountId(undefined);
     setSelectedCategory(undefined);
+    setSelectedTag(undefined);
   };
 
   const handleApply = () => {
@@ -87,6 +95,7 @@ export function TransactionFilterModal({ visible, filters, onClose, onApply }: P
       datePreset: selectedDatePreset,
       accountId: selectedAccountId,
       category: selectedCategory,
+      tag: selectedTag,
     });
     onClose();
   };
@@ -95,7 +104,8 @@ export function TransactionFilterModal({ visible, filters, onClose, onApply }: P
     (selectedType !== 'all' ? 1 : 0) +
     (selectedDatePreset !== 'all' ? 1 : 0) +
     (selectedAccountId ? 1 : 0) +
-    (selectedCategory ? 1 : 0);
+    (selectedCategory ? 1 : 0) +
+    (selectedTag ? 1 : 0);
 
   const insets = useSafeInsets();
 
@@ -237,6 +247,37 @@ export function TransactionFilterModal({ visible, filters, onClose, onApply }: P
               })}
             </View>
           </View>
+
+          {/* Section: Tags */}
+          {tags.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Tags</Text>
+              <View style={styles.chipRow}>
+                <TouchableOpacity
+                  style={[styles.chip, !selectedTag && styles.chipSelected]}
+                  onPress={() => setSelectedTag(undefined)}
+                >
+                  <Text style={[styles.chipText, !selectedTag && styles.chipTextSelected]}>
+                    All Tags
+                  </Text>
+                </TouchableOpacity>
+                {tags.map((t) => {
+                  const isSelected = selectedTag === t.name;
+                  return (
+                    <TouchableOpacity
+                      key={t.id}
+                      style={[styles.chip, isSelected && styles.chipSelected]}
+                      onPress={() => setSelectedTag(isSelected ? undefined : t.name)}
+                    >
+                      <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                        #{t.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
         </ScrollView>
 
         {/* Footer */}
@@ -252,8 +293,8 @@ export function TransactionFilterModal({ visible, filters, onClose, onApply }: P
   );
 }
 
-const getStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
+const getStyles = (colors: ThemeColors) => {
+  const styles = StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
@@ -370,4 +411,6 @@ const getStyles = (colors: ThemeColors) =>
       fontSize: 15,
     },
   });
+  return styles;
+};
 

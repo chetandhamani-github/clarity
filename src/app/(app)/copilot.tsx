@@ -26,14 +26,7 @@ import { chatWithFinancialCopilot } from '@/services/api/ai.api';
 import { fetchRemoteConfig } from '@/services/api/config.api';
 import { useNetworkStore } from '@/store/use-network-store';
 import { isNetworkError } from '@/services/network/network.service';
-
-interface ChatMessage {
-  id: string;
-  sender: 'user' | 'assistant';
-  text: string;
-  timestamp: string;
-  suggestedAction?: string;
-}
+import { ChatMessage, useCopilotStore } from '@/store/use-copilot-store';
 
 const SUGGESTED_PROMPTS = [
   'How can I save more money this month?',
@@ -124,14 +117,9 @@ export default function CopilotScreen() {
     fetchRemoteConfig().catch(() => {});
   }, []);
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome-1',
-      sender: 'assistant',
-      text: `Hello! I'm your Clarity Financial Copilot.\n\nI can analyze your spending patterns, track your 50/30/20 budget targets, and answer questions about your cash flow. How can I assist you today?`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    },
-  ]);
+  const messages = useCopilotStore((state) => state.messages);
+  const setMessages = useCopilotStore((state) => state.setMessages);
+  const clearMessages = useCopilotStore((state) => state.clearMessages);
 
   // Anonymized context summary constructed on-device
   const financialContext = useMemo(() => {
@@ -223,14 +211,7 @@ export default function CopilotScreen() {
           text: 'Clear',
           style: 'destructive',
           onPress: () => {
-            setMessages([
-              {
-                id: `welcome-${Date.now()}`,
-                sender: 'assistant',
-                text: 'Conversation reset. What would you like to explore about your finances?',
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              },
-            ]);
+            clearMessages();
             showToast('Conversation cleared', 'info');
           },
         },
@@ -240,9 +221,13 @@ export default function CopilotScreen() {
 
   const handleActionPress = useCallback((actionRoute: string) => {
     try {
-      router.push(actionRoute as any);
+      // Normalize tab routes to stack screen routes so they are cleanly pushed onto the Copilot stack
+      const normalizedRoute = actionRoute
+        .replace('/(tabs)/', '/')
+        .replace('/(app)/(tabs)/', '/(app)/');
+      router.push(normalizedRoute as any);
     } catch {
-      router.push('/(app)/(tabs)/plan');
+      router.push('/(app)/plan');
     }
   }, [router]);
 

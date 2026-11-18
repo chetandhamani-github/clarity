@@ -17,4 +17,6 @@ public class SplitSyncRequest {
     private List<SplitPersonDTO> people;
     private List<SplitDebtDTO> debts;
     private List<SplitSettlementDTO> settlements;
+    private List<SplitGroupDTO> groups;
+    private List<SplitExpenseDTO> expenses;
 }

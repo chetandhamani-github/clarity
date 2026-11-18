@@ -283,7 +283,13 @@ describe('SplitwiseRepository', () => {
           total_i_owe: 4000,
         })
         .mockResolvedValueOnce({
+          total_owed_to_me: 0,
+          total_i_owe: 0,
+        })
+        .mockResolvedValueOnce({
           total_settled: 2000,
+          total_settled_by_them: 2000,
+          total_settled_by_you: 0,
         });
 
       const overall = await SplitwiseRepository.getOverallSummary();

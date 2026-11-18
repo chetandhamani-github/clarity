@@ -140,8 +140,8 @@ export function LegalModal({ visible, type, onClose }: LegalModalProps) {
   );
 }
 
-const getStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
+const getStyles = (colors: ThemeColors) => {
+  const styles = StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
@@ -192,4 +192,6 @@ const getStyles = (colors: ThemeColors) =>
       lineHeight: 22,
     },
   });
+  return styles;
+};
 

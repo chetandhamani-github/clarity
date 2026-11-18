@@ -71,7 +71,7 @@ export function PassphraseModal({
             <TouchableWithoutFeedback>
               <View style={styles.card}>
                 <View style={styles.iconCircle}>
-                  <MaterialIcons name="lock" size={28} color={colors.primary} />
+                  <MaterialIcons name="lock" size={28} color={colors.onPrimaryContainer} />
                 </View>
 
                 <Text style={styles.title}>{title}</Text>
@@ -152,8 +152,8 @@ export function PassphraseModal({
   );
 }
 
-const getStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
+const getStyles = (colors: ThemeColors) => {
+  const styles = StyleSheet.create({
     overlay: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.6)',
@@ -263,4 +263,6 @@ const getStyles = (colors: ThemeColors) =>
       fontWeight: '500',
     },
   });
+  return styles;
+};
 

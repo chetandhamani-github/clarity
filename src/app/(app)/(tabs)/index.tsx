@@ -7,10 +7,11 @@ import { VoiceTransactionModal } from '@/components/modals/VoiceTransactionModal
 import type { ParsedVoiceTransaction } from '@/services/voice/voice-parser';
 import { radius, ThemeColors, typography, useTheme } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Dimensions,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -30,6 +31,8 @@ import { getCategoryIcon } from '@/utils/icons';
 import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
 import { useAppStore } from '@/store/use-app-store';
 import { useSmsStore } from '@/store/useSmsStore';
+
+const RECENT_TRANSACTIONS_FILTER = { limit: 5 };
 
 export default function DashboardScreen() {
   useDoubleBackToExit();
@@ -82,7 +85,7 @@ export default function DashboardScreen() {
     transactions,
     isLoading: txLoading,
     refetch: refetchTransactions,
-  } = useTransactions({ limit: 5 });
+  } = useTransactions(RECENT_TRANSACTIONS_FILTER);
   const {
     totals: monthlyTotals,
     isLoading: totalsLoading,
@@ -161,26 +164,40 @@ export default function DashboardScreen() {
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      refetchAccounts();
-      refetchTransactions();
-      refetchTotals();
-      refetchPlan();
-      refetchSpending();
-      refetchNw();
-    }, [
-      refetchAccounts,
-      refetchTransactions,
-      refetchTotals,
-      refetchPlan,
-      refetchSpending,
-      refetchNw,
-    ])
-  );
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        refetchAccounts(),
+        refetchTransactions(),
+        refetchTotals(),
+        refetchPlan(),
+        refetchSpending(),
+        refetchNw(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [
+    refetchAccounts,
+    refetchTransactions,
+    refetchTotals,
+    refetchPlan,
+    refetchSpending,
+    refetchNw,
+  ]);
 
-  const isLoading =
+  const hasLoadedRef = useRef(false);
+  const isAnyLoading =
     accountsLoading || txLoading || totalsLoading || planLoading || spendingLoading || nwLoading;
+
+  if (!isAnyLoading && !hasLoadedRef.current) {
+    hasLoadedRef.current = true;
+  }
+
+  // Only show skeleton on initial cold load before cached data exists
+  const showSkeleton = !hasLoadedRef.current && isAnyLoading;
 
   // Calculate Net Worth
   const netWorth = useMemo(() => {
@@ -345,6 +362,14 @@ export default function DashboardScreen() {
         scrollEnabled={!isDraggingAccounts}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
       >
         <AnnouncementBanner />
         {/* SMS Auto-Tracking Banner */}
@@ -408,7 +433,7 @@ export default function DashboardScreen() {
           </View>
         )}
         <View style={{ flex: 1 }}>
-          {isLoading ? (
+          {showSkeleton ? (
             <HomeSkeleton />
           ) : (
             <>

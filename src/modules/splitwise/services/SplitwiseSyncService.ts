@@ -55,20 +55,24 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
    */
   public async exportPayload(): Promise<SplitwiseSyncPayload> {
     await SplitwiseRepository.ensureSchema();
-    const [people, debts, settlements] = await Promise.all([
+    const [people, debts, settlements, groups, expenses] = await Promise.all([
       SplitwiseRepository.getAllPeople(),
       SplitwiseRepository.getAllDebts(),
       SplitwiseRepository.getAllSettlements(),
+      SplitwiseRepository.getAllGroups(true),
+      SplitwiseRepository.getAllExpenses(),
     ]);
+
+    const allSplits = expenses.flatMap((e) => e.splits);
 
     return {
       people,
       debts,
       settlements,
-      groups: [],
-      groupMembers: [],
-      expenses: [],
-      expenseSplits: [],
+      groups,
+      groupMembers: groups.flatMap((g) => g.members || []),
+      expenses,
+      expenseSplits: allSplits,
       exportedAt: new Date().toISOString(),
       schemaVersion: 1,
     };
@@ -124,6 +128,102 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
             [s.id, s.personId, s.amount, s.description ?? null, s.settlementType || 'THEY_PAID', s.friendEmail ?? null, s.createdAt]
           );
         }
+
+        // Upsert groups
+        for (const g of payload.groups || []) {
+          await db.runAsync(
+            `INSERT INTO splitwise_groups (id, name, description, icon, category, currency, is_archived, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               name = excluded.name,
+               description = excluded.description,
+               icon = excluded.icon,
+               category = excluded.category,
+               currency = excluded.currency,
+               is_archived = excluded.is_archived,
+               updated_at = excluded.updated_at;`,
+            [
+              g.id,
+              g.name,
+              g.description ?? null,
+              g.icon ?? null,
+              g.category ?? null,
+              g.currency || 'INR',
+              g.isArchived ? 1 : 0,
+              g.createdAt,
+              g.updatedAt ?? g.createdAt,
+            ]
+          );
+        }
+
+        // Upsert group members
+        for (const gm of payload.groupMembers || []) {
+          await db.runAsync(
+            `INSERT INTO splitwise_group_members (id, group_id, person_id, role, joined_at)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(group_id, person_id) DO UPDATE SET
+               role = excluded.role;`,
+            [gm.id || `${gm.groupId}_${gm.personId}`, gm.groupId, gm.personId, gm.role || 'member', gm.joinedAt]
+          );
+        }
+
+        // Upsert expenses
+        for (const e of payload.expenses || []) {
+          await db.runAsync(
+            `INSERT INTO splitwise_expenses (id, description, amount, currency, category, date, payer_id, group_id, split_type, notes, receipt_url, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               description = excluded.description,
+               amount = excluded.amount,
+               category = excluded.category,
+               date = excluded.date,
+               payer_id = excluded.payer_id,
+               group_id = excluded.group_id,
+               split_type = excluded.split_type,
+               notes = excluded.notes,
+               updated_at = excluded.updated_at;`,
+            [
+              e.id,
+              e.description,
+              e.amount,
+              e.currency || 'INR',
+              e.category ?? null,
+              e.date,
+              e.payerId,
+              e.groupId ?? null,
+              e.splitType,
+              e.notes ?? null,
+              e.receiptUrl ?? null,
+              e.createdAt,
+              e.updatedAt ?? e.createdAt,
+            ]
+          );
+        }
+
+        // Upsert expense splits
+        for (const es of payload.expenseSplits || []) {
+          await db.runAsync(
+            `INSERT INTO splitwise_expense_splits (id, expense_id, person_id, paid_amount, owed_amount, percentage, shares, is_paid, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               paid_amount = excluded.paid_amount,
+               owed_amount = excluded.owed_amount,
+               percentage = excluded.percentage,
+               shares = excluded.shares,
+               is_paid = excluded.is_paid;`,
+            [
+              es.id || `${es.expenseId || ''}_${es.personId || ''}`,
+              es.expenseId ?? null,
+              es.personId ?? null,
+              es.paidAmount || 0,
+              es.owedAmount || 0,
+              es.percentage ?? null,
+              es.shares ?? null,
+              es.isPaid ? 1 : 0,
+              es.createdAt || new Date().toISOString(),
+            ]
+          );
+        }
       });
 
       return {
@@ -133,8 +233,8 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
           people: payload.people?.length || 0,
           debts: payload.debts?.length || 0,
           settlements: payload.settlements?.length || 0,
-          groups: 0,
-          expenses: 0,
+          groups: payload.groups?.length || 0,
+          expenses: payload.expenses?.length || 0,
         },
         conflictsCount: 0,
       };

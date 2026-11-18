@@ -12,6 +12,7 @@ import type {
   SharesSplitRequest,
   GroupBalanceSummary,
   PersonBalanceSummary,
+  SimplifiedDebt,
 } from '../types/splitwise.types';
 import { DebtType, SplitType } from '../types/splitwise.types';
 
@@ -542,8 +543,21 @@ export function calculateGroupBalances(
   }
 
   for (const set of settlements) {
-    if (memberBalances[set.personId]) {
-      memberBalances[set.personId].totalSettled += set.amount;
+    const amt = Number(set.amount) || 0;
+    if (set.settlementType === 'YOU_PAID') {
+      if (memberBalances['current_user']) {
+        memberBalances['current_user'].totalSettled -= amt;
+      }
+      if (memberBalances[set.personId]) {
+        memberBalances[set.personId].totalSettled += amt;
+      }
+    } else {
+      if (memberBalances['current_user']) {
+        memberBalances['current_user'].totalSettled += amt;
+      }
+      if (memberBalances[set.personId]) {
+        memberBalances[set.personId].totalSettled -= amt;
+      }
     }
   }
 
@@ -561,6 +575,8 @@ export function calculateGroupBalances(
   });
 
   const groupNetBalance = memberSummaries.reduce((acc, ms) => acc + ms.netBalance, 0);
+  const mySummary = memberSummaries.find((m) => m.person.id === 'current_user');
+  const myBalance = mySummary ? mySummary.netBalance : 0;
 
   return {
     groupId,
@@ -568,7 +584,63 @@ export function calculateGroupBalances(
     members: memberSummaries,
     totalGroupSpend: roundCurrency(totalGroupSpend),
     netBalance: roundCurrency(groupNetBalance),
+    myBalance,
   };
+}
+
+/**
+ * Minimizes inter-member transactions using a greedy debt simplification algorithm.
+ * Pairs the largest debtor with the largest creditor until all balances are settled.
+ */
+export function simplifyDebts(
+  memberBalances: { personId: string; personName?: string; netBalance: number }[]
+): SimplifiedDebt[] {
+  const debtors: { personId: string; personName?: string; amount: number }[] = [];
+  const creditors: { personId: string; personName?: string; amount: number }[] = [];
+
+  for (const mb of memberBalances) {
+    const net = roundCurrency(mb.netBalance);
+    if (net < -0.009) {
+      debtors.push({ personId: mb.personId, personName: mb.personName, amount: -net });
+    } else if (net > 0.009) {
+      creditors.push({ personId: mb.personId, personName: mb.personName, amount: net });
+    }
+  }
+
+  debtors.sort((a, b) => b.amount - a.amount);
+  creditors.sort((a, b) => b.amount - a.amount);
+
+  const transactions: SimplifiedDebt[] = [];
+  let dIdx = 0;
+  let cIdx = 0;
+
+  while (dIdx < debtors.length && cIdx < creditors.length) {
+    const debtor = debtors[dIdx];
+    const creditor = creditors[cIdx];
+    const settleAmount = roundCurrency(Math.min(debtor.amount, creditor.amount));
+
+    if (settleAmount > 0.009) {
+      transactions.push({
+        fromPersonId: debtor.personId,
+        fromPersonName: debtor.personName,
+        toPersonId: creditor.personId,
+        toPersonName: creditor.personName,
+        amount: settleAmount,
+      });
+    }
+
+    debtor.amount = roundCurrency(debtor.amount - settleAmount);
+    creditor.amount = roundCurrency(creditor.amount - settleAmount);
+
+    if (debtor.amount <= 0.009) {
+      dIdx++;
+    }
+    if (creditor.amount <= 0.009) {
+      cIdx++;
+    }
+  }
+
+  return transactions;
 }
 
 export const BalanceCalculator = {
@@ -590,4 +662,5 @@ export const BalanceCalculator = {
   calculateExactSplits,
   calculateSharesSplits,
   calculateGroupBalances,
+  simplifyDebts,
 };

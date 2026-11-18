@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+  <shortcut
+    android:shortcutId="voice_add"
+    android:enabled="true"
+    android:icon="@mipmap/ic_launcher"
+    android:shortcutShortLabel="@string/shortcut_voice_add_short"
+    android:shortcutLongLabel="@string/shortcut_voice_add_long">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:data="clarity://voice-add" />
+  </shortcut>
+  <shortcut
+    android:shortcutId="add_transaction"
+    android:enabled="true"
+    android:icon="@mipmap/ic_launcher"
+    android:shortcutShortLabel="@string/shortcut_add_tx_short"
+    android:shortcutLongLabel="@string/shortcut_add_tx_long">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:data="clarity://add-transaction" />
+  </shortcut>
+</shortcuts>

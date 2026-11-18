@@ -340,8 +340,8 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
   );
 }
 
-const getStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
+const getStyles = (colors: ThemeColors) => {
+  const styles = StyleSheet.create({
     modalOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0, 0, 0, 0.65)',
@@ -538,3 +538,5 @@ const getStyles = (colors: ThemeColors) =>
       color: colors.onPrimary,
     },
   });
+  return styles;
+};

@@ -62,6 +62,15 @@ export interface Transaction {
   status?: TransactionStatus;
   smsId?: string;
   parsedTxId?: string;
+  receiptUri?: string;
+  tags?: string[];
+}
+
+export interface Tag {
+  id: string;
+  name: string;
+  color?: string;
+  createdAt?: number;
 }
 
 export type TransactionType = 'expense' | 'income' | 'transfer';
@@ -85,6 +94,7 @@ export interface RecurringTransaction {
 
 export interface TransactionFilters {
   category?: string;
+  tag?: string;
   search?: string;
   accountId?: string;
   type?: TransactionType;
@@ -146,6 +156,7 @@ export interface BudgetCategory {
 }
 
 export interface CategorySpending {
+  id?: string;
   category: string;
   icon: string;
   limit: number;

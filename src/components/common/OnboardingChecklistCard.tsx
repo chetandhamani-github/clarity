@@ -128,8 +128,8 @@ export function OnboardingChecklistCard({
   );
 }
 
-const getStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
+const getStyles = (colors: ThemeColors) => {
+  const styles = StyleSheet.create({
     card: {
       backgroundColor: colors.surfaceContainerLowest,
       borderRadius: 16,
@@ -210,4 +210,6 @@ const getStyles = (colors: ThemeColors) =>
       color: colors.onSurfaceVariant,
     },
   });
+  return styles;
+};
 

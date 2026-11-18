@@ -21,7 +21,11 @@ import { useToast, useAlert } from '@/components/ui';
 import { formatCurrency, getCurrencySymbol } from '@/utils/format';
 import type { Goal } from '@/types';
 
-export default function GoalsScreen() {
+interface GoalsScreenProps {
+  showBack?: boolean;
+}
+
+export default function GoalsScreen({ showBack = false }: GoalsScreenProps = {}) {
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const insets = useSafeAreaInsets();
@@ -77,14 +81,17 @@ export default function GoalsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <Header
-        isMainTab
+        isMainTab={!showBack}
+        showBack={showBack}
         title="Goals"
         leftNode={
-          <TouchableOpacity style={styles.avatarButton} onPress={() => router.navigate('/settings')}>
-            <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
-              <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
-            </View>
-          </TouchableOpacity>
+          showBack ? undefined : (
+            <TouchableOpacity style={styles.avatarButton} onPress={() => router.navigate('/settings')}>
+              <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
+                <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
+              </View>
+            </TouchableOpacity>
+          )
         }
         rightNode={
           <TouchableOpacity style={styles.iconButton} onPress={() => setShowAdd(!showAdd)}>

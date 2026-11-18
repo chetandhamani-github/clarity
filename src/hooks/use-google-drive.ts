@@ -38,6 +38,8 @@ export function useGoogleDrive() {
 
   const autoBackupEnabled = useAppStore((state) => state.autoBackupEnabled);
   const setAutoBackupEnabled = useAppStore((state) => state.setAutoBackupEnabled);
+  const autoBackupOnlyWifi = useAppStore((state) => state.autoBackupOnlyWifi);
+  const setAutoBackupOnlyWifi = useAppStore((state) => state.setAutoBackupOnlyWifi);
 
   useEffect(() => {
     if (isConnected) {
@@ -344,6 +346,8 @@ export function useGoogleDrive() {
     lastBackupTime,
     autoBackupEnabled,
     setAutoBackupEnabled,
+    autoBackupOnlyWifi,
+    setAutoBackupOnlyWifi,
     hasCustomBackupPassphrase,
     checkHasCustomBackupPassphrase,
     isConnecting,

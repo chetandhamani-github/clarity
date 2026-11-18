@@ -406,6 +406,31 @@ describe('BalanceCalculator', () => {
       expect(result.shares[0].owedAmount).toBe(200);
       expect(result.shares[1].owedAmount).toBe(100);
     });
+
+    it('simplifies group debts accurately', () => {
+      // Alice: +₹400, Bob: -₹100, Charlie: -₹300
+      const transactions = BalanceCalculator.simplifyDebts([
+        { personId: 'alice', personName: 'Alice', netBalance: 400 },
+        { personId: 'bob', personName: 'Bob', netBalance: -100 },
+        { personId: 'charlie', personName: 'Charlie', netBalance: -300 },
+      ]);
+
+      expect(transactions).toHaveLength(2);
+      expect(transactions[0]).toEqual({
+        fromPersonId: 'charlie',
+        fromPersonName: 'Charlie',
+        toPersonId: 'alice',
+        toPersonName: 'Alice',
+        amount: 300,
+      });
+      expect(transactions[1]).toEqual({
+        fromPersonId: 'bob',
+        fromPersonName: 'Bob',
+        toPersonId: 'alice',
+        toPersonName: 'Alice',
+        amount: 100,
+      });
+    });
   });
 });
 

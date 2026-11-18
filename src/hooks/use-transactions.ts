@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   deleteTransaction as deleteTransactionDao,
+  bulkDeleteTransactions,
+  bulkUpdateCategory,
+  bulkUpdateAccount,
   getAccountHistory,
   getMonthlyReports,
   getMonthlyTotals,
@@ -124,6 +127,90 @@ export function useDeleteTransaction() {
   return {
     mutate: (id: string, options?: { onSuccess?: () => void }) => {
       mutation.mutate(id, { onSuccess: options?.onSuccess });
+    },
+    isPending: mutation.isPending,
+  };
+}
+
+export function useBulkDeleteTransactions() {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: (ids: string[]) => bulkDeleteTransactions(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+      queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
+      queryClient.invalidateQueries({ queryKey: ['goals'] });
+      queueAutoBackup('bulk-delete-transactions');
+    },
+  });
+
+  return {
+    mutate: (
+      ids: string[],
+      options?: { onSuccess?: () => void; onError?: (error: unknown) => void }
+    ) => {
+      mutation.mutate(ids, {
+        onSuccess: options?.onSuccess,
+        onError: options?.onError,
+      });
+    },
+    isPending: mutation.isPending,
+  };
+}
+
+export function useBulkUpdateCategory() {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: ({ ids, category }: { ids: string[]; category: string }) =>
+      bulkUpdateCategory(ids, category),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+      queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
+      queueAutoBackup('bulk-update-category');
+    },
+  });
+
+  return {
+    mutate: (
+      params: { ids: string[]; category: string },
+      options?: { onSuccess?: () => void; onError?: (error: unknown) => void }
+    ) => {
+      mutation.mutate(params, {
+        onSuccess: options?.onSuccess,
+        onError: options?.onError,
+      });
+    },
+    isPending: mutation.isPending,
+  };
+}
+
+export function useBulkUpdateAccount() {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: ({ ids, accountId }: { ids: string[]; accountId: string }) =>
+      bulkUpdateAccount(ids, accountId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queueAutoBackup('bulk-update-account');
+    },
+  });
+
+  return {
+    mutate: (
+      params: { ids: string[]; accountId: string },
+      options?: { onSuccess?: () => void; onError?: (error: unknown) => void }
+    ) => {
+      mutation.mutate(params, {
+        onSuccess: options?.onSuccess,
+        onError: options?.onError,
+      });
     },
     isPending: mutation.isPending,
   };

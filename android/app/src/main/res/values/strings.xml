@@ -2,4 +2,8 @@
   <string name="app_name">Clarity</string>
   <string name="expo_system_ui_user_interface_style" translatable="false">automatic</string>
   <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
+  <string name="shortcut_voice_add_short">Voice Add</string>
+  <string name="shortcut_voice_add_long">Speak Expense with Voice</string>
+  <string name="shortcut_add_tx_short">Add Expense</string>
+  <string name="shortcut_add_tx_long">Add New Transaction</string>
 </resources>
