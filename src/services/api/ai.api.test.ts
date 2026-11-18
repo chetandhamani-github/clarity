@@ -50,6 +50,7 @@ describe('ai.api', () => {
           headers: {
             'X-Installation-Id': 'mock-device-id-123',
           },
+          timeoutMs: 30000,
         }
       );
       expect(res).toEqual(mockResult);
@@ -81,7 +82,7 @@ describe('ai.api', () => {
           headers: {
             'X-Installation-Id': 'mock-device-id-123',
           },
-          timeoutMs: 45000,
+          timeoutMs: 60000,
         }
       );
       expect(res).toEqual(mockResult);
@@ -111,7 +112,7 @@ describe('ai.api', () => {
           headers: {
             'X-Installation-Id': 'mock-device-id-123',
           },
-          timeoutMs: 15000,
+          timeoutMs: 60000,
         }
       );
       expect(res).toEqual(mockResult);
@@ -150,6 +151,7 @@ describe('ai.api', () => {
           headers: {
             'X-Installation-Id': 'mock-device-id-123',
           },
+          timeoutMs: 45000,
         }
       );
       expect(res).toEqual(mockResult);

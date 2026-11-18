@@ -1,17 +1,17 @@
-import React, { useState } from 'react';
-import {
-  View,
-  StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
-  StyleProp,
-  ViewStyle,
-} from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import { Text } from './Text';
-import { useTheme, ThemeColors } from '@/theme/useTheme';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
+import { ThemeColors, useTheme } from '@/theme/useTheme';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useState } from 'react';
+import {
+    ActivityIndicator,
+    StyleProp,
+    StyleSheet,
+    TouchableOpacity,
+    View,
+    ViewStyle,
+} from 'react-native';
+import { Text } from './Text';
 
 export interface NoNetworkViewProps {
   variant?: 'fullscreen' | 'card' | 'banner';

@@ -36,6 +36,14 @@ export class ReviewQueueService {
   }
 
   /**
+   * Get count of pending review items.
+   */
+  public static async getPendingCount(): Promise<number> {
+    const stats = await SmsDao.getSmsStats();
+    return stats.totalReview;
+  }
+
+  /**
    * Resolve an item by supplying user-verified or manually entered transaction details.
    */
   public static async resolveItem(

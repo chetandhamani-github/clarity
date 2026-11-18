@@ -23,6 +23,7 @@ import { useMonthlyTotals } from '@/hooks/use-transactions';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
 import { useAccounts } from '@/hooks/use-accounts';
 import { chatWithFinancialCopilot } from '@/services/api/ai.api';
+import { fetchRemoteConfig } from '@/services/api/config.api';
 import { useNetworkStore } from '@/store/use-network-store';
 import { isNetworkError } from '@/services/network/network.service';
 
@@ -118,6 +119,11 @@ export default function CopilotScreen() {
     };
   }, []);
 
+  // Warm up backend silently so Render is active when user sends a query
+  useEffect(() => {
+    fetchRemoteConfig().catch(() => {});
+  }, []);
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome-1',
@@ -188,7 +194,7 @@ export default function CopilotScreen() {
       setTimeout(() => scrollToEnd(true), 80);
     } catch (err: unknown) {
       if (isNetworkError(err)) {
-        useNetworkStore.getState().setIsConnected(false);
+        void useNetworkStore.getState().verifyConnection();
       }
       showToast('Could not reach assistant. Please try again.', 'error');
       const errorMsg: ChatMessage = {

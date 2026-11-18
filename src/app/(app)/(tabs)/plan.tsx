@@ -153,7 +153,7 @@ export default function PlanScreen() {
     const projectedMonthEnd = Math.round(dailyBurn * totalDays);
     const variance = projectedMonthEnd - safePlan.monthlyIncome;
     const isOverbudgetRisk = variance > 0;
-    const unpaidBills = billSummary?.unpaidAmount || 0;
+    const unpaidBills = billSummary ? billSummary.totalPending + billSummary.totalOverdue : 0;
     const targetDailyPace =
       daysLeft > 0 ? Math.max(0, (safePlan.monthlyIncome - totals.totalSpent) / daysLeft) : 0;
     const safeDailySpend =
@@ -171,7 +171,7 @@ export default function PlanScreen() {
       targetDailyPace: Math.round(targetDailyPace),
       safeDailySpend: Math.round(safeDailySpend),
     };
-  }, [safePlan.monthlyIncome, totals.totalSpent, billSummary?.unpaidAmount]);
+  }, [safePlan.monthlyIncome, totals.totalSpent, billSummary?.totalPending, billSummary?.totalOverdue]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>

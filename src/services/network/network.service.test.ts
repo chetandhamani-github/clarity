@@ -19,7 +19,7 @@ describe('network.service', () => {
       expect(isOnline).toBe(true);
       expect(globalThis.fetch).toHaveBeenCalledWith(
         'https://connectivitycheck.gstatic.com/generate_204',
-        expect.objectContaining({ method: 'HEAD' })
+        expect.objectContaining({ method: 'GET' })
       );
     });
 
@@ -37,7 +37,22 @@ describe('network.service', () => {
       expect(globalThis.fetch).toHaveBeenCalledTimes(2);
     });
 
-    it('returns false when both primary and fallback fail', async () => {
+    it('returns true when tertiary Cloudflare endpoint succeeds if first two fail', async () => {
+      globalThis.fetch = jest
+        .fn()
+        .mockRejectedValueOnce(new Error('Primary network error'))
+        .mockRejectedValueOnce(new Error('Secondary network error'))
+        .mockResolvedValueOnce({
+          status: 200,
+          ok: true,
+        } as Response);
+
+      const isOnline = await checkInternetConnectivity(1000);
+      expect(isOnline).toBe(true);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(3);
+    });
+
+    it('returns false when all endpoints fail', async () => {
       globalThis.fetch = jest.fn().mockRejectedValue(new Error('Network request failed'));
 
       const isOnline = await checkInternetConnectivity(1000);

@@ -6,6 +6,7 @@ import {
     encryptBackupPayload,
     decryptBackupPayload,
     isEncryptedBackup,
+    generateSecureDeviceKey,
 } from './backup-crypto';
 import {
     GoogleSignin,
@@ -18,6 +19,7 @@ const SECURE_KEYS = {
   REFRESH_TOKEN: 'gdrive_refresh_token',
   EXPIRES_AT: 'gdrive_token_expires_at',
   USER_EMAIL: 'gdrive_user_email',
+  BACKUP_PASSPHRASE: 'gdrive_backup_passphrase',
 };
 
 const BACKUP_FILE_NAME = 'clarity_backup.json';
@@ -115,6 +117,55 @@ export async function clearTokens(): Promise<void> {
   } catch {
     // Ignore sign-out errors
   }
+}
+
+/**
+ * Retrieve saved client-side backup encryption passphrase/key from SecureStore.
+ */
+export async function getStoredBackupPassphrase(): Promise<string | null> {
+  try {
+    return await SecureStore.getItemAsync(SECURE_KEYS.BACKUP_PASSPHRASE);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Persist client-side backup encryption passphrase/key to SecureStore.
+ */
+export async function setStoredBackupPassphrase(passphrase: string): Promise<void> {
+  try {
+    if (passphrase && passphrase.trim().length >= 4) {
+      await SecureStore.setItemAsync(SECURE_KEYS.BACKUP_PASSPHRASE, passphrase.trim());
+    }
+  } catch {
+    // Ignore SecureStore write errors
+  }
+}
+
+/**
+ * Delete saved backup encryption passphrase from SecureStore.
+ */
+export async function clearStoredBackupPassphrase(): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(SECURE_KEYS.BACKUP_PASSPHRASE);
+  } catch {
+    // Ignore delete errors
+  }
+}
+
+/**
+ * Retrieve existing passphrase or generate a cryptographically secure 256-bit device key.
+ * Guarantees that ALL backups to Google Drive are encrypted from day one.
+ */
+export async function getOrCreateDefaultBackupKey(): Promise<string> {
+  const existing = await getStoredBackupPassphrase();
+  if (existing && existing.trim().length >= 4) {
+    return existing;
+  }
+  const generatedKey = generateSecureDeviceKey();
+  await setStoredBackupPassphrase(generatedKey);
+  return generatedKey;
 }
 
 /**
@@ -373,13 +424,19 @@ export async function uploadBackup(
       };
     }
 
-    let jsonContent: string;
+    // Enforce AES-256-GCM encryption client-side before sending to Google Drive
+    // Guarantees zero unencrypted/plain-text financial records on Google Cloud
+    const encryptionPassphrase =
+      options?.passphrase ||
+      (await getStoredBackupPassphrase()) ||
+      (await getOrCreateDefaultBackupKey());
+
     if (options?.passphrase) {
-      const encrypted = await encryptBackupPayload(snapshot, options.passphrase);
-      jsonContent = JSON.stringify(encrypted, null, 2);
-    } else {
-      jsonContent = JSON.stringify(snapshot, null, 2);
+      await setStoredBackupPassphrase(options.passphrase);
     }
+
+    const encryptedPayload = await encryptBackupPayload(snapshot, encryptionPassphrase);
+    const jsonContent = JSON.stringify(encryptedPayload, null, 2);
 
     let response: Response;
 
@@ -530,7 +587,8 @@ export async function downloadBackup(passphrase?: string): Promise<{
 
     let payload: ClarityBackupPayload;
     if (isEncryptedBackup(rawJson)) {
-      if (!passphrase) {
+      const keyToUse = passphrase || (await getStoredBackupPassphrase());
+      if (!keyToUse) {
         return {
           success: false,
           isEncrypted: true,
@@ -539,7 +597,10 @@ export async function downloadBackup(passphrase?: string): Promise<{
         };
       }
       try {
-        payload = await decryptBackupPayload<ClarityBackupPayload>(rawJson, passphrase);
+        payload = await decryptBackupPayload<ClarityBackupPayload>(rawJson, keyToUse);
+        if (passphrase) {
+          await setStoredBackupPassphrase(passphrase);
+        }
       } catch (decErr: any) {
         return {
           success: false,
@@ -578,6 +639,7 @@ export async function downloadBackup(passphrase?: string): Promise<{
           const revData = await revRes.json();
           const revisions = revData.revisions;
           if (Array.isArray(revisions) && revisions.length > 0) {
+            const keyToUse = passphrase || (await getStoredBackupPassphrase());
             // Check revisions from newest to oldest
             for (let i = revisions.length - 1; i >= 0; i--) {
               const rev = revisions[i];
@@ -589,7 +651,14 @@ export async function downloadBackup(passphrase?: string): Promise<{
               if (revFileRes.ok) {
                 const revText = await revFileRes.text();
                 try {
-                  const revPayload = JSON.parse(revText);
+                  const revRaw = JSON.parse(revText);
+                  let revPayload: ClarityBackupPayload;
+                  if (isEncryptedBackup(revRaw)) {
+                    if (!keyToUse) continue;
+                    revPayload = await decryptBackupPayload<ClarityBackupPayload>(revRaw, keyToUse);
+                  } else {
+                    revPayload = revRaw;
+                  }
                   if (isMeaningfulDatabaseSnapshot(revPayload)) {
                     return {
                       success: true,

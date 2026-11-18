@@ -6,16 +6,16 @@
  */
 
 /**
- * Checks internet connectivity by pinging lightweight 204 endpoints.
+ * Checks internet connectivity by pinging lightweight, globally distributed 204/trace endpoints.
  * Returns true if network is available and reachable, false otherwise.
  */
-export async function checkInternetConnectivity(timeoutMs: number = 2500): Promise<boolean> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
+export async function checkInternetConnectivity(timeoutMs: number = 5000): Promise<boolean> {
+  // 1. Primary check: Google connectivity check 204
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetch('https://connectivitycheck.gstatic.com/generate_204', {
-      method: 'HEAD',
+      method: 'GET',
       signal: controller.signal,
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -23,23 +23,46 @@ export async function checkInternetConnectivity(timeoutMs: number = 2500): Promi
       },
     });
     clearTimeout(timer);
-    return res.status === 204 || res.ok;
-  } catch {
-    clearTimeout(timer);
-    // Fallback attempt to alternate lightweight endpoint
-    try {
-      const fbController = new AbortController();
-      const fbTimer = setTimeout(() => fbController.abort(), 1500);
-      const fbRes = await fetch('https://clients3.google.com/generate_204', {
-        method: 'HEAD',
-        signal: fbController.signal,
-      });
-      clearTimeout(fbTimer);
-      return fbRes.status === 204 || fbRes.ok;
-    } catch {
-      return false;
+    if (res.status === 204 || res.ok) {
+      return true;
     }
+  } catch {
+    // Primary failed, proceed to fallback
   }
+
+  // 2. Fallback check: Google alternate 204
+  try {
+    const fbController = new AbortController();
+    const fbTimer = setTimeout(() => fbController.abort(), 3000);
+    const fbRes = await fetch('https://clients3.google.com/generate_204', {
+      method: 'GET',
+      signal: fbController.signal,
+    });
+    clearTimeout(fbTimer);
+    if (fbRes.status === 204 || fbRes.ok) {
+      return true;
+    }
+  } catch {
+    // Alternate failed, proceed to third fallback
+  }
+
+  // 3. Fallback check: Cloudflare CDN trace
+  try {
+    const cfController = new AbortController();
+    const cfTimer = setTimeout(() => cfController.abort(), 3000);
+    const cfRes = await fetch('https://www.cloudflare.com/cdn-cgi/trace', {
+      method: 'GET',
+      signal: cfController.signal,
+    });
+    clearTimeout(cfTimer);
+    if (cfRes.status === 200 || cfRes.ok) {
+      return true;
+    }
+  } catch {
+    // All endpoints failed
+  }
+
+  return false;
 }
 
 /**

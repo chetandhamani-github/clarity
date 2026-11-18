@@ -1,19 +1,19 @@
-import React, { useState } from 'react';
-import {
-  View,
-  StyleSheet,
-  Modal,
-  TouchableOpacity,
-  TextInput,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
 import { Text } from '@/components/ui/Text';
-import { useTheme, typography, ThemeColors } from '@/theme';
-import { MaterialIcons } from '@expo/vector-icons';
-import { parseVoiceTranscript, ParsedVoiceTransaction, UserAccountRef } from '@/services/voice/voice-parser';
+import { ParsedVoiceTransaction, parseVoiceTranscript, UserAccountRef } from '@/services/voice/voice-parser';
+import { ThemeColors, typography, useTheme } from '@/theme';
 import { getCurrencySymbol } from '@/utils/format';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useState } from 'react';
+import {
+    ActivityIndicator,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    StyleSheet,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 
 interface VoiceTransactionModalProps {
   visible: boolean;

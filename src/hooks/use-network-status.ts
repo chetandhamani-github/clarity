@@ -7,6 +7,7 @@ export function useNetworkStatus() {
   const isConnected = useNetworkStore((state) => state.isConnected);
   const isChecking = useNetworkStore((state) => state.isChecking);
   const checkConnection = useNetworkStore((state) => state.checkConnection);
+  const verifyConnection = useNetworkStore((state) => state.verifyConnection);
   const setIsConnected = useNetworkStore((state) => state.setIsConnected);
 
   return {
@@ -14,6 +15,7 @@ export function useNetworkStatus() {
     isOffline: !isConnected,
     isChecking,
     checkConnection,
+    verifyConnection,
     setIsConnected,
   };
 }

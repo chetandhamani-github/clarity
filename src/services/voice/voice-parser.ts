@@ -1,6 +1,5 @@
 import { LocalCategorizerEngine } from '@/modules/sms/categorizer/localCategorizerEngine';
 import { parseVoiceTransactionWithAi } from '@/services/api/ai.api';
-import type { VoiceParseResult } from '@/services/api/types';
 
 export interface ParsedVoiceTransaction {
   merchant: string;
@@ -114,11 +113,11 @@ function extractTransactionLocally(
   }
 
   // 2. Extract Amount
-  // Matches "350", "350.50", "rs 350", "350 rupees", "$50", "₹1200"
+  // Matches "350", "350.50", "rs 350", "350 rupees", "$50", "₹1,200", "₹1,50,000"
   let amount = 0;
-  const amountMatch = lower.match(/(?:rs\.?|inr|₹|\$)?\s*([0-9]+(?:[\.,][0-9]{1,2})?)\s*(?:rs\.?|inr|rupees|bucks)?/i);
+  const amountMatch = lower.match(/(?:rs\.?|inr|₹|\$)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)\s*(?:rs\.?|inr|rupees|bucks)?/i);
   if (amountMatch && amountMatch[1]) {
-    const parsed = parseFloat(amountMatch[1].replace(',', ''));
+    const parsed = parseFloat(amountMatch[1].replace(/,/g, ''));
     if (!isNaN(parsed) && parsed > 0) {
       amount = parsed;
     }

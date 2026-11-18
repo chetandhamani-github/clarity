@@ -156,7 +156,10 @@ export default function SettingsScreen() {
       }
     } else {
       setPassphraseModalVisible(false);
-      await backupDriveNow(passphrase);
+      const success = await backupDriveNow(passphrase);
+      if (success) {
+        showToast('Passphrase updated & encrypted backup saved!', 'success');
+      }
     }
   };
 
@@ -515,6 +518,24 @@ export default function SettingsScreen() {
                         ? new Date(driveLastBackupTime).toLocaleString()
                         : 'Not backed up yet'}
                     </Text>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: colors.surfaceContainerHighest,
+                        borderRadius: 6,
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        gap: 4,
+                        marginTop: 6,
+                        alignSelf: 'flex-start',
+                      }}
+                    >
+                      <MaterialIcons name="lock" size={13} color={colors.primary} />
+                      <Text style={{ ...typography.labelMd, color: colors.primary, fontWeight: '700' }}>
+                        AES-256-GCM Encrypted
+                      </Text>
+                    </View>
                   </View>
                 </View>
 
@@ -540,7 +561,7 @@ export default function SettingsScreen() {
                       )}
                     </View>
                     <Text style={styles.settingSub}>
-                      Auto-syncs changes & updates silently in background.
+                      Auto-syncs encrypted snapshots silently in background.
                     </Text>
                   </View>
                   <Switch
@@ -562,7 +583,7 @@ export default function SettingsScreen() {
                     ) : (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <MaterialIcons name="cloud-upload" size={18} color={colors.onPrimary} />
-                        <Text style={styles.btnPrimaryText}>BACKUP NOW</Text>
+                        <Text style={styles.btnPrimaryText}>BACKUP NOW (ENCRYPTED)</Text>
                       </View>
                     )}
                   </TouchableOpacity>
@@ -576,9 +597,9 @@ export default function SettingsScreen() {
                     disabled={isBackingUpDrive || isRestoringDrive || isDeletingDriveBackups}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                      <MaterialIcons name="enhanced-encryption" size={18} color={colors.primary} />
+                      <MaterialIcons name="vpn-key" size={18} color={colors.primary} />
                       <Text style={[styles.btnSecondaryText, { color: colors.primary }]}>
-                        CREATE ENCRYPTED BACKUP
+                        SET / CHANGE PASSPHRASE
                       </Text>
                     </View>
                   </TouchableOpacity>

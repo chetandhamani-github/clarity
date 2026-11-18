@@ -24,6 +24,7 @@ export async function categorizeTransactionWithAi(
     headers: {
       'X-Installation-Id': installationId,
     },
+    timeoutMs: 30000,
   });
 }
 
@@ -38,7 +39,7 @@ export async function scanReceiptWithAi(
     headers: {
       'X-Installation-Id': installationId,
     },
-    timeoutMs: 45000,
+    timeoutMs: 60000,
   });
 }
 
@@ -53,7 +54,7 @@ export async function chatWithFinancialCopilot(
     headers: {
       'X-Installation-Id': installationId,
     },
-    timeoutMs: 15000,
+    timeoutMs: 60000,
   });
 }
 
@@ -68,7 +69,7 @@ export async function parseVoiceTransactionWithAi(
     headers: {
       'X-Installation-Id': installationId,
     },
-    timeoutMs: 15000,
+    timeoutMs: 45000,
   });
 }
 
@@ -83,5 +84,6 @@ export async function fetchMonthlyAiDigest(
     headers: {
       'X-Installation-Id': installationId,
     },
+    timeoutMs: 45000,
   });
 }

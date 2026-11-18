@@ -37,4 +37,12 @@ describe('useNetworkStore', () => {
     expect(useNetworkStore.getState().isConnected).toBe(false);
     expect(useNetworkStore.getState().isChecking).toBe(false);
   });
+
+  it('delegates verifyConnection to checkConnection', async () => {
+    (networkService.checkInternetConnectivity as jest.Mock).mockResolvedValueOnce(true);
+
+    const result = await useNetworkStore.getState().verifyConnection();
+    expect(result).toBe(true);
+    expect(useNetworkStore.getState().isConnected).toBe(true);
+  });
 });

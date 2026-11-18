@@ -6,6 +6,8 @@ import {
     downloadBackup,
     findBackupFile,
     getSavedTokens,
+    getStoredBackupPassphrase,
+    setStoredBackupPassphrase,
     uploadBackup,
     type GoogleDriveBackupInfo,
 } from '@/services/cloud/google-drive-service';
@@ -199,11 +201,14 @@ export function useGoogleDrive() {
   }, [setGoogleDriveConnected, showToast]);
 
   /**
-   * Trigger manual backup to Google Drive.
+   * Trigger manual client-side encrypted backup to Google Drive.
    */
   const backupNow = useCallback(async (passphrase?: string) => {
     setIsBackingUp(true);
     try {
+      if (passphrase) {
+        await setStoredBackupPassphrase(passphrase);
+      }
       const snapshot = await generateDatabaseSnapshot();
       const result = await uploadBackup(snapshot, { passphrase });
 
@@ -214,7 +219,7 @@ export function useGoogleDrive() {
 
       const nowStr = result.modifiedTime || new Date().toISOString();
       setLastCloudBackupTime(nowStr);
-      showToast('Backup saved to Google Drive successfully!', 'success');
+      showToast('Encrypted backup saved to Google Drive!', 'success');
       return true;
     } catch (error: any) {
       showToast(error?.message || 'Error uploading backup', 'error');
@@ -323,5 +328,7 @@ export function useGoogleDrive() {
     restoreFromDrive,
     checkAvailableBackup,
     deleteBackupsFromDrive,
+    getBackupPassphrase: getStoredBackupPassphrase,
+    setBackupPassphrase: setStoredBackupPassphrase,
   };
 }

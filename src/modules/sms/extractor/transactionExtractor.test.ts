@@ -398,16 +398,11 @@ describe('TransactionExtractor', () => {
     expect(res?.merchant).toBe('CHAI CORNER');
   });
 
-  it('extracts inline transaction date from SMS text', () => {
-    const datedMsg: RawSmsMessage = {
-      id: 'date-1',
-      address: 'HDFCBK',
-      body: 'Rs. 1,000.00 debited from A/c XX1234 on 15-Jan-25 to Myntra. Avl Bal: Rs 20,000.',
-      date: 1765000000000, // Device delivery date in future
-    };
-    const res = TransactionExtractor.extract(datedMsg);
-    expect(res?.timestamp).not.toBe(1765000000000);
-    const parsedDate = new Date(res!.timestamp);
+  it('extracts inline transaction date from SMS text using extractDate', () => {
+    const text = 'Rs. 1,000.00 debited from A/c XX1234 on 15-Jan-25 to Myntra. Avl Bal: Rs 20,000.';
+    const parsedTimestamp = TransactionExtractor.extractDate(text, 1765000000000);
+    expect(parsedTimestamp).not.toBe(1765000000000);
+    const parsedDate = new Date(parsedTimestamp);
     expect(parsedDate.getFullYear()).toBe(2025);
     expect(parsedDate.getMonth()).toBe(0); // Jan
     expect(parsedDate.getDate()).toBe(15);

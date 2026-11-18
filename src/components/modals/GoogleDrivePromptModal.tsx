@@ -53,17 +53,17 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
               </View>
 
               {/* Title & Description */}
-              <Text style={styles.title}>Secure Cloud Backup</Text>
+              <Text style={styles.title}>Encrypted Cloud Backup</Text>
               <Text style={styles.subtitle}>
-                Connect Clarity to your private Google Drive to keep your accounts, transactions,
-                and budgets safely backed up.
+                Connect Clarity to your private Google Drive with client-side AES-256-GCM encryption.
+                Only your device holds the key — Google cannot read your financial records.
               </Text>
 
               {/* Feature Points */}
               <View style={styles.featuresList}>
                 <View style={styles.featureItem}>
                   <MaterialIcons name="lock-outline" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>100% private to your personal Drive</Text>
+                  <Text style={styles.featureText}>AES-256-GCM client-side encryption</Text>
                 </View>
                 <View style={styles.featureItem}>
                   <MaterialIcons name="restore" size={20} color={colors.primary} />

@@ -7,6 +7,31 @@ interface NetworkState {
   isChecking: boolean;
   setIsConnected: (connected: boolean) => void;
   checkConnection: () => Promise<boolean>;
+  verifyConnection: () => Promise<boolean>;
+}
+
+let offlineRetryTimer: ReturnType<typeof setInterval> | null = null;
+
+function startOfflineRetry() {
+  if (offlineRetryTimer) return;
+  offlineRetryTimer = setInterval(async () => {
+    try {
+      const isOnline = await checkInternetConnectivity(4000);
+      if (isOnline) {
+        useNetworkStore.getState().setIsConnected(true);
+        stopOfflineRetry();
+      }
+    } catch {
+      // Still offline, retry next cycle
+    }
+  }, 6000);
+}
+
+function stopOfflineRetry() {
+  if (offlineRetryTimer) {
+    clearInterval(offlineRetryTimer);
+    offlineRetryTimer = null;
+  }
 }
 
 export const useNetworkStore = create<NetworkState>((set, get) => ({
@@ -15,6 +40,11 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   setIsConnected: (connected: boolean) => {
     if (get().isConnected !== connected) {
       set({ isConnected: connected });
+      if (!connected) {
+        startOfflineRetry();
+      } else {
+        stopOfflineRetry();
+      }
     }
   },
   checkConnection: async () => {
@@ -25,11 +55,23 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     try {
       const connected = await checkInternetConnectivity();
       set({ isConnected: connected, isChecking: false });
+      if (!connected) {
+        startOfflineRetry();
+      } else {
+        stopOfflineRetry();
+      }
       return connected;
     } catch {
       set({ isConnected: false, isChecking: false });
+      startOfflineRetry();
       return false;
     }
+  },
+  verifyConnection: async () => {
+    if (get().isChecking) {
+      return get().isConnected;
+    }
+    return get().checkConnection();
   },
 }));
 
@@ -55,6 +97,7 @@ export function initNetworkMonitoring(): () => void {
 
   return () => {
     subscription.remove();
+    stopOfflineRetry();
     isMonitoringInitialized = false;
   };
 }

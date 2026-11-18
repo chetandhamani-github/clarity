@@ -150,7 +150,7 @@ function cleanMerchantName(narration: string): string {
   }
 
   // POS 123456 MERCHANT NAME
-  clean = clean.replace(/^(POS|NEFT|RTGS|IMPS|ATM|ACH|INB|BILLDESK|RAZORPAY)[*\s:/-]+/i, '');
+  clean = clean.replace(/^(POS|NEFT|RTGS|IMPS|ATM|ACH|INB|BILLDESK|RAZORPAY|BHARATPE|PHONEPE|PAYU|CCAVENUE|AIRPAY|PINELABS)[*\s:/-]+/i, '');
 
   // Truncate trailing numbers/account references
   clean = clean.replace(/[/_-]\d+$/, '').trim();
@@ -241,7 +241,9 @@ export function parseBankStatementCsv(csvText: string): CsvParseResult {
         continue;
       }
     } else if (colAmount !== -1) {
-      const val = cleanAmount(row[colAmount]);
+      const rawAmtStr = (row[colAmount] || '').trim();
+      const isNegativeOrParen = rawAmtStr.includes('-') || /^\(.*\)$/.test(rawAmtStr);
+      const val = cleanAmount(rawAmtStr);
       if (val === 0) {
         ignoredRows++;
         continue;
@@ -255,8 +257,10 @@ export function parseBankStatementCsv(csvText: string): CsvParseResult {
         } else {
           type = 'expense';
         }
-      } else if (row[colAmount].includes('-')) {
+      } else if (isNegativeOrParen) {
         type = 'expense';
+      } else if (rawAmtStr.includes('+')) {
+        type = 'income';
       } else {
         type = 'expense';
       }

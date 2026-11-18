@@ -86,20 +86,27 @@ export default function ImportStatementScreen() {
 
       setParsedTransactions(parseResult.transactions);
 
-      // Check existing transactions for deduplication
+      // Check existing transactions for frequency-aware and merchant-matched deduplication
       const existing = await getTransactions({ accountId: selectedAccountId });
       const nonDuplicates: ParsedCsvTransaction[] = [];
       let duplicates = 0;
+      const matchedExistingIds = new Set<string>();
 
       for (const tx of parseResult.transactions) {
-        const isDup = existing.some(
+        const txMerchantNorm = (tx.merchant || '').trim().toLowerCase();
+
+        // Match against existing transactions, consuming each match only once
+        const matchedItem = existing.find(
           (e) =>
+            !matchedExistingIds.has(e.id) &&
             e.date === tx.date &&
             Math.abs(e.amount - tx.amount) < 0.01 &&
-            e.type === tx.type
+            e.type === tx.type &&
+            (!e.merchant || !txMerchantNorm || e.merchant.trim().toLowerCase() === txMerchantNorm)
         );
 
-        if (isDup) {
+        if (matchedItem) {
+          matchedExistingIds.add(matchedItem.id);
           duplicates++;
         } else {
           nonDuplicates.push(tx);

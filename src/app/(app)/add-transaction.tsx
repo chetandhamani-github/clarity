@@ -13,7 +13,6 @@ import { calculateNextDate } from '@/services/database/recurring-dao';
 import { evaluateTransactionBudgetAlerts } from '@/services/notifications/alert-engine';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { scanReceiptWithAi } from '@/services/api/ai.api';
 import { VoiceTransactionModal } from '@/components/modals/VoiceTransactionModal';
 import type { ParsedVoiceTransaction } from '@/services/voice/voice-parser';
@@ -432,35 +431,15 @@ export default function AddTransactionScreen() {
 
       const asset = res.assets[0];
       setIsScanningReceipt(true);
-      showToast('Optimizing and scanning receipt...', 'info');
+      showToast('Scanning receipt with AI...', 'info');
 
-      // Client-side image downscaling to reduce payload from ~10MB to <350KB
-      let base64 = '';
-      let mimeType = 'image/jpeg';
-      try {
-        const manipResult = await manipulateAsync(
-          asset.uri,
-          [{ resize: { width: 1400 } }],
-          { compress: 0.75, format: SaveFormat.JPEG, base64: true }
-        );
-        if (manipResult.base64) {
-          base64 = manipResult.base64;
-          mimeType = 'image/jpeg';
-        }
-      } catch {
-        // Fallback to direct read if manipulation fails on non-standard formats
-      }
-
-      if (!base64) {
-        base64 = await FileSystem.readAsStringAsync(asset.uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        mimeType = asset.mimeType || 'image/jpeg';
-      }
+      const base64 = await FileSystem.readAsStringAsync(asset.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
 
       const scanResult = await scanReceiptWithAi({
         imageBase64: base64,
-        mimeType,
+        mimeType: asset.mimeType || 'image/jpeg',
       });
 
       if (scanResult) {
@@ -485,18 +464,29 @@ export default function AddTransactionScreen() {
           }
         }
 
-        // Only activate split mode if there are at least 2 distinct items that sum to the total amount
+        // Reconcile and activate split mode when multiple line items are detected
         if (scanResult.items && scanResult.items.length > 1) {
-          const itemSum = scanResult.items.reduce((acc, it) => acc + (it.amount || 0), 0);
+          const validItems = scanResult.items.filter((it) => (it.amount || 0) > 0);
+          const itemSum = validItems.reduce((acc, it) => acc + (it.amount || 0), 0);
           const total = scanResult.totalAmount || 0;
-          if (total > 0 && Math.abs(itemSum - total) <= 0.5) {
+          const diff = Math.round((total - itemSum) * 100) / 100;
+
+          if (total > 0 && validItems.length > 1) {
+            const mappedSplits = validItems.map((it) => ({
+              category: it.category || scanResult.category || 'Groceries',
+              amount: it.amount ? it.amount.toString() : '0',
+            }));
+
+            // If line items don't fully add up due to taxes, fees, or service charges, add a balancing split item
+            if (diff > 0.5) {
+              mappedSplits.push({
+                category: 'Bills & Utilities',
+                amount: diff.toString(),
+              });
+            }
+
             setIsSplitMode(true);
-            setSplitItems(
-              scanResult.items.map((it) => ({
-                category: it.category || scanResult.category || 'Groceries',
-                amount: it.amount ? it.amount.toString() : '0',
-              }))
-            );
+            setSplitItems(mappedSplits);
           } else {
             setIsSplitMode(false);
           }
@@ -508,8 +498,8 @@ export default function AddTransactionScreen() {
       }
     } catch (err: unknown) {
       if (isNetworkError(err)) {
-        useNetworkStore.getState().setIsConnected(false);
-        showToast('Internet connection lost. Please check your connection.', 'error');
+        void useNetworkStore.getState().verifyConnection();
+        showToast('Network request timed out. Please check your connection and try again.', 'error');
       } else {
         const errMsg = err instanceof Error && err.message.includes('timeout')
           ? 'Receipt scan timed out. Try with a smaller image or enter manually.'
@@ -1902,36 +1892,6 @@ const getStyles = (colors: ThemeColors) => {
     smartActionSubtitle: {
       ...typography.labelMd,
       fontSize: 10,
-      color: colors.onSurfaceVariant,
-    },
-    aiScanBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      backgroundColor: colors.surfaceContainerLow,
-      borderWidth: 1,
-      borderColor: colors.outlineVariant,
-      borderRadius: 14,
-      padding: 12,
-      marginBottom: 16,
-    },
-    aiScanBannerIcon: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: colors.primaryContainer,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    aiScanBannerTitle: {
-      ...typography.labelMd,
-      fontWeight: '700',
-      color: colors.onSurface,
-    },
-    aiScanBannerSubtitle: {
-      ...typography.bodyMd,
-      fontSize: 12,
-      lineHeight: 16,
       color: colors.onSurfaceVariant,
     },
   });

@@ -18,6 +18,8 @@ import { formatCurrency, formatLocalDate, getTransactionSign, groupTransactionsB
 import { getCategoryIcon } from '@/utils/icons';
 import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
 import { TransactionFilterModal, ActiveFilters, DatePreset } from '@/components/modals/TransactionFilterModal';
+import { ReviewQueueModal } from '@/components/modals/ReviewQueueModal';
+import { useSmsStore } from '@/store/useSmsStore';
 import type { TransactionFilters } from '@/types';
 
 const FILTERS = [
@@ -35,6 +37,9 @@ export default function TransactionsScreen() {
 
   const { accounts } = useAccounts();
   const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [reviewModalVisible, setReviewModalVisible] = useState(false);
+  const reviewQueueCount = useSmsStore((state) => state.reviewQueueCount);
+  const refreshReviewQueueCount = useSmsStore((state) => state.refreshReviewQueueCount);
   const [filters, setFilters] = useState<ActiveFilters>({
     datePreset: 'all',
     type: 'all',
@@ -81,7 +86,8 @@ export default function TransactionsScreen() {
   useFocusEffect(
     useCallback(() => {
       refetch();
-    }, [refetch])
+      refreshReviewQueueCount();
+    }, [refetch, refreshReviewQueueCount])
   );
 
   const groupedTransactions = useMemo(
@@ -336,13 +342,34 @@ export default function TransactionsScreen() {
           </View>
         )}
 
+        {reviewQueueCount > 0 && (
+          <TouchableOpacity
+            style={styles.reviewQueueBanner}
+            onPress={() => setReviewModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.reviewQueueIconContainer}>
+              <MaterialIcons name="rate-review" size={20} color={colors.onPrimary} />
+            </View>
+            <View style={styles.reviewQueueContent}>
+              <Text style={styles.reviewQueueTitle}>
+                {reviewQueueCount} {reviewQueueCount === 1 ? 'transaction needs' : 'transactions need'} review
+              </Text>
+              <Text style={styles.reviewQueueSubtitle}>
+                Tap to verify details from parsed SMS
+              </Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={22} color={colors.onPrimaryContainer} />
+          </TouchableOpacity>
+        )}
+
         <View style={styles.resultsHeader}>
           <Text style={styles.resultsTitle}>Recent Activity</Text>
           <Text style={styles.resultsCount}>{transactions.length} Transactions</Text>
         </View>
       </View>
     ),
-    [colors, styles, router, filters, activeCount, activeBadges, transactions.length]
+    [colors, styles, router, filters, activeCount, activeBadges, transactions.length, reviewQueueCount]
   );
 
   const renderListEmpty = useCallback(() => {
@@ -404,6 +431,11 @@ export default function TransactionsScreen() {
         filters={filters}
         onClose={() => setFilterModalVisible(false)}
         onApply={setFilters}
+      />
+
+      <ReviewQueueModal
+        visible={reviewModalVisible}
+        onClose={() => setReviewModalVisible(false)}
       />
     </View>
   );
@@ -567,6 +599,39 @@ const getStyles = (colors: ThemeColors) => {
     inactiveFilterText: {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
+    },
+    reviewQueueBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.primaryContainer,
+      borderRadius: 16,
+      padding: 14,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      gap: 12,
+    },
+    reviewQueueIconContainer: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    reviewQueueContent: {
+      flex: 1,
+    },
+    reviewQueueTitle: {
+      ...typography.labelMd,
+      color: colors.onPrimaryContainer,
+      fontWeight: '700',
+    },
+    reviewQueueSubtitle: {
+      ...typography.bodyMd,
+      color: colors.onPrimaryContainer,
+      opacity: 0.8,
+      marginTop: 2,
     },
     resultsHeader: {
       flexDirection: 'row',

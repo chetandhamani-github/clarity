@@ -1,9 +1,9 @@
-import { SmsSyncService } from './smsSyncService';
-import { SmsReaderService } from '@/modules/sms/reader/smsReaderService';
-import { MockSmsReaderAdapter } from '@/modules/sms/reader/mockSmsReaderAdapter';
-import { SmsDao } from '@/modules/sms/storage/smsDao';
 import { mmkv } from '@/lib/storage';
+import { MockSmsReaderAdapter } from '@/modules/sms/reader/mockSmsReaderAdapter';
+import { SmsReaderService } from '@/modules/sms/reader/smsReaderService';
+import { SmsDao } from '@/modules/sms/storage/smsDao';
 import type { ParsedTransaction, RawSmsMessage } from '@/modules/sms/types';
+import { SmsSyncService } from './smsSyncService';
 
 jest.mock('@/modules/sms/storage/smsDao', () => ({
   SmsDao: {

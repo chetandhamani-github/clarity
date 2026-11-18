@@ -377,14 +377,14 @@ public class AiServiceImpl implements AiService {
             String jsonPayload = objectMapper.writeValueAsString(requestBody);
 
             HttpClient client = HttpClient.newBuilder()
-                    .connectTimeout(Duration.ofSeconds(10))
+                    .connectTimeout(Duration.ofSeconds(15))
                     .build();
 
             HttpRequest httpRequest = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("Content-Type", "application/json")
                     .header("x-goog-api-key", geminiApiKey.trim())
-                    .timeout(Duration.ofSeconds(25))
+                    .timeout(Duration.ofSeconds(45))
                     .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
                     .build();
 

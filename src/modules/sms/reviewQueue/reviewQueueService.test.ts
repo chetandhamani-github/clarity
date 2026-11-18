@@ -7,6 +7,7 @@ jest.mock('@/modules/sms/storage/smsDao', () => ({
     saveParsedTransactionsBatch: jest.fn().mockResolvedValue(undefined),
     updateReviewQueueStatus: jest.fn().mockResolvedValue(undefined),
     getReviewQueueItems: jest.fn().mockResolvedValue([]),
+    getSmsStats: jest.fn().mockResolvedValue({ totalReview: 3 }),
   },
 }));
 
@@ -58,5 +59,11 @@ describe('ReviewQueueService', () => {
   it('dismisses a review item', async () => {
     await ReviewQueueService.dismissItem('item-123');
     expect(SmsDao.updateReviewQueueStatus).toHaveBeenCalledWith('item-123', 'dismissed');
+  });
+
+  it('gets count of pending review items', async () => {
+    const count = await ReviewQueueService.getPendingCount();
+    expect(count).toBe(3);
+    expect(SmsDao.getSmsStats).toHaveBeenCalled();
   });
 });
