@@ -18,7 +18,7 @@ import { useAccountReconciliation, useCreateAdjustmentEntry } from '@/hooks/use-
 import { useToast, useAlert, DiscrepancyBanner } from '@/components/ui';
 import { LineChart } from 'react-native-gifted-charts';
 import { formatCurrency, formatDate, getTransactionSign } from '@/utils/format';
-import { getCategoryIcon, getAccountTypeIcon } from '@/utils/icons';
+import { getCategoryIcon, getAccountTypeIcon, getBankBranding } from '@/utils/icons';
 import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
 
 export default function AccountDetailsScreen() {
@@ -142,8 +142,51 @@ export default function AccountDetailsScreen() {
 
   const isPositiveTrend = balanceChangePercent >= 0;
 
+  const billingCycleInfo = useMemo(() => {
+    if (account?.type !== 'credit') return null;
+    const cycleDay = account.billingCycleDay;
+    const dueDay = account.dueDay;
+    if (!cycleDay && !dueDay) return null;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let nextStatementDate: Date | null = null;
+    if (cycleDay) {
+      const year = today.getFullYear();
+      const month = today.getMonth();
+      const candidateThisMonth = new Date(year, month, cycleDay);
+      if (candidateThisMonth >= today) {
+        nextStatementDate = candidateThisMonth;
+      } else {
+        nextStatementDate = new Date(year, month + 1, cycleDay);
+      }
+    }
+
+    let nextDueDate: Date | null = null;
+    let daysUntilDue: number | null = null;
+    if (dueDay) {
+      const year = today.getFullYear();
+      const month = today.getMonth();
+      const candidateThisMonth = new Date(year, month, dueDay);
+      if (candidateThisMonth >= today) {
+        nextDueDate = candidateThisMonth;
+      } else {
+        nextDueDate = new Date(year, month + 1, dueDay);
+      }
+      daysUntilDue = Math.ceil((nextDueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    return {
+      nextStatementDate,
+      nextDueDate,
+      daysUntilDue,
+    };
+  }, [account]);
+
   const screenWidth = Dimensions.get('window').width;
   const chartWidth = screenWidth - 88;
+  const branding = account ? getBankBranding(account.institution || account.name) : null;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -211,11 +254,16 @@ export default function AccountDetailsScreen() {
                     <Text style={styles.institutionText}>{account.institution}</Text>
                   )}
                 </View>
-                <View style={styles.accountIconBox}>
+                <View
+                  style={[
+                    styles.accountIconBox,
+                    branding ? { backgroundColor: branding.backgroundColor } : undefined,
+                  ]}
+                >
                   <MaterialIcons
-                    name={getAccountTypeIcon(account.type)}
+                    name={account.institution ? 'account-balance' : getAccountTypeIcon(account.type)}
                     size={24}
-                    color={colors.primary}
+                    color={branding ? branding.color : colors.primary}
                   />
                 </View>
               </View>
@@ -333,6 +381,99 @@ export default function AccountDetailsScreen() {
               </View>
             </View>
 
+            {/* Credit Card Billing Cycle Card */}
+            {account.type === 'credit' && (
+              <View style={styles.billingCycleCard}>
+                <View style={styles.billingCycleHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <MaterialIcons name="credit-score" size={20} color={colors.primary} />
+                    <Text style={styles.billingCycleTitle}>Billing Cycle & Due Date</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => router.navigate(`/(app)/add-account?id=${account.id}`)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <MaterialIcons name="edit" size={16} color={colors.outline} />
+                  </TouchableOpacity>
+                </View>
+
+                {billingCycleInfo ? (
+                  <View style={{ gap: 12 }}>
+                    <View style={styles.billingCycleGrid}>
+                      <View style={styles.billingStatBox}>
+                        <Text style={styles.billingStatLabel}>Next Statement</Text>
+                        <Text style={styles.billingStatValue}>
+                          {billingCycleInfo.nextStatementDate
+                            ? billingCycleInfo.nextStatementDate.toLocaleDateString(undefined, {
+                                day: 'numeric',
+                                month: 'short',
+                              })
+                            : '—'}
+                        </Text>
+                      </View>
+
+                      <View style={styles.billingStatBox}>
+                        <Text style={styles.billingStatLabel}>Payment Due Date</Text>
+                        <Text style={styles.billingStatValue}>
+                          {billingCycleInfo.nextDueDate
+                            ? billingCycleInfo.nextDueDate.toLocaleDateString(undefined, {
+                                day: 'numeric',
+                                month: 'short',
+                              })
+                            : '—'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {billingCycleInfo.daysUntilDue !== null && (
+                      <View
+                        style={[
+                          styles.dueAlertBanner,
+                          billingCycleInfo.daysUntilDue <= 3
+                            ? { backgroundColor: colors.errorContainer }
+                            : { backgroundColor: colors.surfaceContainer },
+                        ]}
+                      >
+                        <MaterialIcons
+                          name={billingCycleInfo.daysUntilDue <= 3 ? 'warning' : 'event'}
+                          size={18}
+                          color={
+                            billingCycleInfo.daysUntilDue <= 3
+                              ? colors.onErrorContainer
+                              : colors.primary
+                          }
+                        />
+                        <Text
+                          style={[
+                            styles.dueAlertText,
+                            billingCycleInfo.daysUntilDue <= 3
+                              ? { color: colors.onErrorContainer, fontWeight: '700' }
+                              : { color: colors.onSurface },
+                          ]}
+                        >
+                          {billingCycleInfo.daysUntilDue === 0
+                            ? 'Payment due today!'
+                            : billingCycleInfo.daysUntilDue < 0
+                            ? `Payment is ${Math.abs(billingCycleInfo.daysUntilDue)} days overdue`
+                            : `${billingCycleInfo.daysUntilDue} days remaining until payment due`}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.addBillingCyclePrompt}
+                    onPress={() => router.navigate(`/(app)/add-account?id=${account.id}`)}
+                  >
+                    <MaterialIcons name="add-circle-outline" size={18} color={colors.primary} />
+                    <Text style={styles.addBillingCycleText}>
+                      Set statement & payment due days to track billing cycle
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
             {/* Discrepancy Banner */}
             {reconciliation && reconciliation.hasDiscrepancy && (
               <DiscrepancyBanner
@@ -386,7 +527,7 @@ export default function AccountDetailsScreen() {
                                     color={
                                       tx.type === 'income'
                                         ? colors.onPrimaryContainer
-                                        : colors.primary
+                                        : colors.onSurfaceVariant
                                     }
                                   />
                                 </View>
@@ -637,6 +778,70 @@ const getStyles = (colors: ThemeColors) => {
     payBillBtnText: {
       ...typography.labelMd,
       color: colors.onPrimary,
+      fontWeight: '600',
+    },
+    billingCycleCard: {
+      backgroundColor: colors.surfaceContainerLowest,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      padding: 16,
+      gap: 12,
+    },
+    billingCycleHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    billingCycleTitle: {
+      ...typography.labelMd,
+      color: colors.onSurface,
+      fontWeight: '700',
+    },
+    billingCycleGrid: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    billingStatBox: {
+      flex: 1,
+      backgroundColor: colors.surfaceContainer,
+      borderRadius: 10,
+      padding: 10,
+      gap: 2,
+    },
+    billingStatLabel: {
+      ...typography.bodyMd,
+      fontSize: 11,
+      color: colors.onSurfaceVariant,
+    },
+    billingStatValue: {
+      ...typography.bodyLg,
+      fontWeight: '700',
+      color: colors.onSurface,
+    },
+    dueAlertBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+    },
+    dueAlertText: {
+      ...typography.bodyMd,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    addBillingCyclePrompt: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 6,
+    },
+    addBillingCycleText: {
+      ...typography.bodyMd,
+      fontSize: 13,
+      color: colors.primary,
       fontWeight: '600',
     },
   });

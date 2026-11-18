@@ -37,18 +37,22 @@ export function useNotifications() {
 export function useMarkNotificationAsRead() {
   const [isPending, setIsPending] = useState(false);
 
-  const mutate = useCallback(async (id: string, options?: { onSuccess?: () => void }) => {
-    setIsPending(true);
-    try {
-      await notificationDao.markNotificationAsRead(id);
-      DeviceEventEmitter.emit('notificationsUpdated');
-      options?.onSuccess?.();
-    } catch (error) {
-      throw error;
-    } finally {
-      setIsPending(false);
-    }
-  }, []);
+  const mutate = useCallback(
+    async (id: string, options?: { onSuccess?: () => void; onError?: () => void }) => {
+      setIsPending(true);
+      try {
+        await notificationDao.markNotificationAsRead(id);
+        DeviceEventEmitter.emit('notificationsUpdated');
+        options?.onSuccess?.();
+      } catch (error) {
+        options?.onError?.();
+        throw error;
+      } finally {
+        setIsPending(false);
+      }
+    },
+    []
+  );
 
   return { mutate, isPending };
 }
@@ -56,18 +60,45 @@ export function useMarkNotificationAsRead() {
 export function useMarkAllNotificationsAsRead() {
   const [isPending, setIsPending] = useState(false);
 
-  const mutate = useCallback(async (options?: { onSuccess?: () => void }) => {
-    setIsPending(true);
-    try {
-      await notificationDao.markAllNotificationsAsRead();
-      DeviceEventEmitter.emit('notificationsUpdated');
-      options?.onSuccess?.();
-    } catch (error) {
-      throw error;
-    } finally {
-      setIsPending(false);
-    }
-  }, []);
+  const mutate = useCallback(
+    async (options?: { onSuccess?: () => void; onError?: () => void }) => {
+      setIsPending(true);
+      try {
+        await notificationDao.markAllNotificationsAsRead();
+        DeviceEventEmitter.emit('notificationsUpdated');
+        options?.onSuccess?.();
+      } catch (error) {
+        options?.onError?.();
+        throw error;
+      } finally {
+        setIsPending(false);
+      }
+    },
+    []
+  );
+
+  return { mutate, isPending };
+}
+
+export function useDeleteNotification() {
+  const [isPending, setIsPending] = useState(false);
+
+  const mutate = useCallback(
+    async (id: string, options?: { onSuccess?: () => void; onError?: () => void }) => {
+      setIsPending(true);
+      try {
+        await notificationDao.deleteNotification(id);
+        DeviceEventEmitter.emit('notificationsUpdated');
+        options?.onSuccess?.();
+      } catch (error) {
+        options?.onError?.();
+        throw error;
+      } finally {
+        setIsPending(false);
+      }
+    },
+    []
+  );
 
   return { mutate, isPending };
 }
@@ -75,18 +106,22 @@ export function useMarkAllNotificationsAsRead() {
 export function useClearAllNotifications() {
   const [isPending, setIsPending] = useState(false);
 
-  const mutate = useCallback(async (options?: { onSuccess?: () => void }) => {
-    setIsPending(true);
-    try {
-      await notificationDao.clearAllNotifications();
-      DeviceEventEmitter.emit('notificationsUpdated');
-      options?.onSuccess?.();
-    } catch (error) {
-      throw error;
-    } finally {
-      setIsPending(false);
-    }
-  }, []);
+  const mutate = useCallback(
+    async (options?: { onSuccess?: () => void; onError?: () => void }) => {
+      setIsPending(true);
+      try {
+        await notificationDao.clearAllNotifications();
+        DeviceEventEmitter.emit('notificationsUpdated');
+        options?.onSuccess?.();
+      } catch (error) {
+        options?.onError?.();
+        throw error;
+      } finally {
+        setIsPending(false);
+      }
+    },
+    []
+  );
 
   return { mutate, isPending };
 }

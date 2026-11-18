@@ -152,7 +152,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
             onPress={() => setShowChooserModal(true)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <MaterialIcons name="add" size={22} color={colors.primary} />
+            <MaterialIcons name="add" size={22} color={colors.onSurface} />
           </TouchableOpacity>
         }
       />
@@ -516,7 +516,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
                       {
                         backgroundColor:
                           act.activityType === 'settlement'
-                            ? colors.primaryContainer + '25'
+                            ? 'rgba(59, 130, 246, 0.12)'
                             : act.debtType === 'OWE_ME'
                               ? 'rgba(16, 185, 129, 0.12)'
                               : 'rgba(239, 68, 68, 0.12)',
@@ -534,7 +534,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
                       size={18}
                       color={
                         act.activityType === 'settlement'
-                          ? colors.primary
+                          ? '#3b82f6'
                           : act.debtType === 'OWE_ME'
                             ? '#10b981'
                             : '#ef4444'
@@ -639,8 +639,8 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
                 style={[styles.chooserItem, { backgroundColor: colors.surfaceContainerLow }]}
                 onPress={() => openAction('SETTLEMENT')}
               >
-                <View style={[styles.chooserIconCircle, { backgroundColor: colors.primaryContainer + '25' }]}>
-                  <MaterialIcons name="handshake" size={22} color={colors.primary} />
+                <View style={[styles.chooserIconCircle, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
+                  <MaterialIcons name="handshake" size={22} color="#3b82f6" />
                 </View>
                 <View style={styles.chooserTextCol}>
                   <Text style={[styles.chooserItemTitle, { color: colors.onSurface }]}>
@@ -657,8 +657,8 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
                 style={[styles.chooserItem, { backgroundColor: colors.surfaceContainerLow }]}
                 onPress={() => openAction('PERSON')}
               >
-                <View style={[styles.chooserIconCircle, { backgroundColor: colors.surfaceContainerHigh }]}>
-                  <MaterialIcons name="person-add" size={22} color={colors.primary} />
+                <View style={[styles.chooserIconCircle, { backgroundColor: 'rgba(168, 85, 247, 0.12)' }]}>
+                  <MaterialIcons name="person-add" size={22} color="#a855f7" />
                 </View>
                 <View style={styles.chooserTextCol}>
                   <Text style={[styles.chooserItemTitle, { color: colors.onSurface }]}>
@@ -725,8 +725,32 @@ function PersonCard({ balance, hideBalances, onPress, onSettlePress }: PersonCar
       activeOpacity={0.75}
     >
       <View style={styles.personCardLeft}>
-        <View style={[styles.avatarCircle, { backgroundColor: colors.primaryContainer }]}>
-          <Text style={[styles.avatarText, { color: colors.onPrimaryContainer }]}>{initials}</Text>
+        <View
+          style={[
+            styles.avatarCircle,
+            {
+              backgroundColor: isOwedToMe
+                ? 'rgba(16, 185, 129, 0.12)'
+                : isYouOwe
+                  ? 'rgba(239, 68, 68, 0.12)'
+                  : colors.primaryContainer,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.avatarText,
+              {
+                color: isOwedToMe
+                  ? '#10b981'
+                  : isYouOwe
+                    ? '#ef4444'
+                    : colors.onPrimaryContainer,
+              },
+            ]}
+          >
+            {initials}
+          </Text>
         </View>
 
         <View style={styles.nameCol}>

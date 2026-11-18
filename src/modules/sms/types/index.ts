@@ -11,6 +11,7 @@ export type SmsClassification =
   | 'OTP'
   | 'PROMOTIONAL'
   | 'SPAM'
+  | 'PRE_DEBIT_NOTIFICATION'
   | 'UNKNOWN';
 
 export type SmsPermissionStatus =

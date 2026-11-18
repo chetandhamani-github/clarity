@@ -101,7 +101,18 @@ export default function PlanScreen() {
         <View
           style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, gap: 16 }}
         >
-          <MaterialIcons name="account-balance-wallet" size={64} color={colors.primaryContainer} />
+          <View
+            style={{
+              width: 80,
+              height: 80,
+              borderRadius: 40,
+              backgroundColor: colors.surfaceContainerLow,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <MaterialIcons name="account-balance-wallet" size={44} color={colors.primary} />
+          </View>
           <Text style={{ ...typography.headlineSm, color: colors.onSurface }}>
             No Budget Plan Set
           </Text>
@@ -130,6 +141,32 @@ export default function PlanScreen() {
   const savingsLimit = safePlan.monthlyIncome * (safePlan.savingsPercent / 100);
 
   const remaining = safePlan.monthlyIncome - totals.totalSpent;
+
+  const forecast = useMemo(() => {
+    if (!safePlan.monthlyIncome || safePlan.monthlyIncome <= 0 || totals.totalSpent <= 0) return null;
+    const now = new Date();
+    const daysPassed = Math.max(1, now.getDate());
+    const totalDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const daysLeft = Math.max(0, totalDays - daysPassed);
+
+    const dailyBurn = totals.totalSpent / daysPassed;
+    const projectedMonthEnd = Math.round(dailyBurn * totalDays);
+    const variance = projectedMonthEnd - safePlan.monthlyIncome;
+    const isOverbudgetRisk = variance > 0;
+    const targetDailyPace =
+      daysLeft > 0 ? Math.max(0, (safePlan.monthlyIncome - totals.totalSpent) / daysLeft) : 0;
+
+    return {
+      daysPassed,
+      totalDays,
+      daysLeft,
+      dailyBurn: Math.round(dailyBurn),
+      projectedMonthEnd,
+      variance,
+      isOverbudgetRisk,
+      targetDailyPace: Math.round(targetDailyPace),
+    };
+  }, [safePlan.monthlyIncome, totals.totalSpent]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -201,6 +238,63 @@ export default function PlanScreen() {
               </View>
             </View>
 
+            {/* Smart Predictive Burn-Rate Forecast */}
+            {forecast && (
+              <View
+                style={[
+                  styles.forecastCard,
+                  {
+                    borderColor: forecast.isOverbudgetRisk
+                      ? colors.errorContainer
+                      : colors.outlineVariant,
+                  },
+                ]}
+              >
+                <View style={styles.forecastHeader}>
+                  <View style={styles.forecastHeaderLeft}>
+                    <View
+                      style={[
+                        styles.forecastIconBox,
+                        {
+                          backgroundColor: forecast.isOverbudgetRisk
+                            ? colors.errorContainer
+                            : colors.primaryContainer,
+                        },
+                      ]}
+                    >
+                      <MaterialIcons
+                        name={forecast.isOverbudgetRisk ? 'trending-up' : 'auto-awesome'}
+                        size={18}
+                        color={
+                          forecast.isOverbudgetRisk
+                            ? colors.onErrorContainer
+                            : colors.onPrimaryContainer
+                        }
+                      />
+                    </View>
+                    <Text style={styles.forecastTitle}>
+                      {forecast.isOverbudgetRisk ? 'Burn-Rate Alert' : 'Cash-Flow Projection'}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.forecastBadge,
+                      {
+                        color: forecast.isOverbudgetRisk ? colors.error : colors.primary,
+                      },
+                    ]}
+                  >
+                    {forecast.daysLeft}d left
+                  </Text>
+                </View>
+                <Text style={styles.forecastDesc}>
+                  {forecast.isOverbudgetRisk
+                    ? `At your current pace (${formatCurrency(forecast.dailyBurn)}/day), month-end spend is projected to reach ${formatCurrency(forecast.projectedMonthEnd)} (${formatCurrency(forecast.variance)} over budget). Limit daily spending to ${formatCurrency(forecast.targetDailyPace)} to stay on track.`
+                    : `Spending is well-paced at ${formatCurrency(forecast.dailyBurn)}/day. Projected month-end spend is ${formatCurrency(forecast.projectedMonthEnd)} with estimated savings of ${formatCurrency(Math.abs(forecast.variance))}.`}
+                </Text>
+              </View>
+            )}
+
             {/* Allocation Sections */}
             <View style={styles.allocationSections}>
               {/* Needs */}
@@ -210,7 +304,7 @@ export default function PlanScreen() {
               >
                 <View style={styles.allocationHeader}>
                   <View style={styles.allocationHeaderLeft}>
-                    <MaterialIcons name="home" size={24} color={colors.primary} />
+                    <MaterialIcons name="home" size={24} color="#3B82F6" />
                     <Text style={styles.allocationTitle}>Needs</Text>
                   </View>
                   <Text style={styles.allocationPercent}>{safePlan.needsPercent}%</Text>
@@ -227,6 +321,7 @@ export default function PlanScreen() {
                       style={[
                         styles.progressBarFill,
                         {
+                          backgroundColor: '#3B82F6',
                           width: `${Math.min(100, (totals.needsSpent / Math.max(1, needsLimit)) * 100)}%`,
                         },
                       ]}
@@ -248,7 +343,7 @@ export default function PlanScreen() {
                     onPress={() => router.navigate('/(app)/bills')}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <MaterialIcons name="receipt-long" size={16} color={colors.primary} />
+                      <MaterialIcons name="receipt-long" size={16} color={colors.onSurfaceVariant} />
                       <Text style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, fontSize: 12 }}>
                         Committed Bills & Utilities
                       </Text>
@@ -267,7 +362,7 @@ export default function PlanScreen() {
               >
                 <View style={styles.allocationHeader}>
                   <View style={styles.allocationHeaderLeft}>
-                    <MaterialIcons name="shopping-bag" size={24} color={colors.primary} />
+                    <MaterialIcons name="shopping-bag" size={24} color="#EC4899" />
                     <Text style={styles.allocationTitle}>Wants</Text>
                   </View>
                   <Text style={styles.allocationPercent}>{safePlan.wantsPercent}%</Text>
@@ -284,6 +379,7 @@ export default function PlanScreen() {
                       style={[
                         styles.progressBarFill,
                         {
+                          backgroundColor: '#EC4899',
                           width: `${Math.min(100, (totals.wantsSpent / Math.max(1, wantsLimit)) * 100)}%`,
                         },
                       ]}
@@ -299,7 +395,7 @@ export default function PlanScreen() {
               >
                 <View style={styles.allocationHeader}>
                   <View style={styles.allocationHeaderLeft}>
-                    <MaterialIcons name="savings" size={24} color={colors.primary} />
+                    <MaterialIcons name="savings" size={24} color="#10B981" />
                     <Text style={styles.allocationTitle}>Savings</Text>
                   </View>
                   <Text style={styles.allocationPercent}>{safePlan.savingsPercent}%</Text>
@@ -316,6 +412,7 @@ export default function PlanScreen() {
                       style={[
                         styles.progressBarFill,
                         {
+                          backgroundColor: '#10B981',
                           width: `${Math.min(100, (totals.savingsSpent / Math.max(1, savingsLimit)) * 100)}%`,
                         },
                       ]}
@@ -482,6 +579,45 @@ const getStyles = (colors: ThemeColors) => {
       height: '100%',
       backgroundColor: colors.primary,
       borderRadius: 4,
+    },
+    forecastCard: {
+      backgroundColor: colors.surfaceContainerLowest,
+      borderRadius: 16,
+      borderWidth: 1,
+      padding: 16,
+      gap: 10,
+    },
+    forecastHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    forecastHeaderLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    forecastIconBox: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    forecastTitle: {
+      ...typography.labelMd,
+      fontWeight: '700',
+      color: colors.onSurface,
+    },
+    forecastBadge: {
+      ...typography.labelMd,
+      fontWeight: '700',
+      fontSize: 12,
+    },
+    forecastDesc: {
+      ...typography.bodyMd,
+      color: colors.onSurfaceVariant,
+      lineHeight: 20,
     },
   });
   return styles;

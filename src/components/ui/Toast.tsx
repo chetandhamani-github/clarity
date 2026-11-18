@@ -46,12 +46,24 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const getBackgroundColor = (type: ToastType) => {
     switch (type) {
       case 'success':
-        return colors.primary;
+        return colors.success;
       case 'error':
         return colors.error;
       case 'info':
       default:
-        return colors.secondary;
+        return colors.inverseSurface;
+    }
+  };
+
+  const getForegroundColor = (type: ToastType) => {
+    switch (type) {
+      case 'success':
+        return colors.onSuccess;
+      case 'error':
+        return colors.onError;
+      case 'info':
+      default:
+        return colors.inverseOnSurface;
     }
   };
 
@@ -82,8 +94,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             onPress={hideToast}
             style={[styles.toastContent, { backgroundColor: getBackgroundColor(toast.type) }]}
           >
-            <MaterialIcons name={getIcon(toast.type)} size={20} color={colors.onPrimary} />
-            <Text style={styles.toastText}>{toast.message}</Text>
+            <MaterialIcons name={getIcon(toast.type)} size={20} color={getForegroundColor(toast.type)} />
+            <Text style={[styles.toastText, { color: getForegroundColor(toast.type) }]}>{toast.message}</Text>
           </TouchableOpacity>
         </Animated.View>
       )}

@@ -28,6 +28,23 @@ export class SmsClassificationEngine {
     /\b(?:account blocked|kyc expired|pan not linked|update kyc immediately|click link to prevent deactivation)\b/i,
   ];
 
+  // Regex patterns for Failed / Declined Transactions
+  private static readonly FAILED_PATTERNS = [
+    /\b(?:failed|declined|unsuccessful|could\s+not\s+(?:be\s+)?processed|rejected|cancelled|reversed\s+due\s+to\s+failure)\b/i,
+    /\b(?:insufficient\s+(?:funds|balance)|incorrect\s+(?:pin|otp|cvv)|limit\s+exceeded)\b/i,
+    /\b(?:txn|transaction)\s+(?:has\s+)?(?:failed|declined)\b/i,
+  ];
+
+  // Regex patterns for Pre-Debit & Scheduled Mandate Alerts (Future debits, not executed transactions)
+  private static readonly PRE_DEBIT_PATTERNS = [
+    /\b(?:will\s+be|is\s+scheduled\s+to\s+be|scheduled\s+for|is\s+set\s+to\s+be)\s+debited\b/i,
+    /\b(?:will\s+be|scheduled\s+to\s+be)\s+(?:deducted|processed|auto[- ]debited)\b/i,
+    /\b(?:mandate|e[- ]mandate|autopay|standing\s+instruction)\s+(?:registered|scheduled|created|initiated)\s+for\b/i,
+    /\bmandate\s+(?:due\s+on|debit\s+date)\b/i,
+    /\brequest\s+to\s+debit\s+your\s+a\/?c\b/i,
+    /\bpre[- ]debit\s+notification\b/i,
+  ];
+
   // Financial verbs & currency check
   private static readonly AMOUNT_PATTERNS = [
     /(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d{1,2})?/i,
@@ -100,6 +117,16 @@ export class SmsClassificationEngine {
    * Fast check to see if text can possibly be a financial transaction.
    */
   public static isPotentiallyFinancial(body: string): boolean {
+    const isReversalCredit = /\b(?:reversed\s+(?:and\s+)?credited|refund(?:ed)?\s+(?:to|in)\s+your)\b/i.test(body);
+    if (!isReversalCredit && this.FAILED_PATTERNS.some((p) => p.test(body))) {
+      return false;
+    }
+
+    // Ignore pre-debit notifications and scheduled mandate alerts
+    if (this.PRE_DEBIT_PATTERNS.some((p) => p.test(body))) {
+      return false;
+    }
+
     const hasAmount = this.AMOUNT_PATTERNS.some((p) => p.test(body));
     if (!hasAmount) return false;
 
@@ -112,7 +139,7 @@ export class SmsClassificationEngine {
   }
 
   /**
-   * Classify message into one of 13 types and calculate confidence.
+   * Classify message into one of 14 types and calculate confidence.
    */
   public static classify(message: RawSmsMessage): ClassificationResult {
     const body = message.body;
@@ -146,6 +173,29 @@ export class SmsClassificationEngine {
       return {
         classification: 'PROMOTIONAL',
         confidence: 0.9,
+        isFinancial: false,
+        reasons,
+      };
+    }
+
+    // 3.5 Check Failed / Declined Transactions
+    const isReversalCredit = /\b(?:reversed\s+(?:and\s+)?credited|refund(?:ed)?\s+(?:to|in)\s+your)\b/i.test(body);
+    if (!isReversalCredit && this.FAILED_PATTERNS.some((p) => p.test(body))) {
+      reasons.push('Transaction failed, declined, or was cancelled');
+      return {
+        classification: 'UNKNOWN',
+        confidence: 0.9,
+        isFinancial: false,
+        reasons,
+      };
+    }
+
+    // 3.6 Check Pre-Debit & Scheduled Mandate Alerts
+    if (this.PRE_DEBIT_PATTERNS.some((p) => p.test(body))) {
+      reasons.push('Pre-debit or scheduled mandate notification (not an executed transaction)');
+      return {
+        classification: 'PRE_DEBIT_NOTIFICATION',
+        confidence: 0.95,
         isFinancial: false,
         reasons,
       };

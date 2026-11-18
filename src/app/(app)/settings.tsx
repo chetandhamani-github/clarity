@@ -1,4 +1,6 @@
 import { Header, Text, useAlert, useToast } from '@/components/ui';
+import { LegalModal } from '@/components/modals/LegalModal';
+import { PassphraseModal } from '@/components/modals/PassphraseModal';
 import { useCategorySpending } from '@/hooks/use-budget';
 import { useGoals } from '@/hooks/use-goals';
 import { useGoogleDrive } from '@/hooks/use-google-drive';
@@ -12,10 +14,12 @@ import { formatCurrency } from '@/utils/format';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import { useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -35,6 +39,9 @@ export default function SettingsScreen() {
   const setCurrency = useAppStore((state) => state.setCurrency);
   const biometricsEnabled = useAppStore((state) => state.biometricEnabled);
   const [isResetting, setIsResetting] = useState(false);
+  const [legalModalType, setLegalModalType] = useState<'privacy' | 'terms' | null>(null);
+  const [passphraseModalVisible, setPassphraseModalVisible] = useState(false);
+  const [passphraseMode, setPassphraseMode] = useState<'encrypt' | 'decrypt'>('decrypt');
   const { showAlert } = useAlert();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
@@ -94,6 +101,7 @@ export default function SettingsScreen() {
 
   const now = new Date();
   const { notifications } = useNotifications();
+  const unreadNotificationCount = notifications.filter((n) => !n.isRead).length;
   const { goals } = useGoals();
   const { spending } = useCategorySpending(now.getMonth() + 1, now.getFullYear());
 
@@ -114,7 +122,7 @@ export default function SettingsScreen() {
     else setCurrency('INR');
   };
 
-  const handleRestoreFromDrive = async () => {
+  const handleRestoreFromDrive = async (passphrase?: string) => {
     const backupDateMsg = driveLastBackupTime
       ? ` (Backup from: ${new Date(driveLastBackupTime).toLocaleString()})`
       : '';
@@ -127,11 +135,29 @@ export default function SettingsScreen() {
           text: 'Restore',
           style: 'default',
           onPress: async () => {
-            await restoreFromDrive();
+            const res = await restoreFromDrive(passphrase);
+            if (!res.success && res.isEncrypted) {
+              setPassphraseMode('decrypt');
+              setPassphraseModalVisible(true);
+            }
           },
         },
       ]
     );
+  };
+
+  const handlePassphraseSubmit = async (passphrase: string) => {
+    if (passphraseMode === 'decrypt') {
+      const res = await restoreFromDrive(passphrase);
+      if (res.success) {
+        setPassphraseModalVisible(false);
+      } else {
+        showToast(res.error || 'Incorrect passphrase', 'error');
+      }
+    } else {
+      setPassphraseModalVisible(false);
+      await backupDriveNow(passphrase);
+    }
   };
 
   const handleDisconnectDrive = () => {
@@ -192,6 +218,12 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleContactSupport = () => {
+    Linking.openURL('mailto:support@clarityapp.dev?subject=Clarity%20Feedback%20v1.0.0').catch(() => {
+      showToast('Could not open email client. Contact support@clarityapp.dev', 'info');
+    });
+  };
+
   const { user, isAuthenticated, signOut, isLoading: isAuthLoading } = useAuthStore();
 
   const handleSignOut = () => {
@@ -215,7 +247,14 @@ export default function SettingsScreen() {
         title="Intelligence & System"
         rightNode={
           <TouchableOpacity style={styles.iconButton} onPress={() => router.navigate('/notifications')}>
-            <MaterialIcons name="notifications" size={24} color={colors.primary} />
+            <MaterialIcons name="notifications" size={24} color={colors.onSurface} />
+            {unreadNotificationCount > 0 && (
+              <View style={styles.unreadBadgeDot}>
+                <Text style={styles.unreadBadgeText}>
+                  {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         }
       />
@@ -515,7 +554,7 @@ export default function SettingsScreen() {
                 <View style={{ gap: 8 }}>
                   <TouchableOpacity
                     style={styles.btnPrimary}
-                    onPress={backupDriveNow}
+                    onPress={() => backupDriveNow()}
                     disabled={isBackingUpDrive || isRestoringDrive || isDeletingDriveBackups}
                   >
                     {isBackingUpDrive ? (
@@ -530,7 +569,23 @@ export default function SettingsScreen() {
 
                   <TouchableOpacity
                     style={styles.btnSecondary}
-                    onPress={handleRestoreFromDrive}
+                    onPress={() => {
+                      setPassphraseMode('encrypt');
+                      setPassphraseModalVisible(true);
+                    }}
+                    disabled={isBackingUpDrive || isRestoringDrive || isDeletingDriveBackups}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                      <MaterialIcons name="enhanced-encryption" size={18} color={colors.primary} />
+                      <Text style={[styles.btnSecondaryText, { color: colors.primary }]}>
+                        CREATE ENCRYPTED BACKUP
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.btnSecondary}
+                    onPress={() => handleRestoreFromDrive()}
                     disabled={isBackingUpDrive || isRestoringDrive || isDeletingDriveBackups}
                   >
                     {isRestoringDrive ? (
@@ -693,6 +748,32 @@ export default function SettingsScreen() {
                 )}
               </TouchableOpacity>
             </View>
+
+            {Platform.OS === 'android' && permissionStatus === 'granted' && (
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.surfaceVariant,
+                }}
+                onPress={() => Linking.openSettings()}
+                activeOpacity={0.7}
+              >
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={{ ...typography.bodyMd, color: colors.onSurface, fontWeight: '600' }}>
+                    Background Auto-Sync Reliability
+                  </Text>
+                  <Text style={{ ...typography.bodyMd, fontSize: 12, lineHeight: 16, color: colors.onSurfaceVariant }}>
+                    Set battery usage to "Unrestricted" to ensure background SMS scans run reliably.
+                  </Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={colors.outline} />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -715,6 +796,15 @@ export default function SettingsScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.btnSecondary}
+                onPress={() => router.navigate('/import-statement')}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  <MaterialIcons name="file-upload" size={18} color={colors.onSurface} />
+                  <Text style={styles.btnSecondaryText}>IMPORT STATEMENT (CSV)</Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.btnSecondary}
                 onPress={() => router.navigate('/export-success')}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
@@ -727,14 +817,116 @@ export default function SettingsScreen() {
                 onPress={handleResetData}
                 disabled={isResetting}
               >
-                <Text style={styles.btnPrimaryText}>
+                <Text style={[styles.btnPrimaryText, { color: colors.onError }]}>
                   {isResetting ? 'RESETTING...' : 'RESET APP DATA'}
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
+
+        {/* About & Legal */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>About & Legal</Text>
+          <View style={[styles.card, { minHeight: 'auto', gap: 16 }]}>
+            {/* 100% On-device Badge */}
+            <View
+              style={{
+                backgroundColor: colors.surfaceContainer,
+                padding: 12,
+                borderRadius: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+              }}
+            >
+              <MaterialIcons name="verified-user" size={24} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ ...typography.bodyMd, fontWeight: '700', color: colors.onSurface }}>
+                  100% Private & On-Device
+                </Text>
+                <Text style={{ ...typography.bodyMd, fontSize: 12, lineHeight: 16, color: colors.onSurfaceVariant }}>
+                  Your SMS & transactions are processed strictly on your phone. No personal financial data is ever uploaded or sold.
+                </Text>
+              </View>
+            </View>
+
+            {/* Links */}
+            <View style={{ gap: 4 }}>
+              <TouchableOpacity
+                style={styles.legalRow}
+                onPress={() => setLegalModalType('privacy')}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <MaterialIcons name="privacy-tip" size={20} color={colors.onSurfaceVariant} />
+                  <Text style={styles.legalRowText}>Privacy Policy</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={colors.outline} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.legalRow}
+                onPress={() => setLegalModalType('terms')}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <MaterialIcons name="gavel" size={20} color={colors.onSurfaceVariant} />
+                  <Text style={styles.legalRowText}>Terms of Service</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={colors.outline} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.legalRow}
+                onPress={() => Linking.openURL('https://github.com/homerun/clarity')}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <MaterialIcons name="code" size={20} color={colors.onSurfaceVariant} />
+                  <Text style={styles.legalRowText}>Open Source & Licenses</Text>
+                </View>
+                <MaterialIcons name="open-in-new" size={18} color={colors.outline} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.legalRow}
+                onPress={handleContactSupport}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <MaterialIcons name="help-outline" size={20} color={colors.onSurfaceVariant} />
+                  <Text style={styles.legalRowText}>Report an Issue / Contact Support</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={colors.outline} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Version Footer */}
+            <View style={{ alignItems: 'center', paddingTop: 6 }}>
+              <Text style={{ ...typography.labelMd, color: colors.onSurfaceVariant, fontSize: 12 }}>
+                Clarity Personal Finance • v{Constants.expoConfig?.version || '1.0.0'} (Production)
+              </Text>
+            </View>
+          </View>
+        </View>
       </ScrollView>
+
+      <LegalModal
+        visible={!!legalModalType}
+        type={legalModalType}
+        onClose={() => setLegalModalType(null)}
+      />
+
+      <PassphraseModal
+        visible={passphraseModalVisible}
+        title={passphraseMode === 'encrypt' ? 'Set Backup Passphrase' : 'Enter Backup Passphrase'}
+        description={
+          passphraseMode === 'encrypt'
+            ? 'Set a secret passphrase to encrypt your cloud backup. Nobody (not even Google) can read your financial data without this key.'
+            : 'This backup is client-side encrypted with AES-256-GCM. Enter your secret passphrase to decrypt and restore.'
+        }
+        confirmText={passphraseMode === 'encrypt' ? 'Encrypt & Backup' : 'Unlock & Restore'}
+        isLoading={isBackingUpDrive || isRestoringDrive}
+        onClose={() => setPassphraseModalVisible(false)}
+        onSubmit={handlePassphraseSubmit}
+      />
     </View>
   );
 }
@@ -751,6 +943,25 @@ const getStyles = (colors: ThemeColors) => {
       height: 40,
       alignItems: 'center',
       justifyContent: 'center',
+      position: 'relative',
+    },
+    unreadBadgeDot: {
+      position: 'absolute',
+      top: 4,
+      right: 4,
+      minWidth: 16,
+      height: 16,
+      borderRadius: 8,
+      backgroundColor: colors.error,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 3,
+    },
+    unreadBadgeText: {
+      color: colors.onError,
+      fontSize: 10,
+      fontWeight: '700',
+      lineHeight: 12,
     },
     scrollContent: {
       padding: 20,
@@ -1000,6 +1211,20 @@ const getStyles = (colors: ThemeColors) => {
     signInText: {
       ...typography.labelMd,
       fontWeight: '700',
+    },
+    legalRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 14,
+      paddingHorizontal: 4,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.surfaceVariant,
+    },
+    legalRowText: {
+      ...typography.bodyMd,
+      color: colors.onSurface,
+      fontWeight: '500',
     },
   });
   return styles;

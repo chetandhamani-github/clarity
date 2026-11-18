@@ -37,6 +37,30 @@ describe('SmsClassificationEngine', () => {
       expect(res.classification).toBe('UNKNOWN');
       expect(res.isFinancial).toBe(false);
     });
+
+    it('classifies failed or declined transactions as UNKNOWN with isFinancial false', () => {
+      const msg = createMsg('Txn of Rs 1,500 on card ending 1234 has DECLINED due to incorrect PIN');
+      const res = SmsClassificationEngine.classify(msg);
+      expect(res.classification).toBe('UNKNOWN');
+      expect(res.isFinancial).toBe(false);
+    });
+
+    it('classifies pre-debit notifications as PRE_DEBIT_NOTIFICATION with isFinancial false', () => {
+      const msg = createMsg(
+        'Dear Customer, Mandate for Rs 499 towards Netflix will be debited from A/c XX1234 on 25-Nov. If not requested, click...'
+      );
+      const res = SmsClassificationEngine.classify(msg);
+      expect(res.classification).toBe('PRE_DEBIT_NOTIFICATION');
+      expect(res.isFinancial).toBe(false);
+    });
+
+    it('flags scheduled future debits as isFinancial false in isPotentiallyFinancial', () => {
+      expect(
+        SmsClassificationEngine.isPotentiallyFinancial(
+          'Your A/c is scheduled to be debited for Rs 1500 on 30-Nov for SIP'
+        )
+      ).toBe(false);
+    });
   });
 
   describe('Financial Classification', () => {

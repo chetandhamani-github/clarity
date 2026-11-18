@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { View, StyleSheet, Modal, TouchableOpacity, ActivityIndicator } from 'react-native';
-import * as LocalAuthentication from 'expo-local-authentication';
-import { Text } from './Text';
+import { typography, useTheme } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useTheme, typography } from '@/theme';
+import * as LocalAuthentication from 'expo-local-authentication';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, BackHandler, Modal, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Text } from './Text';
 
 interface AppLockModalProps {
   visible: boolean;
@@ -68,7 +68,13 @@ export function AppLockModal({ visible, onUnlock }: AppLockModalProps) {
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} animationType="fade" transparent={false} statusBarTranslucent>
+    <Modal
+      visible={visible}
+      animationType="fade"
+      transparent={false}
+      statusBarTranslucent
+      onRequestClose={() => BackHandler.exitApp()}
+    >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.content}>
           <View style={[styles.iconCircle, { backgroundColor: colors.primaryContainer }]}>

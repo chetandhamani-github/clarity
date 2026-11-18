@@ -29,6 +29,7 @@ interface AppState {
   hasSeenDrivePrompt: boolean;
   hasSeenSmsPrompt: boolean;
   hideBalances: boolean;
+  hasDismissedOnboardingChecklist: boolean;
   setHasHydrated: (value: boolean) => void;
   setOnboarded: (value: boolean) => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -42,6 +43,7 @@ interface AppState {
   setHasSeenSmsPrompt: (seen: boolean) => void;
   setHideBalances: (value: boolean) => void;
   toggleHideBalances: () => void;
+  setHasDismissedOnboardingChecklist: (dismissed: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -60,6 +62,7 @@ export const useAppStore = create<AppState>()(
       hasSeenDrivePrompt: false,
       hasSeenSmsPrompt: false,
       hideBalances: false,
+      hasDismissedOnboardingChecklist: false,
       setHasHydrated: (value) => set({ _hasHydrated: value }),
       setOnboarded: (value) => set({ hasOnboarded: value }),
       setTheme: (theme) => set({ theme }),
@@ -78,6 +81,8 @@ export const useAppStore = create<AppState>()(
       setHasSeenSmsPrompt: (seen) => set({ hasSeenSmsPrompt: seen }),
       setHideBalances: (value) => set({ hideBalances: value }),
       toggleHideBalances: () => set((state) => ({ hideBalances: !state.hideBalances })),
+      setHasDismissedOnboardingChecklist: (dismissed) =>
+        set({ hasDismissedOnboardingChecklist: dismissed }),
     }),
     {
       name: 'app-storage',

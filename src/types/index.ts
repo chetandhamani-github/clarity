@@ -5,6 +5,9 @@ export interface Account {
   balance: number;
   institution: string;
   lastFour: string;
+  sortOrder?: number;
+  billingCycleDay?: number;
+  dueDay?: number;
   createdAt: string;
   updatedAt?: string;
 }
@@ -149,11 +152,20 @@ export interface CategorySpending {
   bucketType: BucketType;
 }
 
+export type NotificationType =
+  | 'alert'
+  | 'milestone'
+  | 'bill'
+  | 'budget'
+  | 'account'
+  | 'system'
+  | 'default';
+
 export interface Notification {
   id: string;
   title: string;
   description: string;
-  type: 'alert' | 'milestone' | 'default';
+  type: NotificationType;
   isRead: boolean;
   createdAt: string;
   actionUrl: string;

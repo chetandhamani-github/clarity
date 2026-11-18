@@ -237,6 +237,8 @@ const getStyles = (colors: ThemeColors) => {
     },
     destructiveButton: {
       backgroundColor: colors.errorContainer,
+      borderWidth: 1,
+      borderColor: colors.error + '33',
     },
     destructiveText: {
       ...typography.bodyMd,

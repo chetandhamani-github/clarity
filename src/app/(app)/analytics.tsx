@@ -14,9 +14,10 @@ import {
 } from '@/hooks/use-transactions';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useCategorySpending } from '@/hooks/use-budget';
-import { formatCurrency } from '@/utils/format';
+import { formatCurrency, formatCurrencyPrivacy } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
 import { getTransactionDisplayName } from '@/utils/transaction-display';
+import { useAppStore } from '@/store/use-app-store';
 
 export default function AnalyticsScreen() {
   const { colors } = useTheme();
@@ -24,6 +25,7 @@ export default function AnalyticsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ month?: string; year?: string }>();
+  const { hideBalances, toggleHideBalances } = useAppStore();
 
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState<number>(
@@ -157,13 +159,26 @@ export default function AnalyticsScreen() {
                     <MaterialIcons name="chevron-right" size={24} color={colors.onSurface} />
                   </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  style={styles.exportButton}
-                  onPress={() => router.navigate('/export-statement')}
-                >
-                  <Text style={styles.exportButtonText}>Export</Text>
-                  <MaterialIcons name="download" size={16} color={colors.onPrimary} />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <TouchableOpacity
+                    style={styles.privacyButton}
+                    onPress={toggleHideBalances}
+                    accessibilityLabel="Toggle privacy mode"
+                  >
+                    <MaterialIcons
+                      name={hideBalances ? 'visibility-off' : 'visibility'}
+                      size={20}
+                      color={colors.onSurfaceVariant}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.exportButton}
+                    onPress={() => router.navigate('/export-statement')}
+                  >
+                    <Text style={styles.exportButtonText}>Export</Text>
+                    <MaterialIcons name="download" size={16} color={colors.onPrimary} />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {/* Bento Grid: Key Metrics & Cash Flow */}
@@ -194,7 +209,7 @@ export default function AnalyticsScreen() {
                         numberOfLines={1}
                       >
                         {netCashFlow >= 0 ? '+' : ''}
-                        {formatCurrency(netCashFlow)}
+                        {formatCurrencyPrivacy(netCashFlow, hideBalances)}
                       </Text>
                     </View>
                   </View>
@@ -206,7 +221,7 @@ export default function AnalyticsScreen() {
                       adjustsFontSizeToFit
                       minimumFontScale={0.75}
                     >
-                      {formatCurrency(totals.income)}
+                      {formatCurrencyPrivacy(totals.income, hideBalances)}
                     </Text>
                     <Text style={styles.inOutLabel}>In</Text>
                     <Text style={styles.inOutDivider}>/</Text>
@@ -216,7 +231,7 @@ export default function AnalyticsScreen() {
                       adjustsFontSizeToFit
                       minimumFontScale={0.75}
                     >
-                      {formatCurrency(totals.expenses)}
+                      {formatCurrencyPrivacy(totals.expenses, hideBalances)}
                     </Text>
                     <Text style={styles.inOutLabel}>Out</Text>
                   </View>
@@ -281,14 +296,14 @@ export default function AnalyticsScreen() {
                 <View style={styles.netWorthCard}>
                   <View>
                     <Text style={styles.netWorthLabel}>NET WORTH</Text>
-                    <Text style={styles.netWorthAmount}>{formatCurrency(netWorth)}</Text>
+                    <Text style={styles.netWorthAmount}>{formatCurrencyPrivacy(netWorth, hideBalances)}</Text>
                   </View>
 
                   <View style={styles.netWorthBars}>
                     <View style={styles.netWorthBarRow}>
                       <View style={styles.netWorthBarTextRow}>
                         <Text style={styles.netWorthBarLabel}>Assets</Text>
-                        <Text style={styles.netWorthBarValue}>{formatCurrency(assets)}</Text>
+                        <Text style={styles.netWorthBarValue}>{formatCurrencyPrivacy(assets, hideBalances)}</Text>
                       </View>
                       <View style={styles.progressBarTrack}>
                         <View
@@ -306,7 +321,7 @@ export default function AnalyticsScreen() {
                     <View style={styles.netWorthBarRow}>
                       <View style={styles.netWorthBarTextRow}>
                         <Text style={styles.netWorthBarLabel}>Liabilities</Text>
-                        <Text style={styles.netWorthBarValue}>{formatCurrency(liabilities)}</Text>
+                        <Text style={styles.netWorthBarValue}>{formatCurrencyPrivacy(liabilities, hideBalances)}</Text>
                       </View>
                       <View style={styles.progressBarTrack}>
                         <View
@@ -346,9 +361,13 @@ export default function AnalyticsScreen() {
                                   color={colors.onSurface}
                                 />
                               </View>
-                              <Text style={styles.categoryName}>{cat.category}</Text>
+                              <Text style={styles.categoryName} numberOfLines={1}>
+                                {cat.category}
+                              </Text>
                             </View>
-                            <Text style={styles.categoryAmount}>{formatCurrency(cat.spent)}</Text>
+                            <Text style={styles.categoryAmount} numberOfLines={1}>
+                              {formatCurrencyPrivacy(cat.spent, hideBalances)}
+                            </Text>
                           </View>
                           <View style={styles.progressBarTrack}>
                             <View
@@ -393,12 +412,20 @@ export default function AnalyticsScreen() {
                               {m.merchant.substring(0, 2).toUpperCase()}
                             </Text>
                           </View>
-                          <View>
-                            <Text style={styles.listItemTitle}>{m.merchant}</Text>
-                            <Text style={styles.listItemSubtitle}>Expense</Text>
+                          <View style={styles.listItemTextContainer}>
+                            <Text style={styles.listItemTitle} numberOfLines={1}>
+                              {m.merchant}
+                            </Text>
+                            <Text style={styles.listItemSubtitle} numberOfLines={1}>
+                              Expense
+                            </Text>
                           </View>
                         </View>
-                        <Text style={styles.listItemAmount}>{formatCurrency(m.total)}</Text>
+                        <View style={styles.listItemRight}>
+                          <Text style={styles.listItemAmount} numberOfLines={1}>
+                            {formatCurrencyPrivacy(m.total, hideBalances)}
+                          </Text>
+                        </View>
                       </View>
                     ))
                   ) : (
@@ -418,7 +445,7 @@ export default function AnalyticsScreen() {
                 {/* Recurring */}
                 <View style={styles.card}>
                   <View style={styles.recurringHeader}>
-                    <Text style={styles.cardTitle}>Recurring</Text>
+                    <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Recurring</Text>
                     <TouchableOpacity
                       style={styles.addRecurringBtn}
                       onPress={() => router.navigate('/add-transaction')}
@@ -440,7 +467,7 @@ export default function AnalyticsScreen() {
                           <View style={styles.avatarBox}>
                             <MaterialIcons name="autorenew" size={20} color={colors.primary} />
                           </View>
-                          <View style={{ flex: 1, paddingRight: 8 }}>
+                          <View style={styles.listItemTextContainer}>
                             <Text style={styles.listItemTitle} numberOfLines={1}>
                               {getTransactionDisplayName(tx)}
                             </Text>
@@ -452,8 +479,10 @@ export default function AnalyticsScreen() {
                             </Text>
                           </View>
                         </View>
-                        <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                          <Text style={styles.listItemAmount}>{formatCurrency(tx.amount)}</Text>
+                        <View style={styles.listItemRight}>
+                          <Text style={styles.listItemAmount} numberOfLines={1}>
+                            {formatCurrencyPrivacy(tx.amount, hideBalances)}
+                          </Text>
                           <MaterialIcons name="delete-outline" size={18} color={colors.outline} />
                         </View>
                       </TouchableOpacity>
@@ -519,6 +548,13 @@ const getStyles = (colors: ThemeColors) => {
       color: colors.onSurface,
       fontSize: 16,
       lineHeight: 22,
+    },
+    privacyButton: {
+      padding: 8,
+      borderRadius: 8,
+      backgroundColor: colors.surfaceContainerLow,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     exportButton: {
       backgroundColor: colors.primary,
@@ -701,12 +737,12 @@ const getStyles = (colors: ThemeColors) => {
       borderWidth: 1,
       borderColor: colors.surfaceVariant,
       borderRadius: 16,
-      padding: 24,
+      padding: 16,
     },
     cardTitle: {
       ...typography.headlineSm,
       color: colors.onSurface,
-      marginBottom: 24,
+      marginBottom: 16,
     },
     categoryList: {
       gap: 24,
@@ -721,9 +757,12 @@ const getStyles = (colors: ThemeColors) => {
       marginBottom: 4,
     },
     categoryRowLeft: {
+      flex: 1,
+      minWidth: 0,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
+      marginRight: 8,
     },
     categoryIconBox: {
       width: 40,
@@ -732,16 +771,20 @@ const getStyles = (colors: ThemeColors) => {
       backgroundColor: colors.surfaceContainer,
       alignItems: 'center',
       justifyContent: 'center',
+      flexShrink: 0,
     },
     categoryName: {
       ...typography.bodyLg,
       color: colors.onSurface,
       fontWeight: '600',
+      flex: 1,
     },
     categoryAmount: {
       ...typography.bodyLg,
       color: colors.onSurface,
       fontWeight: '600',
+      flexShrink: 0,
+      textAlign: 'right',
     },
     listsGrid: {
       gap: 24,
@@ -753,9 +796,12 @@ const getStyles = (colors: ThemeColors) => {
       paddingVertical: 12,
     },
     listItemLeft: {
+      flex: 1,
+      minWidth: 0,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 16,
+      gap: 12,
+      marginRight: 8,
     },
     avatarBox: {
       width: 40,
@@ -764,10 +810,16 @@ const getStyles = (colors: ThemeColors) => {
       backgroundColor: colors.surfaceContainer,
       alignItems: 'center',
       justifyContent: 'center',
+      flexShrink: 0,
     },
     avatarText: {
       ...typography.labelMd,
       color: colors.onSurface,
+    },
+    listItemTextContainer: {
+      flex: 1,
+      minWidth: 0,
+      justifyContent: 'center',
     },
     listItemTitle: {
       ...typography.bodyLg,
@@ -778,16 +830,23 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.bodyMd,
       color: colors.onSurfaceVariant,
     },
+    listItemRight: {
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+      flexShrink: 0,
+      gap: 4,
+    },
     listItemAmount: {
       ...typography.bodyLg,
       color: colors.onSurface,
       fontWeight: '600',
+      textAlign: 'right',
     },
     recurringHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      alignItems: 'baseline',
-      marginBottom: 24,
+      alignItems: 'center',
+      marginBottom: 16,
     },
     addRecurringBtn: {
       flexDirection: 'row',

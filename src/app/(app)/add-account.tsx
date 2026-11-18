@@ -28,6 +28,8 @@ export default function AddAccountScreen() {
   const [balanceStr, setBalanceStr] = useState('');
   const [institution, setInstitution] = useState('');
   const [lastFour, setLastFour] = useState('');
+  const [billingCycleDayStr, setBillingCycleDayStr] = useState('');
+  const [dueDayStr, setDueDayStr] = useState('');
   const [showTypeSelector, setShowTypeSelector] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
@@ -44,6 +46,8 @@ export default function AddAccountScreen() {
       );
       setInstitution(account.institution || '');
       setLastFour(account.lastFour || '');
+      setBillingCycleDayStr(account.billingCycleDay ? account.billingCycleDay.toString() : '');
+      setDueDayStr(account.dueDay ? account.dueDay.toString() : '');
       setInitialized(true);
     }
   }, [isEditing, account, initialized]);
@@ -69,12 +73,20 @@ export default function AddAccountScreen() {
       ? (rawBalance === 0 ? 0 : -Math.abs(rawBalance))
       : rawBalance;
 
+    const cycleDay = parseInt(billingCycleDayStr, 10);
+    const validCycleDay = !isNaN(cycleDay) && cycleDay >= 1 && cycleDay <= 31 ? cycleDay : undefined;
+
+    const paymentDay = parseInt(dueDayStr, 10);
+    const validDueDay = !isNaN(paymentDay) && paymentDay >= 1 && paymentDay <= 31 ? paymentDay : undefined;
+
     const accountData = {
       name: name.trim(),
       type,
       balance,
       institution: institution.trim(),
       lastFour: lastFour.trim().slice(0, 4),
+      billingCycleDay: validCycleDay,
+      dueDay: validDueDay,
     };
 
     if (isEditing && id) {
@@ -220,6 +232,54 @@ export default function AddAccountScreen() {
               onChangeText={setLastFour}
             />
           </View>
+
+          {type === 'credit' && (
+            <View style={{ gap: 16, paddingTop: 4 }}>
+              <View
+                style={{
+                  backgroundColor: colors.surfaceContainer,
+                  padding: 12,
+                  borderRadius: 12,
+                  gap: 4,
+                }}
+              >
+                <Text style={{ ...typography.labelMd, color: colors.primary, fontWeight: '700' }}>
+                  Billing Cycle & Due Dates (Optional)
+                </Text>
+                <Text style={{ ...typography.bodyMd, fontSize: 12, lineHeight: 16, color: colors.onSurfaceVariant }}>
+                  Enter the day of the month your statement generates and when payment is due to track billing cycles.
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Statement Day</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. 15"
+                    placeholderTextColor={colors.outline}
+                    keyboardType="number-pad"
+                    maxLength={2}
+                    value={billingCycleDayStr}
+                    onChangeText={setBillingCycleDayStr}
+                  />
+                </View>
+
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Payment Due Day</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. 5"
+                    placeholderTextColor={colors.outline}
+                    keyboardType="number-pad"
+                    maxLength={2}
+                    value={dueDayStr}
+                    onChangeText={setDueDayStr}
+                  />
+                </View>
+              </View>
+            </View>
+          )}
 
           <TouchableOpacity
             style={[styles.submitBtn, isPending && { opacity: 0.7 }]}

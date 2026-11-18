@@ -152,4 +152,71 @@ export interface AuthResponse {
   user: UserDTO;
 }
 
+export interface AiCategorizePayload {
+  merchant: string;
+  amount?: number;
+  note?: string;
+}
+
+export interface AiCategorizeResult {
+  category: string;
+  confidence: number;
+  suggestedBudgetBucket: 'needs' | 'wants' | 'savings';
+  isRecurringSubscription: boolean;
+  cleanMerchant: string;
+}
+
+export interface ReceiptItemResult {
+  name: string;
+  amount: number;
+  category: string;
+  quantity?: number;
+}
+
+export interface ReceiptScanPayload {
+  imageBase64?: string;
+  mimeType?: string;
+  rawText?: string;
+}
+
+export interface ReceiptScanResult {
+  merchant: string;
+  date: string;
+  totalAmount: number;
+  taxAmount: number;
+  category: string;
+  items: ReceiptItemResult[];
+  confidence: number;
+}
+
+export interface AiChatPayload {
+  message: string;
+  financialContextSummary?: string;
+}
+
+export interface AiChatResult {
+  reply: string;
+  suggestedAction?: string;
+}
+
+export interface MonthlyDigestPayload {
+  month: number;
+  year: number;
+  totalIncome: number;
+  totalExpenses: number;
+  topCategories?: string[];
+  needsPercent?: number;
+  wantsPercent?: number;
+  savingsPercent?: number;
+}
+
+export interface MonthlyDigestResult {
+  headline: string;
+  savingsAssessment: string;
+  insights: string[];
+  actionableTips: string[];
+  financialHealthScore: number;
+}
+
+
 

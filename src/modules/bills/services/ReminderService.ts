@@ -41,7 +41,7 @@ export class ReminderService {
         await insertNotification({
           title,
           description,
-          type: diffDays === 0 ? 'alert' : 'default',
+          type: diffDays === 0 ? 'alert' : 'bill',
           actionUrl: '/(app)/bills',
         });
         DeviceEventEmitter.emit('notificationsUpdated');
@@ -81,7 +81,7 @@ export class ReminderService {
 
         let alertTitle = '';
         let alertDesc = '';
-        let alertType: 'alert' | 'default' = 'default';
+        let alertType: 'alert' | 'bill' = 'bill';
 
         const name = bill.provider || bill.title;
 
@@ -96,11 +96,11 @@ export class ReminderService {
         } else if (diffDays === 1) {
           alertTitle = `Bill Due Tomorrow: ${name}`;
           alertDesc = `${name} bill of ${formatCurrency(bill.amount)} is due tomorrow (${bill.dueDate}).`;
-          alertType = 'default';
+          alertType = 'bill';
         } else if (diffDays <= (bill.reminderDays ?? 3)) {
           alertTitle = `Bill Due in ${diffDays} Days: ${name}`;
           alertDesc = `${name} bill of ${formatCurrency(bill.amount)} is due on ${bill.dueDate}.`;
-          alertType = 'default';
+          alertType = 'bill';
         }
 
         if (!alertTitle) continue;

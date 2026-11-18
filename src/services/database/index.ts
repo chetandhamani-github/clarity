@@ -10,6 +10,7 @@ export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
   db = await SQLite.openDatabaseAsync('clarity.db');
   await db.execAsync('PRAGMA journal_mode = WAL;');
   await db.execAsync('PRAGMA foreign_keys = ON;');
+  await db.execAsync('PRAGMA busy_timeout = 5000;');
 
   await runMigrations(db);
   await seedDatabase(db);
@@ -47,6 +48,7 @@ export async function clearDatabase(): Promise<void> {
     DROP TABLE IF EXISTS transactions;
     DROP TABLE IF EXISTS accounts;
     DROP TABLE IF EXISTS notifications;
+    DROP TABLE IF EXISTS merchant_category_rules;
   `);
   await db.execAsync('PRAGMA foreign_keys = ON;');
   // Re-run migrations and seeds

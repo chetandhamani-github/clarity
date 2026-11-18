@@ -176,7 +176,7 @@ export default function ManageCategoriesScreen() {
             style={[styles.addIconButton, { backgroundColor: colors.primaryContainer }]}
             onPress={openCreateModal}
           >
-            <MaterialIcons name="add" size={24} color={colors.primary} />
+            <MaterialIcons name="add" size={24} color={colors.onPrimaryContainer} />
           </TouchableOpacity>
         }
       />
@@ -245,13 +245,13 @@ export default function ManageCategoriesScreen() {
                     <View
                       style={[
                         styles.iconCircle,
-                        { backgroundColor: colors.surfaceContainerHighest },
+                        { backgroundColor: bucketColor + '18' },
                       ]}
                     >
                       <MaterialIcons
                         name={(cat.icon as MaterialIconName) || 'category'}
                         size={22}
-                        color={colors.primary}
+                        color={bucketColor}
                       />
                     </View>
                     <View style={styles.cardDetails}>

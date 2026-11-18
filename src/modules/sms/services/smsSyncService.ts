@@ -1,36 +1,42 @@
 import { mmkv } from '@/lib/storage';
-import type {
-  ParsedTransaction,
-  RawSmsMessage,
-  ReviewQueueItem,
-  SmsSyncProgress,
-} from '@/modules/sms/types';
-import { SmsReaderService } from '@/modules/sms/reader/smsReaderService';
-import { SmsPipelineService } from './smsPipelineService';
-import { SmsDao } from '@/modules/sms/storage/smsDao';
-import { DuplicateDetectionEngine } from '@/modules/sms/duplicate/duplicateDetectionEngine';
-import { RecurringDetectionEngine } from '@/modules/sms/recurring/recurringDetectionEngine';
-import {
-  getAllAccounts,
-  insertAccount,
-  updateAccount,
-  updateAccountBalance,
-} from '@/services/database/account-dao';
-import {
-  insertTransaction,
-  findManualMatch,
-  mergeManualWithSmsTransaction,
-} from '@/services/database/transaction-dao';
-import { getDatabase } from '@/services/database';
-import { TransactionExtractor } from '@/modules/sms/extractor/transactionExtractor';
-import { BillExtractor } from '@/modules/sms/extractor/billExtractor';
-import { mergeOrInsertSmsBill } from '@/services/database/bill-dao';
-import { BillService } from '@/modules/bills/services/BillService';
 import { BillsRepository } from '@/modules/bills/database/bills.repository';
+import { BillService } from '@/modules/bills/services/BillService';
 import type { BillCategory } from '@/modules/bills/types/bill.types';
+import { LocalCategorizerEngine } from '@/modules/sms/categorizer/localCategorizerEngine';
+import { DuplicateDetectionEngine } from '@/modules/sms/duplicate/duplicateDetectionEngine';
+import { BillExtractor } from '@/modules/sms/extractor/billExtractor';
+import { TransactionExtractor } from '@/modules/sms/extractor/transactionExtractor';
+import { SmsReaderService } from '@/modules/sms/reader/smsReaderService';
+import { RecurringDetectionEngine } from '@/modules/sms/recurring/recurringDetectionEngine';
 import { BillSettlementEngine } from '@/modules/sms/services/billSettlementEngine';
+import { SmsDao } from '@/modules/sms/storage/smsDao';
+import type {
+    ParsedTransaction,
+    RawSmsMessage,
+    ReviewQueueItem,
+    SmsSyncProgress,
+} from '@/modules/sms/types';
+import { getDatabase } from '@/services/database';
+import {
+    getAllAccounts,
+    insertAccount,
+    updateAccount,
+    updateAccountBalance,
+} from '@/services/database/account-dao';
+import { mergeOrInsertSmsBill } from '@/services/database/bill-dao';
+import {
+    findManualMatch,
+    insertTransaction,
+    mergeManualWithSmsTransaction,
+} from '@/services/database/transaction-dao';
 import { BillAlertEngine } from '@/services/notifications/bill-alert-engine';
+import {
+  evaluateTransactionBudgetAlerts,
+  evaluateAccountBalanceAlerts,
+} from '@/services/notifications/alert-engine';
+import { formatLocalDate } from '@/utils/format';
 import { hasMeaningfulMerchant } from '@/utils/transaction-display';
+import { SmsPipelineService } from './smsPipelineService';
 
 const LAST_SYNC_KEY = 'clarity_last_sms_sync_timestamp';
 const DEFAULT_CHUNK_SIZE = 200;
@@ -83,6 +89,7 @@ export class SmsSyncService {
     this.isSyncing = true;
     this.shouldCancel = false;
     DuplicateDetectionEngine.clearCache();
+    await LocalCategorizerEngine.loadDatabaseRules().catch(() => {});
 
     const batchSize = options.batchSize ?? DEFAULT_CHUNK_SIZE;
     let scannedCount = 0;
@@ -201,6 +208,7 @@ export class SmsSyncService {
     this.isSyncing = true;
     this.shouldCancel = false;
     DuplicateDetectionEngine.clearCache();
+    await LocalCategorizerEngine.loadDatabaseRules().catch(() => {});
 
     const batchSize = options.batchSize ?? DEFAULT_CHUNK_SIZE;
     let scannedCount = 0;
@@ -585,6 +593,12 @@ export class SmsSyncService {
           transaction.availableBalance !== null
         ) {
           await updateAccountBalance(matchedAccount.id, transaction.availableBalance);
+          evaluateAccountBalanceAlerts({
+            id: matchedAccount.id,
+            name: matchedAccount.name,
+            type: matchedAccount.type,
+            balance: transaction.availableBalance,
+          }).catch(() => {});
         }
       } catch {
         // Account auto-fetch error ignored
@@ -726,11 +740,40 @@ export class SmsSyncService {
             smsId: transaction.smsId,
             parsedTxId: transaction.id,
             merchant: effectiveMerchant,
-            date: new Date(transaction.timestamp).toISOString(),
+            date: formatLocalDate(new Date(transaction.timestamp)),
           });
           await SmsDao.linkClarityTransaction(transaction.id, manualMatch.id);
           transaction.transactionId = manualMatch.id;
         } else {
+          // Check if this is a reversal or refund credit that offsets a prior expense
+          const isReversal =
+            txType === 'income' &&
+            /\b(?:revers(?:ed|al)|refund(?:ed)?|credited\s+back)\b/i.test(transaction.rawBody || '');
+          let finalCategory = transaction.category;
+          let finalNote = 'Imported via SMS (' + bankName + ')';
+
+          if (isReversal) {
+            try {
+              const priorExpense = await database.getFirstAsync<{
+                id: string;
+                merchant: string;
+                category: string;
+              }>(
+                `SELECT id, merchant, category FROM transactions 
+                 WHERE account_id = ? AND amount = ? AND type = 'expense'
+                 ORDER BY date DESC LIMIT 1`,
+                [matchedAccount.id, transaction.amount]
+              );
+
+              if (priorExpense) {
+                finalCategory = priorExpense.category;
+                finalNote = `Reversal / Refund for ${priorExpense.merchant || 'prior transaction'}`;
+              }
+            } catch {
+              // Reversal match fallback
+            }
+          }
+
           // Insert brand new verified SMS transaction
           const createdTransaction = await insertTransaction(
             {
@@ -738,10 +781,10 @@ export class SmsSyncService {
               amount: transaction.amount,
               type: txType,
               merchant: effectiveMerchant,
-              category: transaction.category,
-              date: new Date(transaction.timestamp).toISOString(),
+              category: finalCategory,
+              date: formatLocalDate(new Date(transaction.timestamp)),
               isRecurring: false,
-              note: 'Imported via SMS (' + bankName + ')',
+              note: finalNote,
               source: 'SMS',
               status: 'VERIFIED',
               smsId: transaction.smsId,
@@ -754,8 +797,20 @@ export class SmsSyncService {
           transaction.transactionId = createdTransaction.id;
         }
 
-        // Settle any matching unpaid bill for expense transaction
+        // Settle any matching unpaid bill & evaluate budget alerts for expense transaction
         if (txType === 'expense') {
+          evaluateTransactionBudgetAlerts({
+            accountId: matchedAccount.id,
+            amount: transaction.amount,
+            type: txType,
+            merchant: effectiveMerchant,
+            category: transaction.category,
+            date: formatLocalDate(new Date(transaction.timestamp)),
+            isRecurring: false,
+            note: 'Imported via SMS (' + bankName + ')',
+            source: 'SMS',
+          }).catch(() => {});
+
           BillSettlementEngine.settleBillsForTransaction({
             id: transaction.transactionId || '',
             amount: transaction.amount,
@@ -836,6 +891,12 @@ export class SmsSyncService {
           }
 
           await updateAccountBalance(account.id, latestBalance.available_balance);
+          evaluateAccountBalanceAlerts({
+            id: account.id,
+            name: account.name,
+            type: account.type,
+            balance: latestBalance.available_balance,
+          }).catch(() => {});
         }
       }
     } catch {

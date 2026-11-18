@@ -102,7 +102,7 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
           onPress={() => router.navigate('/(app)/add-bill')}
           activeOpacity={0.8}
         >
-          <View style={styles.emptyIconBox}>
+          <View style={[styles.emptyIconBox, { backgroundColor: colors.surfaceContainerLow }]}>
             <MaterialIcons name="check-circle" size={24} color={colors.primary} />
           </View>
           <View style={styles.emptyTextContainer}>
@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   headerTitleRow: {
     flexDirection: 'row',
@@ -239,7 +239,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(120, 86, 0, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },

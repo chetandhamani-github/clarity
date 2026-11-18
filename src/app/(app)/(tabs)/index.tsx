@@ -2,10 +2,11 @@ import { Header, HomeSkeleton, ProgressBar, Text } from '@/components/ui';
 import { UpcomingBillsWidget } from '@/modules/bills';
 import { SplitwiseWidget } from '@/modules/splitwise';
 import { AnnouncementBanner } from '@/components/backend';
+import { ReorderableBankAccounts, OnboardingChecklistCard } from '@/components/common';
 import { radius, ThemeColors, typography, useTheme } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Dimensions,
   ScrollView,
@@ -21,10 +22,12 @@ import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
 import { useMonthlyTotals, useNetWorthHistory, useTransactions } from '@/hooks/use-transactions';
 import { useDoubleBackToExit } from '@/hooks/use-double-back-to-exit';
 import { useSmsSync } from '@/hooks/useSmsSync';
+import { useNotifications } from '@/hooks/use-notifications';
 import { formatCurrency, formatCurrencyPrivacy, getTransactionSign } from '@/utils/format';
-import { getCategoryIcon, getBankBranding } from '@/utils/icons';
+import { getCategoryIcon } from '@/utils/icons';
 import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
 import { useAppStore } from '@/store/use-app-store';
+import { useSmsStore } from '@/store/useSmsStore';
 
 export default function DashboardScreen() {
   useDoubleBackToExit();
@@ -33,7 +36,12 @@ export default function DashboardScreen() {
   const styles = getStyles(colors);
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { hideBalances, toggleHideBalances } = useAppStore();
+  const { hideBalances, toggleHideBalances, googleDriveConnected } = useAppStore();
+  const [isDraggingAccounts, setIsDraggingAccounts] = useState(false);
+  const { notifications } = useNotifications();
+  const unreadNotificationCount = notifications.filter((n) => !n.isRead).length;
+  const pendingSmsTransactions = useSmsStore((state) => state.pendingTransactions);
+  const openSmsTransactionPrompt = useSmsStore((state) => state.openTransactionPrompt);
 
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
@@ -237,12 +245,20 @@ export default function DashboardScreen() {
               onPress={() => router.navigate('/notifications')}
             >
               <MaterialIcons name="notifications-none" size={24} color={colors.onSurface} />
+              {unreadNotificationCount > 0 && (
+                <View style={styles.unreadBadgeDot}>
+                  <Text style={styles.unreadBadgeText}>
+                    {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         }
       />
 
       <ScrollView
+        scrollEnabled={!isDraggingAccounts}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
@@ -419,6 +435,39 @@ export default function DashboardScreen() {
                 </View>
               </View>
 
+              {/* Pending SMS Transactions Banner */}
+              {pendingSmsTransactions.length > 0 && (
+                <TouchableOpacity
+                  style={styles.pendingSmsBanner}
+                  onPress={openSmsTransactionPrompt}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.pendingSmsBannerLeft}>
+                    <View style={styles.pendingSmsIcon}>
+                      <MaterialIcons name="sms" size={20} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.pendingSmsTitle} numberOfLines={1}>
+                        {pendingSmsTransactions.length} new transaction
+                        {pendingSmsTransactions.length > 1 ? 's' : ''} detected
+                      </Text>
+                      <Text style={styles.pendingSmsSubtitle} numberOfLines={1}>
+                        Tap to review and import into Clarity
+                      </Text>
+                    </View>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={22} color={colors.primary} />
+                </TouchableOpacity>
+              )}
+
+              {/* Onboarding Checklist for New Users */}
+              <OnboardingChecklistCard
+                hasAccounts={accounts.length > 0}
+                hasTransactions={transactions.length > 0}
+                hasBudgetPlan={Boolean(plan && plan.monthlyIncome > 0)}
+                googleDriveConnected={googleDriveConnected}
+              />
+
               {/* Snapshot Row */}
               <View style={styles.snapshotRow}>
                 <View style={styles.snapshotCard}>
@@ -442,89 +491,18 @@ export default function DashboardScreen() {
               </View>
 
               {/* Bank Accounts Section */}
-              {accounts.length > 0 && (
-                <View style={styles.sectionContainer}>
-                  <View style={styles.recentActivityHeader}>
-                    <Text style={styles.recentActivityTitle}>Bank Accounts</Text>
-                    <TouchableOpacity
-                      style={styles.viewAllButton}
-                      onPress={() => router.navigate('/accounts')}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Text style={styles.viewAllText}>VIEW ALL</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ gap: 12, paddingVertical: 2 }}
-                  >
-                    {accounts.map((acc) => {
-                      const branding = getBankBranding(acc.institution || acc.name);
-                      return (
-                        <TouchableOpacity
-                          key={acc.id}
-                          style={styles.bankAccountCard}
-                          onPress={() =>
-                            router.navigate({
-                              pathname: '/account-details',
-                              params: { accountId: acc.id },
-                            })
-                          }
-                        >
-                          <View
-                            style={{
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                            }}
-                          >
-                            <View
-                              style={[
-                                styles.bankIconCircle,
-                                { backgroundColor: branding.backgroundColor },
-                              ]}
-                            >
-                              <MaterialIcons
-                                name="account-balance"
-                                size={18}
-                                color={branding.color}
-                              />
-                            </View>
-                            <View
-                              style={[
-                                styles.bankPill,
-                                { backgroundColor: branding.backgroundColor },
-                              ]}
-                            >
-                              <Text style={[styles.bankPillText, { color: branding.color }]}>
-                                {branding.shortName}
-                              </Text>
-                            </View>
-                          </View>
-                          <View style={{ marginTop: 12 }}>
-                            <Text style={styles.bankCardName} numberOfLines={1}>
-                              {acc.name}
-                            </Text>
-                            <Text style={styles.bankCardType} numberOfLines={1}>
-                              {acc.type.charAt(0).toUpperCase() + acc.type.slice(1)}
-                              {acc.lastFour ? ` •••• ${acc.lastFour}` : ''}
-                            </Text>
-                            <Text
-                              style={styles.bankCardBalance}
-                              numberOfLines={1}
-                              adjustsFontSizeToFit
-                              minimumFontScale={0.75}
-                            >
-                              {formatCurrencyPrivacy(acc.balance, false, hideBalances)}
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-              )}
+              <ReorderableBankAccounts
+                accounts={accounts}
+                hideBalances={hideBalances}
+                onAccountPress={(accountId) =>
+                  router.navigate({
+                    pathname: '/account-details',
+                    params: { accountId },
+                  })
+                }
+                onViewAll={() => router.navigate('/accounts')}
+                onDragStateChange={setIsDraggingAccounts}
+              />
 
               {/* Upcoming Bills & Utilities Carousel */}
               <UpcomingBillsWidget />
@@ -770,6 +748,25 @@ const getStyles = (colors: ThemeColors) => {
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: 20,
+      position: 'relative',
+    },
+    unreadBadgeDot: {
+      position: 'absolute',
+      top: 4,
+      right: 4,
+      minWidth: 16,
+      height: 16,
+      borderRadius: 8,
+      backgroundColor: colors.error,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 3,
+    },
+    unreadBadgeText: {
+      color: colors.onError,
+      fontSize: 10,
+      fontWeight: '700',
+      lineHeight: 12,
     },
     scrollContent: {
       paddingHorizontal: 20,
@@ -782,6 +779,45 @@ const getStyles = (colors: ThemeColors) => {
       borderColor: colors.surfaceVariant,
       padding: 20,
       marginBottom: 24,
+    },
+    pendingSmsBanner: {
+      backgroundColor: colors.primaryContainer,
+      borderRadius: 16,
+      padding: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderWidth: 1,
+      borderColor: colors.primary + '33',
+      marginBottom: 24,
+    },
+    pendingSmsBannerLeft: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginRight: 8,
+    },
+    pendingSmsIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.surfaceContainerLowest,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    },
+    pendingSmsTitle: {
+      ...typography.labelMd,
+      color: colors.onPrimaryContainer,
+      fontWeight: '700',
+    },
+    pendingSmsSubtitle: {
+      ...typography.bodyMd,
+      fontSize: 12,
+      lineHeight: 16,
+      color: colors.onPrimaryContainer,
+      opacity: 0.85,
     },
     netWorthHeader: {
       flexDirection: 'row',
@@ -957,52 +993,6 @@ const getStyles = (colors: ThemeColors) => {
       fontSize: 11,
       lineHeight: 15,
       fontWeight: '600',
-    },
-    bankAccountCard: {
-      width: 160,
-      backgroundColor: colors.surfaceContainerLowest,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: colors.surfaceVariant,
-      padding: 14,
-    },
-    bankIconCircle: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    bankPill: {
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 6,
-    },
-    bankPillText: {
-      fontSize: 10,
-      fontWeight: '700',
-    },
-    bankCardName: {
-      ...typography.bodyMd,
-      fontFamily: 'Manrope_600SemiBold',
-      color: colors.onSurface,
-      fontSize: 13,
-      lineHeight: 18,
-      marginBottom: 2,
-    },
-    bankCardType: {
-      ...typography.labelMd,
-      color: colors.onSurfaceVariant,
-      fontSize: 11,
-      lineHeight: 16,
-      marginBottom: 8,
-    },
-    bankCardBalance: {
-      ...typography.bodyLg,
-      fontFamily: 'Manrope_700Bold',
-      color: colors.onSurface,
-      fontSize: 14,
-      lineHeight: 20,
     },
   });
   return styles;

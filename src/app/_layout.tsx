@@ -25,13 +25,29 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/lib/query-client';
 import { BackendProvider } from '@/providers/BackendProvider';
 import { useAppStore } from '@/store/use-app-store';
-import { checkUpcomingBillReminders } from '@/services/notifications/alert-engine';
+import { checkUpcomingBillReminders, checkUpcomingGoalDeadlines } from '@/services/notifications/alert-engine';
+import { mmkv } from '@/lib/storage';
 
 SplashScreen.preventAutoHideAsync();
 
+function checkInitialLockState(): boolean {
+  try {
+    const raw = mmkv.getString('app-storage');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.state?.biometricEnabled && parsed?.state?.timeoutSetting !== 'never') {
+        return true;
+      }
+    }
+  } catch {
+    // Ignore error
+  }
+  return false;
+}
+
 export default function RootLayout() {
   const [dbReady, setDbReady] = useState(false);
-  const [isAppLocked, setIsAppLocked] = useState(false);
+  const [isAppLocked, setIsAppLocked] = useState(checkInitialLockState);
   const [showDrivePrompt, setShowDrivePrompt] = useState(false);
   const [showSmsPrompt, setShowSmsPrompt] = useState(false);
   const isTransactionPromptVisible = useSmsStore((state) => state.isPromptVisible);
@@ -107,6 +123,7 @@ export default function RootLayout() {
             await import('@/services/database/recurring-dao');
           await processDueRecurringTransactions();
           await checkUpcomingBillReminders();
+          await checkUpcomingGoalDeadlines();
 
           // Silent cloud backup sync on app launch
           const { syncDatabaseToDriveSilently } = await import(
@@ -156,6 +173,11 @@ export default function RootLayout() {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
         lastBackgroundTime.current = Date.now();
+        const state = useAppStore.getState();
+        // Mask screen immediately in task switcher if biometric lock is immediate
+        if (state.biometricEnabled && state.timeoutSetting === 'immediate') {
+          setIsAppLocked(true);
+        }
       } else if (nextAppState === 'active') {
         const state = useAppStore.getState();
         if (state.biometricEnabled && lastBackgroundTime.current) {

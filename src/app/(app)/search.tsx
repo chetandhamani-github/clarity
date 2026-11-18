@@ -175,7 +175,7 @@ export default function SearchScreen() {
                                   color={
                                     tx.type === 'income'
                                       ? colors.onPrimaryContainer
-                                      : colors.primary
+                                      : colors.onSurfaceVariant
                                   }
                                 />
                               </View>

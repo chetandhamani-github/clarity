@@ -130,7 +130,7 @@ export function PeopleScreen() {
             onPress={() => router.navigate('/(app)/add-splitwise-person')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <MaterialIcons name="person-add" size={20} color={colors.primary} />
+            <MaterialIcons name="person-add" size={20} color={colors.onSurface} />
           </TouchableOpacity>
         }
       />

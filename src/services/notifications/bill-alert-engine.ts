@@ -30,7 +30,7 @@ export class BillAlertEngine {
 
         let alertTitle = '';
         let alertDesc = '';
-        let alertType: 'alert' | 'default' = 'default';
+        let alertType: 'alert' | 'bill' = 'bill';
 
         if (diffDays < 0) {
           // Overdue
@@ -46,7 +46,7 @@ export class BillAlertEngine {
           // Due Soon
           alertTitle = `Bill Due in ${diffDays} Day${diffDays > 1 ? 's' : ''}: ${bill.billerName}`;
           alertDesc = `Your ${bill.billerName} bill of ${formatCurrency(bill.amountDue)} is due on ${bill.dueDate}.`;
-          alertType = 'default';
+          alertType = 'bill';
         }
 
         if (!alertTitle) continue;

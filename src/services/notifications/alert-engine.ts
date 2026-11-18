@@ -57,7 +57,7 @@ export async function evaluateTransactionBudgetAlerts(
         ]
       );
 
-      if (percentage >= 100) {
+        if (percentage >= 100) {
         await insertNotification({
           title: `Budget Exceeded: ${categoryName}`,
           description: `You have spent ${formatCurrency(totalSpent)} which exceeds your ${formatCurrency(limit)} limit for ${categoryName}.`,
@@ -69,14 +69,32 @@ export async function evaluateTransactionBudgetAlerts(
         await insertNotification({
           title: `Budget Alert: ${categoryName}`,
           description: `You have spent ${formatCurrency(totalSpent)} (${Math.round(percentage)}% of your ${formatCurrency(limit)} budget for ${categoryName}).`,
-          type: 'alert',
+          type: 'budget',
           actionUrl: '/(app)/(tabs)/plan',
         });
         DeviceEventEmitter.emit('notificationsUpdated');
       }
     }
 
-    // 2. Check total income vs total expenses for this month
+    // 2. Check high-value transaction alert (e.g. single spend >= ₹15,000)
+    if (transaction.amount >= 15000) {
+      const existingHighAlert = await db.getFirstAsync<{ id: string }>(
+        `SELECT id FROM notifications 
+         WHERE type = 'budget' AND title = 'High Expense Recorded' AND created_at >= ?`,
+        [`${datePrefix}-01`]
+      );
+      if (!existingHighAlert) {
+        await insertNotification({
+          title: 'High Expense Recorded',
+          description: `A large spend of ${formatCurrency(transaction.amount)} was recorded for "${transaction.merchant || transaction.category}".`,
+          type: 'budget',
+          actionUrl: '/(app)/(tabs)/transactions',
+        });
+        DeviceEventEmitter.emit('notificationsUpdated');
+      }
+    }
+
+    // 3. Check total income vs total expenses for this month
     const totals = await getMonthlyTotals(month, year);
     if (totals.income > 0 && totals.expenses > totals.income) {
       // Check if we already alerted this month for exceeding income
@@ -177,17 +195,152 @@ export async function checkUpcomingBillReminders(): Promise<void> {
         await insertNotification({
           title: `Upcoming Bill: ${bill.merchant}`,
           description: `Scheduled ${formatCurrency(bill.amount)} due on ${bill.next_process_date}.`,
-          type: 'default',
+          type: 'bill',
           actionUrl: '/(app)/(tabs)/transactions',
         });
         DeviceEventEmitter.emit('notificationsUpdated');
       }
     }
 
-    // Also evaluate dedicated bill reminders (utility bills, credit cards, rent, etc.)
+    // Evaluate dedicated legacy bill reminders
     const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
     await BillAlertEngine.evaluateUpcomingBillAlerts();
+
+    // Evaluate modern bills repository reminders
+    const { ReminderService } = await import('@/modules/bills/services/ReminderService');
+    await ReminderService.evaluateAllBillReminders();
+
+    // Evaluate upcoming subscription renewals
+    const upcomingSubs = await db.getAllAsync<{
+      id: string;
+      name: string;
+      amount: number;
+      next_renewal_date: string;
+    }>(
+      `SELECT id, name, amount, next_renewal_date 
+       FROM subscriptions 
+       WHERE status = 'active' AND next_renewal_date > ? AND next_renewal_date <= ?`,
+      [todayStr, in3DaysStr]
+    );
+
+    for (const sub of upcomingSubs) {
+      const existing = await db.getFirstAsync<{ id: string }>(
+        `SELECT id FROM notifications 
+         WHERE title LIKE ? AND created_at >= date('now', '-2 days')`,
+        [`%${sub.name}%`]
+      );
+
+      if (!existing) {
+        await insertNotification({
+          title: `Subscription Renewal: ${sub.name}`,
+          description: `Your ${sub.name} subscription (${formatCurrency(sub.amount)}) is scheduled to renew on ${sub.next_renewal_date}.`,
+          type: 'bill',
+          actionUrl: '/(app)/bills',
+        });
+        DeviceEventEmitter.emit('notificationsUpdated');
+      }
+    }
   } catch {
     // Error checking upcoming bill reminders
+  }
+}
+
+export async function checkUpcomingGoalDeadlines(): Promise<void> {
+  try {
+    const db = getDatabase();
+    const today = new Date();
+    const in7Days = new Date(today);
+    in7Days.setDate(in7Days.getDate() + 7);
+
+    const todayStr = today.toISOString().split('T')[0];
+    const in7DaysStr = in7Days.toISOString().split('T')[0];
+
+    const upcomingGoals = await db.getAllAsync<{
+      id: string;
+      name: string;
+      target_amount: number;
+      current_amount: number;
+      target_date: string;
+    }>(
+      `SELECT id, name, target_amount, current_amount, target_date 
+       FROM goals 
+       WHERE current_amount < target_amount AND target_date >= ? AND target_date <= ?`,
+      [todayStr, in7DaysStr]
+    );
+
+    for (const g of upcomingGoals) {
+      const existing = await db.getFirstAsync<{ id: string }>(
+        `SELECT id FROM notifications 
+         WHERE title LIKE ? AND created_at >= date('now', '-3 days')`,
+        [`%${g.name}%`]
+      );
+
+      if (!existing) {
+        const remaining = g.target_amount - g.current_amount;
+        await insertNotification({
+          title: `Goal Deadline Approaching: ${g.name}`,
+          description: `Target date is ${g.target_date}. You are ${formatCurrency(remaining)} away from your target.`,
+          type: 'milestone',
+          actionUrl: `/(app)/goal-details?id=${g.id}`,
+        });
+        DeviceEventEmitter.emit('notificationsUpdated');
+      }
+    }
+  } catch {
+    // Error checking goal deadlines
+  }
+}
+
+export async function evaluateAccountBalanceAlerts(account: {
+  id: string;
+  name: string;
+  type: string;
+  balance: number;
+}): Promise<void> {
+  try {
+    const db = getDatabase();
+
+    if (account.type === 'credit') {
+      // For credit cards, negative balance usually represents money owed or debt
+      return;
+    }
+
+    if (account.balance < 0) {
+      // Overdraft / negative balance alert
+      const existingAlert = await db.getFirstAsync<{ id: string }>(
+        `SELECT id FROM notifications 
+         WHERE type = 'account' AND title LIKE ? AND created_at >= date('now', '-1 day')`,
+        [`%Overdraft: ${account.name}%`]
+      );
+
+      if (!existingAlert) {
+        await insertNotification({
+          title: `Overdraft: ${account.name}`,
+          description: `Your account balance is negative (${formatCurrency(account.balance)}). Please deposit funds immediately.`,
+          type: 'account',
+          actionUrl: '/(app)/(tabs)/accounts',
+        });
+        DeviceEventEmitter.emit('notificationsUpdated');
+      }
+    } else if (account.balance <= 1000) {
+      // Low balance warning
+      const existingAlert = await db.getFirstAsync<{ id: string }>(
+        `SELECT id FROM notifications 
+         WHERE type = 'account' AND title LIKE ? AND created_at >= date('now', '-2 days')`,
+        [`%Low Balance: ${account.name}%`]
+      );
+
+      if (!existingAlert) {
+        await insertNotification({
+          title: `Low Balance: ${account.name}`,
+          description: `Balance is down to ${formatCurrency(account.balance)}. Ensure you maintain any required minimum balance.`,
+          type: 'account',
+          actionUrl: '/(app)/(tabs)/accounts',
+        });
+        DeviceEventEmitter.emit('notificationsUpdated');
+      }
+    }
+  } catch {
+    // Error evaluating account balance alerts
   }
 }

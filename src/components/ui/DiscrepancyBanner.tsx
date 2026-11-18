@@ -36,7 +36,7 @@ export function DiscrepancyBanner({
     >
       <View style={styles.headerRow}>
         <View style={[styles.iconCircle, { backgroundColor: colors.tertiaryContainer }]}>
-          <MaterialIcons name="sync-problem" size={18} color={colors.tertiary} />
+          <MaterialIcons name="sync-problem" size={18} color={colors.onTertiaryContainer} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.title, { color: colors.onSurface }]}>Discrepancy Detected</Text>

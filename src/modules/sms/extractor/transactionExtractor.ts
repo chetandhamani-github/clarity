@@ -48,8 +48,8 @@ export class TransactionExtractor {
 
   private static readonly MERCHANT_PATTERNS = [
     /\b(?:credited|received|deposited)\b[\s\S]{0,80}?\b(?:from|by)\s+([A-Za-z0-9@*.\-'&_\s]{2,80}?)(?:\s+(?:on|upi\s+ref|ref|rrn|utr|avl\.?\s*bal|available\s+bal(?:ance)?|bal(?:ance)?)|[.;\n]|$)/i,
-    /(?:at|to|towards|vpa|paid to|transferred to|trf to|info\/)\s+([A-Za-z0-9*.\-'&_\s]{2,40}?)(?:\s+on\b|\s+for\b|\s+dated\b|\s+upi\s+ref|\s+ref|\s+avl|\s+not you|\s+via|\s+using|[.;\n]|$)/i,
-    /(?:info[:\s]+)([A-Za-z0-9*.\-'&_\s]{2,40}?)(?:\s+on\b|\s+for\b|\s+upi\s+ref|\s+ref|\s+avl|[.;\n]|$)/i,
+    /(?:at|to|towards|vpa|paid to|transferred to|trf to|info\/)\s+([A-Za-z0-9@*.\-'&_\s]{2,40}?)(?:\s+on\b|\s+for\b|\s+dated\b|\s+upi\s+ref|\s+ref|\s+avl|\s+not you|\s+via|\s+using|[.;\n]|$)/i,
+    /(?:info[:\s]+)([A-Za-z0-9@*.\-'&_\s]{2,40}?)(?:\s+on\b|\s+for\b|\s+upi\s+ref|\s+ref|\s+avl|[.;\n]|$)/i,
   ];
 
   private static readonly BANK_MAPPINGS: Record<string, string> = {
@@ -164,6 +164,14 @@ export class TransactionExtractor {
    * Extract transaction direction (DEBIT or CREDIT).
    */
   public static extractDirection(body: string): TransactionDirection | null {
+    // Check for pre-debit alerts or scheduled mandate notifications
+    const isFutureDebitAlert =
+      /\b(?:will\s+be|is\s+scheduled\s+to\s+be|scheduled\s+for|is\s+set\s+to\s+be)\s+(?:debited|deducted|auto[- ]debited)\b/i.test(body) ||
+      /\bpre[- ]debit\s+notification\b/i.test(body);
+    if (isFutureDebitAlert) {
+      return null;
+    }
+
     const isTransferToOwnAccount =
       /\b(?:transferred?|remitted)\s+to\s+your\s+(?:a\/?c|account)\b/i.test(body);
     const debitPattern =
@@ -175,6 +183,19 @@ export class TransactionExtractor {
     const creditIndex = isTransferToOwnAccount
       ? body.search(/\b(?:transferred?|remitted)\b/i)
       : body.search(creditPattern);
+
+    // Reversals, refunds, and cashback credits always represent money credited back into account
+    const isReversalOrRefund =
+      /\b(?:revers(?:ed|al)|refund(?:ed)?|cashback|credited\s+back)\b/i.test(body);
+    if (isReversalOrRefund) {
+      return 'CREDIT';
+    }
+
+    const isDebitedFromAccount =
+      /\b(?:debited\s+from|auto[- ]debit\s+from|deducted\s+from|paid\s+from)\b/i.test(body);
+    if (isDebitedFromAccount && !/\bcredited\s+to\b/i.test(body)) {
+      return 'DEBIT';
+    }
 
     if (debitIndex !== -1 && creditIndex === -1) return 'DEBIT';
     if (creditIndex !== -1 && debitIndex === -1) return 'CREDIT';
@@ -401,24 +422,41 @@ export class TransactionExtractor {
       return '';
     }
 
-    // Sanitize merchant string
+    // 1. Unmask payment aggregators and payment gateway prefixes (e.g. "RAZORPAY*ZEPTO" -> "ZEPTO", "BILLDESK*BESCOM" -> "BESCOM", "PAYU*SWIGGY" -> "SWIGGY")
+    merchant = merchant
+      .replace(
+        /^(?:RAZORPAY|RZP|BILLDESK|BIL|PAYU|CASHFREE|CCAVENUE|PAYTM(?:QR)?|PINELABS|AIRPAY|PAYGNXT|SETU)[*:\s_/-]*/i,
+        ''
+      )
+      .trim();
+
+    // 2. Sanitize merchant string
     merchant = merchant
       .replace(/^(?:UPI\/\d+\/|info[-:]\s*|vps\*|bil\/|upi\/|payment to\s+|(?:upi|vpa)\s+|to\s+vpa\s+|vpa\s+to\s+)/i, '')
       .replace(/(?:\s+vpa\b.*|\s+via\s+upi\b.*|\s+using\s+upi\b.*|\s+on\s+\d{1,2}.*|\s+for\s+(?:rs\.?|inr|₹|\$|€|£).*|\s+upi\s+ref.*|\s+ref\s+no.*|\s+upi$)/i, '')
       .replace(/[^\w\s@&.'-]/g, '')
       .trim();
 
-    // If merchant is a raw UPI VPA (e.g. "zomato@hdfcbank" or "user@okaxis")
+    // 3. If merchant is a raw UPI VPA (e.g. "zomato@hdfcbank" or "user@okaxis" or "9876543210@paytm")
     if (merchant.includes('@')) {
       const parts = merchant.split('@');
       const handle = parts[0]?.trim() || '';
-      const nameMatch = handle.replace(/[-_.]/g, ' ').replace(/\d+$/, '').trim();
-      if (nameMatch.length >= 3 && !/^\d+$/.test(nameMatch)) {
-        merchant = nameMatch;
-      } else if (handle.length >= 3) {
-        merchant = handle;
+
+      // Check if handle is a 10-digit Indian mobile number (e.g. 9876543210@paytm)
+      if (/^[6-9]\d{9}$/.test(handle)) {
+        merchant = `+91 ${handle.slice(0, 5)} ${handle.slice(5)}`;
+      } else {
+        const nameMatch = handle.replace(/[-_.]/g, ' ').replace(/\d+$/, '').trim();
+        if (nameMatch.length >= 3 && !/^\d+$/.test(nameMatch)) {
+          merchant = nameMatch;
+        } else if (handle.length >= 3) {
+          merchant = handle;
+        }
       }
     }
+
+    // Clean trailing/leading symbols
+    merchant = merchant.replace(/^[^\w+]+|[^\w]+$/g, '').trim();
 
     // If cleaned merchant is empty or just generic keywords
     if (!merchant || /^(?:your|the|account|card|bank)$/i.test(merchant)) {
@@ -435,6 +473,17 @@ export class TransactionExtractor {
     message: RawSmsMessage,
     classification?: ClassificationResult
   ): ExtractedTransaction | null {
+    if (classification?.classification === 'PRE_DEBIT_NOTIFICATION') {
+      return null;
+    }
+
+    const isFutureDebitAlert =
+      /\b(?:will\s+be|is\s+scheduled\s+to\s+be|scheduled\s+for|is\s+set\s+to\s+be)\s+(?:debited|deducted|auto[- ]debited)\b/i.test(message.body) ||
+      /\bpre[- ]debit\s+notification\b/i.test(message.body);
+    if (isFutureDebitAlert) {
+      return null;
+    }
+
     const amount = this.extractAmount(message.body);
     if (!amount) {
       return null;

@@ -58,8 +58,11 @@ export function useCreateTransaction() {
   });
 
   return {
-    mutate: (data: Omit<Transaction, 'id'>, options?: { onSuccess?: () => void }) => {
-      mutation.mutate(data, { onSuccess: options?.onSuccess });
+    mutate: (
+      data: Omit<Transaction, 'id'>,
+      options?: { onSuccess?: () => void; onError?: (error: Error) => void }
+    ) => {
+      mutation.mutate(data, { onSuccess: options?.onSuccess, onError: options?.onError });
     },
     isPending: mutation.isPending,
   };
@@ -85,9 +88,9 @@ export function useUpdateTransaction() {
     mutate: (
       id: string,
       data: Partial<Omit<Transaction, 'id'>>,
-      options?: { onSuccess?: () => void }
+      options?: { onSuccess?: () => void; onError?: (error: Error) => void }
     ) => {
-      mutation.mutate({ id, data }, { onSuccess: options?.onSuccess });
+      mutation.mutate({ id, data }, { onSuccess: options?.onSuccess, onError: options?.onError });
     },
     isPending: mutation.isPending,
   };

@@ -6,6 +6,7 @@ import {
   insertAccount,
   updateAccount as updateAccountDao,
   deleteAccount as deleteAccountDao,
+  updateAccountsOrder,
   getTotalBalance,
 } from '@/services/database/account-dao';
 import { queueAutoBackup } from '@/services/cloud/google-drive-service';
@@ -97,6 +98,37 @@ export function useUpdateAccount() {
     ) => {
       mutation.mutate({ id, data }, { onSuccess: options?.onSuccess });
     },
+    isPending: mutation.isPending,
+  };
+}
+
+export function useReorderAccounts() {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: (orderedAccounts: Account[]) => {
+      const ids = orderedAccounts.map((a) => a.id);
+      return updateAccountsOrder(ids);
+    },
+    onMutate: async (newOrderedAccounts: Account[]) => {
+      await queryClient.cancelQueries({ queryKey: ['accounts'] });
+      const previousAccounts = queryClient.getQueryData<Account[]>(['accounts']);
+      queryClient.setQueryData<Account[]>(['accounts'], newOrderedAccounts);
+      return { previousAccounts };
+    },
+    onError: (_err, _newAccounts, context) => {
+      if (context?.previousAccounts) {
+        queryClient.setQueryData(['accounts'], context.previousAccounts);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queueAutoBackup('reorder-accounts');
+    },
+  });
+
+  return {
+    reorder: (orderedAccounts: Account[]) => mutation.mutate(orderedAccounts),
     isPending: mutation.isPending,
   };
 }

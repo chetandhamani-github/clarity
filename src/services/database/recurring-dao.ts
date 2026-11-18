@@ -179,6 +179,7 @@ export async function processDueRecurringTransactions(): Promise<number> {
     for (const rt of dueTransactions) {
       try {
         let currentDate = rt.next_process_date;
+        const targetDay = parseInt(currentDate.split('-')[2] || '1', 10);
         let lastProcessed = rt.last_processed_date || currentDate;
         let count = 0;
         const MAX_CYCLES = 24; // safety guard
@@ -196,8 +197,15 @@ export async function processDueRecurringTransactions(): Promise<number> {
 
         while (currentDate <= today && count < MAX_CYCLES) {
           // Check if an SMS or manual transaction already captured this recurring charge for this cycle
-          // Window: within 2 days of scheduled date, matching amount, account, and merchant/category
+          // Window: within 2 days of scheduled date, matching amount, account, and exact/clean merchant
           const cleanMerchant = (rt.merchant || '').toLowerCase().trim();
+          const hasMerchant = cleanMerchant.length > 0;
+          const merchantFilter = hasMerchant
+            ? `(LOWER(merchant) LIKE ? OR ? LIKE '%' || LOWER(merchant) || '%')`
+            : `(category = ?)`;
+          const merchantParams = hasMerchant
+            ? [`%${cleanMerchant}%`, cleanMerchant]
+            : [rt.category];
 
           const existingTx = await db.getFirstAsync<{ id: string; is_recurring: number }>(
             `SELECT id, is_recurring FROM transactions
@@ -208,11 +216,7 @@ export async function processDueRecurringTransactions(): Promise<number> {
                  date(date) BETWEEN date(?, '-2 days') AND date(?, '+2 days')
                  OR date LIKE ?
                )
-               AND (
-                 LOWER(merchant) LIKE ? OR ? LIKE '%' || LOWER(merchant) || '%'
-                 OR category = ?
-                 OR is_recurring = 1
-               )
+               AND ${merchantFilter}
              LIMIT 1`,
             [
               rt.account_id,
@@ -221,9 +225,7 @@ export async function processDueRecurringTransactions(): Promise<number> {
               currentDate,
               currentDate,
               `${currentDate}%`,
-              `%${cleanMerchant}%`,
-              cleanMerchant,
-              rt.category,
+              ...merchantParams,
             ]
           );
 
@@ -234,7 +236,7 @@ export async function processDueRecurringTransactions(): Promise<number> {
               ]);
             }
             lastProcessed = currentDate;
-            currentDate = calculateNextDate(currentDate, rt.frequency as RecurringFrequency);
+            currentDate = calculateNextDate(currentDate, rt.frequency as RecurringFrequency, targetDay);
             count++;
             totalProcessed++;
             continue;
@@ -262,7 +264,7 @@ export async function processDueRecurringTransactions(): Promise<number> {
 
           createdTxCount++;
           lastProcessed = currentDate;
-          currentDate = calculateNextDate(currentDate, rt.frequency as RecurringFrequency);
+          currentDate = calculateNextDate(currentDate, rt.frequency as RecurringFrequency, targetDay);
           count++;
           totalProcessed++;
         }
@@ -272,7 +274,7 @@ export async function processDueRecurringTransactions(): Promise<number> {
             await insertNotification({
               title: 'Recurring Transaction Processed',
               description: `Scheduled ${rt.type} of ${formatCurrency(rt.amount)} for "${rt.merchant}" was automatically recorded${createdTxCount > 1 ? ` (${createdTxCount} cycles)` : ''}.`,
-              type: 'default',
+              type: 'bill',
               actionUrl: '/(app)/(tabs)/transactions',
             });
           }

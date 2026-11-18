@@ -59,7 +59,7 @@ export class BillSettlementEngine {
       await insertNotification({
         title: 'Bill Paid',
         description: `Your ${matched.billerName} bill of ${formatCurrency(transaction.amount)} was automatically matched and marked as paid.`,
-        type: 'default',
+        type: 'bill',
         actionUrl: '/(app)/bills',
       });
 

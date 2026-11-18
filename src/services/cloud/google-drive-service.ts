@@ -1,12 +1,17 @@
-import * as SecureStore from 'expo-secure-store';
 import {
-  GoogleSignin,
-  statusCodes,
-} from '@react-native-google-signin/google-signin';
-import {
-  isMeaningfulDatabaseSnapshot,
-  type ClarityBackupPayload,
+    isMeaningfulDatabaseSnapshot,
+    type ClarityBackupPayload,
 } from '@/services/database/backup-restore-service';
+import {
+    encryptBackupPayload,
+    decryptBackupPayload,
+    isEncryptedBackup,
+} from './backup-crypto';
+import {
+    GoogleSignin,
+    statusCodes,
+} from '@react-native-google-signin/google-signin';
+import * as SecureStore from 'expo-secure-store';
 
 const SECURE_KEYS = {
   ACCESS_TOKEN: 'gdrive_access_token',
@@ -175,8 +180,13 @@ export async function authenticateWithGoogle(): Promise<{
 
 /**
  * Get active access token, refreshing if needed.
+ * @param forceRefresh Clear cached token and force fresh token retrieval
+ * @param allowInteractive If false, fails silently without prompting user login UI
  */
-export async function getValidAccessToken(forceRefresh = false): Promise<string | null> {
+export async function getValidAccessToken(
+  forceRefresh = false,
+  allowInteractive = true
+): Promise<string | null> {
   try {
     const { accessToken, isExpired } = await getSavedTokens();
     if (accessToken && !isExpired && !forceRefresh) {
@@ -214,7 +224,11 @@ export async function getValidAccessToken(forceRefresh = false): Promise<string 
       // Silent refresh fallback
     }
 
-    // 2. Interactive sign-in fallback
+    // 2. Interactive sign-in fallback (only if interactive UI is allowed)
+    if (!allowInteractive) {
+      return null;
+    }
+
     const auth = await authenticateWithGoogle();
     return auth.success && auth.accessToken ? auth.accessToken : null;
   } catch {
@@ -324,10 +338,11 @@ export async function findBackupFile(accessToken: string): Promise<GoogleDriveBa
  */
 export async function uploadBackup(
   snapshot: ClarityBackupPayload,
-  options?: { allowEmptyOverwrite?: boolean }
+  options?: { allowEmptyOverwrite?: boolean; allowInteractive?: boolean; passphrase?: string }
 ): Promise<{ success: boolean; modifiedTime?: string; error?: string }> {
   try {
-    let accessToken = await getValidAccessToken();
+    const allowInteractive = options?.allowInteractive ?? true;
+    let accessToken = await getValidAccessToken(false, allowInteractive);
     if (!accessToken) {
       return { success: false, error: 'Google Drive is not connected or token expired.' };
     }
@@ -337,7 +352,7 @@ export async function uploadBackup(
       existingFile = await findBackupFile(accessToken);
     } catch (findErr: any) {
       if (findErr?.message === 'UNAUTHORIZED') {
-        accessToken = await getValidAccessToken(true);
+        accessToken = await getValidAccessToken(true, allowInteractive);
         if (accessToken) {
           existingFile = await findBackupFile(accessToken);
         }
@@ -358,7 +373,13 @@ export async function uploadBackup(
       };
     }
 
-    const jsonContent = JSON.stringify(snapshot, null, 2);
+    let jsonContent: string;
+    if (options?.passphrase) {
+      const encrypted = await encryptBackupPayload(snapshot, options.passphrase);
+      jsonContent = JSON.stringify(encrypted, null, 2);
+    } else {
+      jsonContent = JSON.stringify(snapshot, null, 2);
+    }
 
     let response: Response;
 
@@ -376,7 +397,7 @@ export async function uploadBackup(
 
       // If 401, retry once with refreshed token
       if (response.status === 401) {
-        accessToken = await getValidAccessToken(true);
+        accessToken = await getValidAccessToken(true, allowInteractive);
         if (accessToken) {
           response = await fetch(uploadUrl, {
             method: 'PATCH',
@@ -419,7 +440,7 @@ export async function uploadBackup(
 
       // If 401, retry once with refreshed token
       if (response.status === 401) {
-        accessToken = await getValidAccessToken(true);
+        accessToken = await getValidAccessToken(true, allowInteractive);
         if (accessToken) {
           response = await fetch(uploadUrl, {
             method: 'POST',
@@ -450,12 +471,13 @@ export async function uploadBackup(
 /**
  * Download backup snapshot from Google Drive AppData folder.
  */
-export async function downloadBackup(): Promise<{
+export async function downloadBackup(passphrase?: string): Promise<{
   success: boolean;
   data?: ClarityBackupPayload;
   metadata?: GoogleDriveBackupInfo;
   error?: string;
   isRecoveredFromRevision?: boolean;
+  isEncrypted?: boolean;
 }> {
   try {
     let accessToken = await getValidAccessToken();
@@ -499,11 +521,35 @@ export async function downloadBackup(): Promise<{
     }
 
     const responseText = await response.text();
-    let payload: ClarityBackupPayload;
+    let rawJson: any;
     try {
-      payload = JSON.parse(responseText);
+      rawJson = JSON.parse(responseText);
     } catch {
       throw new Error('Downloaded backup file is not valid JSON.');
+    }
+
+    let payload: ClarityBackupPayload;
+    if (isEncryptedBackup(rawJson)) {
+      if (!passphrase) {
+        return {
+          success: false,
+          isEncrypted: true,
+          metadata: backupInfo,
+          error: 'This backup is encrypted with a passphrase.',
+        };
+      }
+      try {
+        payload = await decryptBackupPayload<ClarityBackupPayload>(rawJson, passphrase);
+      } catch (decErr: any) {
+        return {
+          success: false,
+          isEncrypted: true,
+          metadata: backupInfo,
+          error: decErr?.message || 'Incorrect passphrase.',
+        };
+      }
+    } else {
+      payload = rawJson;
     }
 
     if (!payload || !payload.data) {
@@ -673,7 +719,7 @@ export async function syncDatabaseToDriveSilently(reason = 'auto-sync'): Promise
       return false;
     }
 
-    const result = await uploadBackup(snapshot);
+    const result = await uploadBackup(snapshot, { allowInteractive: false });
     if (result.success && result.modifiedTime) {
       state.setLastCloudBackupTime(result.modifiedTime);
       return true;

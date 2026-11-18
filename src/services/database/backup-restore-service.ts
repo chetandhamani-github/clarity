@@ -265,8 +265,8 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
     if (Array.isArray(data.accounts)) {
       for (const a of data.accounts) {
         await db.runAsync(
-          `INSERT INTO accounts (id, name, type, balance, institution, last_four, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO accounts (id, name, type, balance, institution, last_four, sort_order, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             a.id,
             a.name,
@@ -274,6 +274,7 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
             a.balance ?? 0,
             a.institution ?? '',
             a.last_four ?? a.lastFour ?? '',
+            a.sort_order ?? a.sortOrder ?? 0,
             a.created_at ?? a.createdAt ?? new Date().toISOString(),
             a.updated_at ?? a.updatedAt ?? a.created_at ?? new Date().toISOString(),
           ]

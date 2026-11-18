@@ -22,9 +22,10 @@ import {
   formatCurrencyPrivacy,
   formatCurrencyWholePrivacy,
 } from '@/utils/format';
-import { getAccountTypeIcon, getBankBranding } from '@/utils/icons';
+import { getBankBranding } from '@/utils/icons';
 import type { Account } from '@/types';
 import { useAppStore } from '@/store/use-app-store';
+import { ReorderableAccountSection } from '@/components/common';
 
 export default function AccountsScreen() {
   const { colors } = useTheme();
@@ -33,6 +34,7 @@ export default function AccountsScreen() {
   const router = useRouter();
   const { accounts, isLoading, refetch } = useAccounts();
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [isDraggingAccounts, setIsDraggingAccounts] = useState(false);
   const { hideBalances, toggleHideBalances } = useAppStore();
 
   useFocusEffect(
@@ -53,68 +55,6 @@ export default function AccountsScreen() {
     0
   );
   const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
-
-  const renderAccountRow = (account: Account) => {
-    const isSelected = selectedAccount?.id === account.id;
-    const isDebt = isLiabilityType(account.type) && account.balance < 0;
-    const branding = getBankBranding(account.institution || account.name);
-
-    return (
-      <TouchableOpacity
-        key={account.id}
-        style={isSelected ? styles.accountItemActive : styles.accountItemInactive}
-        onPress={() => setSelectedAccountId(account.id)}
-      >
-        <View style={styles.accountItemLeft}>
-          <View
-            style={[
-              styles.accountIconContainer,
-              {
-                backgroundColor: isSelected
-                  ? colors.primaryContainer
-                  : branding.backgroundColor,
-              },
-            ]}
-          >
-            <MaterialIcons
-              name={account.institution ? 'account-balance' : getAccountTypeIcon(account.type)}
-              size={22}
-              color={isSelected ? colors.onPrimaryContainer : branding.color}
-            />
-          </View>
-          <View style={styles.accountNameContainer}>
-            <Text style={styles.accountName} numberOfLines={1}>
-              {account.name}
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-              {account.institution ? (
-                <View style={[styles.bankBadge, { backgroundColor: branding.backgroundColor }]}>
-                  <Text style={[styles.bankBadgeText, { color: branding.color }]} numberOfLines={1}>
-                    {branding.shortName}
-                  </Text>
-                </View>
-              ) : null}
-              <Text style={styles.accountType} numberOfLines={1}>
-                {account.type.charAt(0).toUpperCase() + account.type.slice(1)}
-                {account.lastFour ? ` •••• ${account.lastFour}` : ''}
-              </Text>
-            </View>
-          </View>
-        </View>
-        <View style={styles.accountItemRight}>
-          <Text
-            style={[styles.accountBalanceActive, isDebt && { color: colors.error }]}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.75}
-          >
-            {formatCurrencyWholePrivacy(account.balance, hideBalances)}
-          </Text>
-          {isDebt && <Text style={[styles.owedBadge, { color: colors.error }]}>Due</Text>}
-        </View>
-      </TouchableOpacity>
-    );
-  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -155,6 +95,7 @@ export default function AccountsScreen() {
       ) : (
         <ScrollView
           style={{ flex: 1 }}
+          scrollEnabled={!isDraggingAccounts}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
           showsVerticalScrollIndicator={false}
         >
@@ -204,11 +145,11 @@ export default function AccountsScreen() {
                         <View
                           style={[
                             styles.summaryPill,
-                            { backgroundColor: colors.errorContainer + '33' },
+                            { backgroundColor: colors.errorContainer },
                           ]}
                         >
                           <Text
-                            style={[styles.summaryPillLabel, { color: colors.error }]}
+                            style={[styles.summaryPillLabel, { color: colors.onErrorContainer }]}
                             numberOfLines={1}
                           >
                             Liabilities: -{formatCurrencyWholePrivacy(totalLiabilities, hideBalances)}
@@ -220,33 +161,32 @@ export default function AccountsScreen() {
 
                   {/* Assets Section */}
                   {assetAccounts.length > 0 && (
-                    <View style={styles.sectionCard}>
-                      <View style={styles.sectionHeaderRow}>
-                        <Text style={styles.sectionHeaderLabel}>ASSETS</Text>
-                        <Text style={styles.sectionSubtotal} numberOfLines={1}>
-                          {formatCurrencyWholePrivacy(totalAssets, hideBalances)}
-                        </Text>
-                      </View>
-                      <View style={styles.accountList}>
-                        {assetAccounts.map(renderAccountRow)}
-                      </View>
-                    </View>
+                    <ReorderableAccountSection
+                      title="ASSETS"
+                      subtotalText={formatCurrencyWholePrivacy(totalAssets, hideBalances)}
+                      accounts={assetAccounts}
+                      allAccounts={accounts}
+                      selectedAccountId={selectedAccountId}
+                      onSelectAccount={setSelectedAccountId}
+                      hideBalances={hideBalances}
+                      onDragStateChange={setIsDraggingAccounts}
+                    />
                   )}
 
                   {/* Liabilities & Debt Section */}
                   {liabilityAccounts.length > 0 && (
-                    <View style={[styles.sectionCard, { marginTop: assetAccounts.length > 0 ? 16 : 0 }]}>
-                      <View style={styles.sectionHeaderRow}>
-                        <Text style={[styles.sectionHeaderLabel, { color: colors.error }]}>
-                          LIABILITIES & DEBT
-                        </Text>
-                        <Text style={[styles.sectionSubtotal, { color: colors.error }]} numberOfLines={1}>
-                          -{formatCurrencyWholePrivacy(totalLiabilities, hideBalances)}
-                        </Text>
-                      </View>
-                      <View style={styles.accountList}>
-                        {liabilityAccounts.map(renderAccountRow)}
-                      </View>
+                    <View style={{ marginTop: assetAccounts.length > 0 ? 16 : 0 }}>
+                      <ReorderableAccountSection
+                        title="LIABILITIES & DEBT"
+                        subtotalText={`-${formatCurrencyWholePrivacy(totalLiabilities, hideBalances)}`}
+                        isLiability
+                        accounts={liabilityAccounts}
+                        allAccounts={accounts}
+                        selectedAccountId={selectedAccountId}
+                        onSelectAccount={setSelectedAccountId}
+                        hideBalances={hideBalances}
+                        onDragStateChange={setIsDraggingAccounts}
+                      />
                     </View>
                   )}
 
@@ -603,27 +543,8 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       fontWeight: '600',
     },
-    sectionHeaderRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 8,
-      paddingHorizontal: 8,
-    },
-    sectionSubtotal: {
-      ...typography.bodyMd,
-      fontWeight: '600',
-      color: colors.onSurface,
-    },
-    owedBadge: {
-      ...typography.labelMd,
-      fontWeight: '700',
-      textTransform: 'uppercase',
-      marginTop: 2,
-      flexShrink: 0,
-    },
     payBillButton: {
-      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      backgroundColor: colors.primary,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
@@ -650,75 +571,6 @@ const getStyles = (colors: ThemeColors) => {
       shadowOpacity: 0.02,
       shadowRadius: 24,
       elevation: 2,
-    },
-    sectionHeaderLabel: {
-      ...typography.labelMd,
-      color: colors.onSurfaceVariant,
-      textTransform: 'uppercase',
-      letterSpacing: 0.6,
-    },
-    accountList: {
-      gap: 8,
-    },
-    accountItemActive: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: 16,
-      borderRadius: 12,
-      backgroundColor: colors.surfaceContainer,
-      borderWidth: 1,
-      borderColor: colors.surfaceVariant,
-      gap: 12,
-    },
-    accountItemInactive: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: 16,
-      borderRadius: 12,
-      backgroundColor: colors.surfaceContainerLowest,
-      borderWidth: 1,
-      borderColor: colors.surfaceVariant,
-      gap: 12,
-    },
-    accountItemLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      flex: 1,
-    },
-    accountNameContainer: {
-      flex: 1,
-    },
-    accountItemRight: {
-      alignItems: 'flex-end',
-      justifyContent: 'center',
-      flexShrink: 0,
-      maxWidth: '42%',
-    },
-    accountIconContainer: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      alignItems: 'center',
-      justifyContent: 'center',
-      flexShrink: 0,
-    },
-    accountName: {
-      ...typography.bodyLg,
-      fontWeight: '500',
-      color: colors.onSurface,
-    },
-    accountType: {
-      ...typography.bodyMd,
-      color: colors.onSurfaceVariant,
-    },
-    accountBalanceActive: {
-      ...typography.bodyLg,
-      fontWeight: '600',
-      color: colors.onSurface,
-      textAlign: 'right',
     },
     detailsHeader: {
       flexDirection: 'row',

@@ -26,6 +26,19 @@ export async function markAllNotificationsAsRead(): Promise<void> {
   await db.runAsync('UPDATE notifications SET is_read = 1 WHERE is_read = 0;');
 }
 
+export async function deleteNotification(id: string): Promise<void> {
+  const db = getDatabase();
+  await db.runAsync('DELETE FROM notifications WHERE id = ?;', [id]);
+}
+
+export async function getUnreadNotificationCount(): Promise<number> {
+  const db = getDatabase();
+  const row = await db.getFirstAsync<{ count: number }>(
+    'SELECT count(*) as count FROM notifications WHERE is_read = 0;'
+  );
+  return row?.count ?? 0;
+}
+
 export async function clearAllNotifications(): Promise<void> {
   const db = getDatabase();
   await db.runAsync('DELETE FROM notifications;');

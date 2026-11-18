@@ -413,11 +413,16 @@ export function PersonDetailsScreen() {
                 style={[
                   styles.avatarLarge,
                   {
-                    backgroundColor: colors.primaryContainer,
+                    backgroundColor: isSettled ? colors.primaryContainer : balanceBg,
                   },
                 ]}
               >
-                <Text style={[styles.avatarLargeText, { color: colors.onPrimaryContainer }]}>
+                <Text
+                  style={[
+                    styles.avatarLargeText,
+                    { color: isSettled ? colors.onPrimaryContainer : balanceColor },
+                  ]}
+                >
                   {initials}
                 </Text>
               </View>

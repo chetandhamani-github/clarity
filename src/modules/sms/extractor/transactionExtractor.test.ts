@@ -63,6 +63,19 @@ describe('TransactionExtractor', () => {
     expect(res?.bank).toBe('Axis Bank');
   });
 
+  it('extracts reversal and refund transactions as CREDIT even if debited is mentioned', () => {
+    const msg: RawSmsMessage = {
+      id: '4-rev',
+      address: 'HDFCBK',
+      body: 'Txn of Rs 500.00 debited from A/c XX1234 on 12-Nov has been REVERSED and credited to your A/c. Avl bal: Rs 10,000.',
+      date: 1705315200000,
+    };
+
+    const res = TransactionExtractor.extract(msg);
+    expect(res?.type).toBe('CREDIT');
+    expect(res?.amount).toBe(500);
+  });
+
   it('handles balance-first messages, full account numbers, card use, and ordinary recipient names', () => {
     const balanceFirst: RawSmsMessage = {
       id: '5',
@@ -284,5 +297,68 @@ describe('TransactionExtractor', () => {
     expect(res11?.availableBalance).toBeUndefined();
     expect(res11?.accountMask).toBe('1234');
     expect(res11?.merchant).toBe('NYKAA');
+  });
+
+  it('unmasks payment aggregators and normalizes merchant names', () => {
+    const razorpayMsg: RawSmsMessage = {
+      id: 'agg-1',
+      address: 'VM-HDFCBK',
+      body: 'Rs 450.00 debited from HDFC Bank A/C XX1234 on 10-Jan-26 at RAZORPAY*ZEPTO. Avl Bal Rs 50,000.',
+      date: 1705315200000,
+    };
+    const res1 = TransactionExtractor.extract(razorpayMsg);
+    expect(res1?.merchant).toBe('ZEPTO');
+    expect(res1?.amount).toBe(450);
+
+    const billdeskMsg: RawSmsMessage = {
+      id: 'agg-2',
+      address: 'AD-ICICIB',
+      body: 'Your A/C XX5678 is debited for INR 1,200.00 on 12-Jan-26 towards BILLDESK*BESCOM. Bal: Rs 20,000.',
+      date: 1705315200000,
+    };
+    const res2 = TransactionExtractor.extract(billdeskMsg);
+    expect(res2?.merchant).toBe('BESCOM');
+    expect(res2?.amount).toBe(1200);
+
+    const payuMsg: RawSmsMessage = {
+      id: 'agg-3',
+      address: 'AXISBK',
+      body: 'Axis Bank Card 4455 spent INR 650.00 at PAYU*SWIGGY on 14-Jan-26.',
+      date: 1705315200000,
+    };
+    const res3 = TransactionExtractor.extract(payuMsg);
+    expect(res3?.merchant).toBe('SWIGGY');
+  });
+
+  it('formats 10-digit Indian phone number UPI handles into standard phone format', () => {
+    const upiPhoneMsg: RawSmsMessage = {
+      id: 'upi-p2p',
+      address: 'VK-SBIUPI',
+      body: 'Your A/C 9988 is debited by Rs 500.00 on 10-Jan-26 trf to 9876543210@paytm UPI Ref 402918273612',
+      date: 1705315200000,
+    };
+    const res = TransactionExtractor.extract(upiPhoneMsg);
+    expect(res?.merchant).toBe('+91 98765 43210');
+    expect(res?.amount).toBe(500);
+  });
+
+  it('rejects future pre-debit notifications and scheduled mandate alerts', () => {
+    const preDebitMsg: RawSmsMessage = {
+      id: 'pre-debit-1',
+      address: 'VM-HDFCBK',
+      body: 'Dear Customer, Mandate of Rs 499.00 towards Netflix will be debited from A/c XX1234 on 25-Nov-2026. If not requested by you, click here.',
+      date: 1705315200000,
+    };
+    const res1 = TransactionExtractor.extract(preDebitMsg);
+    expect(res1).toBeNull();
+
+    const scheduledMsg: RawSmsMessage = {
+      id: 'pre-debit-2',
+      address: 'AD-ICICIB',
+      body: 'Your Account XX5678 is scheduled to be debited for Rs 1,500.00 on 30-Nov-2026 towards HDFC Life.',
+      date: 1705315200000,
+    };
+    const res2 = TransactionExtractor.extract(scheduledMsg);
+    expect(res2).toBeNull();
   });
 });

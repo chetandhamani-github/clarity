@@ -1,19 +1,19 @@
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
 import { getDatabase } from '@/services/database';
-import {
-  getTransactions,
-  getMonthlyTotals,
-  getTopMerchants,
-} from '@/services/database/transaction-dao';
 import { getAllAccounts } from '@/services/database/account-dao';
 import {
-  getCurrentBudgetPlan,
-  getAllCategories,
-  getSpentByCategory,
+    getAllCategories,
+    getCurrentBudgetPlan,
+    getSpentByCategory,
 } from '@/services/database/budget-dao';
 import { getGoals } from '@/services/database/goal-dao';
+import {
+    getMonthlyTotals,
+    getTopMerchants,
+    getTransactions,
+} from '@/services/database/transaction-dao';
 import { getCurrencySymbol } from '@/utils/format';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 
 export interface ExportStats {
   transactionCount: number;
@@ -74,7 +74,7 @@ export async function exportTransactionsToCSV(): Promise<{
         escape(t.toAccountName || ''),
         escape(t.category),
         escape(t.merchant),
-        t.amount,
+        Number(t.amount).toFixed(2),
         t.isRecurring ? 'Yes' : 'No',
         escape(t.note || ''),
       ].join(',');

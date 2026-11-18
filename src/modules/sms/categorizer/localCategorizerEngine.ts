@@ -179,8 +179,70 @@ export class LocalCategorizerEngine {
     'mygate',
   ];
 
+  // Semantic keyword clusters for zero-shot on-device merchant intelligence
+  private static readonly SEMANTIC_CLUSTERS: Record<string, string[]> = {
+    'Food & Dining': [
+      'cafe', 'coffee', 'tea', 'chai', 'hotel', 'restaurant', 'restro', 'bites', 'kitchen',
+      'dhaba', 'sagar', 'bhavan', 'bakery', 'sweets', 'snack', 'fast food', 'pizzeria',
+      'burger', 'pizza', 'diner', 'eats', 'dining', 'pub', 'bar', 'brewery', 'tiffin', 'biryani',
+    ],
+    'Groceries': [
+      'kirana', 'mart', 'bazaar', 'supermarket', 'hypermarket', 'provisions', 'dairy',
+      'vegetable', 'fruits', 'organics', 'grocer', 'store', 'dryfruits',
+    ],
+    'Health & Fitness': [
+      'medical', 'medicals', 'pharmacy', 'pharma', 'druggist', 'clinic', 'hospital',
+      'healthcare', 'diagnostic', 'pathology', 'lab', 'dental', 'gym', 'fitness',
+      'crossfit', 'yoga', 'wellness', 'spa', 'salon', 'barber',
+    ],
+    'Transportation': [
+      'fuel', 'petrol', 'diesel', 'cng', 'hpcl', 'bpcl', 'ioc', 'indian oil', 'shell',
+      'auto', 'cabs', 'taxi', 'ride', 'metro', 'railway', 'irctc', 'toll', 'fastag',
+      'parking', 'flight', 'airways', 'airline', 'transit',
+    ],
+    'Shopping': [
+      'retail', 'fashions', 'fashion', 'clothing', 'garments', 'textiles', 'silks',
+      'footwear', 'shoes', 'opticals', 'eyewear', 'jewellers', 'jewellery', 'jewel',
+      'electronics', 'appliances', 'furniture', 'stationery', 'gift', 'toys', 'books',
+    ],
+    'Entertainment': [
+      'cinema', 'cinemas', 'theatre', 'theater', 'movie', 'multiplex', 'gaming',
+      'amusement', 'resort', 'club', 'concert', 'events', 'ott',
+    ],
+    'Bills & Utilities': [
+      'electricity', 'power', 'bescom', 'energy', 'water', 'gas', 'broadband',
+      'internet', 'wifi', 'fiber', 'telecom', 'recharge', 'dth', 'cable',
+    ],
+    'Investments': [
+      'mutual fund', 'stocks', 'securities', 'invest', 'wealth', 'gold', 'bullion',
+      'capital', 'brokerage',
+    ],
+    'Rent & Housing': [
+      'maintenance', 'society', 'apartment', 'realty', 'builders', 'housing', 'flat', 'property',
+    ],
+    'Education': [
+      'school', 'college', 'university', 'academy', 'classes', 'tuition', 'coaching',
+      'learning', 'course',
+    ],
+  };
+
   // User-defined custom rules
   private static customRules: CategoryRule[] = [];
+
+  /**
+   * Load persistent merchant rules from SQLite into memory for fast lookup.
+   */
+  public static async loadDatabaseRules(): Promise<void> {
+    try {
+      const { getAllMerchantRules } = await import('@/services/database/merchant-rule-dao');
+      const dbRules = await getAllMerchantRules();
+      for (const rule of dbRules) {
+        this.addCustomRule(rule.merchantPattern, rule.category);
+      }
+    } catch {
+      // Database not ready or in test environment
+    }
+  }
 
   /**
    * Add a custom rule to the categorizer.
@@ -264,7 +326,25 @@ export class LocalCategorizerEngine {
       return 'Rent & Housing';
     }
 
-    // 4. Secondary classification fallback
+    // 4. Semantic token clustering analysis for unlisted/local vendors
+    const normalizedTokens = merchantLower
+      .replace(/[._\-/*@#:]+/g, ' ')
+      .split(/\s+/)
+      .filter((t) => t.length > 2);
+
+    for (const [category, keywords] of Object.entries(this.SEMANTIC_CLUSTERS)) {
+      if (
+        keywords.some((kw) =>
+          kw.includes(' ')
+            ? merchantLower.includes(kw)
+            : normalizedTokens.includes(kw) || merchantLower.includes(kw)
+        )
+      ) {
+        return category;
+      }
+    }
+
+    // 5. Secondary classification fallback
     if (classification === 'BILL') {
       return 'Bills & Utilities';
     }
@@ -272,7 +352,7 @@ export class LocalCategorizerEngine {
       return 'Subscriptions';
     }
 
-    // 5. Default by direction
+    // 6. Default by direction
     return transaction.type === 'CREDIT' ? 'Income' : 'General';
   }
 }

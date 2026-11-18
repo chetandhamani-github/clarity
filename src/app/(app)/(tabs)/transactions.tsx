@@ -13,9 +13,12 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useTransactions } from '@/hooks/use-transactions';
-import { formatCurrency, getTransactionSign, groupTransactionsByDate } from '@/utils/format';
+import { useAccounts } from '@/hooks/use-accounts';
+import { formatCurrency, formatLocalDate, getTransactionSign, groupTransactionsByDate } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
 import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
+import { TransactionFilterModal, ActiveFilters, DatePreset } from '@/components/modals/TransactionFilterModal';
+import type { TransactionFilters } from '@/types';
 
 const FILTERS = [
   { id: 'all', label: 'All', icon: 'list' },
@@ -30,13 +33,50 @@ export default function TransactionsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const [activeFilter, setActiveFilter] = useState<string>('all');
+  const { accounts } = useAccounts();
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [filters, setFilters] = useState<ActiveFilters>({
+    datePreset: 'all',
+    type: 'all',
+  });
 
-  // Convert filter string to type expected by useTransactions
-  const typeFilter =
-    activeFilter === 'all' ? undefined : (activeFilter as 'expense' | 'income' | 'transfer');
+  const dateRange = useMemo<{ dateFrom?: string; dateTo?: string }>(() => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = today.getMonth();
 
-  const { transactions, isLoading, refetch } = useTransactions({ type: typeFilter });
+    switch (filters.datePreset) {
+      case 'this_month': {
+        const from = formatLocalDate(new Date(y, m, 1));
+        const to = formatLocalDate(today);
+        return { dateFrom: from, dateTo: to };
+      }
+      case 'last_month': {
+        const from = formatLocalDate(new Date(y, m - 1, 1));
+        const to = formatLocalDate(new Date(y, m, 0));
+        return { dateFrom: from, dateTo: to };
+      }
+      case 'last_90_days': {
+        const fromDate = new Date();
+        fromDate.setDate(fromDate.getDate() - 90);
+        return { dateFrom: formatLocalDate(fromDate), dateTo: formatLocalDate(today) };
+      }
+      default:
+        return {};
+    }
+  }, [filters.datePreset]);
+
+  const queryFilters = useMemo<TransactionFilters>(() => {
+    return {
+      type: filters.type === 'all' ? undefined : filters.type,
+      accountId: filters.accountId,
+      category: filters.category,
+      dateFrom: dateRange.dateFrom,
+      dateTo: dateRange.dateTo,
+    };
+  }, [filters, dateRange]);
+
+  const { transactions, isLoading, refetch } = useTransactions(queryFilters);
 
   useFocusEffect(
     useCallback(() => {
@@ -110,7 +150,7 @@ export default function TransactionsScreen() {
               <MaterialIcons
                 name={getCategoryIcon(tx.category)}
                 size={20}
-                color={tx.type === 'income' ? colors.onPrimaryContainer : colors.primary}
+                color={tx.type === 'income' ? colors.onPrimaryContainer : colors.onSurfaceVariant}
               />
             </View>
             <View style={{ flex: 1, justifyContent: 'center' }}>
@@ -162,13 +202,73 @@ export default function TransactionsScreen() {
     [colors, styles, router]
   );
 
+  const activeCount =
+    (filters.type && filters.type !== 'all' ? 1 : 0) +
+    (filters.datePreset !== 'all' ? 1 : 0) +
+    (filters.accountId ? 1 : 0) +
+    (filters.category ? 1 : 0);
+
+  const selectedAccount = useMemo(() => {
+    if (!filters.accountId) return null;
+    return accounts.find((a) => a.id === filters.accountId);
+  }, [accounts, filters.accountId]);
+
+  const activeBadges = useMemo(() => {
+    const list: { id: string; label: string; onRemove: () => void }[] = [];
+    if (filters.accountId && selectedAccount) {
+      list.push({
+        id: 'account',
+        label: `Account: ${selectedAccount.name}`,
+        onRemove: () => setFilters((prev) => ({ ...prev, accountId: undefined })),
+      });
+    }
+    if (filters.category) {
+      list.push({
+        id: 'category',
+        label: `Category: ${filters.category}`,
+        onRemove: () => setFilters((prev) => ({ ...prev, category: undefined })),
+      });
+    }
+    if (filters.datePreset !== 'all') {
+      const label =
+        filters.datePreset === 'this_month'
+          ? 'This Month'
+          : filters.datePreset === 'last_month'
+          ? 'Last Month'
+          : 'Last 90 Days';
+      list.push({
+        id: 'date',
+        label: `Date: ${label}`,
+        onRemove: () => setFilters((prev) => ({ ...prev, datePreset: 'all' })),
+      });
+    }
+    return list;
+  }, [filters, selectedAccount]);
+
   const renderListHeader = useMemo(
     () => (
       <View>
-        <TouchableOpacity style={styles.searchBar} onPress={() => router.navigate('/search')}>
-          <MaterialIcons name="search" size={20} color={colors.primary} />
-          <Text style={styles.searchPlaceholder}>Search transactions...</Text>
-        </TouchableOpacity>
+        <View style={styles.searchRow}>
+          <TouchableOpacity style={styles.searchBar} onPress={() => router.navigate('/search')}>
+            <MaterialIcons name="search" size={20} color={colors.primary} />
+            <Text style={styles.searchPlaceholder}>Search transactions...</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterButton, activeCount > 0 && styles.filterButtonActive]}
+            onPress={() => setFilterModalVisible(true)}
+          >
+            <MaterialIcons
+              name="tune"
+              size={22}
+              color={activeCount > 0 ? colors.onPrimary : colors.onSurface}
+            />
+            {activeCount > 0 && (
+              <View style={styles.filterDotBadge}>
+                <Text style={styles.filterDotText}>{activeCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.filtersScroll}>
           <ScrollView
@@ -177,12 +277,17 @@ export default function TransactionsScreen() {
             contentContainerStyle={styles.filtersContainer}
           >
             {FILTERS.map((filter) => {
-              const isActive = activeFilter === filter.id;
+              const isActive = (filters.type || 'all') === filter.id;
               return (
                 <TouchableOpacity
                   key={filter.id}
                   style={isActive ? styles.activeFilter : styles.inactiveFilter}
-                  onPress={() => setActiveFilter(filter.id)}
+                  onPress={() =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      type: filter.id as any,
+                    }))
+                  }
                 >
                   <MaterialIcons
                     name={filter.icon as any}
@@ -198,13 +303,46 @@ export default function TransactionsScreen() {
           </ScrollView>
         </View>
 
+        {activeBadges.length > 0 && (
+          <View style={styles.activeBadgesRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.activeBadgesContainer}
+            >
+              {activeBadges.map((badge) => (
+                <View key={badge.id} style={styles.activeBadgePill}>
+                  <Text style={styles.activeBadgeText}>{badge.label}</Text>
+                  <TouchableOpacity
+                    onPress={badge.onRemove}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <MaterialIcons name="close" size={14} color={colors.onPrimaryContainer} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              <TouchableOpacity
+                onPress={() =>
+                  setFilters({
+                    datePreset: 'all',
+                    type: 'all',
+                  })
+                }
+                style={styles.clearAllBtn}
+              >
+                <Text style={styles.clearAllText}>Clear All</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        )}
+
         <View style={styles.resultsHeader}>
           <Text style={styles.resultsTitle}>Recent Activity</Text>
           <Text style={styles.resultsCount}>{transactions.length} Transactions</Text>
         </View>
       </View>
     ),
-    [colors, styles, router, activeFilter, transactions.length]
+    [colors, styles, router, filters, activeCount, activeBadges, transactions.length]
   );
 
   const renderListEmpty = useCallback(() => {
@@ -260,6 +398,13 @@ export default function TransactionsScreen() {
         windowSize={5}
         removeClippedSubviews={Platform.OS === 'android'}
       />
+
+      <TransactionFilterModal
+        visible={filterModalVisible}
+        filters={filters}
+        onClose={() => setFilterModalVisible(false)}
+        onApply={setFilters}
+      />
     </View>
   );
 }
@@ -295,7 +440,14 @@ const getStyles = (colors: ThemeColors) => {
       paddingHorizontal: 20,
       paddingTop: spacing.sm,
     },
+    searchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginBottom: 16,
+    },
     searchBar: {
+      flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: colors.surfaceContainerLowest,
@@ -305,7 +457,73 @@ const getStyles = (colors: ThemeColors) => {
       height: 56,
       paddingHorizontal: 16,
       gap: 12,
+    },
+    filterButton: {
+      width: 56,
+      height: 56,
+      borderRadius: 12,
+      backgroundColor: colors.surfaceContainerLowest,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      alignItems: 'center',
+      justifyContent: 'center',
+      position: 'relative',
+    },
+    filterButtonActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    filterDotBadge: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      backgroundColor: colors.error,
+      minWidth: 18,
+      height: 18,
+      borderRadius: 9,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 4,
+    },
+    filterDotText: {
+      ...typography.labelMd,
+      color: colors.onError,
+      fontSize: 10,
+      fontWeight: '700',
+    },
+    activeBadgesRow: {
+      marginHorizontal: -20,
       marginBottom: 16,
+    },
+    activeBadgesContainer: {
+      paddingHorizontal: 20,
+      gap: 8,
+      alignItems: 'center',
+    },
+    activeBadgePill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.primaryContainer,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: 16,
+      gap: 6,
+    },
+    activeBadgeText: {
+      ...typography.labelMd,
+      color: colors.onPrimaryContainer,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    clearAllBtn: {
+      paddingVertical: 6,
+      paddingHorizontal: 8,
+    },
+    clearAllText: {
+      ...typography.labelMd,
+      color: colors.error,
+      fontSize: 12,
+      fontWeight: '600',
     },
     searchPlaceholder: {
       ...typography.bodyLg,

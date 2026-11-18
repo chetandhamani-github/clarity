@@ -1,5 +1,5 @@
+import type { BucketType, BudgetCategory, BudgetPlan } from '@/types';
 import { getDatabase } from './index';
-import type { BudgetPlan, BudgetCategory, BucketType } from '@/types';
 
 function generateId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -236,8 +236,8 @@ export async function getSpentByCategory(
   const rows = await db.getAllAsync<{ category: string; amount: number; splits_json?: string }>(
     `SELECT category, amount, splits_json
      FROM transactions
-     WHERE type = 'expense' AND date LIKE ?`,
-    [`${datePrefix}%`]
+     WHERE type = 'expense' AND (date LIKE ? OR date(date, 'localtime') LIKE ?)`,
+    [`${datePrefix}%`, `${datePrefix}%`]
   );
 
   const result: Record<string, number> = {};

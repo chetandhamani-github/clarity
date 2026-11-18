@@ -6,3 +6,4 @@ export * from './device.api';
 export * from './announcement.api';
 export * from './health.api';
 export * from './splitwise.api';
+export * from './ai.api';

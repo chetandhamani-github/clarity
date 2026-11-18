@@ -1,25 +1,25 @@
-import { useState, useCallback } from 'react';
-import { DeviceEventEmitter } from 'react-native';
-import { useQueryClient } from '@tanstack/react-query';
-import { useAppStore } from '@/store/use-app-store';
 import { useToast } from '@/components/ui';
 import {
-  authenticateWithGoogle,
-  clearTokens,
-  uploadBackup,
-  downloadBackup,
-  findBackupFile,
-  deleteAllBackups,
-  getSavedTokens,
-  type GoogleDriveBackupInfo,
+    authenticateWithGoogle,
+    clearTokens,
+    deleteAllBackups,
+    downloadBackup,
+    findBackupFile,
+    getSavedTokens,
+    uploadBackup,
+    type GoogleDriveBackupInfo,
 } from '@/services/cloud/google-drive-service';
 import {
-  generateDatabaseSnapshot,
-  restoreDatabaseFromSnapshot,
-  getBackupSummary,
-  isMeaningfulDatabaseSnapshot,
-  type BackupMetadata,
+    generateDatabaseSnapshot,
+    getBackupSummary,
+    isMeaningfulDatabaseSnapshot,
+    restoreDatabaseFromSnapshot,
+    type BackupMetadata,
 } from '@/services/database/backup-restore-service';
+import { useAppStore } from '@/store/use-app-store';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCallback, useState } from 'react';
+import { DeviceEventEmitter } from 'react-native';
 
 export function useGoogleDrive() {
   const queryClient = useQueryClient();
@@ -44,62 +44,71 @@ export function useGoogleDrive() {
   /**
    * Restore database from Google Drive backup.
    */
-  const restoreFromDrive = useCallback(async (): Promise<{
-    success: boolean;
-    summary?: BackupMetadata;
-    error?: string;
-  }> => {
-    setIsRestoring(true);
-    try {
-      const downloadRes = await downloadBackup();
-      if (!downloadRes.success || !downloadRes.data) {
-        showToast(downloadRes.error || 'No backup found to restore', 'error');
-        return { success: false, error: downloadRes.error };
-      }
-
-      await restoreDatabaseFromSnapshot(downloadRes.data);
-      const summary = getBackupSummary(downloadRes.data);
-
-      if (downloadRes.metadata?.modifiedTime) {
-        setLastCloudBackupTime(downloadRes.metadata.modifiedTime);
-      }
-
-      // Invalidate and refetch all query caches so UI updates instantly
-      await queryClient.invalidateQueries();
-
-      DeviceEventEmitter.emit('billsUpdated');
-      DeviceEventEmitter.emit('notificationsUpdated');
-      DeviceEventEmitter.emit('splitwiseUpdated');
-
+  const restoreFromDrive = useCallback(
+    async (
+      passphrase?: string
+    ): Promise<{
+      success: boolean;
+      summary?: BackupMetadata;
+      isEncrypted?: boolean;
+      error?: string;
+    }> => {
+      setIsRestoring(true);
       try {
-        const { useBillsStore } = await import('@/modules/bills/store/bills.store');
-        useBillsStore.getState().loadData().catch(() => {});
-      } catch {
-        // Ignore if bills store is not initialized
-      }
+        const downloadRes = await downloadBackup(passphrase);
+        if (!downloadRes.success || !downloadRes.data) {
+          if (downloadRes.isEncrypted) {
+            return { success: false, isEncrypted: true, error: downloadRes.error };
+          }
+          showToast(downloadRes.error || 'No backup found to restore', 'error');
+          return { success: false, error: downloadRes.error };
+        }
 
-      if (downloadRes.isRecoveredFromRevision) {
-        showToast(
-          `Data recovered from previous version! (${summary.accountCount} accounts, ${summary.transactionCount} transactions)`,
-          'success'
-        );
-        // Resave the recovered version as the latest snapshot so future backups stay in sync
-        uploadBackup(downloadRes.data).catch(() => {});
-      } else {
-        showToast(
-          `Data restored! (${summary.accountCount} accounts, ${summary.transactionCount} transactions)`,
-          'success'
-        );
-      }
+        await restoreDatabaseFromSnapshot(downloadRes.data);
+        const summary = getBackupSummary(downloadRes.data);
 
-      return { success: true, summary };
-    } catch (error: any) {
-      showToast(error?.message || 'Failed to restore backup from Drive', 'error');
-      return { success: false, error: error?.message };
-    } finally {
-      setIsRestoring(false);
-    }
-  }, [queryClient, setLastCloudBackupTime, showToast]);
+        if (downloadRes.metadata?.modifiedTime) {
+          setLastCloudBackupTime(downloadRes.metadata.modifiedTime);
+        }
+
+        // Invalidate and refetch all query caches so UI updates instantly
+        await queryClient.invalidateQueries();
+
+        DeviceEventEmitter.emit('billsUpdated');
+        DeviceEventEmitter.emit('notificationsUpdated');
+        DeviceEventEmitter.emit('splitwiseUpdated');
+
+        try {
+          const { useBillsStore } = await import('@/modules/bills/store/bills.store');
+          useBillsStore.getState().loadData().catch(() => {});
+        } catch {
+          // Ignore if bills store is not initialized
+        }
+
+        if (downloadRes.isRecoveredFromRevision) {
+          showToast(
+            `Data recovered from previous version! (${summary.accountCount} accounts, ${summary.transactionCount} transactions)`,
+            'success'
+          );
+          // Resave the recovered version as the latest snapshot so future backups stay in sync
+          uploadBackup(downloadRes.data).catch(() => {});
+        } else {
+          showToast(
+            `Data restored! (${summary.accountCount} accounts, ${summary.transactionCount} transactions)`,
+            'success'
+          );
+        }
+
+        return { success: true, summary };
+      } catch (error: any) {
+        showToast(error?.message || 'Failed to restore backup from Drive', 'error');
+        return { success: false, error: error?.message };
+      } finally {
+        setIsRestoring(false);
+      }
+    },
+    [queryClient, setLastCloudBackupTime, showToast]
+  );
 
   /**
    * Connect with Google Drive OAuth and check for existing cloud backups safely.
@@ -192,11 +201,11 @@ export function useGoogleDrive() {
   /**
    * Trigger manual backup to Google Drive.
    */
-  const backupNow = useCallback(async () => {
+  const backupNow = useCallback(async (passphrase?: string) => {
     setIsBackingUp(true);
     try {
       const snapshot = await generateDatabaseSnapshot();
-      const result = await uploadBackup(snapshot);
+      const result = await uploadBackup(snapshot, { passphrase });
 
       if (!result.success) {
         showToast(result.error || 'Failed to upload backup', 'error');
@@ -231,7 +240,7 @@ export function useGoogleDrive() {
         if (!isMeaningfulDatabaseSnapshot(snapshot)) {
           return false;
         }
-        const result = await uploadBackup(snapshot);
+        const result = await uploadBackup(snapshot, { allowInteractive: false });
         if (result.success && result.modifiedTime) {
           currentState.setLastCloudBackupTime(result.modifiedTime);
           return true;

@@ -16,22 +16,22 @@ export async function seedDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
   if (!accountResult || accountResult.count === 0) {
     const defaultAccountId = uuid();
     await db.runAsync(
-      `INSERT INTO accounts (id, name, type, balance, institution, last_four, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'));`,
+      `INSERT INTO accounts (id, name, type, balance, institution, last_four, sort_order, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, 0, datetime('now'));`,
       [defaultAccountId, 'Primary Bank Account', 'savings', 0, 'Bank / UPI', '']
     );
 
     const borrowedAccountId = uuid();
     await db.runAsync(
-      `INSERT INTO accounts (id, name, type, balance, institution, last_four, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'));`,
+      `INSERT INTO accounts (id, name, type, balance, institution, last_four, sort_order, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, 1, datetime('now'));`,
       [borrowedAccountId, 'Borrowed / Loan', 'borrowed', 0, 'Personal / Friend', '']
     );
 
     const lentAccountId = uuid();
     await db.runAsync(
-      `INSERT INTO accounts (id, name, type, balance, institution, last_four, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'));`,
+      `INSERT INTO accounts (id, name, type, balance, institution, last_four, sort_order, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, 2, datetime('now'));`,
       [lentAccountId, 'Lent / Money Given', 'lent', 0, 'Personal / Friend', '']
     );
   } else {
@@ -42,8 +42,8 @@ export async function seedDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
     if (!lentResult || lentResult.count === 0) {
       const lentAccountId = uuid();
       await db.runAsync(
-        `INSERT INTO accounts (id, name, type, balance, institution, last_four, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, datetime('now'));`,
+        `INSERT INTO accounts (id, name, type, balance, institution, last_four, sort_order, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 3, datetime('now'));`,
         [lentAccountId, 'Lent / Money Given', 'lent', 0, 'Personal / Friend', '']
       );
     }
@@ -114,7 +114,7 @@ export async function seedDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
         uuid(),
         'Welcome to Clarity',
         'Your personal finance ledger is set up. Log your daily UPI spends, track accounts, and manage your budget.',
-        'milestone',
+        'system',
         0,
         '/add-transaction',
       ]

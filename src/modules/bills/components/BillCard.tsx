@@ -159,8 +159,8 @@ export function BillCard({ bill, onPress }: BillCardProps) {
               onPress={handlePay}
               activeOpacity={0.8}
             >
-              <MaterialIcons name="open-in-new" size={14} color="#ffffff" />
-              <Text style={styles.payOnlineButtonText}>PAY ONLINE</Text>
+              <MaterialIcons name="open-in-new" size={14} color={colors.onPrimary} />
+              <Text style={[styles.payOnlineButtonText, { color: colors.onPrimary }]}>PAY ONLINE</Text>
             </TouchableOpacity>
           ) : null}
 

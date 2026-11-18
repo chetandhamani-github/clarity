@@ -2,12 +2,18 @@ import type { RecurringFrequency } from '@/types';
 
 /**
  * Deterministic date calculation that handles month-end clamping and avoids timezone drift.
+ * Optional targetDay preserves original billing day (e.g. 31st) across shorter months like February.
  */
-export function calculateNextDate(currentDateStr: string, frequency: RecurringFrequency): string {
+export function calculateNextDate(
+  currentDateStr: string,
+  frequency: RecurringFrequency,
+  targetDay?: number
+): string {
   const [yearStr, monthStr, dayStr] = currentDateStr.split('T')[0].split('-');
   let year = parseInt(yearStr, 10);
   let month = parseInt(monthStr, 10); // 1-12
   let day = parseInt(dayStr, 10); // 1-31
+  const effectiveDay = targetDay && targetDay >= 1 && targetDay <= 31 ? targetDay : day;
 
   const pad = (n: number) => n.toString().padStart(2, '0');
 
@@ -30,13 +36,13 @@ export function calculateNextDate(currentDateStr: string, frequency: RecurringFr
       }
       // Month-end clamping (e.g. Jan 31 -> Feb 28 or 29, Mar 31 -> Apr 30)
       const maxDays = new Date(year, month, 0).getDate();
-      day = Math.min(day, maxDays);
+      day = Math.min(effectiveDay, maxDays);
       return `${year}-${pad(month)}-${pad(day)}`;
     }
     case 'yearly': {
       year += 1;
       const maxDays = new Date(year, month, 0).getDate();
-      day = Math.min(day, maxDays);
+      day = Math.min(effectiveDay, maxDays);
       return `${year}-${pad(month)}-${pad(day)}`;
     }
   }

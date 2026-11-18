@@ -323,7 +323,7 @@ export function BillDetailsScreen() {
             onPress={handlePayOnline}
             activeOpacity={0.85}
           >
-            <MaterialIcons name="open-in-new" size={18} color="#ffffff" />
+            <MaterialIcons name="open-in-new" size={18} color={colors.onSurface} />
             <Text style={[styles.payOnlineBtnText, { color: colors.onSurface }]}>PAY ONLINE</Text>
           </TouchableOpacity>
         ) : null}

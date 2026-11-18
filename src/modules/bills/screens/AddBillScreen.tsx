@@ -447,7 +447,7 @@ export function AddBillScreen() {
                     <MaterialIcons
                       name={cat.icon as any}
                       size={18}
-                      color={isSelected ? colors.primary : colors.onSurfaceVariant}
+                      color={isSelected ? colors.onPrimaryContainer : colors.onSurfaceVariant}
                     />
                     <Text
                       style={[
@@ -806,9 +806,9 @@ const styles = StyleSheet.create({
     ...typography.displayLg,
     fontWeight: '800',
     fontSize: 32,
-    minWidth: 100,
-    textAlign: 'center',
+    textAlign: 'left',
     padding: 0,
+    letterSpacing: 0,
   },
   formCard: {
     borderRadius: radius.lg,

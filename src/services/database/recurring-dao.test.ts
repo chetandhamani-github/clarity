@@ -58,6 +58,9 @@ describe('recurring-dao', () => {
 
       // May 31 -> June 30 (June has 30 days)
       expect(calculateNextDate('2026-05-31', 'monthly')).toBe('2026-06-30');
+
+      // Preserves original 31st targetDay across shorter months (Feb 28 -> Mar 31)
+      expect(calculateNextDate('2026-02-28', 'monthly', 31)).toBe('2026-03-31');
     });
 
     it('advances yearly frequency correctly and clamps leap year', () => {

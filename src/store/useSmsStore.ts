@@ -186,7 +186,7 @@ export const useSmsStore = create<SmsStoreState>((set, get) => ({
   setPendingTransactions: (txs: ParsedTransaction[]) => {
     set({
       pendingTransactions: txs,
-      isPromptVisible: txs.length > 0,
+      isPromptVisible: false,
     });
   },
 

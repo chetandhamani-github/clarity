@@ -8,6 +8,8 @@ import {
   Platform,
   ScrollView,
   Modal,
+  KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -88,6 +90,16 @@ export function SettlementScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showPersonPicker, setShowPersonPicker] = useState(false);
   const [friendSearch, setFriendSearch] = useState('');
+
+  const openPersonPicker = () => {
+    Keyboard.dismiss();
+    setShowPersonPicker(true);
+  };
+
+  const closePersonPicker = () => {
+    Keyboard.dismiss();
+    setShowPersonPicker(false);
+  };
 
   const {
     control,
@@ -292,7 +304,7 @@ export function SettlementScreen() {
               <Text style={[styles.cardSectionTitle, { color: colors.onSurface }]}>Friend / Contact</Text>
             </View>
             <TouchableOpacity
-              onPress={() => setShowPersonPicker(true)}
+              onPress={openPersonPicker}
               style={[styles.changeFriendBtn, { backgroundColor: colors.surfaceContainerHigh }]}
             >
               <Text style={[styles.changeFriendText, { color: colors.primary }]}>
@@ -311,7 +323,7 @@ export function SettlementScreen() {
                   borderColor: colors.surfaceVariant,
                 },
               ]}
-              onPress={() => setShowPersonPicker(true)}
+              onPress={openPersonPicker}
               activeOpacity={0.8}
             >
               <View style={[styles.avatarCircle, { backgroundColor: colors.primaryContainer }]}>
@@ -358,7 +370,7 @@ export function SettlementScreen() {
                   borderColor: colors.outlineVariant,
                 },
               ]}
-              onPress={() => setShowPersonPicker(true)}
+              onPress={openPersonPicker}
             >
               <MaterialIcons name="person-add" size={22} color={colors.primary} />
               <Text style={[styles.selectPromptText, { color: colors.onSurfaceVariant }]}>
@@ -881,9 +893,17 @@ export function SettlementScreen() {
         visible={showPersonPicker}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowPersonPicker(false)}
+        onRequestClose={closePersonPicker}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdropTouch}
+            activeOpacity={1}
+            onPress={closePersonPicker}
+          />
           <View
             style={[
               styles.modalCard,
@@ -897,7 +917,7 @@ export function SettlementScreen() {
             <View style={styles.modalHeaderRow}>
               <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Select Friend</Text>
               <TouchableOpacity
-                onPress={() => setShowPersonPicker(false)}
+                onPress={closePersonPicker}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
@@ -959,7 +979,7 @@ export function SettlementScreen() {
                     ]}
                     onPress={() => {
                       setValue('personId', p.id, { shouldValidate: true });
-                      setShowPersonPicker(false);
+                      closePersonPicker();
                     }}
                   >
                     <View
@@ -1013,7 +1033,7 @@ export function SettlementScreen() {
                   <TouchableOpacity
                     style={[styles.addFriendPromptBtn, { backgroundColor: colors.primary }]}
                     onPress={() => {
-                      setShowPersonPicker(false);
+                      closePersonPicker();
                       router.navigate('/(app)/add-splitwise-person');
                     }}
                   >
@@ -1026,7 +1046,7 @@ export function SettlementScreen() {
               )}
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -1418,6 +1438,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'flex-end',
   },
+  modalBackdropTouch: {
+    flex: 1,
+  },
   modalCard: {
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
@@ -1456,6 +1479,7 @@ const styles = StyleSheet.create({
   },
   friendsListScroll: {
     maxHeight: 320,
+    flexShrink: 1,
   },
   friendItem: {
     flexDirection: 'row',

@@ -10,6 +10,9 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
       balance REAL NOT NULL DEFAULT 0,
       institution TEXT NOT NULL DEFAULT '',
       last_four TEXT NOT NULL DEFAULT '',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      billing_cycle_day INTEGER,
+      due_day INTEGER,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -73,7 +76,7 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
       id TEXT PRIMARY KEY NOT NULL,
       title TEXT NOT NULL,
       description TEXT NOT NULL,
-      type TEXT NOT NULL CHECK(type IN ('alert', 'milestone', 'default')) DEFAULT 'default',
+      type TEXT NOT NULL CHECK(type IN ('alert', 'milestone', 'bill', 'budget', 'account', 'system', 'default')) DEFAULT 'default',
       is_read INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       action_url TEXT NOT NULL DEFAULT ''
@@ -136,6 +139,18 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
     `);
   } catch (e) {
     // Index might already exist, ignore error
+  }
+
+  try {
+    await db.execAsync('ALTER TABLE accounts ADD COLUMN billing_cycle_day INTEGER;');
+  } catch (e) {
+    // Column might already exist, ignore error
+  }
+
+  try {
+    await db.execAsync('ALTER TABLE accounts ADD COLUMN due_day INTEGER;');
+  } catch (e) {
+    // Column might already exist, ignore error
   }
 
   await db.execAsync(`
@@ -310,6 +325,14 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_bills_unified_category ON bills(category);
     CREATE INDEX IF NOT EXISTS idx_subscriptions_renewal ON subscriptions(next_renewal_date ASC);
     CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
+
+    CREATE TABLE IF NOT EXISTS merchant_category_rules (
+      id TEXT PRIMARY KEY NOT NULL,
+      merchant_pattern TEXT UNIQUE NOT NULL,
+      category TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_merchant_rules_pattern ON merchant_category_rules(merchant_pattern);
   `);
 
   await runSplitwiseMigrations(db);
@@ -319,6 +342,44 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
     await db.execAsync("UPDATE accounts SET updated_at = created_at WHERE updated_at IS NULL;");
   } catch {
     // Column may already exist
+  }
+
+  try {
+    await db.execAsync('ALTER TABLE accounts ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;');
+  } catch {
+    // Column may already exist
+  }
+
+  try {
+    await db.execAsync('CREATE INDEX IF NOT EXISTS idx_accounts_sort_order ON accounts(sort_order ASC, created_at DESC);');
+  } catch {
+    // Index may already exist
+  }
+
+  // Safe migration for notifications table CHECK constraint expansion
+  try {
+    const tableSql = await db.getFirstAsync<{ sql: string }>(
+      "SELECT sql FROM sqlite_master WHERE type='table' AND name='notifications';"
+    );
+    if (tableSql?.sql && !tableSql.sql.includes("'bill'")) {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS notifications_new (
+          id TEXT PRIMARY KEY NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT NOT NULL,
+          type TEXT NOT NULL CHECK(type IN ('alert', 'milestone', 'bill', 'budget', 'account', 'system', 'default')) DEFAULT 'default',
+          is_read INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          action_url TEXT NOT NULL DEFAULT ''
+        );
+        INSERT OR IGNORE INTO notifications_new SELECT * FROM notifications;
+        DROP TABLE notifications;
+        ALTER TABLE notifications_new RENAME TO notifications;
+        CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(is_read);
+      `);
+    }
+  } catch {
+    // Notifications migration fallback
   }
 }
 

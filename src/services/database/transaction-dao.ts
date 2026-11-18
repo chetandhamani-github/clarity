@@ -1,14 +1,14 @@
-import { getDatabase } from './index';
-import { updateAccountBalance, getAccountById } from './account-dao';
 import type {
-  Transaction,
-  TransactionWithAccount,
-  TransactionFilters,
-  TransactionType,
-  TransactionSource,
-  TransactionStatus,
-  MonthlyTotals,
+    MonthlyTotals,
+    Transaction,
+    TransactionFilters,
+    TransactionSource,
+    TransactionStatus,
+    TransactionType,
+    TransactionWithAccount,
 } from '@/types';
+import { getAccountById } from './account-dao';
+import { getDatabase } from './index';
 
 function generateId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -155,7 +155,7 @@ export async function insertTransaction(
   if (data.type === 'income') balanceChange = data.amount;
   else if (data.type === 'expense' || data.type === 'transfer') balanceChange = -data.amount;
 
-  const newBalance = account.balance + balanceChange;
+  const newBalance = Math.round((account.balance + balanceChange) * 100) / 100;
   const shouldUpdateAccountBalance = options.updateAccountBalance !== false;
 
   let toAccount;
@@ -202,7 +202,7 @@ export async function insertTransaction(
     }
 
     if (shouldUpdateAccountBalance && toAccount && data.toAccountId) {
-      const newToBalance = toAccount.balance + data.amount;
+      const newToBalance = Math.round((toAccount.balance + data.amount) * 100) / 100;
       await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
         newToBalance,
         data.toAccountId,
@@ -254,8 +254,6 @@ export async function updateTransaction(
   const newType = data.type ?? oldTx.type;
 
   const oldAccount = await getAccountById(oldTx.account_id);
-  const newAccount =
-    newAccountId === oldTx.account_id ? oldAccount : await getAccountById(newAccountId);
 
   await db.execAsync('BEGIN TRANSACTION');
   try {
@@ -266,7 +264,7 @@ export async function updateTransaction(
       else if (oldTx.type === 'expense' || oldTx.type === 'transfer') balanceRevert = oldTx.amount;
 
       if (balanceRevert !== 0) {
-        oldAccount.balance += balanceRevert;
+        oldAccount.balance = Math.round((oldAccount.balance + balanceRevert) * 100) / 100;
         await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
           oldAccount.balance,
           oldAccount.id,
@@ -276,7 +274,7 @@ export async function updateTransaction(
     if (oldTx.type === 'transfer' && oldTx.to_account_id) {
       const oldToAccount = await getAccountById(oldTx.to_account_id);
       if (oldToAccount) {
-        oldToAccount.balance -= oldTx.amount;
+        oldToAccount.balance = Math.round((oldToAccount.balance - oldTx.amount) * 100) / 100;
         await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
           oldToAccount.balance,
           oldToAccount.id,
@@ -284,15 +282,15 @@ export async function updateTransaction(
       }
     }
 
-    // 3. Apply new transaction's effect on new account
+    // 3. Apply new transaction's effect on new accounts (fetched post-revert to avoid stale balances)
+    const newAccount = await getAccountById(newAccountId);
     if (newAccount) {
       let balanceApply = 0;
       if (newType === 'income') balanceApply = newAmount;
       else if (newType === 'expense' || newType === 'transfer') balanceApply = -newAmount;
 
       if (balanceApply !== 0) {
-        if (newAccount.id === oldAccount?.id) newAccount.balance = oldAccount.balance;
-        newAccount.balance += balanceApply;
+        newAccount.balance = Math.round((newAccount.balance + balanceApply) * 100) / 100;
         await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
           newAccount.balance,
           newAccount.id,
@@ -302,9 +300,7 @@ export async function updateTransaction(
     if (newType === 'transfer' && newToAccountId) {
       const newToAccount = await getAccountById(newToAccountId);
       if (newToAccount) {
-        if (newToAccount.id === oldAccount?.id) newToAccount.balance = oldAccount.balance;
-        if (newToAccount.id === newAccount?.id) newToAccount.balance = newAccount.balance;
-        newToAccount.balance += newAmount;
+        newToAccount.balance = Math.round((newToAccount.balance + newAmount) * 100) / 100;
         await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
           newToAccount.balance,
           newToAccount.id,
@@ -424,7 +420,7 @@ export async function deleteTransaction(id: string): Promise<void> {
       else if (tx.type === 'expense' || tx.type === 'transfer') balanceRevert = tx.amount;
 
       if (balanceRevert !== 0) {
-        account.balance += balanceRevert;
+        account.balance = Math.round((account.balance + balanceRevert) * 100) / 100;
         await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
           account.balance,
           account.id,
@@ -435,7 +431,7 @@ export async function deleteTransaction(id: string): Promise<void> {
     if (tx.type === 'transfer' && tx.to_account_id) {
       const toAccount = await getAccountById(tx.to_account_id);
       if (toAccount) {
-        toAccount.balance -= tx.amount;
+        toAccount.balance = Math.round((toAccount.balance - tx.amount) * 100) / 100;
         await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
           toAccount.balance,
           toAccount.id,
@@ -478,8 +474,8 @@ export async function getMonthlyTotals(month: number, year: number): Promise<Mon
       COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as income,
       COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as expenses
      FROM transactions 
-     WHERE date LIKE ?`,
-    [`${datePrefix}%`]
+     WHERE date LIKE ? OR date(date, 'localtime') LIKE ?`,
+    [`${datePrefix}%`, `${datePrefix}%`]
   );
 
   return {
@@ -494,11 +490,14 @@ export async function getMonthlyReports(): Promise<
   const db = getDatabase();
   const rows = await db.getAllAsync<{ datePrefix: string; income: number; expenses: number }>(
     `SELECT 
-      SUBSTR(date, 1, 7) as datePrefix,
+      CASE 
+        WHEN date LIKE '%T%' THEN SUBSTR(date(date, 'localtime'), 1, 7)
+        ELSE SUBSTR(date, 1, 7)
+      END as datePrefix,
       COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as income,
       COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as expenses
      FROM transactions 
-     GROUP BY SUBSTR(date, 1, 7)
+     GROUP BY datePrefix
      ORDER BY datePrefix DESC`
   );
   return rows;
@@ -517,14 +516,14 @@ export async function getTopMerchants(
     `SELECT merchant, SUM(amount) as total
      FROM transactions 
      WHERE type = 'expense'
-       AND date LIKE ?
+       AND (date LIKE ? OR date(date, 'localtime') LIKE ?)
        AND merchant IS NOT NULL
        AND TRIM(merchant) != ''
        AND LOWER(TRIM(merchant)) NOT LIKE '%transaction'
      GROUP BY merchant
      ORDER BY total DESC
      LIMIT ?`,
-    [`${datePrefix}%`, limit]
+    [`${datePrefix}%`, `${datePrefix}%`, limit]
   );
   return rows;
 }

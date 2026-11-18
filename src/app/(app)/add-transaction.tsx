@@ -11,6 +11,9 @@ import {
 } from '@/hooks/use-transactions';
 import { calculateNextDate } from '@/services/database/recurring-dao';
 import { evaluateTransactionBudgetAlerts } from '@/services/notifications/alert-engine';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import { scanReceiptWithAi } from '@/services/api/ai.api';
 import { ThemeColors, typography, useTheme } from '@/theme';
 import type { RecurringFrequency, TransactionType } from '@/types';
 import { formatLocalDate, getCurrencySymbol } from '@/utils/format';
@@ -117,7 +120,7 @@ export default function AddTransactionScreen() {
       setAmountStr(transaction.amount.toString());
       setMerchant(transaction.merchant);
       setCategory(transaction.category);
-      setDate(transaction.date);
+      setDate(transaction.date ? transaction.date.split('T')[0] : formatLocalDate(new Date()));
       setAccountId(transaction.accountId);
       setNote(transaction.note || '');
       if ('toAccountId' in transaction) {
@@ -163,8 +166,9 @@ export default function AddTransactionScreen() {
       return;
     }
     // Merchant description is optional
-    // Basic date validation
-    if (!date.trim() || date.length !== 10) {
+    // Basic date validation (handles full ISO strings and YYYY-MM-DD)
+    const normalizedDate = date.includes('T') ? date.split('T')[0] : date.trim();
+    if (!normalizedDate || normalizedDate.length !== 10) {
       showToast('Please enter date in YYYY-MM-DD format', 'error');
       return;
     }
@@ -197,7 +201,7 @@ export default function AddTransactionScreen() {
       type,
       merchant: type === 'transfer' ? 'Transfer' : (merchant.trim() || category),
       category: type === 'transfer' ? 'Transfer' : category,
-      date,
+      date: normalizedDate,
       isRecurring,
       splits: splitsToSave,
       note: note.trim(),
@@ -211,6 +215,16 @@ export default function AddTransactionScreen() {
       updateTransaction(id, txData, {
         onSuccess: () => {
           evaluateTransactionBudgetAlerts(txData);
+          if (type !== 'transfer' && txData.merchant.trim() && txData.category) {
+            import('@/services/database/merchant-rule-dao')
+              .then(({ saveMerchantRule }) => saveMerchantRule(txData.merchant, txData.category))
+              .catch(() => {});
+            import('@/modules/sms/categorizer/localCategorizerEngine')
+              .then(({ LocalCategorizerEngine }) =>
+                LocalCategorizerEngine.addCustomRule(txData.merchant, txData.category)
+              )
+              .catch(() => {});
+          }
           showToast('Transaction updated successfully', 'success');
           router.back();
         },
@@ -219,7 +233,7 @@ export default function AddTransactionScreen() {
     }
 
     // New transaction with future recurring date
-    if (isRecurring && date > today) {
+    if (isRecurring && normalizedDate > today) {
       const recData = {
         accountId,
         toAccountId: type === 'transfer' ? toAccountId || undefined : undefined,
@@ -228,12 +242,12 @@ export default function AddTransactionScreen() {
         merchant: txData.merchant,
         category: txData.category,
         frequency: recurringFreq,
-        nextProcessDate: date,
+        nextProcessDate: normalizedDate,
         splits: splitsToSave,
       };
       createRecurring(recData, {
         onSuccess: () => {
-          showToast(`Recurring schedule created (First on ${date})`, 'success');
+          showToast(`Recurring schedule created (First on ${normalizedDate})`, 'success');
           router.back();
         },
       });
@@ -244,6 +258,16 @@ export default function AddTransactionScreen() {
     createTransaction(txData, {
       onSuccess: () => {
         evaluateTransactionBudgetAlerts(txData);
+        if (type !== 'transfer' && txData.merchant.trim() && txData.category) {
+          import('@/services/database/merchant-rule-dao')
+            .then(({ saveMerchantRule }) => saveMerchantRule(txData.merchant, txData.category))
+            .catch(() => {});
+          import('@/modules/sms/categorizer/localCategorizerEngine')
+            .then(({ LocalCategorizerEngine }) =>
+              LocalCategorizerEngine.addCustomRule(txData.merchant, txData.category)
+            )
+            .catch(() => {});
+        }
 
         if (isRecurring) {
           const nextDate = calculateNextDate(date, recurringFreq);
@@ -293,6 +317,63 @@ export default function AddTransactionScreen() {
     }
   };
 
+  const handleDuplicate = () => {
+    showAlert(
+      'Duplicate Transaction',
+      "Create a copy of this transaction with today's date?",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Duplicate',
+          style: 'default',
+          onPress: () => {
+            const amount = parseFloat(amountStr);
+            if (isNaN(amount) || amount <= 0) {
+              showToast('Please enter a valid amount', 'error');
+              return;
+            }
+            if (!accountId) {
+              showToast('Please select an account', 'error');
+              return;
+            }
+
+            const splitsToSave = isSplitMode
+              ? splitItems
+                  .filter((s) => parseFloat(s.amount) > 0)
+                  .map((s) => ({ category: s.category, amount: parseFloat(s.amount) }))
+              : undefined;
+
+            const duplicateData = {
+              accountId,
+              toAccountId: type === 'transfer' ? toAccountId || undefined : undefined,
+              amount,
+              type,
+              merchant: merchant.trim(),
+              category: type === 'transfer' ? 'Transfer' : category,
+              date: formatLocalDate(new Date()),
+              isRecurring: false,
+              splits: splitsToSave,
+              note: note.trim(),
+              source: 'MANUAL' as const,
+              status: 'VERIFIED' as const,
+            };
+
+            createTransaction(duplicateData, {
+              onSuccess: () => {
+                evaluateTransactionBudgetAlerts(duplicateData);
+                showToast('Transaction duplicated for today!', 'success');
+                router.back();
+              },
+              onError: () => {
+                showToast('Failed to duplicate transaction', 'error');
+              },
+            });
+          },
+        },
+      ]
+    );
+  };
+
   const selectedAccount = accounts.find((a) => a.id === accountId);
 
   return (
@@ -305,7 +386,21 @@ export default function AddTransactionScreen() {
         },
       ]}
     >
-      <Header showBack title={isEditing ? 'Edit Transaction' : 'Add Transaction'} />
+      <Header
+        showBack
+        title={isEditing ? 'Edit Transaction' : 'Add Transaction'}
+        rightNode={
+          isEditing ? (
+            <TouchableOpacity
+              onPress={handleDuplicate}
+              style={styles.headerDuplicateBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <MaterialIcons name="content-copy" size={22} color={colors.onSurface} />
+            </TouchableOpacity>
+          ) : undefined
+        }
+      />
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
@@ -581,7 +676,7 @@ export default function AddTransactionScreen() {
                               setSplitItems((prev) => prev.filter((_, i) => i !== idx));
                             }}
                           >
-                            <MaterialIcons name="close" size={18} color={colors.error} />
+                            <MaterialIcons name="close" size={18} color={colors.onErrorContainer} />
                           </TouchableOpacity>
                         )}
                       </View>
@@ -770,6 +865,19 @@ export default function AddTransactionScreen() {
 
           {isEditing && (
             <TouchableOpacity
+              style={styles.duplicateButton}
+              onPress={handleDuplicate}
+              disabled={isPending}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <MaterialIcons name="content-copy" size={18} color={colors.primary} />
+                <Text style={styles.duplicateButtonText}>Duplicate for Today</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+
+          {isEditing && (
+            <TouchableOpacity
               style={styles.deleteButton}
               onPress={handleDelete}
               disabled={isPending}
@@ -799,7 +907,7 @@ export default function AddTransactionScreen() {
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderTitleRow}>
                 <View style={styles.categoryIconBoxHeader}>
-                  <MaterialIcons name="category" size={20} color={colors.primary} />
+                  <MaterialIcons name="category" size={20} color={colors.onPrimaryContainer} />
                 </View>
                 <Text style={styles.modalTitle}>Select Category</Text>
               </View>
@@ -855,7 +963,7 @@ export default function AddTransactionScreen() {
                         <MaterialIcons
                           name={getCategoryIcon(cat)}
                           size={20}
-                          color={isSelected ? colors.onPrimary : colors.primary}
+                          color={isSelected ? colors.onPrimary : colors.onSurfaceVariant}
                         />
                       </View>
                       <Text
@@ -919,7 +1027,7 @@ export default function AddTransactionScreen() {
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderTitleRow}>
                 <View style={styles.categoryIconBoxHeader}>
-                  <MaterialIcons name="account-balance" size={20} color={colors.primary} />
+                  <MaterialIcons name="account-balance" size={20} color={colors.onPrimaryContainer} />
                 </View>
                 <Text style={styles.modalTitle}>Select Account</Text>
               </View>
@@ -960,7 +1068,7 @@ export default function AddTransactionScreen() {
                         <MaterialIcons
                           name={getAccountTypeIcon(acc.type)}
                           size={20}
-                          color={isSelected ? colors.onPrimary : colors.primary}
+                          color={isSelected ? colors.onPrimary : colors.onSurfaceVariant}
                         />
                       </View>
                       <View>
@@ -1013,7 +1121,7 @@ export default function AddTransactionScreen() {
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderTitleRow}>
                 <View style={styles.categoryIconBoxHeader}>
-                  <MaterialIcons name="account-balance" size={20} color={colors.primary} />
+                  <MaterialIcons name="account-balance" size={20} color={colors.onPrimaryContainer} />
                 </View>
                 <Text style={styles.modalTitle}>Select Destination Account</Text>
               </View>
@@ -1054,7 +1162,7 @@ export default function AddTransactionScreen() {
                         <MaterialIcons
                           name={getAccountTypeIcon(acc.type)}
                           size={20}
-                          color={isSelected ? colors.onPrimary : colors.primary}
+                          color={isSelected ? colors.onPrimary : colors.onSurfaceVariant}
                         />
                       </View>
                       <View>
@@ -1274,6 +1382,26 @@ const getStyles = (colors: ThemeColors) => {
       lineHeight: 20,
       color: colors.onPrimary,
     },
+    duplicateButton: {
+      marginTop: 12,
+      height: 48,
+      backgroundColor: colors.surfaceContainer,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+    },
+    duplicateButtonText: {
+      ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
+      fontSize: 15,
+      lineHeight: 20,
+      color: colors.primary,
+    },
+    headerDuplicateBtn: {
+      padding: 4,
+    },
     deleteButton: {
       marginTop: 16,
       height: 48,
@@ -1481,7 +1609,7 @@ const getStyles = (colors: ThemeColors) => {
     splitDeleteBtn: {
       padding: 6,
       borderRadius: 16,
-      backgroundColor: colors.errorContainer + '33',
+      backgroundColor: colors.errorContainer,
     },
     addSplitBtn: {
       flexDirection: 'row',

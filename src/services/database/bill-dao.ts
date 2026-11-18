@@ -165,7 +165,7 @@ export async function insertBill(
     insertNotification({
       title: `Bill Reminder: ${data.billerName}`,
       description: `Reminder for ${data.billerName} of ${formatCurrency(data.amountDue)} due on ${data.dueDate} was scheduled.`,
-      type: 'default',
+      type: 'bill',
       actionUrl: '/(app)/bills',
     }).catch(() => {});
     DeviceEventEmitter.emit('notificationsUpdated');
@@ -531,7 +531,7 @@ export async function mergeOrInsertSmsBill(extracted: {
     insertNotification({
       title: `New Bill Detected: ${extracted.billerName}`,
       description: `Bill of ${formatCurrency(extracted.amountDue)} due on ${extracted.dueDate} was auto-detected from SMS.`,
-      type: 'default',
+      type: 'bill',
       actionUrl: '/(app)/bills',
     }).catch(() => {});
     DeviceEventEmitter.emit('notificationsUpdated');

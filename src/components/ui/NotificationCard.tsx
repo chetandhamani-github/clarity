@@ -4,13 +4,14 @@ import { Text } from './Text';
 import { radius, spacing, typography } from '../../theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '@/theme';
+import type { NotificationType } from '@/types';
 
 interface Props {
   title: string;
   time: string;
   description: string;
   isRead?: boolean;
-  type?: 'alert' | 'milestone' | 'default';
+  type?: NotificationType;
   children?: React.ReactNode;
   onPress?: () => void;
   style?: ViewStyle;

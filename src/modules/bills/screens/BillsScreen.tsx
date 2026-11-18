@@ -66,7 +66,7 @@ export function BillsScreen() {
             onPress={() => router.navigate('/(app)/add-bill')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <MaterialIcons name="add" size={24} color={colors.primary} />
+            <MaterialIcons name="add" size={24} color={colors.onSurface} />
           </TouchableOpacity>
         }
       />
