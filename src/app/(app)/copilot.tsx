@@ -385,7 +385,7 @@ export default function CopilotScreen() {
             renderItem={renderMessageItem}
             contentContainerStyle={styles.messagesList}
             keyboardShouldPersistTaps="always"
-            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            keyboardDismissMode="none"
             showsVerticalScrollIndicator={false}
             onScroll={handleScroll}
             scrollEventThrottle={16}
@@ -483,7 +483,7 @@ export default function CopilotScreen() {
                 placeholderTextColor={colors.onSurfaceVariant}
                 value={inputText}
                 onChangeText={setInputText}
-                editable={isConnected && !isSending}
+                editable={isConnected}
                 multiline
                 maxLength={500}
                 returnKeyType="send"

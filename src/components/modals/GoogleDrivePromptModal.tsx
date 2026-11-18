@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -6,8 +6,11 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   TouchableWithoutFeedback,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
-import { Text } from '@/components/ui';
+import { Text, useToast } from '@/components/ui';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme, typography, ThemeColors } from '@/theme';
 import { useGoogleDrive } from '@/hooks/use-google-drive';
@@ -18,95 +21,335 @@ interface Props {
   onDismiss: () => void;
 }
 
+type ModalStep = 'intro' | 'setup_passphrase' | 'restore_passphrase';
+
 export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
   const { colors } = useTheme();
   const styles = getStyles(colors);
-  const { connect, isConnecting } = useGoogleDrive();
+  const { showToast } = useToast();
+
+  const [step, setStep] = useState<ModalStep>('intro');
+  const [passphrase, setPassphrase] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [existingBackupDate, setExistingBackupDate] = useState<string | null>(null);
+  const [inlineError, setInlineError] = useState<string | null>(null);
+
+  const {
+    connect,
+    isConnecting,
+    backupNow,
+    isBackingUp,
+    restoreFromDrive,
+    isRestoring,
+  } = useGoogleDrive();
   const setHasSeenDrivePrompt = useAppStore((state) => state.setHasSeenDrivePrompt);
 
+  useEffect(() => {
+    if (visible) {
+      setStep('intro');
+      setPassphrase('');
+      setShowPassword(false);
+      setInlineError(null);
+      setExistingBackupDate(null);
+    }
+  }, [visible]);
+
+  if (!visible) return null;
+
   const handleConnect = async () => {
+    setInlineError(null);
+    const res = await connect();
+    if (!res.success) {
+      return;
+    }
+
     setHasSeenDrivePrompt(true);
-    const success = await connect();
-    if (success) {
+
+    if (res.needsPassphraseToRestore) {
+      setExistingBackupDate(res.existingBackupDate || null);
+      setStep('restore_passphrase');
+    } else if (!res.hasExistingBackup) {
+      setStep('setup_passphrase');
+    } else {
       onDismiss();
     }
   };
 
-  const handleSkip = () => {
+  const handleSetPassphraseSubmit = async () => {
+    if (passphrase.trim().length < 4) {
+      setInlineError('Passphrase must be at least 4 characters long.');
+      return;
+    }
+    setInlineError(null);
+    const success = await backupNow(passphrase.trim());
+    if (success) {
+      showToast('Recovery passphrase set & cloud backup encrypted!', 'success');
+      onDismiss();
+    } else {
+      setInlineError('Failed to save backup. Please try again.');
+    }
+  };
+
+  const handleSkipPassphrase = () => {
+    showToast('Using device-only key. You can set a recovery passphrase anytime in Settings.', 'info');
+    onDismiss();
+  };
+
+  const handleRestoreSubmit = async () => {
+    if (!passphrase.trim()) {
+      setInlineError('Please enter your passphrase.');
+      return;
+    }
+    setInlineError(null);
+    const res = await restoreFromDrive(passphrase.trim());
+    if (res.success) {
+      onDismiss();
+    } else {
+      setInlineError(res.error || 'Incorrect passphrase. Please try again.');
+    }
+  };
+
+  const handleInitialSkip = () => {
     setHasSeenDrivePrompt(true);
     onDismiss();
   };
 
-  if (!visible) return null;
-
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleSkip}>
-      <TouchableWithoutFeedback onPress={handleSkip}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleInitialSkip}>
+      <TouchableWithoutFeedback onPress={step === 'intro' ? handleInitialSkip : undefined}>
         <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View style={styles.card}>
-              {/* Header Icon */}
-              <View style={styles.iconContainer}>
-                <View style={[styles.iconCircle, { backgroundColor: colors.primaryContainer }]}>
-                  <MaterialIcons name="cloud-sync" size={40} color={colors.onPrimaryContainer} />
-                </View>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.keyboardView}
+          >
+            <TouchableWithoutFeedback>
+              <View style={styles.card}>
+                {step === 'intro' && (
+                  <>
+                    <View style={styles.iconContainer}>
+                      <View style={[styles.iconCircle, { backgroundColor: colors.primaryContainer }]}>
+                        <MaterialIcons name="cloud-sync" size={40} color={colors.onPrimaryContainer} />
+                      </View>
+                    </View>
+
+                    <Text style={styles.title}>Encrypted Cloud Backup</Text>
+                    <Text style={styles.subtitle}>
+                      Connect Clarity to your private Google Drive with client-side AES-256-GCM encryption.
+                      Set a passphrase so you can restore your data if you switch or lose your phone.
+                    </Text>
+
+                    <View style={styles.featuresList}>
+                      <View style={styles.featureItem}>
+                        <MaterialIcons name="lock-outline" size={20} color={colors.primary} />
+                        <Text style={styles.featureText}>AES-256-GCM client-side encryption</Text>
+                      </View>
+                      <View style={styles.featureItem}>
+                        <MaterialIcons name="restore" size={20} color={colors.primary} />
+                        <Text style={styles.featureText}>Seamless recovery when changing devices</Text>
+                      </View>
+                      <View style={styles.featureItem}>
+                        <MaterialIcons name="sync" size={20} color={colors.primary} />
+                        <Text style={styles.featureText}>Automatic encrypted cloud sync</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.actionsContainer}>
+                      <TouchableOpacity
+                        style={[styles.primaryButton, { backgroundColor: colors.primary }]}
+                        onPress={handleConnect}
+                        disabled={isConnecting}
+                        activeOpacity={0.85}
+                      >
+                        {isConnecting ? (
+                          <ActivityIndicator color={colors.onPrimary} size="small" />
+                        ) : (
+                          <>
+                            <MaterialIcons name="add-to-drive" size={20} color={colors.onPrimary} />
+                            <Text style={[styles.primaryButtonText, { color: colors.onPrimary }]}>
+                              Connect Google Drive
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.skipButton}
+                        onPress={handleInitialSkip}
+                        disabled={isConnecting}
+                      >
+                        <Text style={[styles.skipButtonText, { color: colors.onSurfaceVariant }]}>
+                          Set Up Later in Settings
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
+
+                {step === 'setup_passphrase' && (
+                  <>
+                    <View style={styles.iconContainer}>
+                      <View style={[styles.iconCircle, { backgroundColor: colors.primaryContainer }]}>
+                        <MaterialIcons name="vpn-key" size={36} color={colors.onPrimaryContainer} />
+                      </View>
+                    </View>
+
+                    <Text style={styles.title}>Set Recovery Passphrase</Text>
+                    <Text style={styles.subtitle}>
+                      Set a secret passphrase to encrypt your cloud backup. You will need this passphrase to
+                      restore your financial records if your phone is lost or replaced.
+                    </Text>
+
+                    <View style={styles.inputWrapper}>
+                      <MaterialIcons name="lock" size={20} color={colors.onSurfaceVariant} />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Enter passphrase (min 4 characters)"
+                        placeholderTextColor={colors.outline}
+                        secureTextEntry={!showPassword}
+                        value={passphrase}
+                        onChangeText={(txt) => {
+                          setPassphrase(txt);
+                          if (inlineError) setInlineError(null);
+                        }}
+                        autoCapitalize="none"
+                        autoFocus
+                      />
+                      <TouchableOpacity
+                        onPress={() => setShowPassword(!showPassword)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <MaterialIcons
+                          name={showPassword ? 'visibility-off' : 'visibility'}
+                          size={20}
+                          color={colors.outline}
+                        />
+                      </TouchableOpacity>
+                    </View>
+
+                    {inlineError ? (
+                      <Text style={[styles.errorText, { color: colors.error }]}>{inlineError}</Text>
+                    ) : null}
+
+                    <View style={styles.actionsContainer}>
+                      <TouchableOpacity
+                        style={[
+                          styles.primaryButton,
+                          { backgroundColor: colors.primary },
+                          (passphrase.trim().length < 4 || isBackingUp) && { opacity: 0.5 },
+                        ]}
+                        onPress={handleSetPassphraseSubmit}
+                        disabled={passphrase.trim().length < 4 || isBackingUp}
+                        activeOpacity={0.85}
+                      >
+                        {isBackingUp ? (
+                          <ActivityIndicator color={colors.onPrimary} size="small" />
+                        ) : (
+                          <>
+                            <MaterialIcons name="security" size={20} color={colors.onPrimary} />
+                            <Text style={[styles.primaryButtonText, { color: colors.onPrimary }]}>
+                              Encrypt & Finish Setup
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.skipButton}
+                        onPress={handleSkipPassphrase}
+                        disabled={isBackingUp}
+                      >
+                        <Text style={[styles.skipButtonText, { color: colors.onSurfaceVariant }]}>
+                          Skip for now (device-only key)
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
+
+                {step === 'restore_passphrase' && (
+                  <>
+                    <View style={styles.iconContainer}>
+                      <View style={[styles.iconCircle, { backgroundColor: colors.primaryContainer }]}>
+                        <MaterialIcons name="cloud-download" size={36} color={colors.onPrimaryContainer} />
+                      </View>
+                    </View>
+
+                    <Text style={styles.title}>Cloud Backup Found</Text>
+                    <Text style={styles.subtitle}>
+                      We detected an encrypted backup
+                      {existingBackupDate ? ` from ${new Date(existingBackupDate).toLocaleDateString()}` : ''}.
+                      Enter your passphrase to restore your accounts, transactions, and goals.
+                    </Text>
+
+                    <View style={styles.inputWrapper}>
+                      <MaterialIcons name="vpn-key" size={20} color={colors.onSurfaceVariant} />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Enter your backup passphrase"
+                        placeholderTextColor={colors.outline}
+                        secureTextEntry={!showPassword}
+                        value={passphrase}
+                        onChangeText={(txt) => {
+                          setPassphrase(txt);
+                          if (inlineError) setInlineError(null);
+                        }}
+                        autoCapitalize="none"
+                        autoFocus
+                      />
+                      <TouchableOpacity
+                        onPress={() => setShowPassword(!showPassword)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <MaterialIcons
+                          name={showPassword ? 'visibility-off' : 'visibility'}
+                          size={20}
+                          color={colors.outline}
+                        />
+                      </TouchableOpacity>
+                    </View>
+
+                    {inlineError ? (
+                      <Text style={[styles.errorText, { color: colors.error }]}>{inlineError}</Text>
+                    ) : null}
+
+                    <View style={styles.actionsContainer}>
+                      <TouchableOpacity
+                        style={[
+                          styles.primaryButton,
+                          { backgroundColor: colors.primary },
+                          (!passphrase.trim() || isRestoring) && { opacity: 0.5 },
+                        ]}
+                        onPress={handleRestoreSubmit}
+                        disabled={!passphrase.trim() || isRestoring}
+                        activeOpacity={0.85}
+                      >
+                        {isRestoring ? (
+                          <ActivityIndicator color={colors.onPrimary} size="small" />
+                        ) : (
+                          <>
+                            <MaterialIcons name="lock-open" size={20} color={colors.onPrimary} />
+                            <Text style={[styles.primaryButtonText, { color: colors.onPrimary }]}>
+                              Unlock & Restore
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.skipButton}
+                        onPress={onDismiss}
+                        disabled={isRestoring}
+                      >
+                        <Text style={[styles.skipButtonText, { color: colors.onSurfaceVariant }]}>
+                          Start Fresh / Restore Later
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
               </View>
-
-              {/* Title & Description */}
-              <Text style={styles.title}>Encrypted Cloud Backup</Text>
-              <Text style={styles.subtitle}>
-                Connect Clarity to your private Google Drive with client-side AES-256-GCM encryption.
-                Only your device holds the key — Google cannot read your financial records.
-              </Text>
-
-              {/* Feature Points */}
-              <View style={styles.featuresList}>
-                <View style={styles.featureItem}>
-                  <MaterialIcons name="lock-outline" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>AES-256-GCM client-side encryption</Text>
-                </View>
-                <View style={styles.featureItem}>
-                  <MaterialIcons name="restore" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>Restore seamlessly anytime from Settings</Text>
-                </View>
-                <View style={styles.featureItem}>
-                  <MaterialIcons name="sync" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>Automatic encrypted local snapshot sync</Text>
-                </View>
-              </View>
-
-              {/* Buttons */}
-              <View style={styles.actionsContainer}>
-                <TouchableOpacity
-                  style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-                  onPress={handleConnect}
-                  disabled={isConnecting}
-                  activeOpacity={0.85}
-                >
-                  {isConnecting ? (
-                    <ActivityIndicator color={colors.onPrimary} size="small" />
-                  ) : (
-                    <>
-                      <MaterialIcons name="add-to-drive" size={20} color={colors.onPrimary} />
-                      <Text style={[styles.primaryButtonText, { color: colors.onPrimary }]}>
-                        Connect Google Drive
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.skipButton}
-                  onPress={handleSkip}
-                  disabled={isConnecting}
-                >
-                  <Text style={[styles.skipButtonText, { color: colors.onSurfaceVariant }]}>
-                    Set Up Later in Settings
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </TouchableWithoutFeedback>
+            </TouchableWithoutFeedback>
+          </KeyboardAvoidingView>
         </View>
       </TouchableWithoutFeedback>
     </Modal>
@@ -182,6 +425,34 @@ const getStyles = (colors: ThemeColors) => {
     },
     actionsContainer: {
       gap: 12,
+    },
+    keyboardView: {
+      width: '100%',
+      maxWidth: 400,
+    },
+    inputWrapper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surfaceContainer,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      paddingHorizontal: 14,
+      width: '100%',
+      height: 50,
+      gap: 10,
+      marginBottom: 16,
+    },
+    input: {
+      flex: 1,
+      ...typography.bodyMd,
+      color: colors.onSurface,
+      height: '100%',
+    },
+    errorText: {
+      ...typography.bodySm,
+      marginBottom: 12,
+      textAlign: 'center',
     },
     primaryButton: {
       flexDirection: 'row',

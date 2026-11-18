@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text as RNText, TextProps, StyleSheet, TextStyle } from 'react-native';
+import { Text as RNText, TextProps, StyleSheet, TextStyle, Platform } from 'react-native';
 import { typography } from '../../theme';
 import { useTheme } from '@/theme';
 
@@ -22,6 +22,7 @@ export const Text = ({ variant = 'bodyMd', color, style, ...props }: Props) => {
   return (
     <RNText
       style={[
+        Platform.OS === 'android' ? { includeFontPadding: false } : undefined,
         typography[variant],
         { color: textColor },
         dynamicLineHeight,

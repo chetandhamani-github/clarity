@@ -40,10 +40,23 @@ export const typography = {
     lineHeight: 20,
     ...(Platform.OS === 'ios' ? { fontWeight: '400' as const } : {}),
   },
+  bodySm: {
+    fontFamily: 'Manrope_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+    ...(Platform.OS === 'ios' ? { fontWeight: '400' as const } : {}),
+  },
   labelMd: {
     fontFamily: 'Manrope_600SemiBold',
     fontSize: 12,
     lineHeight: 18,
+    letterSpacing: 0.5,
+    ...(Platform.OS === 'ios' ? { fontWeight: '600' as const } : {}),
+  },
+  labelSm: {
+    fontFamily: 'Manrope_600SemiBold',
+    fontSize: 11,
+    lineHeight: 16,
     letterSpacing: 0.5,
     ...(Platform.OS === 'ios' ? { fontWeight: '600' as const } : {}),
   },

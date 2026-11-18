@@ -30,6 +30,7 @@ interface AppState {
   hasSeenSmsPrompt: boolean;
   hideBalances: boolean;
   hasDismissedOnboardingChecklist: boolean;
+  hasCustomBackupPassphrase: boolean;
   setHasHydrated: (value: boolean) => void;
   setOnboarded: (value: boolean) => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -44,6 +45,7 @@ interface AppState {
   setHideBalances: (value: boolean) => void;
   toggleHideBalances: () => void;
   setHasDismissedOnboardingChecklist: (dismissed: boolean) => void;
+  setHasCustomBackupPassphrase: (value: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -63,6 +65,7 @@ export const useAppStore = create<AppState>()(
       hasSeenSmsPrompt: false,
       hideBalances: false,
       hasDismissedOnboardingChecklist: false,
+      hasCustomBackupPassphrase: false,
       setHasHydrated: (value) => set({ _hasHydrated: value }),
       setOnboarded: (value) => set({ hasOnboarded: value }),
       setTheme: (theme) => set({ theme }),
@@ -73,7 +76,7 @@ export const useAppStore = create<AppState>()(
         set({
           googleDriveConnected: connected,
           googleDriveUserEmail: email,
-          ...(!connected ? { lastCloudBackupTime: null } : {}),
+          ...(!connected ? { lastCloudBackupTime: null, hasCustomBackupPassphrase: false } : {}),
         }),
       setLastCloudBackupTime: (time) => set({ lastCloudBackupTime: time }),
       setAutoBackupEnabled: (enabled) => set({ autoBackupEnabled: enabled }),
@@ -83,6 +86,7 @@ export const useAppStore = create<AppState>()(
       toggleHideBalances: () => set((state) => ({ hideBalances: !state.hideBalances })),
       setHasDismissedOnboardingChecklist: (dismissed) =>
         set({ hasDismissedOnboardingChecklist: dismissed }),
+      setHasCustomBackupPassphrase: (value) => set({ hasCustomBackupPassphrase: value }),
     }),
     {
       name: 'app-storage',

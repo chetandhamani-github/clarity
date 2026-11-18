@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -19,6 +19,9 @@ interface Props {
   title: string;
   description: string;
   confirmText?: string;
+  cancelText?: string;
+  skipText?: string;
+  onSkip?: () => void;
   isLoading?: boolean;
   onClose: () => void;
   onSubmit: (passphrase: string) => void;
@@ -29,6 +32,9 @@ export function PassphraseModal({
   title,
   description,
   confirmText = 'Confirm',
+  cancelText = 'Cancel',
+  skipText = 'Skip for now',
+  onSkip,
   isLoading = false,
   onClose,
   onSubmit,
@@ -38,10 +44,19 @@ export function PassphraseModal({
   const [passphrase, setPassphrase] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
+  useEffect(() => {
+    if (visible) {
+      setPassphrase('');
+      setShowPassword(false);
+    }
+  }, [visible]);
+
   if (!visible) return null;
 
+  const isValid = passphrase.trim().length >= 4;
+
   const handleSubmit = () => {
-    if (!passphrase.trim()) return;
+    if (!isValid) return;
     onSubmit(passphrase.trim());
   };
 
@@ -66,7 +81,7 @@ export function PassphraseModal({
                   <MaterialIcons name="vpn-key" size={20} color={colors.onSurfaceVariant} />
                   <TextInput
                     style={styles.input}
-                    placeholder="Enter passphrase"
+                    placeholder="Enter passphrase (min 4 characters)"
                     placeholderTextColor={colors.outline}
                     secureTextEntry={!showPassword}
                     value={passphrase}
@@ -86,22 +101,28 @@ export function PassphraseModal({
                   </TouchableOpacity>
                 </View>
 
+                {passphrase.length > 0 && !isValid && (
+                  <Text style={[styles.helperError, { color: colors.error }]}>
+                    Passphrase must be at least 4 characters
+                  </Text>
+                )}
+
                 <View style={styles.actions}>
                   <TouchableOpacity
                     style={styles.cancelButton}
                     onPress={onClose}
                     disabled={isLoading}
                   >
-                    <Text style={styles.cancelText}>Cancel</Text>
+                    <Text style={styles.cancelText}>{cancelText}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={[
                       styles.confirmButton,
-                      (!passphrase.trim() || isLoading) && { opacity: 0.5 },
+                      (!isValid || isLoading) && { opacity: 0.5 },
                     ]}
                     onPress={handleSubmit}
-                    disabled={!passphrase.trim() || isLoading}
+                    disabled={!isValid || isLoading}
                   >
                     {isLoading ? (
                       <ActivityIndicator size="small" color={colors.onPrimary} />
@@ -110,6 +131,18 @@ export function PassphraseModal({
                     )}
                   </TouchableOpacity>
                 </View>
+
+                {onSkip && (
+                  <TouchableOpacity
+                    style={styles.skipButton}
+                    onPress={onSkip}
+                    disabled={isLoading}
+                  >
+                    <Text style={[styles.skipButtonText, { color: colors.onSurfaceVariant }]}>
+                      {skipText}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </TouchableWithoutFeedback>
           </KeyboardAvoidingView>
@@ -212,6 +245,22 @@ const getStyles = (colors: ThemeColors) =>
       ...typography.labelMd,
       color: colors.onPrimary,
       fontWeight: '700',
+    },
+    helperError: {
+      ...typography.bodySm,
+      alignSelf: 'flex-start',
+      marginLeft: 4,
+      marginTop: -4,
+    },
+    skipButton: {
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      alignItems: 'center',
+      marginTop: 4,
+    },
+    skipButtonText: {
+      ...typography.bodySm,
+      fontWeight: '500',
     },
   });
 

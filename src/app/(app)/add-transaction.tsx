@@ -67,6 +67,9 @@ export default function AddTransactionScreen() {
     toAccountId?: string;
     accountId?: string;
     amount?: string;
+    merchant?: string;
+    category?: string;
+    note?: string;
   }>();
   const id = params.id;
   const isEditing = !!id;
@@ -94,12 +97,16 @@ export default function AddTransactionScreen() {
 
   const [type, setType] = useState<TransactionType>(params.type || 'expense');
   const [amountStr, setAmountStr] = useState(params.amount || '');
-  const [merchant, setMerchant] = useState('');
-  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [merchant, setMerchant] = useState(params.merchant || '');
+  const [category, setCategory] = useState(
+    params.category
+      ? CATEGORIES.find((c) => c.toLowerCase() === params.category?.toLowerCase()) || params.category
+      : CATEGORIES[0]
+  );
   const [date, setDate] = useState(formatLocalDate(new Date()));
   const [accountId, setAccountId] = useState<string | null>(params.accountId || null);
   const [toAccountId, setToAccountId] = useState<string | null>(params.toAccountId || null);
-  const [note, setNote] = useState('');
+  const [note, setNote] = useState(params.note || '');
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringFreq, setRecurringFreq] = useState<RecurringFrequency>('monthly');
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -181,6 +188,22 @@ export default function AddTransactionScreen() {
       setAccountId(params.accountId || accounts[0].id);
     }
   }, [accounts, accountId, isEditing, params.accountId]);
+
+  // Sync params when navigated with pre-filled voice or quick action data
+  React.useEffect(() => {
+    if (!isEditing) {
+      if (params.amount) setAmountStr(params.amount);
+      if (params.merchant) setMerchant(params.merchant);
+      if (params.category) {
+        const matched = CATEGORIES.find(
+          (c) => c.toLowerCase() === params.category?.toLowerCase()
+        );
+        setCategory(matched || params.category);
+      }
+      if (params.note) setNote(params.note);
+      if (params.type) setType(params.type);
+    }
+  }, [params.amount, params.merchant, params.category, params.note, params.type, isEditing]);
 
   const handleSave = () => {
     if (!accountId) {
@@ -536,15 +559,16 @@ export default function AddTransactionScreen() {
               <MaterialIcons name="content-copy" size={22} color={colors.onSurface} />
             </TouchableOpacity>
           ) : (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
               <TouchableOpacity
                 onPress={() => setShowVoiceModal(true)}
                 style={styles.headerScanBtn}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Voice Add"
               >
                 <View style={styles.headerScanContent}>
-                  <MaterialIcons name="mic" size={18} color={colors.primary} />
-                  <Text style={styles.headerScanText}>Voice</Text>
+                  <MaterialIcons name="mic" size={16} color={colors.primary} />
+                  <Text style={styles.headerScanText} numberOfLines={1}>Voice</Text>
                 </View>
               </TouchableOpacity>
               <TouchableOpacity
@@ -552,13 +576,14 @@ export default function AddTransactionScreen() {
                 disabled={isScanningReceipt}
                 style={styles.headerScanBtn}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="AI Receipt Scan"
               >
                 {isScanningReceipt ? (
                   <ActivityIndicator size="small" color={colors.primary} />
                 ) : (
                   <View style={styles.headerScanContent}>
-                    <MaterialIcons name="document-scanner" size={18} color={colors.primary} />
-                    <Text style={styles.headerScanText}>AI Scan</Text>
+                    <MaterialIcons name="document-scanner" size={16} color={colors.primary} />
+                    <Text style={styles.headerScanText} numberOfLines={1}>AI Scan</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -1846,17 +1871,27 @@ const getStyles = (colors: ThemeColors) => {
     },
     headerScanBtn: {
       paddingHorizontal: 8,
-      paddingVertical: 4,
+      paddingVertical: 5,
+      borderRadius: 14,
+      backgroundColor: colors.surfaceContainerLow,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      flexShrink: 0,
     },
     headerScanContent: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
+      gap: 3,
+      flexShrink: 0,
     },
     headerScanText: {
       ...typography.labelMd,
       color: colors.primary,
       fontWeight: '700',
+      fontSize: 11,
+      lineHeight: 15,
+      letterSpacing: 0,
+      ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
     },
     smartActionsRow: {
       flexDirection: 'row',

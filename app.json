@@ -23,7 +23,8 @@
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
-        "READ_SMS"
+        "READ_SMS",
+        "RECORD_AUDIO"
       ],
       "predictiveBackGestureEnabled": false,
       "package": "com.homerun.clarity"
@@ -35,6 +36,12 @@
     "plugins": [
       "./plugins/withSmsReader",
       "expo-router",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow Clarity to use the microphone for voice transaction entry."
+        }
+      ],
       [
         "expo-splash-screen",
         {

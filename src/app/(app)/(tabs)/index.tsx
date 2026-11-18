@@ -1,8 +1,10 @@
-import { Header, HomeSkeleton, ProgressBar, Text } from '@/components/ui';
+import { Header, HomeSkeleton, ProgressBar, Text, useToast } from '@/components/ui';
 import { UpcomingBillsWidget } from '@/modules/bills';
 import { SplitwiseWidget } from '@/modules/splitwise';
 import { AnnouncementBanner } from '@/components/backend';
 import { ReorderableBankAccounts, OnboardingChecklistCard } from '@/components/common';
+import { VoiceTransactionModal } from '@/components/modals/VoiceTransactionModal';
+import type { ParsedVoiceTransaction } from '@/services/voice/voice-parser';
 import { radius, ThemeColors, typography, useTheme } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -19,11 +21,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAccounts } from '@/hooks/use-accounts';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
-import { useMonthlyTotals, useNetWorthHistory, useTransactions } from '@/hooks/use-transactions';
+import { useMonthlyTotals, useNetWorthHistory, useTransactions, useCreateTransaction } from '@/hooks/use-transactions';
 import { useDoubleBackToExit } from '@/hooks/use-double-back-to-exit';
 import { useSmsSync } from '@/hooks/useSmsSync';
 import { useNotifications } from '@/hooks/use-notifications';
-import { formatCurrency, formatCurrencyPrivacy, getTransactionSign } from '@/utils/format';
+import { formatCurrency, formatCurrencyPrivacy, formatLocalDate, getCurrencySymbol, getTransactionSign } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
 import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
 import { useAppStore } from '@/store/use-app-store';
@@ -38,14 +40,41 @@ export default function DashboardScreen() {
   const router = useRouter();
   const { hideBalances, toggleHideBalances, googleDriveConnected } = useAppStore();
   const [isDraggingAccounts, setIsDraggingAccounts] = useState(false);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
   const { notifications } = useNotifications();
   const unreadNotificationCount = notifications.filter((n) => !n.isRead).length;
   const pendingSmsTransactions = useSmsStore((state) => state.pendingTransactions);
   const openSmsTransactionPrompt = useSmsStore((state) => state.openTransactionPrompt);
+  const { showToast } = useToast();
+  const { mutate: createTransaction } = useCreateTransaction();
 
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
+
+  const handleOpenCopilot = useCallback(() => {
+    router.push({
+      pathname: '/(app)/copilot',
+      params: { month: currentMonth.toString(), year: currentYear.toString() },
+    });
+  }, [router, currentMonth, currentYear]);
+
+  const handleApplyVoiceFromHome = useCallback(
+    (parsed: ParsedVoiceTransaction) => {
+      router.navigate({
+        pathname: '/add-transaction',
+        params: {
+          type: parsed.type,
+          amount: parsed.amount > 0 ? parsed.amount.toString() : '',
+          merchant: parsed.merchant,
+          category: parsed.category,
+          accountId: parsed.accountId,
+          note: parsed.note,
+        },
+      });
+    },
+    [router]
+  );
 
   // Fetch Data
   const { accounts, isLoading: accountsLoading, refetch: refetchAccounts } = useAccounts();
@@ -66,6 +95,54 @@ export default function DashboardScreen() {
     refetch: refetchSpending,
   } = useCategorySpending(currentMonth, currentYear);
   const { history: nwHistory, isLoading: nwLoading, refetch: refetchNw } = useNetWorthHistory(30);
+
+  const handleDirectSaveVoice = useCallback(
+    (parsed: ParsedVoiceTransaction) => {
+      if (parsed.amount <= 0) {
+        showToast('Please specify a valid amount', 'error');
+        return;
+      }
+
+      const targetAccount = parsed.accountId
+        ? accounts.find((a) => a.id === parsed.accountId) || accounts[0]
+        : accounts[0];
+
+      if (!targetAccount) {
+        showToast('Please add a bank account first', 'error');
+        return;
+      }
+
+      createTransaction(
+        {
+          accountId: targetAccount.id,
+          amount: parsed.amount,
+          type: parsed.type || 'expense',
+          merchant: parsed.merchant || 'General',
+          category: parsed.category || 'General',
+          date: formatLocalDate(new Date()),
+          note: parsed.note || 'Logged via Voice',
+          isRecurring: false,
+          source: 'MANUAL',
+          status: 'VERIFIED',
+        },
+        {
+          onSuccess: () => {
+            showToast(
+              `Added ${parsed.type || 'expense'}: ${parsed.merchant || 'Transaction'} (${getCurrencySymbol()}${parsed.amount.toFixed(2)})`,
+              'success'
+            );
+            refetchTransactions();
+            refetchAccounts();
+            refetchTotals();
+          },
+          onError: () => {
+            showToast('Could not save voice transaction. Please try again.', 'error');
+          },
+        }
+      );
+    },
+    [accounts, createTransaction, showToast, refetchTransactions, refetchAccounts, refetchTotals]
+  );
 
   const {
     permissionStatus: smsPermissionStatus,
@@ -236,15 +313,22 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         }
         rightNode={
-          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={handleOpenCopilot}
+              accessibilityLabel="Financial Copilot"
+            >
+              <MaterialIcons name="auto-awesome" size={22} color={colors.primary} />
+            </TouchableOpacity>
             <TouchableOpacity style={styles.iconButton} onPress={() => router.navigate('/analytics')}>
-              <MaterialIcons name="insights" size={24} color={colors.onSurface} />
+              <MaterialIcons name="insights" size={22} color={colors.onSurface} />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.iconButton}
               onPress={() => router.navigate('/notifications')}
             >
-              <MaterialIcons name="notifications-none" size={24} color={colors.onSurface} />
+              <MaterialIcons name="notifications-none" size={22} color={colors.onSurface} />
               {unreadNotificationCount > 0 && (
                 <View style={styles.unreadBadgeDot}>
                   <Text style={styles.unreadBadgeText}>
@@ -433,6 +517,46 @@ export default function DashboardScreen() {
                     }}
                   />
                 </View>
+              </View>
+
+              {/* Quick Actions: Voice Add & Copilot */}
+              <View style={styles.quickActionsRow}>
+                <TouchableOpacity
+                  style={styles.quickActionCard}
+                  onPress={() => setShowVoiceModal(true)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.quickActionIconBox}>
+                    <MaterialIcons name="mic" size={18} color={colors.primary} />
+                  </View>
+                  <View style={styles.quickActionTextBox}>
+                    <Text style={styles.quickActionTitle}>Voice Add</Text>
+                    <Text style={styles.quickActionSubtitle}>Speak expense</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.quickActionCard}
+                  onPress={handleOpenCopilot}
+                  activeOpacity={0.7}
+                >
+                  <View
+                    style={[
+                      styles.quickActionIconBox,
+                      { backgroundColor: colors.secondaryContainer },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name="auto-awesome"
+                      size={18}
+                      color={colors.onSecondaryContainer}
+                    />
+                  </View>
+                  <View style={styles.quickActionTextBox}>
+                    <Text style={styles.quickActionTitle}>Ask Copilot</Text>
+                    <Text style={styles.quickActionSubtitle}>Financial AI</Text>
+                  </View>
+                </TouchableOpacity>
               </View>
 
               {/* Pending SMS Transactions Banner */}
@@ -716,6 +840,14 @@ export default function DashboardScreen() {
           )}
         </View>
       </ScrollView>
+
+      <VoiceTransactionModal
+        visible={showVoiceModal}
+        onDismiss={() => setShowVoiceModal(false)}
+        onApply={handleApplyVoiceFromHome}
+        onSave={handleDirectSaveVoice}
+        accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
+      />
     </View>
   );
 }
@@ -778,7 +910,48 @@ const getStyles = (colors: ThemeColors) => {
       borderWidth: 1,
       borderColor: colors.surfaceVariant,
       padding: 20,
+      marginBottom: 16,
+    },
+    quickActionsRow: {
+      flexDirection: 'row',
+      gap: 12,
       marginBottom: 24,
+    },
+    quickActionCard: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: colors.surfaceContainerLow,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      borderRadius: 14,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    quickActionIconBox: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.primaryContainer,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    quickActionTextBox: {
+      flex: 1,
+    },
+    quickActionTitle: {
+      ...typography.labelMd,
+      fontWeight: '700',
+      color: colors.onSurface,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    quickActionSubtitle: {
+      ...typography.bodyMd,
+      fontSize: 11,
+      lineHeight: 14,
+      color: colors.onSurfaceVariant,
     },
     pendingSmsBanner: {
       backgroundColor: colors.primaryContainer,

@@ -50,6 +50,7 @@ export default function SettingsScreen() {
     isConnected: isDriveConnected,
     userEmail: driveUserEmail,
     lastBackupTime: driveLastBackupTime,
+    hasCustomBackupPassphrase,
     isConnecting: isConnectingDrive,
     isBackingUp: isBackingUpDrive,
     isRestoring: isRestoringDrive,
@@ -158,8 +159,21 @@ export default function SettingsScreen() {
       setPassphraseModalVisible(false);
       const success = await backupDriveNow(passphrase);
       if (success) {
-        showToast('Passphrase updated & encrypted backup saved!', 'success');
+        showToast('Recovery passphrase updated & encrypted backup saved!', 'success');
       }
+    }
+  };
+
+  const handleConnectDrive = async () => {
+    const res = await connectDrive();
+    if (!res || !res.success) return;
+
+    if (res.needsPassphraseToRestore) {
+      setPassphraseMode('decrypt');
+      setPassphraseModalVisible(true);
+    } else if (!res.hasExistingBackup && !hasCustomBackupPassphrase) {
+      setPassphraseMode('encrypt');
+      setPassphraseModalVisible(true);
     }
   };
 
@@ -572,6 +586,83 @@ export default function SettingsScreen() {
                   />
                 </View>
 
+                {!hasCustomBackupPassphrase ? (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 12,
+                      backgroundColor: colors.warningContainer,
+                      borderRadius: 12,
+                      gap: 10,
+                      borderWidth: 1,
+                      borderColor: colors.warning,
+                    }}
+                  >
+                    <MaterialIcons name="warning" size={22} color={colors.warning} />
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{
+                          ...typography.labelMd,
+                          color: colors.onWarningContainer,
+                          fontWeight: '700',
+                        }}
+                      >
+                        No Recovery Passphrase Set
+                      </Text>
+                      <Text
+                        style={{
+                          ...typography.bodySm,
+                          color: colors.onWarningContainer,
+                          lineHeight: 16,
+                          marginTop: 2,
+                        }}
+                      >
+                        Without a passphrase, this backup cannot be restored if you lose this device.
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: colors.warning,
+                        paddingVertical: 6,
+                        paddingHorizontal: 10,
+                        borderRadius: 8,
+                      }}
+                      onPress={() => {
+                        setPassphraseMode('encrypt');
+                        setPassphraseModalVisible(true);
+                      }}
+                    >
+                      <Text
+                        style={{
+                          ...typography.labelSm,
+                          color: colors.onWarning,
+                          fontWeight: '700',
+                        }}
+                      >
+                        SET KEY
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      backgroundColor: colors.surfaceContainer,
+                      borderRadius: 10,
+                      gap: 8,
+                    }}
+                  >
+                    <MaterialIcons name="verified-user" size={18} color={colors.primary} />
+                    <Text style={{ ...typography.bodySm, color: colors.onSurfaceVariant, flex: 1 }}>
+                      End-to-end encrypted with your secret passphrase. Safe for device recovery.
+                    </Text>
+                  </View>
+                )}
+
                 <View style={{ gap: 8 }}>
                   <TouchableOpacity
                     style={styles.btnPrimary}
@@ -668,7 +759,7 @@ export default function SettingsScreen() {
 
                 <TouchableOpacity
                   style={styles.btnPrimary}
-                  onPress={() => connectDrive()}
+                  onPress={handleConnectDrive}
                   disabled={isConnectingDrive}
                 >
                   {isConnectingDrive ? (
@@ -937,13 +1028,22 @@ export default function SettingsScreen() {
 
       <PassphraseModal
         visible={passphraseModalVisible}
-        title={passphraseMode === 'encrypt' ? 'Set Backup Passphrase' : 'Enter Backup Passphrase'}
+        title={passphraseMode === 'encrypt' ? 'Set Recovery Passphrase' : 'Enter Backup Passphrase'}
         description={
           passphraseMode === 'encrypt'
-            ? 'Set a secret passphrase to encrypt your cloud backup. Nobody (not even Google) can read your financial data without this key.'
+            ? 'Set a secret passphrase to encrypt your cloud backup. You will need this passphrase to restore your financial data if your device is lost or replaced.'
             : 'This backup is client-side encrypted with AES-256-GCM. Enter your secret passphrase to decrypt and restore.'
         }
         confirmText={passphraseMode === 'encrypt' ? 'Encrypt & Backup' : 'Unlock & Restore'}
+        onSkip={
+          passphraseMode === 'encrypt'
+            ? () => {
+                setPassphraseModalVisible(false);
+                showToast('Using device-only key. You can set a recovery passphrase anytime.', 'info');
+              }
+            : undefined
+        }
+        skipText="Skip for now"
         isLoading={isBackingUpDrive || isRestoringDrive}
         onClose={() => setPassphraseModalVisible(false)}
         onSubmit={handlePassphraseSubmit}

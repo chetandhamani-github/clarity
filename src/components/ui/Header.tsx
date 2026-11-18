@@ -41,6 +41,9 @@ export function Header({
     }
   };
 
+  const hasLeft = Boolean(leftNode || showBack);
+  const hasRight = Boolean(rightNode);
+
   return (
     <View
       style={[
@@ -66,12 +69,27 @@ export function Header({
       </View>
 
       {/* Title */}
-      <View style={styles.titleContainer} pointerEvents="none">
+      <View
+        style={[
+          styles.titleContainer,
+          isMainTab
+            ? styles.titleContainerMainTab
+            : hasRight && hasLeft
+            ? styles.titleContainerCentered
+            : styles.titleContainerFlex,
+        ]}
+        pointerEvents="none"
+      >
         {title ? (
           <Text
             variant={isMainTab ? 'headlineMd' : 'headlineSm'}
-            style={[styles.title, { color: colors.onSurface }]}
+            style={[
+              styles.title,
+              isMainTab && styles.titleMainTab,
+              { color: colors.onSurface },
+            ]}
             numberOfLines={1}
+            ellipsizeMode="tail"
           >
             {title}
           </Text>
@@ -97,30 +115,41 @@ const styles = StyleSheet.create({
     zIndex: 40, // high zIndex for all headers
   },
   leftContainer: {
-    flex: 1,
+    flexShrink: 0,
     alignItems: 'flex-start',
     justifyContent: 'center',
     zIndex: 2,
   },
   rightContainer: {
-    flex: 1,
+    flexShrink: 0,
     alignItems: 'flex-end',
     justifyContent: 'center',
     zIndex: 2,
   },
   titleContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
     justifyContent: 'center',
-    paddingHorizontal: 56,
     zIndex: 1,
+  },
+  titleContainerCentered: {
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  titleContainerFlex: {
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  titleContainerMainTab: {
+    alignItems: 'flex-start',
+    paddingLeft: 12,
+    paddingRight: 8,
   },
   title: {
     textAlign: 'center',
+  },
+  titleMainTab: {
+    textAlign: 'left',
   },
   iconButton: {
     width: 44,
@@ -131,7 +160,7 @@ const styles = StyleSheet.create({
     marginLeft: -8, // Adjust to make icon visually align with 16px padding
   },
   placeholder: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
   },
 });

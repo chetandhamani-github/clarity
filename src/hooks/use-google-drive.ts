@@ -1,6 +1,7 @@
 import { useToast } from '@/components/ui';
 import {
     authenticateWithGoogle,
+    checkHasCustomBackupPassphrase,
     clearTokens,
     deleteAllBackups,
     downloadBackup,
@@ -20,7 +21,7 @@ import {
 } from '@/services/database/backup-restore-service';
 import { useAppStore } from '@/store/use-app-store';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { DeviceEventEmitter } from 'react-native';
 
 export function useGoogleDrive() {
@@ -32,9 +33,17 @@ export function useGoogleDrive() {
   const lastBackupTime = useAppStore((state) => state.lastCloudBackupTime);
   const setGoogleDriveConnected = useAppStore((state) => state.setGoogleDriveConnected);
   const setLastCloudBackupTime = useAppStore((state) => state.setLastCloudBackupTime);
+  const hasCustomBackupPassphrase = useAppStore((state) => state.hasCustomBackupPassphrase);
+  const setHasCustomBackupPassphrase = useAppStore((state) => state.setHasCustomBackupPassphrase);
 
   const autoBackupEnabled = useAppStore((state) => state.autoBackupEnabled);
   const setAutoBackupEnabled = useAppStore((state) => state.setAutoBackupEnabled);
+
+  useEffect(() => {
+    if (isConnected) {
+      checkHasCustomBackupPassphrase().catch(() => {});
+    }
+  }, [isConnected]);
 
   const [isConnecting, setIsConnecting] = useState(false);
   const [isBackingUp, setIsBackingUp] = useState(false);
@@ -116,7 +125,14 @@ export function useGoogleDrive() {
    * Connect with Google Drive OAuth and check for existing cloud backups safely.
    */
   const connect = useCallback(
-    async (options?: { silent?: boolean; autoRestoreIfEmpty?: boolean }) => {
+    async (options?: { silent?: boolean; autoRestoreIfEmpty?: boolean }): Promise<{
+      success: boolean;
+      needsPassphraseToRestore?: boolean;
+      hasExistingBackup?: boolean;
+      existingBackupDate?: string;
+      restored?: boolean;
+      error?: string;
+    }> => {
       setIsConnecting(true);
       try {
         const auth = await authenticateWithGoogle();
@@ -124,10 +140,11 @@ export function useGoogleDrive() {
           if (!auth.error?.toLowerCase().includes('cancel') && !options?.silent) {
             showToast(auth.error || 'Failed to connect Google Drive', 'error');
           }
-          return false;
+          return { success: false, error: auth.error };
         }
 
         setGoogleDriveConnected(true, auth.email);
+        await checkHasCustomBackupPassphrase();
         if (!options?.silent) {
           showToast(`Connected to Google Drive (${auth.email})`, 'success');
         }
@@ -150,7 +167,15 @@ export function useGoogleDrive() {
                 }
                 const restoreRes = await restoreFromDrive();
                 if (restoreRes.success) {
-                  return true;
+                  return { success: true, restored: true, hasExistingBackup: true };
+                }
+                if (restoreRes.isEncrypted) {
+                  return {
+                    success: true,
+                    needsPassphraseToRestore: true,
+                    hasExistingBackup: true,
+                    existingBackupDate: existingFile.modifiedTime,
+                  };
                 }
               }
 
@@ -158,7 +183,11 @@ export function useGoogleDrive() {
                 const dateStr = new Date(existingFile.modifiedTime).toLocaleDateString();
                 showToast(`Cloud backup found from ${dateStr}. Restore from Settings anytime.`, 'info');
               }
-              return true;
+              return {
+                success: true,
+                hasExistingBackup: true,
+                existingBackupDate: existingFile.modifiedTime,
+              };
             }
           }
 
@@ -174,12 +203,12 @@ export function useGoogleDrive() {
           // Initial sync check error ignored
         }
 
-        return true;
+        return { success: true, hasExistingBackup: false };
       } catch (error: any) {
         if (!options?.silent) {
           showToast(error?.message || 'Error connecting to Google Drive', 'error');
         }
-        return false;
+        return { success: false, error: error?.message };
       } finally {
         setIsConnecting(false);
       }
@@ -315,6 +344,8 @@ export function useGoogleDrive() {
     lastBackupTime,
     autoBackupEnabled,
     setAutoBackupEnabled,
+    hasCustomBackupPassphrase,
+    checkHasCustomBackupPassphrase,
     isConnecting,
     isBackingUp,
     isRestoring,

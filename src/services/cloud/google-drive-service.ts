@@ -13,6 +13,7 @@ import {
     statusCodes,
 } from '@react-native-google-signin/google-signin';
 import * as SecureStore from 'expo-secure-store';
+import { useAppStore } from '@/store/use-app-store';
 
 const SECURE_KEYS = {
   ACCESS_TOKEN: 'gdrive_access_token',
@@ -20,6 +21,7 @@ const SECURE_KEYS = {
   EXPIRES_AT: 'gdrive_token_expires_at',
   USER_EMAIL: 'gdrive_user_email',
   BACKUP_PASSPHRASE: 'gdrive_backup_passphrase',
+  HAS_CUSTOM_PASSPHRASE: 'gdrive_has_custom_passphrase',
 };
 
 const BACKUP_FILE_NAME = 'clarity_backup.json';
@@ -111,6 +113,8 @@ export async function clearTokens(): Promise<void> {
   await SecureStore.deleteItemAsync(SECURE_KEYS.REFRESH_TOKEN);
   await SecureStore.deleteItemAsync(SECURE_KEYS.EXPIRES_AT);
   await SecureStore.deleteItemAsync(SECURE_KEYS.USER_EMAIL);
+  await SecureStore.deleteItemAsync(SECURE_KEYS.HAS_CUSTOM_PASSPHRASE);
+  useAppStore.getState().setHasCustomBackupPassphrase(false);
 
   try {
     await GoogleSignin.signOut();
@@ -133,10 +137,17 @@ export async function getStoredBackupPassphrase(): Promise<string | null> {
 /**
  * Persist client-side backup encryption passphrase/key to SecureStore.
  */
-export async function setStoredBackupPassphrase(passphrase: string): Promise<void> {
+export async function setStoredBackupPassphrase(passphrase: string, isCustom = true): Promise<void> {
   try {
     if (passphrase && passphrase.trim().length >= 4) {
       await SecureStore.setItemAsync(SECURE_KEYS.BACKUP_PASSPHRASE, passphrase.trim());
+      if (isCustom) {
+        await SecureStore.setItemAsync(SECURE_KEYS.HAS_CUSTOM_PASSPHRASE, 'true');
+        useAppStore.getState().setHasCustomBackupPassphrase(true);
+      } else {
+        await SecureStore.deleteItemAsync(SECURE_KEYS.HAS_CUSTOM_PASSPHRASE);
+        useAppStore.getState().setHasCustomBackupPassphrase(false);
+      }
     }
   } catch {
     // Ignore SecureStore write errors
@@ -149,8 +160,39 @@ export async function setStoredBackupPassphrase(passphrase: string): Promise<voi
 export async function clearStoredBackupPassphrase(): Promise<void> {
   try {
     await SecureStore.deleteItemAsync(SECURE_KEYS.BACKUP_PASSPHRASE);
+    await SecureStore.deleteItemAsync(SECURE_KEYS.HAS_CUSTOM_PASSPHRASE);
+    useAppStore.getState().setHasCustomBackupPassphrase(false);
   } catch {
     // Ignore delete errors
+  }
+}
+
+/**
+ * Checks whether user has explicitly configured a custom passphrase for device recovery.
+ */
+export async function checkHasCustomBackupPassphrase(): Promise<boolean> {
+  try {
+    const flag = await SecureStore.getItemAsync(SECURE_KEYS.HAS_CUSTOM_PASSPHRASE);
+    if (flag === 'true') {
+      useAppStore.getState().setHasCustomBackupPassphrase(true);
+      return true;
+    }
+    if (flag === 'false') {
+      useAppStore.getState().setHasCustomBackupPassphrase(false);
+      return false;
+    }
+    const existing = await SecureStore.getItemAsync(SECURE_KEYS.BACKUP_PASSPHRASE);
+    if (!existing) {
+      useAppStore.getState().setHasCustomBackupPassphrase(false);
+      return false;
+    }
+    // If it's a 64-char hex string, it was an auto-generated device key
+    const isCustom = !/^[0-9a-fA-F]{64}$/.test(existing.trim());
+    await SecureStore.setItemAsync(SECURE_KEYS.HAS_CUSTOM_PASSPHRASE, isCustom ? 'true' : 'false');
+    useAppStore.getState().setHasCustomBackupPassphrase(isCustom);
+    return isCustom;
+  } catch {
+    return false;
   }
 }
 
@@ -164,7 +206,7 @@ export async function getOrCreateDefaultBackupKey(): Promise<string> {
     return existing;
   }
   const generatedKey = generateSecureDeviceKey();
-  await setStoredBackupPassphrase(generatedKey);
+  await setStoredBackupPassphrase(generatedKey, false);
   return generatedKey;
 }
 
@@ -432,7 +474,7 @@ export async function uploadBackup(
       (await getOrCreateDefaultBackupKey());
 
     if (options?.passphrase) {
-      await setStoredBackupPassphrase(options.passphrase);
+      await setStoredBackupPassphrase(options.passphrase, true);
     }
 
     const encryptedPayload = await encryptBackupPayload(snapshot, encryptionPassphrase);
@@ -599,7 +641,7 @@ export async function downloadBackup(passphrase?: string): Promise<{
       try {
         payload = await decryptBackupPayload<ClarityBackupPayload>(rawJson, keyToUse);
         if (passphrase) {
-          await setStoredBackupPassphrase(passphrase);
+          await setStoredBackupPassphrase(passphrase, true);
         }
       } catch (decErr: any) {
         return {
