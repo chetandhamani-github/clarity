@@ -10,7 +10,7 @@ import {
 import { Text, Header, DetailSkeleton } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAccount, useDeleteAccount } from '@/hooks/use-accounts';
 import { useTransactions, useAccountHistory } from '@/hooks/use-transactions';
@@ -24,7 +24,7 @@ import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transa
 export default function AccountDetailsScreen() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
   const { accountId } = useLocalSearchParams<{ accountId: string }>();
 

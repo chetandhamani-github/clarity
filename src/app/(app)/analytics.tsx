@@ -4,7 +4,7 @@ import { Text, Header, ListSkeleton, useAlert, useToast, NoNetworkView } from '@
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import {
   useMonthlyTotals,
   useTopMerchants,
@@ -27,7 +27,7 @@ export default function AnalyticsScreen() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const params = useLocalSearchParams<{ month?: string; year?: string }>();
   const { hideBalances, toggleHideBalances } = useAppStore();
 

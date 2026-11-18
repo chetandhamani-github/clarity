@@ -11,7 +11,7 @@ import {
 import { Text, Header, AccountsSkeleton } from '@/components/ui';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { LineChart } from 'react-native-gifted-charts';
 import { useAccounts } from '@/hooks/use-accounts';
@@ -34,7 +34,7 @@ interface AccountsScreenProps {
 export default function AccountsScreen({ showBack = false }: AccountsScreenProps = {}) {
   const { colors } = useTheme();
   const styles = getStyles(colors);
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
 
   const { accounts, isLoading, refetch } = useAccounts();

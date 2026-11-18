@@ -13,7 +13,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { Text, Header, useToast, useAlert } from '@/components/ui';
 import { spacing, typography, radius, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter } from 'expo-router';
 import {
   useCategories,
@@ -64,7 +64,7 @@ const BUCKET_OPTIONS: { label: string; value: BucketType; color: string }[] = [
 
 export default function ManageCategoriesScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
   const { showToast } = useToast();
   const { showAlert } = useAlert();
@@ -310,7 +310,7 @@ export default function ManageCategoriesScreen() {
             activeOpacity={1}
             onPress={() => setModalVisible(false)}
           />
-          <View style={[styles.modalContent, { backgroundColor: colors.surfaceContainerLowest }]}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surfaceContainerLowest, paddingBottom: Math.max(insets.bottom, 24) + 8 }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.onSurface }]}>
                 {editingCategory ? 'Edit Category' : 'New Category'}

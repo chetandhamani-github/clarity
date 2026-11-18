@@ -18,7 +18,7 @@ import {
   View
 } from 'react-native';
 import { LineChart, PieChart } from 'react-native-gifted-charts';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 
 import { useAccounts } from '@/hooks/use-accounts';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
@@ -39,7 +39,7 @@ export default function DashboardScreen() {
 
   const { colors } = useTheme();
   const styles = getStyles(colors);
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
   const { hideBalances, toggleHideBalances, googleDriveConnected } = useAppStore();
   const [isDraggingAccounts, setIsDraggingAccounts] = useState(false);

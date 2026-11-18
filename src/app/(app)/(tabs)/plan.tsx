@@ -13,7 +13,7 @@ import {
 import { Text, Header, PlanSkeleton, useToast } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useFocusEffect } from 'expo-router';
 import {
   useBudgetPlan,
@@ -33,7 +33,7 @@ interface PlanScreenProps {
 export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
   const { colors } = useTheme();
   const styles = getStyles(colors);
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
 
   const { showToast } = useToast();
@@ -818,7 +818,7 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
               styles.capModalContainer,
               {
                 backgroundColor: colors.surfaceContainerLowest,
-                paddingBottom: Math.max(insets.bottom, 24),
+                paddingBottom: Math.max(insets.bottom, 24) + 12,
               },
             ]}
           >

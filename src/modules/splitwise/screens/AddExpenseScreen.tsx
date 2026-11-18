@@ -675,7 +675,7 @@ export function AddExpenseScreen() {
                             placeholder="1"
                             placeholderTextColor={colors.outline}
                             keyboardType="number-pad"
-                            value={shareInputs[person.id] || '1'}
+                            value={shareInputs[person.id] !== undefined ? shareInputs[person.id] : '1'}
                             onChangeText={(txt) =>
                               setShareInputs((prev) => ({ ...prev, [person.id]: txt }))
                             }
@@ -777,6 +777,9 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontFamily: 'Manrope_800ExtraBold',
     flex: 1,
+    paddingVertical: 0,
+    textAlignVertical: 'center',
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
   },
   inputWrapper: {
     borderWidth: 1,
@@ -788,6 +791,9 @@ const styles = StyleSheet.create({
   textInput: {
     fontSize: 15,
     fontFamily: 'Manrope_500Medium',
+    paddingVertical: 0,
+    textAlignVertical: 'center',
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
   },
   categoryChipsScroll: {
     gap: 8,
@@ -901,6 +907,8 @@ const styles = StyleSheet.create({
   shareCalculatedVal: {
     fontSize: 15,
     fontFamily: 'Manrope_700Bold',
+    textAlignVertical: 'center',
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
   },
   customInputWrapper: {
     flexDirection: 'row',
@@ -910,22 +918,32 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingHorizontal: 8,
     height: 36,
+    overflow: 'hidden',
   },
   prefixSign: {
     fontSize: 14,
     fontFamily: 'Manrope_700Bold',
     marginRight: 4,
+    textAlignVertical: 'center',
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
   },
   suffixSign: {
     fontSize: 12,
     fontFamily: 'Manrope_500Medium',
     marginLeft: 4,
+    textAlignVertical: 'center',
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
   },
   customInput: {
     fontSize: 14,
     fontFamily: 'Manrope_700Bold',
     minWidth: 50,
     textAlign: 'right',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    height: '100%',
+    textAlignVertical: 'center',
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
   },
   validationBanner: {
     flexDirection: 'row',

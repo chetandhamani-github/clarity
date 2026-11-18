@@ -11,7 +11,7 @@ import {
 import { Text, Header, TransactionsSkeleton, useToast, useAlert } from '@/components/ui';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useFocusEffect } from 'expo-router';
 import {
   useTransactions,
@@ -45,7 +45,7 @@ interface TransactionsScreenProps {
 export default function TransactionsScreen({ showBack = false }: TransactionsScreenProps = {}) {
   const { colors } = useTheme();
   const styles = getStyles(colors);
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
 
   const { accounts } = useAccounts();
@@ -653,7 +653,7 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
 
       {/* Floating Bulk Action Drawer */}
       {selectedIds.size > 0 && (
-        <View style={[styles.bulkActionBar, { bottom: insets.bottom + 16, backgroundColor: colors.surfaceContainerHighest }]}>
+        <View style={[styles.bulkActionBar, { bottom: insets.bottom + (showBack ? 16 : 80), backgroundColor: colors.surfaceContainerHighest }]}>
           <TouchableOpacity
             style={styles.bulkActionItem}
             onPress={handleBulkDelete}
@@ -698,7 +698,7 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
           activeOpacity={1}
           onPress={() => setBulkCategoryModalVisible(false)}
         >
-          <View style={[styles.bulkModalSheet, { backgroundColor: colors.surfaceContainerLowest }]}>
+          <View style={[styles.bulkModalSheet, { backgroundColor: colors.surfaceContainerLowest, paddingBottom: Math.max(insets.bottom, 24) + 8 }]}>
             <View style={styles.bulkModalHeader}>
               <Text style={[styles.bulkModalTitle, { color: colors.onSurface }]}>Change Category</Text>
               <TouchableOpacity onPress={() => setBulkCategoryModalVisible(false)}>
@@ -735,7 +735,7 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
           activeOpacity={1}
           onPress={() => setBulkAccountModalVisible(false)}
         >
-          <View style={[styles.bulkModalSheet, { backgroundColor: colors.surfaceContainerLowest }]}>
+          <View style={[styles.bulkModalSheet, { backgroundColor: colors.surfaceContainerLowest, paddingBottom: Math.max(insets.bottom, 24) + 8 }]}>
             <View style={styles.bulkModalHeader}>
               <Text style={[styles.bulkModalTitle, { color: colors.onSurface }]}>Move to Account</Text>
               <TouchableOpacity onPress={() => setBulkAccountModalVisible(false)}>

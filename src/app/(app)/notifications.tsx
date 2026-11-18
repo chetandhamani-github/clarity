@@ -9,7 +9,7 @@ import {
 import { Text, Header, ListSkeleton, useToast, useAlert } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter } from 'expo-router';
 import {
   useNotifications,
@@ -26,7 +26,7 @@ type FilterTab = 'all' | 'unread' | 'alert' | 'bill' | 'budget';
 export default function NotificationsScreen() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
   const { showToast } = useToast();
   const { showAlert } = useAlert();

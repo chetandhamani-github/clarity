@@ -14,7 +14,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { Text, Header, GoalsSkeleton } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useGoals, useCreateGoal } from '@/hooks/use-goals';
 import { useToast, useAlert } from '@/components/ui';
@@ -28,7 +28,7 @@ interface GoalsScreenProps {
 export default function GoalsScreen({ showBack = false }: GoalsScreenProps = {}) {
   const { colors } = useTheme();
   const styles = getStyles(colors);
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
 
   const { goals, isLoading, refetch } = useGoals();
