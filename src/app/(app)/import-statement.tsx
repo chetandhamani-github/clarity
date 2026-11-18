@@ -12,7 +12,7 @@ import {
 import { Text, Header, useToast } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter } from 'expo-router';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useQueryClient } from '@tanstack/react-query';
@@ -44,7 +44,7 @@ interface StatementItem {
 export default function ImportStatementScreen() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
@@ -277,7 +277,7 @@ export default function ImportStatementScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <Header title="Import Statement" showBack />
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 48 }]}>
         {/* Step 1: Select Target Account */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>1. Target Account</Text>

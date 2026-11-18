@@ -128,7 +128,7 @@ export function BillDetailsScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 80 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Top Hero Banner */}
@@ -307,7 +307,7 @@ export function BillDetailsScreen() {
           {
             backgroundColor: colors.surfaceContainerLow,
             borderTopColor: colors.outlineVariant,
-            paddingBottom: Math.max(16, insets.bottom + 12),
+            paddingBottom: Math.max(20, insets.bottom + 12),
           },
         ]}
       >

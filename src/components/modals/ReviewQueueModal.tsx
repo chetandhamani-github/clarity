@@ -167,7 +167,7 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         style={styles.modalOverlay}
       >
         <View style={styles.modalContainer}>

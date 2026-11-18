@@ -8,13 +8,13 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet, TextInput, TouchableOpacity, View, Platform } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 
 export default function BudgetSetupScreen() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
 
   const { plan, isLoading } = useBudgetPlan();
   const { mutate: updatePlan, isPending } = useUpdateBudgetPlan();

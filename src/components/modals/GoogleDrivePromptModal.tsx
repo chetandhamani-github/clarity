@@ -119,7 +119,7 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
       <TouchableWithoutFeedback onPress={step === 'intro' ? handleInitialSkip : undefined}>
         <View style={styles.overlay}>
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
             style={styles.keyboardView}
           >
             <TouchableWithoutFeedback>

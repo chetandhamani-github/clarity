@@ -302,7 +302,7 @@ export default function ManageCategoriesScreen() {
       {/* Create / Edit Modal */}
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
           style={styles.modalBackdrop}
         >
           <TouchableOpacity
@@ -536,16 +536,19 @@ const styles = StyleSheet.create({
   },
   bucketBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
     flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bucketBadgeText: {
     ...typography.labelMd,
     fontFamily: 'Manrope_700Bold',
     fontSize: 11,
     lineHeight: 15,
+    textAlignVertical: 'center',
   },
   limitText: {
     ...typography.labelMd,

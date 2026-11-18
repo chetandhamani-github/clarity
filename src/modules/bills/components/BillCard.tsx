@@ -265,9 +265,10 @@ const styles = StyleSheet.create({
   pillBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 3,
     paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: 6,
     flexShrink: 0,
   },
@@ -276,12 +277,15 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
     fontWeight: '600',
+    textAlignVertical: 'center',
   },
   sourcePill: {
     paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: 6,
     flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sourcePillText: {
     ...typography.labelMd,
@@ -289,6 +293,7 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     fontWeight: '700',
     letterSpacing: 0.5,
+    textAlignVertical: 'center',
   },
   actionRow: {
     flexDirection: 'row',

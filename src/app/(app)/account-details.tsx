@@ -673,7 +673,16 @@ export default function AccountDetailsScreen() {
                       <View style={styles.transactionsList}>
                         {transactions.slice(0, 5).map((tx, index) => {
                           const isLast = index === Math.min(transactions.length, 5) - 1;
-                          const sign = getTransactionSign(tx.type);
+                          const isIncomingTransfer =
+                            tx.type === 'transfer' && tx.toAccountId === account?.id;
+                          const isOutgoingTransfer =
+                            tx.type === 'transfer' && tx.accountId === account?.id;
+                          const isCredit = tx.type === 'income' || isIncomingTransfer;
+                          const sign = isCredit
+                            ? '+'
+                            : isOutgoingTransfer || tx.type === 'expense'
+                            ? '-'
+                            : getTransactionSign(tx.type);
 
                           return (
                             <TouchableOpacity
@@ -685,7 +694,7 @@ export default function AccountDetailsScreen() {
                                 <View
                                   style={[
                                     styles.txIconBox,
-                                    tx.type === 'income'
+                                    isCredit
                                       ? { backgroundColor: colors.primaryContainer }
                                       : undefined,
                                   ]}
@@ -694,7 +703,7 @@ export default function AccountDetailsScreen() {
                                     name={getCategoryIcon(tx.category)}
                                     size={20}
                                     color={
-                                      tx.type === 'income'
+                                      isCredit
                                         ? colors.onPrimaryContainer
                                         : colors.onSurfaceVariant
                                     }
@@ -703,7 +712,7 @@ export default function AccountDetailsScreen() {
                                 <View style={{ flex: 1, justifyContent: 'center' }}>
                                   <Text style={styles.txTitle} numberOfLines={1}>
                                     {tx.type === 'transfer'
-                                      ? tx.accountId === account?.id
+                                      ? isOutgoingTransfer
                                         ? `Transfer to ${tx.toAccountName || 'Unknown'}`
                                         : `Transfer from ${tx.accountName}`
                                       : getTransactionDisplayName(tx)}
@@ -720,7 +729,7 @@ export default function AccountDetailsScreen() {
                                 <Text
                                   style={[
                                     styles.txAmount,
-                                    tx.type === 'income' ? { color: colors.primary } : undefined,
+                                    isCredit ? { color: colors.primary } : undefined,
                                   ]}
                                 >
                                   {sign}

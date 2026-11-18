@@ -12,7 +12,7 @@ import { Text, Button, Header, useToast, useAlert } from '@/components/ui';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useAppStore } from '@/store/use-app-store';
 import { clearDatabase } from '@/services/database';
 import { exportFullBackupToJSON } from '@/services/export/export-service';
@@ -22,7 +22,7 @@ export default function SecurityPrivacyScreen() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const { showToast } = useToast();
   const { showAlert } = useAlert();
   const { accounts } = useAccounts();

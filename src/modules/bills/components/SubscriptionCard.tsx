@@ -219,15 +219,18 @@ const styles = StyleSheet.create({
   },
   statusBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: 6,
     flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statusText: {
     ...typography.labelMd,
     fontWeight: '700',
     fontSize: 11,
     lineHeight: 15,
+    textAlignVertical: 'center',
   },
   dateLabel: {
     ...typography.bodyMd,

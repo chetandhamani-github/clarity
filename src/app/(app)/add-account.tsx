@@ -4,7 +4,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { Text, Header } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCreateAccount, useUpdateAccount, useAccount } from '@/hooks/use-accounts';
 import { useToast, useAlert } from '@/components/ui';
@@ -14,7 +14,7 @@ import { getCurrencySymbol } from '@/utils/format';
 export default function AddAccountScreen() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
 
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -121,7 +121,7 @@ export default function AddAccountScreen() {
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 140 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 48 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}

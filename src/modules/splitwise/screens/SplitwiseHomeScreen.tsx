@@ -1367,15 +1367,18 @@ const styles = StyleSheet.create({
   },
   statusBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: radius.full,
     flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statusBadgeText: {
     ...typography.labelMd,
     fontFamily: 'Manrope_700Bold',
     fontSize: 11,
     lineHeight: 15,
+    textAlignVertical: 'center',
   },
   settledSubtext: {
     ...typography.bodyMd,

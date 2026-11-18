@@ -9,6 +9,7 @@ import {
   Platform,
   Alert,
   Modal,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
@@ -341,7 +342,7 @@ export function GroupDetailsScreen() {
         style={styles.scrollArea}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 80 },
+          { paddingBottom: insets.bottom + 100 },
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -658,7 +659,7 @@ export function GroupDetailsScreen() {
           styles.bottomBar,
           {
             backgroundColor: colors.background,
-            paddingBottom: Math.max(insets.bottom, 12),
+            paddingBottom: Math.max(insets.bottom, 16) + 8,
           },
         ]}
       >
@@ -681,13 +682,22 @@ export function GroupDetailsScreen() {
         animationType="slide"
         onRequestClose={() => setShowAddMemberModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdropTouch}
+            activeOpacity={1}
+            onPress={() => setShowAddMemberModal(false)}
+          />
           <View
             style={[
               styles.modalContainer,
               {
                 backgroundColor: colors.surfaceContainerLow,
                 borderColor: colors.outlineVariant,
+                paddingBottom: Math.max(insets.bottom, 24),
               },
             ]}
           >
@@ -758,7 +768,7 @@ export function GroupDetailsScreen() {
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -1070,6 +1080,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'flex-end',
+  },
+  modalBackdropTouch: {
+    flex: 1,
   },
   modalContainer: {
     borderTopLeftRadius: radius.xl,

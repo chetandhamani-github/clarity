@@ -137,7 +137,7 @@ export function PeopleScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 32 },
+          { paddingBottom: insets.bottom + 48 },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -473,15 +473,18 @@ const styles = StyleSheet.create({
   statusBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: radius.full,
     flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statusBadgeText: {
     ...typography.labelMd,
     fontFamily: 'Manrope_700Bold',
     fontSize: 11,
     lineHeight: 15,
+    textAlignVertical: 'center',
   },
   personCardRight: {
     flexDirection: 'row',

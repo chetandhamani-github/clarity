@@ -12,7 +12,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { Text, Header, useToast } from '@/components/ui';
 import { typography, radius, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useAccounts } from '@/hooks/use-accounts';
 import { exportCustomStatement } from '@/services/export/export-service';
 import { formatLocalDate } from '@/utils/format';
@@ -22,7 +22,7 @@ type DatePreset = 'this_month' | 'last_month' | 'last_90_days' | 'ytd' | 'all' |
 
 export default function ExportStatementScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const { showToast } = useToast();
   const { accounts } = useAccounts();
 

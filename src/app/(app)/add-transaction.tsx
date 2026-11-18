@@ -29,6 +29,7 @@ import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Keyboard,
   Modal,
   Platform,
   ScrollView,
@@ -235,6 +236,7 @@ export default function AddTransactionScreen() {
   }, [params.amount, params.merchant, params.category, params.note, params.type, isEditing]);
 
   const handleSave = () => {
+    Keyboard.dismiss();
     if (!accountId) {
       showToast('Please select an account', 'error');
       return;
@@ -387,6 +389,7 @@ export default function AddTransactionScreen() {
   };
 
   const handleDelete = () => {
+    Keyboard.dismiss();
     if (isEditing && id) {
       showAlert('Delete Transaction', 'Are you sure you want to delete this transaction?', [
         { text: 'Cancel', style: 'cancel' },
@@ -423,6 +426,7 @@ export default function AddTransactionScreen() {
   };
 
   const handleDuplicate = () => {
+    Keyboard.dismiss();
     showAlert(
       'Duplicate Transaction',
       "Create a copy of this transaction with today's date?",
@@ -653,12 +657,12 @@ export default function AddTransactionScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 32 },
+          { paddingBottom: insets.bottom + 48 },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
-        enableAutomaticScroll={true}
+        enableAutomaticScroll={Platform.OS === 'ios'}
         enableResetScrollToCoords={false}
         extraScrollHeight={Platform.OS === 'ios' ? 140 : 160}
         extraHeight={Platform.OS === 'ios' ? 75 : 140}
@@ -2004,11 +2008,15 @@ const getStyles = (colors: ThemeColors) => {
       borderWidth: 1,
       borderColor: colors.surfaceVariant,
       flexShrink: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     quickChipText: {
       ...typography.labelMd,
       color: colors.onSurface,
       fontWeight: '600',
+      lineHeight: 16,
+      textAlignVertical: 'center',
     },
     splitToggleContainer: {
       flexDirection: 'row',

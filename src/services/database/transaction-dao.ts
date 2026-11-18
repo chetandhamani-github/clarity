@@ -92,8 +92,8 @@ export async function getTransactions(
   const params: any[] = [];
 
   if (filters?.accountId) {
-    query += ` AND t.account_id = ?`;
-    params.push(filters.accountId);
+    query += ` AND (t.account_id = ? OR t.to_account_id = ?)`;
+    params.push(filters.accountId, filters.accountId);
   }
   if (filters?.category) {
     query += ` AND t.category = ?`;

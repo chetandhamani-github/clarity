@@ -26,12 +26,12 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
   const themeSetting = useAppStore((state) => state.theme);
   const setTheme = useAppStore((state) => state.setTheme);

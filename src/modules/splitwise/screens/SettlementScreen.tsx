@@ -280,7 +280,7 @@ export function SettlementScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 32 },
+          { paddingBottom: insets.bottom + 48 },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -899,7 +899,7 @@ export function SettlementScreen() {
         onRequestClose={closePersonPicker}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
           style={styles.modalOverlay}
         >
           <TouchableOpacity
@@ -913,7 +913,7 @@ export function SettlementScreen() {
               {
                 backgroundColor: colors.surfaceContainerLowest,
                 borderColor: colors.outlineVariant,
-                paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 40 : 24),
+                paddingBottom: Math.max(insets.bottom, 24),
               },
             ]}
           >
@@ -1259,6 +1259,7 @@ const styles = StyleSheet.create({
   fullSettleChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: radius.full,
@@ -1269,8 +1270,11 @@ const styles = StyleSheet.create({
     ...typography.labelMd,
     fontFamily: 'Manrope_700Bold',
     fontSize: 12,
+    textAlignVertical: 'center',
   },
   halfSettleChip: {
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: radius.full,
@@ -1280,6 +1284,7 @@ const styles = StyleSheet.create({
     ...typography.labelMd,
     fontFamily: 'Manrope_600SemiBold',
     fontSize: 12,
+    textAlignVertical: 'center',
   },
   quickChipsRow: {
     flexDirection: 'row',
@@ -1293,12 +1298,15 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: radius.full,
     borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   quickChipText: {
     ...typography.labelMd,
     fontFamily: 'Manrope_600SemiBold',
     fontSize: 12,
     lineHeight: 16,
+    textAlignVertical: 'center',
   },
   previewCard: {
     borderRadius: radius.xl,

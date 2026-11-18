@@ -104,6 +104,12 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
   }
 
   try {
+    await db.execAsync('CREATE INDEX IF NOT EXISTS idx_transactions_to_account ON transactions(to_account_id);');
+  } catch (e) {
+    // Index might already exist, ignore error
+  }
+
+  try {
     await db.execAsync('ALTER TABLE transactions ADD COLUMN splits_json TEXT;');
   } catch (e) {
     // Column might already exist, ignore error

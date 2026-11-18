@@ -238,7 +238,7 @@ export function AddDebtScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 32 },
+          { paddingBottom: insets.bottom + 48 },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -737,7 +737,7 @@ export function AddDebtScreen() {
         onRequestClose={closePersonPicker}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
           style={styles.modalOverlay}
         >
           <TouchableOpacity
@@ -751,7 +751,7 @@ export function AddDebtScreen() {
               {
                 backgroundColor: colors.surfaceContainerLowest,
                 borderColor: colors.outlineVariant,
-                paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 40 : 24),
+                paddingBottom: Math.max(insets.bottom, 24),
               },
             ]}
           >
@@ -1098,12 +1098,15 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: radius.full,
     borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   quickChipText: {
     ...typography.labelMd,
     fontFamily: 'Manrope_600SemiBold',
     fontSize: 12,
     lineHeight: 16,
+    textAlignVertical: 'center',
   },
   inputWrapper: {
     borderRadius: radius.lg,

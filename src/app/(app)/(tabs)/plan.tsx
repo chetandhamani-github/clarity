@@ -734,7 +734,10 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
                                   },
                                 ]}
                               >
-                                <Text style={[styles.statusPillText, { color: statusColor }]}>
+                                <Text
+                                  style={[styles.statusPillText, { color: statusColor }]}
+                                  numberOfLines={1}
+                                >
                                   {isExceeded
                                     ? `+${formatCurrency(cat.spent - cat.limit)} over`
                                     : isWarning
@@ -761,6 +764,7 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
                                     styles.setCapBadgeText,
                                     { color: colors.onPrimaryContainer },
                                   ]}
+                                  numberOfLines={1}
                                 >
                                   Set Cap
                                 </Text>
@@ -801,7 +805,7 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
         onRequestClose={() => setCapModalVisible(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
           style={styles.modalBackdrop}
         >
           <TouchableOpacity
@@ -812,7 +816,10 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
           <View
             style={[
               styles.capModalContainer,
-              { backgroundColor: colors.surfaceContainerLowest },
+              {
+                backgroundColor: colors.surfaceContainerLowest,
+                paddingBottom: Math.max(insets.bottom, 24),
+              },
             ]}
           >
             {selectedCategoryForCap && (
@@ -1252,6 +1259,7 @@ const getStyles = (colors: ThemeColors) => {
       alignItems: 'center',
       gap: 12,
       flex: 1,
+      marginRight: 8,
     },
     categoryIconCircle: {
       width: 38,
@@ -1262,6 +1270,7 @@ const getStyles = (colors: ThemeColors) => {
     },
     categoryNameCol: {
       gap: 2,
+      flex: 1,
     },
     categoryNameText: {
       ...typography.labelMd,
@@ -1275,7 +1284,9 @@ const getStyles = (colors: ThemeColors) => {
     },
     categoryCardRight: {
       alignItems: 'flex-end',
+      justifyContent: 'center',
       gap: 4,
+      flexShrink: 0,
     },
     amountRow: {
       flexDirection: 'row',
@@ -1292,14 +1303,18 @@ const getStyles = (colors: ThemeColors) => {
     },
     statusPill: {
       paddingHorizontal: 8,
-      paddingVertical: 2,
+      paddingVertical: 3,
       borderRadius: 10,
       borderWidth: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      alignSelf: 'flex-end',
     },
     statusPillText: {
-      ...typography.labelMd,
-      fontSize: 10,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
+      fontSize: 11,
+      lineHeight: 15,
+      textAlignVertical: 'center',
     },
     setCapBadge: {
       flexDirection: 'row',
@@ -1308,11 +1323,13 @@ const getStyles = (colors: ThemeColors) => {
       paddingHorizontal: 8,
       paddingVertical: 3,
       borderRadius: 8,
+      alignSelf: 'flex-end',
     },
     setCapBadgeText: {
-      ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
       fontSize: 11,
-      fontWeight: '700',
+      lineHeight: 15,
+      textAlignVertical: 'center',
     },
     categoryProgressBarTrack: {
       height: 5,
@@ -1404,7 +1421,9 @@ const getStyles = (colors: ThemeColors) => {
     presetPillText: {
       ...typography.labelMd,
       fontSize: 12,
+      lineHeight: 16,
       fontWeight: '600',
+      textAlignVertical: 'center',
     },
     modalActionsRow: {
       flexDirection: 'row',

@@ -15,10 +15,12 @@ export function calculateSafeInsets(
 
   const bottom =
     insets.bottom > 0
-      ? insets.bottom
+      ? Math.max(insets.bottom, platform === 'android' ? 16 : 0)
       : platform === 'android'
-        ? 16
-        : 0;
+        ? 24
+        : platform === 'ios'
+          ? 20
+          : 0;
 
   return {
     ...insets,

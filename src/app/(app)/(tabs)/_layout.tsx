@@ -3,7 +3,7 @@ import { ThemeColors, typography, useTheme } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Tabs, useRouter } from 'expo-router';
 import { Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 
 const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   index: 'home',
@@ -16,17 +16,18 @@ const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const { colors } = useTheme();
   const styles = getStyles(colors);
+  const safeBottomPadding = Math.max(insets.bottom, Platform.OS === 'ios' ? 24 : 12);
 
   return (
-    <View style={[styles.tabBarContainer, { paddingBottom: insets.bottom }]}>
+    <View style={[styles.tabBarContainer, { paddingBottom: safeBottomPadding }]}>
       <View style={styles.tabBar}>
         {/* Floating Action Button for Add Transaction (hidden on Splitwise tab which has its own FAB) */}
         {state.routes[state.index]?.name !== 'splitwise' && (
           <TouchableOpacity
-            style={[styles.fab, { bottom: insets.bottom + 64 }]} // Float above the tab bar on the right
+            style={[styles.fab, { bottom: safeBottomPadding + 64 }]} // Float above the tab bar on the right
             onPress={() => {
               router.navigate('/add-transaction');
             }}

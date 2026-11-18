@@ -10,6 +10,8 @@ import {
   Modal,
   Platform,
   Linking,
+  KeyboardAvoidingView,
+  ScrollView,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -416,7 +418,7 @@ export function PersonDetailsScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 32 },
+          { paddingBottom: insets.bottom + 48 },
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -896,102 +898,108 @@ export function PersonDetailsScreen() {
         animationType="slide"
         onRequestClose={() => setShowEditPersonModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <KeyboardAwareScrollView
-            contentContainerStyle={styles.modalScrollContainer}
-            keyboardShouldPersistTaps="handled"
-            enableOnAndroid
-            showsVerticalScrollIndicator={false}
-            bounces={false}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdropTouch}
+            activeOpacity={1}
+            onPress={() => setShowEditPersonModal(false)}
+          />
+          <View
+            style={[
+              styles.modalContent,
+              {
+                backgroundColor: colors.surfaceContainerLowest,
+                borderColor: colors.outlineVariant,
+                paddingBottom: Math.max(insets.bottom, 24),
+              },
+            ]}
           >
-            <View
-              style={[
-                styles.modalContent,
-                {
-                  backgroundColor: colors.surfaceContainerLowest,
-                  borderColor: colors.outlineVariant,
-                  paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 40 : 24),
-                },
-              ]}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              bounces={false}
             >
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Edit Friend</Text>
-              <TouchableOpacity
-                onPress={() => setShowEditPersonModal(false)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
-              </TouchableOpacity>
-            </View>
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Edit Friend</Text>
+                <TouchableOpacity
+                  onPress={() => setShowEditPersonModal(false)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
+                </TouchableOpacity>
+              </View>
 
-            <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>Name *</Text>
-            <TextInput
-              style={[
-                styles.textInput,
-                {
-                  backgroundColor: colors.surfaceContainerLow,
-                  borderColor: colors.outlineVariant,
-                  color: colors.onSurface,
-                },
-              ]}
-              value={editName}
-              onChangeText={setEditName}
-              placeholder="Friend's name"
-              placeholderTextColor={colors.onSurfaceVariant}
-            />
+              <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>Name *</Text>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: colors.surfaceContainerLow,
+                    borderColor: colors.outlineVariant,
+                    color: colors.onSurface,
+                  },
+                ]}
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="Friend's name"
+                placeholderTextColor={colors.onSurfaceVariant}
+              />
 
-            <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>Phone Number</Text>
-            <TextInput
-              style={[
-                styles.textInput,
-                {
-                  backgroundColor: colors.surfaceContainerLow,
-                  borderColor: colors.outlineVariant,
-                  color: colors.onSurface,
-                },
-              ]}
-              value={editPhone}
-              onChangeText={setEditPhone}
-              placeholder="e.g. +91 98765 43210"
-              placeholderTextColor={colors.onSurfaceVariant}
-              keyboardType="phone-pad"
-            />
+              <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>Phone Number</Text>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: colors.surfaceContainerLow,
+                    borderColor: colors.outlineVariant,
+                    color: colors.onSurface,
+                  },
+                ]}
+                value={editPhone}
+                onChangeText={setEditPhone}
+                placeholder="e.g. +91 98765 43210"
+                placeholderTextColor={colors.onSurfaceVariant}
+                keyboardType="phone-pad"
+              />
 
-            <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>
-              Notes / Relation
-            </Text>
-            <TextInput
-              style={[
-                styles.textInput,
-                styles.notesAreaInput,
-                {
-                  backgroundColor: colors.surfaceContainerLow,
-                  borderColor: colors.outlineVariant,
-                  color: colors.onSurface,
-                },
-              ]}
-              value={editNotes}
-              onChangeText={setEditNotes}
-              placeholder="e.g. Roommate, Colleague, Trip buddy"
-              placeholderTextColor={colors.onSurfaceVariant}
-              multiline
-              numberOfLines={3}
-            />
-
-            <TouchableOpacity
-              style={[styles.submitBtn, { backgroundColor: colors.primary }]}
-              onPress={handleSaveEditPerson}
-              disabled={isSubmitting}
-              activeOpacity={0.85}
-            >
-              <Text style={[styles.submitBtnText, { color: colors.onPrimary }]}>
-                {isSubmitting ? 'Saving...' : 'Save Changes'}
+              <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>
+                Notes / Relation
               </Text>
-            </TouchableOpacity>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  styles.notesAreaInput,
+                  {
+                    backgroundColor: colors.surfaceContainerLow,
+                    borderColor: colors.outlineVariant,
+                    color: colors.onSurface,
+                  },
+                ]}
+                value={editNotes}
+                onChangeText={setEditNotes}
+                placeholder="e.g. Roommate, Colleague, Trip buddy"
+                placeholderTextColor={colors.onSurfaceVariant}
+                multiline
+                numberOfLines={3}
+              />
+
+              <TouchableOpacity
+                style={[styles.submitBtn, { backgroundColor: colors.primary }]}
+                onPress={handleSaveEditPerson}
+                disabled={isSubmitting}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.submitBtnText, { color: colors.onPrimary }]}>
+                  {isSubmitting ? 'Saving...' : 'Save Changes'}
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
-        </KeyboardAwareScrollView>
-      </View>
-    </Modal>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* EDIT DEBT MODAL */}
       <Modal
@@ -1000,23 +1008,29 @@ export function PersonDetailsScreen() {
         animationType="slide"
         onRequestClose={() => setEditingDebt(null)}
       >
-        <View style={styles.modalOverlay}>
-          <KeyboardAwareScrollView
-            contentContainerStyle={styles.modalScrollContainer}
-            keyboardShouldPersistTaps="handled"
-            enableOnAndroid
-            showsVerticalScrollIndicator={false}
-            bounces={false}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdropTouch}
+            activeOpacity={1}
+            onPress={() => setEditingDebt(null)}
+          />
+          <View
+            style={[
+              styles.modalContent,
+              {
+                backgroundColor: colors.surfaceContainerLowest,
+                borderColor: colors.outlineVariant,
+                paddingBottom: Math.max(insets.bottom, 24),
+              },
+            ]}
           >
-            <View
-              style={[
-                styles.modalContent,
-                {
-                  backgroundColor: colors.surfaceContainerLowest,
-                  borderColor: colors.outlineVariant,
-                  paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 40 : 24),
-                },
-              ]}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              bounces={false}
             >
               <View style={styles.modalHeader}>
                 <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Edit Expense</Text>
@@ -1071,9 +1085,9 @@ export function PersonDetailsScreen() {
                   {isSubmitting ? 'Saving...' : 'Save Changes'}
                 </Text>
               </TouchableOpacity>
-            </View>
-          </KeyboardAwareScrollView>
-        </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -1230,12 +1244,15 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     marginTop: 6,
     flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statusBadgeText: {
     ...typography.labelMd,
     fontFamily: 'Manrope_700Bold',
     fontSize: 12,
     lineHeight: 16,
+    textAlignVertical: 'center',
   },
   breakdownDivider: {
     height: 1,
@@ -1414,17 +1431,17 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
-  },
-  modalScrollContainer: {
-    flexGrow: 1,
     justifyContent: 'flex-end',
+  },
+  modalBackdropTouch: {
+    flex: 1,
   },
   modalContent: {
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     borderWidth: 1,
     padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',

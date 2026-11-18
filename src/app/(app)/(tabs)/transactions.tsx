@@ -268,7 +268,16 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
     ({ item: tx, index, section }: any) => {
       const isLastInSection = index === section.data.length - 1;
       const isVeryLast = section.isLast && isLastInSection;
-      const sign = getTransactionSign(tx.type);
+      const isIncomingTransfer =
+        Boolean(filters.accountId) && tx.type === 'transfer' && tx.toAccountId === filters.accountId;
+      const isOutgoingTransfer =
+        Boolean(filters.accountId) && tx.type === 'transfer' && tx.accountId === filters.accountId;
+      const isCredit = tx.type === 'income' || isIncomingTransfer;
+      const sign = isCredit
+        ? '+'
+        : isOutgoingTransfer || tx.type === 'expense'
+        ? '-'
+        : getTransactionSign(tx.type);
       const hasMerchant = hasMeaningfulMerchant(tx);
       const title = getTransactionDisplayName(tx);
       const subtitle =
@@ -312,13 +321,13 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
             <View
               style={[
                 styles.transactionIconBox,
-                tx.type === 'income' ? { backgroundColor: colors.primaryContainer } : undefined,
+                isCredit ? { backgroundColor: colors.primaryContainer } : undefined,
               ]}
             >
               <MaterialIcons
                 name={getCategoryIcon(tx.category)}
                 size={20}
-                color={tx.type === 'income' ? colors.onPrimaryContainer : colors.onSurfaceVariant}
+                color={isCredit ? colors.onPrimaryContainer : colors.onSurfaceVariant}
               />
             </View>
             <View style={{ flex: 1, justifyContent: 'center' }}>
@@ -334,7 +343,7 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
             <Text
               style={[
                 styles.transactionAmount,
-                tx.type === 'income' ? { color: colors.primary } : undefined,
+                isCredit ? { color: colors.primary } : undefined,
               ]}
             >
               {sign}

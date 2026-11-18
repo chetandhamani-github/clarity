@@ -3,7 +3,7 @@ import { View, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } fro
 import { Text, Header, useAlert, useToast } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter } from 'expo-router';
 import {
   getExportStats,
@@ -16,7 +16,7 @@ import {
 export default function ExportSuccessScreen() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const router = useRouter();
   const { showAlert } = useAlert();
   const { showToast } = useToast();
@@ -65,7 +65,7 @@ export default function ExportSuccessScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 24 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.subtitle}>

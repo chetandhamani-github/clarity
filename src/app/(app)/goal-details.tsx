@@ -158,7 +158,7 @@ export default function GoalDetailsScreen() {
       {goal && (
         <KeyboardAwareScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 48 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           enableOnAndroid={true}

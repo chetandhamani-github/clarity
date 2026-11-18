@@ -4,7 +4,7 @@ import { Text, Header, ListSkeleton } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useMonthlyReports } from '@/hooks/use-transactions';
 import { formatCurrency } from '@/utils/format';
 
@@ -12,7 +12,7 @@ export default function ReportsScreen() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const { reports, isLoading } = useMonthlyReports();
 
   const getMonthName = (datePrefix: string) => {

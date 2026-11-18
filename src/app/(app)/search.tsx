@@ -12,7 +12,7 @@ import { Text, Header, ListSkeleton } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useTransactions } from '@/hooks/use-transactions';
 import { formatCurrency, getTransactionSign, groupTransactionsByDate } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
@@ -36,7 +36,7 @@ export default function SearchScreen() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
