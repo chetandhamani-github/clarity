@@ -3,7 +3,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { Text } from './Text';
 
 export interface ToastAction {
@@ -36,7 +36,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
 
   const showToast = useCallback(
     (message: string, type: ToastType = 'info', action?: ToastAction) => {

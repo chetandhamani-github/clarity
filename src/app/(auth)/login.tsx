@@ -8,6 +8,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
@@ -41,6 +42,7 @@ function GoogleIcon({ size = 18 }: { size?: number }) {
 
 export default function LoginScreen() {
   const { colors, theme } = useTheme();
+  const insets = useSafeInsets();
   const { signInWithGoogle, isLoading } = useAuthStore();
   const { setOnboarded } = useAppStore();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -82,7 +84,7 @@ export default function LoginScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 24) }]}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >

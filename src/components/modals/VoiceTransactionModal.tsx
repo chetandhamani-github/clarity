@@ -7,6 +7,7 @@ import {
 } from '@/services/voice/speech-recognition';
 import { ParsedVoiceTransaction, parseVoiceTranscript, UserAccountRef } from '@/services/voice/voice-parser';
 import { ThemeColors, typography, useTheme } from '@/theme';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { getCurrencySymbol } from '@/utils/format';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
@@ -40,6 +41,7 @@ export function VoiceTransactionModal({
 }: VoiceTransactionModalProps) {
   const { colors } = useTheme();
   const styles = getStyles(colors);
+  const insets = useSafeInsets();
 
   const [inputPhrase, setInputPhrase] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -292,9 +294,7 @@ export function VoiceTransactionModal({
               paddingBottom:
                 keyboardHeight > 0
                   ? keyboardHeight + 16
-                  : Platform.OS === 'ios'
-                  ? 36
-                  : 24,
+                  : Math.max(insets.bottom, 24) + 12,
             },
           ]}
         >
