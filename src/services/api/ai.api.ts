@@ -47,12 +47,23 @@ export async function chatWithFinancialCopilot(
   payload: AiChatPayload
 ): Promise<AiChatResult> {
   const installationId = getInstallationId();
-  return apiClient.post<AiChatResult>('/api/v1/ai/chat', payload, {
-    headers: {
-      'X-Installation-Id': installationId,
-    },
-    timeoutMs: 15000,
+  console.log('[ai.api] chatWithFinancialCopilot called:', {
+    payload,
+    installationId,
   });
+  try {
+    const result = await apiClient.post<AiChatResult>('/api/v1/ai/chat', payload, {
+      headers: {
+        'X-Installation-Id': installationId,
+      },
+      timeoutMs: 15000,
+    });
+    console.log('[ai.api] chatWithFinancialCopilot result:', result);
+    return result;
+  } catch (error) {
+    console.error('[ai.api] chatWithFinancialCopilot failed:', error);
+    throw error;
+  }
 }
 
 /**

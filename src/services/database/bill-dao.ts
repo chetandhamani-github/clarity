@@ -290,13 +290,6 @@ export async function markBillAsPaid(
     throw new Error(`Bill not found: ${id}`);
   }
 
-  await db.runAsync(
-    `UPDATE bill_reminders 
-     SET status = 'PAID', paid_date = ?, paid_transaction_id = ? 
-     WHERE id = ?`,
-    [effectivePaidDate, paidTransactionId || null, id]
-  );
-
   const updatedBill: BillReminder = {
     ...current,
     status: 'PAID',
@@ -306,32 +299,47 @@ export async function markBillAsPaid(
 
   let nextBill: BillReminder | undefined;
 
-  // Auto-schedule next cycle if recurring
-  if (current.repeatFrequency && current.repeatFrequency !== 'one_time') {
-    const nextDueDate = calculateNextDate(
-      current.dueDate,
-      current.repeatFrequency === 'quarterly' ? 'monthly' : (current.repeatFrequency as any)
+  const executeSettle = async () => {
+    await db.runAsync(
+      `UPDATE bill_reminders 
+       SET status = 'PAID', paid_date = ?, paid_transaction_id = ? 
+       WHERE id = ?`,
+      [effectivePaidDate, paidTransactionId || null, id]
     );
 
-    // If quarterly, advance 3 months
-    const actualNextDueDate =
-      current.repeatFrequency === 'quarterly'
-        ? calculateNextDate(calculateNextDate(nextDueDate, 'monthly'), 'monthly')
-        : nextDueDate;
+    // Auto-schedule next cycle if recurring
+    if (current.repeatFrequency && current.repeatFrequency !== 'one_time') {
+      const nextDueDate = calculateNextDate(
+        current.dueDate,
+        current.repeatFrequency === 'quarterly' ? 'monthly' : (current.repeatFrequency as any)
+      );
 
-    nextBill = await insertBill({
-      source: current.source,
-      billerName: current.billerName,
-      billerCategory: current.billerCategory,
-      amountDue: current.amountDue,
-      minAmountDue: current.minAmountDue,
-      dueDate: actualNextDueDate,
-      repeatFrequency: current.repeatFrequency,
-      accountReference: current.accountReference,
-      reminderDaysBefore: current.reminderDaysBefore,
-      paymentUrl: current.paymentUrl,
-      note: current.note,
-    });
+      // If quarterly, advance 3 months
+      const actualNextDueDate =
+        current.repeatFrequency === 'quarterly'
+          ? calculateNextDate(calculateNextDate(nextDueDate, 'monthly'), 'monthly')
+          : nextDueDate;
+
+      nextBill = await insertBill({
+        source: current.source,
+        billerName: current.billerName,
+        billerCategory: current.billerCategory,
+        amountDue: current.amountDue,
+        minAmountDue: current.minAmountDue,
+        dueDate: actualNextDueDate,
+        repeatFrequency: current.repeatFrequency,
+        accountReference: current.accountReference,
+        reminderDaysBefore: current.reminderDaysBefore,
+        paymentUrl: current.paymentUrl,
+        note: current.note,
+      });
+    }
+  };
+
+  if (typeof db.withTransactionAsync === 'function') {
+    await db.withTransactionAsync(executeSettle);
+  } else {
+    await executeSettle();
   }
 
   DeviceEventEmitter.emit('billsUpdated');

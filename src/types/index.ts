@@ -8,6 +8,7 @@ export interface Account {
   sortOrder?: number;
   billingCycleDay?: number;
   dueDay?: number;
+  creditLimit?: number;
   createdAt: string;
   updatedAt?: string;
 }

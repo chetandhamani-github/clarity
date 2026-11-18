@@ -19,6 +19,7 @@ interface AccountRow {
   sort_order?: number;
   billing_cycle_day?: number | null;
   due_day?: number | null;
+  credit_limit?: number | null;
   created_at: string;
   updated_at?: string;
 }
@@ -34,6 +35,7 @@ function mapRow(row: AccountRow): Account {
     sortOrder: row.sort_order ?? 0,
     billingCycleDay: row.billing_cycle_day ?? undefined,
     dueDay: row.due_day ?? undefined,
+    creditLimit: row.credit_limit ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
   };
@@ -69,8 +71,8 @@ export async function insertAccount(data: Omit<Account, 'id' | 'createdAt'>): Pr
   }
 
   await db.runAsync(
-    `INSERT INTO accounts (id, name, type, balance, institution, last_four, sort_order, billing_cycle_day, due_day, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO accounts (id, name, type, balance, institution, last_four, sort_order, billing_cycle_day, due_day, credit_limit, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       data.name,
@@ -81,6 +83,7 @@ export async function insertAccount(data: Omit<Account, 'id' | 'createdAt'>): Pr
       sortOrder,
       data.billingCycleDay ?? null,
       data.dueDay ?? null,
+      data.creditLimit ?? null,
       now,
       updatedAt,
     ]
@@ -144,6 +147,10 @@ export async function updateAccount(
     sets.push('due_day = ?');
     params.push(data.dueDay);
   }
+  if (data.creditLimit !== undefined) {
+    sets.push('credit_limit = ?');
+    params.push(data.creditLimit);
+  }
 
   if (sets.length === 0) return;
 
@@ -157,8 +164,7 @@ export async function updateAccount(
 
 export async function updateAccountsOrder(orderedIds: string[]): Promise<void> {
   const db = getDatabase();
-  await db.execAsync('BEGIN TRANSACTION');
-  try {
+  const executeOrderUpdate = async () => {
     const now = new Date().toISOString();
     for (let i = 0; i < orderedIds.length; i++) {
       await db.runAsync('UPDATE accounts SET sort_order = ?, updated_at = ? WHERE id = ?', [
@@ -167,17 +173,25 @@ export async function updateAccountsOrder(orderedIds: string[]): Promise<void> {
         orderedIds[i],
       ]);
     }
-    await db.execAsync('COMMIT');
-  } catch (error) {
-    await db.execAsync('ROLLBACK');
-    throw error;
+  };
+
+  if (typeof db.withTransactionAsync === 'function') {
+    await db.withTransactionAsync(executeOrderUpdate);
+  } else {
+    await db.execAsync('BEGIN TRANSACTION');
+    try {
+      await executeOrderUpdate();
+      await db.execAsync('COMMIT');
+    } catch (error) {
+      await db.execAsync('ROLLBACK');
+      throw error;
+    }
   }
 }
 
 export async function deleteAccount(id: string): Promise<void> {
   const db = getDatabase();
-  await db.execAsync('BEGIN TRANSACTION');
-  try {
+  const executeDelete = async () => {
     // 1. Revert and clean up goal contributions linked to this account's transactions
     const contributions = await db.getAllAsync<{ id: string; goal_id: string; amount: number }>(
       `SELECT gc.id, gc.goal_id, gc.amount 
@@ -197,10 +211,19 @@ export async function deleteAccount(id: string): Promise<void> {
     await db.runAsync('UPDATE transactions SET to_account_id = NULL WHERE to_account_id = ?', [id]);
     await db.runAsync('DELETE FROM recurring_transactions WHERE to_account_id = ? OR account_id = ?', [id, id]);
     await db.runAsync('DELETE FROM accounts WHERE id = ?', [id]);
-    await db.execAsync('COMMIT');
-  } catch (error) {
-    await db.execAsync('ROLLBACK');
-    throw error;
+  };
+
+  if (typeof db.withTransactionAsync === 'function') {
+    await db.withTransactionAsync(executeDelete);
+  } else {
+    await db.execAsync('BEGIN TRANSACTION');
+    try {
+      await executeDelete();
+      await db.execAsync('COMMIT');
+    } catch (error) {
+      await db.execAsync('ROLLBACK');
+      throw error;
+    }
   }
 }
 

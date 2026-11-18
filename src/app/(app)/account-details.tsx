@@ -184,6 +184,34 @@ export default function AccountDetailsScreen() {
     };
   }, [account]);
 
+  const creditUtilizationInfo = useMemo(() => {
+    if (account?.type !== 'credit') return null;
+    const limit = account.creditLimit;
+    const spent = Math.abs(account.balance);
+    if (!limit || limit <= 0) {
+      return {
+        hasLimit: false,
+        limit: 0,
+        spent,
+        available: 0,
+        utilizationPercent: 0,
+        status: 'none' as const,
+      };
+    }
+    const utilizationPercent = Math.min(100, Math.max(0, (spent / limit) * 100));
+    const available = Math.max(0, limit - spent);
+    const status =
+      utilizationPercent >= 80 ? 'danger' : utilizationPercent > 30 ? 'warning' : 'safe';
+    return {
+      hasLimit: true,
+      limit,
+      spent,
+      available,
+      utilizationPercent,
+      status,
+    };
+  }, [account]);
+
   const screenWidth = Dimensions.get('window').width;
   const chartWidth = screenWidth - 88;
   const branding = account ? getBankBranding(account.institution || account.name) : null;
@@ -471,6 +499,147 @@ export default function AccountDetailsScreen() {
                     </Text>
                   </TouchableOpacity>
                 )}
+
+                {/* Credit Limit & Utilization */}
+                <View
+                  style={{
+                    marginTop: 8,
+                    paddingTop: 12,
+                    borderTopWidth: 1,
+                    borderTopColor: colors.outlineVariant,
+                    gap: 8,
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <Text style={{ ...typography.labelMd, color: colors.onSurface, fontWeight: '600' }}>
+                      Credit Utilization
+                    </Text>
+                    {creditUtilizationInfo?.hasLimit && (
+                      <View
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 2,
+                          borderRadius: 12,
+                          backgroundColor:
+                            creditUtilizationInfo.status === 'danger'
+                              ? colors.errorContainer
+                              : creditUtilizationInfo.status === 'warning'
+                              ? colors.surfaceContainerHighest
+                              : colors.primaryContainer,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            ...typography.labelMd,
+                            fontWeight: '700',
+                            color:
+                              creditUtilizationInfo.status === 'danger'
+                                ? colors.onErrorContainer
+                                : creditUtilizationInfo.status === 'warning'
+                                ? colors.onSurface
+                                : colors.onPrimaryContainer,
+                          }}
+                        >
+                          {Math.round(creditUtilizationInfo.utilizationPercent)}% Used
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {creditUtilizationInfo?.hasLimit ? (
+                    <View style={{ gap: 8 }}>
+                      {/* Utilization Progress Bar */}
+                      <View
+                        style={{
+                          height: 6,
+                          backgroundColor: colors.surfaceContainerHighest,
+                          borderRadius: 3,
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <View
+                          style={{
+                            height: '100%',
+                            width: `${creditUtilizationInfo.utilizationPercent}%`,
+                            backgroundColor:
+                              creditUtilizationInfo.status === 'danger'
+                                ? colors.error
+                                : creditUtilizationInfo.status === 'warning'
+                                ? colors.tertiary || colors.primary
+                                : colors.primary,
+                            borderRadius: 3,
+                          }}
+                        />
+                      </View>
+
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Text style={{ ...typography.bodyMd, fontSize: 12, color: colors.onSurfaceVariant }}>
+                          Spent:{' '}
+                          <Text style={{ fontWeight: '600', color: colors.onSurface }}>
+                            {formatCurrency(creditUtilizationInfo.spent)}
+                          </Text>
+                        </Text>
+                        <Text style={{ ...typography.bodyMd, fontSize: 12, color: colors.onSurfaceVariant }}>
+                          Available:{' '}
+                          <Text style={{ fontWeight: '600', color: colors.onSurface }}>
+                            {formatCurrency(creditUtilizationInfo.available)}
+                          </Text>
+                        </Text>
+                        <Text style={{ ...typography.bodyMd, fontSize: 12, color: colors.onSurfaceVariant }}>
+                          Limit:{' '}
+                          <Text style={{ fontWeight: '600', color: colors.onSurface }}>
+                            {formatCurrency(creditUtilizationInfo.limit)}
+                          </Text>
+                        </Text>
+                      </View>
+
+                      {creditUtilizationInfo.status === 'danger' && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                          <MaterialIcons name="warning" size={14} color={colors.error} />
+                          <Text
+                            style={{
+                              ...typography.bodyMd,
+                              fontSize: 11,
+                              color: colors.error,
+                              fontWeight: '500',
+                            }}
+                          >
+                            Utilization is above 80%. Pay down balance to safeguard your credit score.
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 }}
+                      onPress={() => router.navigate(`/(app)/add-account?id=${account.id}`)}
+                    >
+                      <MaterialIcons name="tune" size={16} color={colors.primary} />
+                      <Text
+                        style={{
+                          ...typography.bodyMd,
+                          fontSize: 12,
+                          color: colors.primary,
+                          fontWeight: '500',
+                        }}
+                      >
+                        Set card limit to track credit utilization & score safety
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             )}
 

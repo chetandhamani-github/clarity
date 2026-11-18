@@ -13,6 +13,7 @@ export default function AppLayout() {
       }}
     >
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="copilot" />
       <Stack.Screen name="bills" />
       <Stack.Screen name="bill-details" />
       <Stack.Screen name="splitwise" />

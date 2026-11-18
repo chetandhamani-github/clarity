@@ -1,4 +1,5 @@
 import type {
+    Account,
     MonthlyTotals,
     Transaction,
     TransactionFilters,
@@ -158,7 +159,7 @@ export async function insertTransaction(
   const newBalance = Math.round((account.balance + balanceChange) * 100) / 100;
   const shouldUpdateAccountBalance = options.updateAccountBalance !== false;
 
-  let toAccount;
+  let toAccount: Account | null = null;
   if (data.type === 'transfer') {
     if (!data.toAccountId) throw new Error('Transfer missing destination account');
     toAccount = await getAccountById(data.toAccountId);
@@ -169,9 +170,8 @@ export async function insertTransaction(
   const status: TransactionStatus =
     data.status || (source === 'MANUAL' ? 'PENDING_MATCH' : 'VERIFIED');
 
-  // 2. Insert transaction and update account balance in a transaction
-  await db.execAsync('BEGIN TRANSACTION');
-  try {
+  // 2. Insert transaction and update account balance atomically
+  const executeInsert = async () => {
     await db.runAsync(
       `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, to_account_id, splits_json, source, status, sms_id, parsed_tx_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -208,11 +208,19 @@ export async function insertTransaction(
         data.toAccountId,
       ]);
     }
+  };
 
-    await db.execAsync('COMMIT');
-  } catch (error) {
-    await db.execAsync('ROLLBACK');
-    throw error;
+  if (typeof db.withTransactionAsync === 'function') {
+    await db.withTransactionAsync(executeInsert);
+  } else {
+    await db.execAsync('BEGIN TRANSACTION');
+    try {
+      await executeInsert();
+      await db.execAsync('COMMIT');
+    } catch (error) {
+      await db.execAsync('ROLLBACK');
+      throw error;
+    }
   }
 
   // Trigger auto-settlement for unpaid bills if this is an expense
@@ -255,8 +263,7 @@ export async function updateTransaction(
 
   const oldAccount = await getAccountById(oldTx.account_id);
 
-  await db.execAsync('BEGIN TRANSACTION');
-  try {
+  const executeUpdate = async () => {
     // 2. Revert old transaction's effect on old account
     if (oldAccount) {
       let balanceRevert = 0;
@@ -394,11 +401,19 @@ export async function updateTransaction(
         }
       }
     }
+  };
 
-    await db.execAsync('COMMIT');
-  } catch (error) {
-    await db.execAsync('ROLLBACK');
-    throw error;
+  if (typeof db.withTransactionAsync === 'function') {
+    await db.withTransactionAsync(executeUpdate);
+  } else {
+    await db.execAsync('BEGIN TRANSACTION');
+    try {
+      await executeUpdate();
+      await db.execAsync('COMMIT');
+    } catch (error) {
+      await db.execAsync('ROLLBACK');
+      throw error;
+    }
   }
 }
 
@@ -411,8 +426,7 @@ export async function deleteTransaction(id: string): Promise<void> {
 
   const account = await getAccountById(tx.account_id);
 
-  await db.execAsync('BEGIN TRANSACTION');
-  try {
+  const executeDelete = async () => {
     // 1. Revert transaction's effect on account
     if (account) {
       let balanceRevert = 0;
@@ -454,11 +468,19 @@ export async function deleteTransaction(id: string): Promise<void> {
 
     // 3. Delete the transaction
     await db.runAsync('DELETE FROM transactions WHERE id = ?', [id]);
+  };
 
-    await db.execAsync('COMMIT');
-  } catch (error) {
-    await db.execAsync('ROLLBACK');
-    throw error;
+  if (typeof db.withTransactionAsync === 'function') {
+    await db.withTransactionAsync(executeDelete);
+  } else {
+    await db.execAsync('BEGIN TRANSACTION');
+    try {
+      await executeDelete();
+      await db.execAsync('COMMIT');
+    } catch (error) {
+      await db.execAsync('ROLLBACK');
+      throw error;
+    }
   }
 }
 

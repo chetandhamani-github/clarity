@@ -58,14 +58,15 @@
     "jest": "^29.7.0",
     "jest-expo": "^57.0.4",
     "prettier": "^3.9.6",
+    "reactotron-react-native": "^5.3.1",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.67.0"
   },
   "scripts": {
     "start": "expo start",
-    "reverse": "adb reverse tcp:8080 tcp:8080 && adb reverse tcp:8081 tcp:8081",
+    "reverse": "adb reverse tcp:8080 tcp:8080 && adb reverse tcp:8081 tcp:8081 && adb reverse tcp:9090 tcp:9090",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "adb reverse tcp:8080 tcp:8080 2>/dev/null || true; expo run:android",
+    "android": "adb reverse tcp:8080 tcp:8080 2>/dev/null || true; adb reverse tcp:9090 tcp:9090 2>/dev/null || true; expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "build:android": "expo run:android",

@@ -197,19 +197,29 @@ public class AiServiceImpl implements AiService {
     public AiChatResponse chat(AiChatRequest request) {
         String msg = request.getMessage();
         String context = request.getFinancialContextSummary() != null ? request.getFinancialContextSummary() : "";
+        boolean geminiConfigured = hasGeminiKey();
+
+        log.info("[AiService] Chat request received: message='{}', geminiKeyConfigured={}, contextLength={}",
+                msg, geminiConfigured, context.length());
 
         // If Gemini is configured, generate natural conversational answer
-        if (hasGeminiKey()) {
+        if (geminiConfigured) {
+            log.info("[AiService] Attempting Gemini generative chat...");
             String prompt = "You are Clarity AI, a private personal finance assistant. Answer concisely in 2-3 sentences based on context.\n" +
                     "Context: " + context + "\nUser question: " + msg;
             String answer = callGemini(prompt, null, null);
             if (answer != null && !answer.trim().isEmpty()) {
                 String action = deriveSuggestedAction(msg);
+                log.info("[AiService] Gemini chat successfully generated response (action={})", action);
                 return AiChatResponse.builder()
                         .reply(answer.trim())
                         .suggestedAction(action)
                         .build();
+            } else {
+                log.warn("[AiService] Gemini response was null/empty; falling back to rule-based engine.");
             }
+        } else {
+            log.info("[AiService] No Gemini API key provided; using rule-based financial copilot fallback.");
         }
 
         // Rule-based fallback
@@ -233,6 +243,8 @@ public class AiServiceImpl implements AiService {
             reply = "I'm Clarity's AI Copilot! I can analyze your spending patterns, track recurring bills, and help you reach your savings targets while keeping your data private.";
             action = "/(app)/(tabs)/index";
         }
+
+        log.info("[AiService] Rule-based fallback response generated (action={})", action);
 
         return AiChatResponse.builder()
                 .reply(reply)
@@ -286,11 +298,16 @@ public class AiServiceImpl implements AiService {
     }
 
     private String callGemini(String prompt, String imageBase64, String mimeType) {
-        if (!hasGeminiKey()) return null;
+        if (!hasGeminiKey()) {
+            log.warn("[AiService] callGemini called, but geminiApiKey is missing or empty.");
+            return null;
+        }
 
         try {
+            String activeModel = geminiModel != null && !geminiModel.isEmpty() ? geminiModel : "gemini-1.5-flash";
+            log.info("[AiService] Invoking Gemini API with model='{}'...", activeModel);
             String url = "https://generativelanguage.googleapis.com/v1beta/models/"
-                    + (geminiModel != null && !geminiModel.isEmpty() ? geminiModel : "gemini-1.5-flash")
+                    + activeModel
                     + ":generateContent?key=" + geminiApiKey.trim();
 
             Map<String, Object> requestBody = new HashMap<>();
@@ -335,6 +352,7 @@ public class AiServiceImpl implements AiService {
             HttpRequest httpRequest = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("Content-Type", "application/json")
+                    .header("x-goog-api-key", geminiApiKey.trim())
                     .timeout(Duration.ofSeconds(25))
                     .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
                     .build();
@@ -346,13 +364,16 @@ public class AiServiceImpl implements AiService {
                 JsonNode candidates = root.path("candidates");
                 if (candidates.isArray() && !candidates.isEmpty()) {
                     JsonNode textNode = candidates.get(0).path("content").path("parts").get(0).path("text");
+                    log.info("[AiService] Gemini API call successful (200 OK)");
                     return textNode.asText();
+                } else {
+                    log.warn("[AiService] Gemini response had 200 OK but no valid candidates in JSON: {}", response.body());
                 }
             } else {
-                log.warn("Gemini API returned status {}: {}", response.statusCode(), response.body());
+                log.warn("[AiService] Gemini API returned status {}: {}", response.statusCode(), response.body());
             }
         } catch (Exception e) {
-            log.warn("Failed to invoke Gemini API: {}", e.getMessage());
+            log.error("[AiService] Failed to invoke Gemini API: {}", e.getMessage(), e);
         }
         return null;
     }

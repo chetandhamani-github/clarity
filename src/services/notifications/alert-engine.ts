@@ -240,6 +240,27 @@ export async function checkUpcomingBillReminders(): Promise<void> {
         DeviceEventEmitter.emit('notificationsUpdated');
       }
     }
+
+    // Evaluate credit card utilization & due dates
+    const creditAccounts = await db.getAllAsync<{
+      id: string;
+      name: string;
+      type: string;
+      balance: number;
+      credit_limit: number | null;
+      due_day: number | null;
+    }>("SELECT id, name, type, balance, credit_limit, due_day FROM accounts WHERE type = 'credit'");
+
+    for (const acc of creditAccounts) {
+      await evaluateAccountBalanceAlerts({
+        id: acc.id,
+        name: acc.name,
+        type: acc.type,
+        balance: acc.balance,
+        creditLimit: acc.credit_limit ?? undefined,
+        dueDay: acc.due_day ?? undefined,
+      });
+    }
   } catch {
     // Error checking upcoming bill reminders
   }
@@ -296,12 +317,79 @@ export async function evaluateAccountBalanceAlerts(account: {
   name: string;
   type: string;
   balance: number;
+  creditLimit?: number;
+  dueDay?: number;
 }): Promise<void> {
   try {
     const db = getDatabase();
 
     if (account.type === 'credit') {
-      // For credit cards, negative balance usually represents money owed or debt
+      let limit = account.creditLimit;
+      let paymentDueDay = account.dueDay;
+      if (limit === undefined || paymentDueDay === undefined) {
+        const row = await db.getFirstAsync<{ credit_limit: number | null; due_day: number | null }>(
+          'SELECT credit_limit, due_day FROM accounts WHERE id = ?',
+          [account.id]
+        );
+        if (limit === undefined) limit = row?.credit_limit ?? undefined;
+        if (paymentDueDay === undefined) paymentDueDay = row?.due_day ?? undefined;
+      }
+
+      // 1. Credit Card High Utilization Warning (>=80%)
+      if (limit && limit > 0) {
+        const spent = Math.abs(account.balance);
+        const utilization = (spent / limit) * 100;
+
+        if (utilization >= 80) {
+          const existingAlert = await db.getFirstAsync<{ id: string }>(
+            `SELECT id FROM notifications 
+             WHERE type = 'alert' AND title LIKE ? AND created_at >= date('now', '-2 days')`,
+            [`%High Credit Utilization: ${account.name}%`]
+          );
+
+          if (!existingAlert) {
+            await insertNotification({
+              title: `High Credit Utilization: ${account.name}`,
+              description: `You have used ${Math.round(utilization)}% (${formatCurrency(spent)} of ${formatCurrency(limit)}) of your credit limit. Keep utilization under 30% to maintain a strong credit score.`,
+              type: 'alert',
+              actionUrl: '/(app)/(tabs)/accounts',
+            });
+            DeviceEventEmitter.emit('notificationsUpdated');
+          }
+        }
+      }
+
+      // 2. Credit Card Payment Due Warning
+      if (paymentDueDay && account.balance < 0) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const year = today.getFullYear();
+        const month = today.getMonth();
+        let nextDueDate = new Date(year, month, paymentDueDay);
+        if (nextDueDate < today) {
+          nextDueDate = new Date(year, month + 1, paymentDueDay);
+        }
+        const daysUntilDue = Math.ceil((nextDueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (daysUntilDue <= 3) {
+          const existingDueAlert = await db.getFirstAsync<{ id: string }>(
+            `SELECT id FROM notifications 
+             WHERE type = 'alert' AND title LIKE ? AND created_at >= date('now', '-2 days')`,
+            [`%Credit Card Due: ${account.name}%`]
+          );
+
+          if (!existingDueAlert) {
+            await insertNotification({
+              title: `Credit Card Due: ${account.name}`,
+              description: `Payment of ${formatCurrency(Math.abs(account.balance))} is due ${daysUntilDue === 0 ? 'today' : `in ${daysUntilDue} day${daysUntilDue > 1 ? 's' : ''}`}.`,
+              type: 'alert',
+              actionUrl: '/(app)/(tabs)/accounts',
+            });
+            DeviceEventEmitter.emit('notificationsUpdated');
+          }
+        }
+      }
+
       return;
     }
 

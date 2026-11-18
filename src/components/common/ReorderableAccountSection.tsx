@@ -1,19 +1,19 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { Text } from '@/components/ui';
+import { useReorderAccounts } from '@/hooks/use-accounts';
+import { ThemeColors, typography, useTheme } from '@/theme';
+import type { Account } from '@/types';
+import { formatCurrencyWholePrivacy } from '@/utils/format';
+import { getAccountTypeIcon, getBankBranding } from '@/utils/icons';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useEffect, useRef, useState } from 'react';
 import {
-  View,
+  Animated,
+  GestureResponderEvent,
   StyleSheet,
   TouchableOpacity,
-  Animated,
   Vibration,
-  GestureResponderEvent,
+  View,
 } from 'react-native';
-import { Text } from '@/components/ui';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useTheme, ThemeColors, typography } from '@/theme';
-import { getAccountTypeIcon, getBankBranding } from '@/utils/icons';
-import { formatCurrencyWholePrivacy } from '@/utils/format';
-import { useReorderAccounts } from '@/hooks/use-accounts';
-import type { Account } from '@/types';
 
 interface ReorderableAccountSectionProps {
   title: string;
@@ -127,8 +127,12 @@ export function ReorderableAccountSection({
       posAnims.current[activeId].setValue(clampedPos);
     }
 
-    const rawTarget = Math.round(clampedPos / ROW_SLOT);
-    const targetSlot = Math.max(0, Math.min(orderRef.current.length - 1, rawTarget));
+    const from = dragIndexRef.current;
+    const slotShift =
+      dy > 0
+        ? Math.floor((dy + ROW_SLOT * 0.65) / ROW_SLOT)
+        : Math.ceil((dy - ROW_SLOT * 0.65) / ROW_SLOT);
+    const targetSlot = Math.max(0, Math.min(orderRef.current.length - 1, from + slotShift));
 
     if (targetSlot !== hoverIndexRef.current) {
       hoverIndexRef.current = targetSlot;
@@ -161,9 +165,6 @@ export function ReorderableAccountSection({
 
   const handleDragEnd = () => {
     if (!isDraggingRef.current || dragIndexRef.current === null) {
-      isDraggingRef.current = false;
-      setActiveDragId(null);
-      onDragStateChange?.(false);
       return;
     }
 
@@ -173,6 +174,27 @@ export function ReorderableAccountSection({
     const targetY = to * ROW_SLOT;
 
     isDraggingRef.current = false;
+
+    // Ensure all other items spring to their intended slots
+    orderRef.current.forEach((itemId, k) => {
+      if (k === from) return;
+      const anim = posAnims.current[itemId];
+      if (!anim) return;
+
+      let slotForK = k;
+      if (from < to && k > from && k <= to) {
+        slotForK = k - 1;
+      } else if (to < from && k >= to && k < from) {
+        slotForK = k + 1;
+      }
+
+      Animated.spring(anim, {
+        toValue: slotForK * ROW_SLOT,
+        useNativeDriver: false,
+        bounciness: 0,
+        speed: 24,
+      }).start();
+    });
 
     Animated.parallel([
       Animated.spring(posAnims.current[activeId], {
@@ -272,21 +294,24 @@ export function ReorderableAccountSection({
             left: 0,
             right: 0,
             height: ROW_HEIGHT,
+            borderRadius: 12,
+            backgroundColor: isSelected
+              ? colors.surfaceContainer
+              : colors.surfaceContainerLowest,
+            borderWidth: isDragging ? 1.5 : 1,
+            borderColor: isDragging ? colors.primary : colors.surfaceVariant,
             transform: [
               { translateY: posAnim },
               { scale: isDragging ? scaleAnim : 1 },
             ],
             zIndex: isDragging ? 999 : 1,
-            elevation: isDragging ? 10 : 1,
+            elevation: isDragging ? 6 : 0,
             ...(isDragging
               ? {
                   shadowColor: colors.onSurface,
-                  shadowOffset: { width: 0, height: 6 },
-                  shadowOpacity: 0.25,
-                  shadowRadius: 10,
-                  borderColor: colors.primary,
-                  borderWidth: 1.5,
-                  borderRadius: 12,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 8,
                 }
               : {}),
           };
@@ -295,28 +320,10 @@ export function ReorderableAccountSection({
             <Animated.View
               key={account.id}
               style={animatedStyle}
-              onTouchMove={(e: GestureResponderEvent) => {
-                if (isDragging) {
-                  handleDragMove(e.nativeEvent.pageY);
-                }
-              }}
-              onTouchEnd={() => {
-                if (isDragging) {
-                  handleDragEnd();
-                }
-              }}
-              onTouchCancel={() => {
-                if (isDragging) {
-                  handleDragEnd();
-                }
-              }}
             >
               <TouchableOpacity
                 activeOpacity={0.8}
-                style={[
-                  isSelected ? styles.accountItemActive : styles.accountItemInactive,
-                  { height: ROW_HEIGHT },
-                ]}
+                style={styles.accountItem}
                 onPress={() => {
                   if (activeDragId === null) {
                     onSelectAccount(account.id);
@@ -434,26 +441,13 @@ const getStyles = (colors: ThemeColors) => {
       color: colors.onSurface,
       fontWeight: '700',
     },
-    accountItemActive: {
+    accountItem: {
+      flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 16,
       borderRadius: 12,
-      backgroundColor: colors.surfaceContainer,
-      borderWidth: 1,
-      borderColor: colors.surfaceVariant,
-      gap: 12,
-    },
-    accountItemInactive: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      borderRadius: 12,
-      backgroundColor: colors.surfaceContainerLowest,
-      borderWidth: 1,
-      borderColor: colors.surfaceVariant,
       gap: 12,
     },
     accountItemLeft: {

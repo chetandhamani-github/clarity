@@ -1,20 +1,20 @@
-import React, { useState, useRef, useEffect } from 'react';
-import {
-  View,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Animated,
-  Vibration,
-  GestureResponderEvent,
-} from 'react-native';
 import { Text } from '@/components/ui';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useTheme, ThemeColors, typography } from '@/theme';
-import { getBankBranding } from '@/utils/icons';
-import { formatCurrencyPrivacy } from '@/utils/format';
 import { useReorderAccounts } from '@/hooks/use-accounts';
+import { ThemeColors, typography, useTheme } from '@/theme';
 import type { Account } from '@/types';
+import { formatCurrencyPrivacy } from '@/utils/format';
+import { getBankBranding } from '@/utils/icons';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useEffect, useRef, useState } from 'react';
+import {
+    Animated,
+    GestureResponderEvent,
+    ScrollView,
+    StyleSheet,
+    TouchableOpacity,
+    Vibration,
+    View,
+} from 'react-native';
 
 interface ReorderableBankAccountsProps {
   accounts: Account[];
@@ -85,7 +85,7 @@ export function ReorderableBankAccounts({
     onDragStateChange?.(true);
 
     Animated.spring(scaleAnim, {
-      toValue: 1.06,
+      toValue: 1.04,
       useNativeDriver: false,
       bounciness: 4,
       speed: 20,
@@ -104,8 +104,12 @@ export function ReorderableBankAccounts({
       posAnims.current[activeId].setValue(clampedPos);
     }
 
-    const rawTarget = Math.round(clampedPos / ITEM_SLOT);
-    const targetSlot = Math.max(0, Math.min(orderRef.current.length - 1, rawTarget));
+    const from = dragIndexRef.current;
+    const slotShift =
+      dx > 0
+        ? Math.floor((dx + ITEM_SLOT * 0.65) / ITEM_SLOT)
+        : Math.ceil((dx - ITEM_SLOT * 0.65) / ITEM_SLOT);
+    const targetSlot = Math.max(0, Math.min(orderRef.current.length - 1, from + slotShift));
 
     if (targetSlot !== hoverIndexRef.current) {
       hoverIndexRef.current = targetSlot;
@@ -138,9 +142,6 @@ export function ReorderableBankAccounts({
 
   const handleDragEnd = () => {
     if (!isDraggingRef.current || dragIndexRef.current === null) {
-      isDraggingRef.current = false;
-      setActiveDragId(null);
-      onDragStateChange?.(false);
       return;
     }
 
@@ -150,6 +151,27 @@ export function ReorderableBankAccounts({
     const targetX = to * ITEM_SLOT;
 
     isDraggingRef.current = false;
+
+    // Ensure all other items spring to their intended slots
+    orderRef.current.forEach((itemId, k) => {
+      if (k === from) return;
+      const anim = posAnims.current[itemId];
+      if (!anim) return;
+
+      let slotForK = k;
+      if (from < to && k > from && k <= to) {
+        slotForK = k - 1;
+      } else if (to < from && k >= to && k < from) {
+        slotForK = k + 1;
+      }
+
+      Animated.spring(anim, {
+        toValue: slotForK * ITEM_SLOT,
+        useNativeDriver: false,
+        bounciness: 0,
+        speed: 24,
+      }).start();
+    });
 
     Animated.parallel([
       Animated.spring(posAnims.current[activeId], {
@@ -246,21 +268,23 @@ export function ReorderableBankAccounts({
               top: 4,
               left: 0,
               width: CARD_WIDTH,
+              height: CARD_HEIGHT,
+              borderRadius: 16,
+              backgroundColor: colors.surfaceContainerLowest,
+              borderWidth: isDragging ? 1.5 : 1,
+              borderColor: isDragging ? colors.primary : colors.surfaceVariant,
               transform: [
                 { translateX: posAnim },
                 { scale: isDragging ? scaleAnim : 1 },
               ],
               zIndex: isDragging ? 999 : 1,
-              elevation: isDragging ? 10 : 1,
+              elevation: isDragging ? 6 : 0,
               ...(isDragging
                 ? {
                     shadowColor: colors.onSurface,
-                    shadowOffset: { width: 0, height: 6 },
-                    shadowOpacity: 0.25,
-                    shadowRadius: 10,
-                    borderColor: colors.primary,
-                    borderWidth: 1.5,
-                    borderRadius: 16,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 8,
                   }
                 : {}),
             };
@@ -269,21 +293,6 @@ export function ReorderableBankAccounts({
               <Animated.View
                 key={acc.id}
                 style={animatedStyle}
-                onTouchMove={(e: GestureResponderEvent) => {
-                  if (isDragging) {
-                    handleDragMove(e.nativeEvent.pageX);
-                  }
-                }}
-                onTouchEnd={() => {
-                  if (isDragging) {
-                    handleDragEnd();
-                  }
-                }}
-                onTouchCancel={() => {
-                  if (isDragging) {
-                    handleDragEnd();
-                  }
-                }}
               >
                 <TouchableOpacity
                   activeOpacity={0.8}
@@ -389,12 +398,8 @@ const getStyles = (colors: ThemeColors) => {
       paddingHorizontal: 2,
     },
     bankAccountCard: {
-      width: CARD_WIDTH,
-      height: CARD_HEIGHT,
-      backgroundColor: colors.surfaceContainerLowest,
+      flex: 1,
       borderRadius: 16,
-      borderWidth: 1,
-      borderColor: colors.surfaceVariant,
       padding: 14,
       justifyContent: 'space-between',
     },

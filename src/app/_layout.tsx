@@ -1,3 +1,4 @@
+import '@/lib/reactotron';
 import '@/lib/navigation';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import React, { useEffect, useState, useRef, useMemo } from 'react';

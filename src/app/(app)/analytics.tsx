@@ -18,6 +18,8 @@ import { formatCurrency, formatCurrencyPrivacy } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
 import { getTransactionDisplayName } from '@/utils/transaction-display';
 import { useAppStore } from '@/store/use-app-store';
+import { fetchMonthlyAiDigest } from '@/services/api/ai.api';
+import type { MonthlyDigestResult } from '@/services/api/types';
 
 export default function AnalyticsScreen() {
   const { colors } = useTheme();
@@ -53,6 +55,48 @@ export default function AnalyticsScreen() {
   const { showAlert } = useAlert();
   const { showToast } = useToast();
   const { reports, isLoading: loadingReports } = useMonthlyReports();
+
+  const [digest, setDigest] = useState<MonthlyDigestResult | null>(null);
+  const [loadingDigest, setLoadingDigest] = useState(false);
+
+  const handleOpenCopilot = () => {
+    router.push({
+      pathname: '/(app)/copilot',
+      params: { month: selectedMonth.toString(), year: selectedYear.toString() },
+    });
+  };
+
+  useEffect(() => {
+    let isCancelled = false;
+    const loadDigest = async () => {
+      setLoadingDigest(true);
+      try {
+        const topCatList =
+          spending?.slice(0, 3).map((s) => `${s.category}: ${Math.round(s.spent)}`) || [];
+        const res = await fetchMonthlyAiDigest({
+          month: selectedMonth,
+          year: selectedYear,
+          totalIncome: totals.income,
+          totalExpenses: totals.expenses,
+          topCategories: topCatList,
+        });
+        if (!isCancelled) {
+          setDigest(res);
+        }
+      } catch {
+        // Fallback gracefully
+      } finally {
+        if (!isCancelled) setLoadingDigest(false);
+      }
+    };
+
+    if (totals.income > 0 || totals.expenses > 0) {
+      loadDigest();
+    }
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedMonth, selectedYear, totals.income, totals.expenses, spending]);
 
   const handleCancelRecurring = (tx: any) => {
     const title = getTransactionDisplayName(tx);
@@ -337,6 +381,101 @@ export default function AnalyticsScreen() {
                     </View>
                   </View>
                 </View>
+              </View>
+
+              {/* AI Financial Digest */}
+              <View style={styles.card}>
+                <View style={styles.aiDigestHeader}>
+                  <View style={styles.aiDigestTitleRow}>
+                    <MaterialIcons name="auto-awesome" size={20} color={colors.primary} />
+                    <Text style={styles.cardTitle}>Clarity AI Digest</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.copilotHeaderBtn}
+                    onPress={handleOpenCopilot}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialIcons name="chat" size={16} color={colors.primary} />
+                    <Text style={styles.copilotBtnText}>Ask Copilot</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {loadingDigest ? (
+                  <View style={styles.aiLoadingBox}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text style={styles.aiLoadingText}>Analyzing monthly trends & cash flow...</Text>
+                  </View>
+                ) : digest ? (
+                  <View style={styles.aiDigestContent}>
+                    <View style={styles.digestScoreRow}>
+                      <View
+                        style={[
+                          styles.digestScoreBadge,
+                          {
+                            backgroundColor:
+                              (digest.financialHealthScore ?? 0) >= 70
+                                ? colors.primaryContainer
+                                : (digest.financialHealthScore ?? 0) >= 40
+                                ? colors.surfaceContainerHigh
+                                : colors.errorContainer,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.digestScoreText,
+                            {
+                              color:
+                                (digest.financialHealthScore ?? 0) >= 70
+                                  ? colors.onPrimaryContainer
+                                  : (digest.financialHealthScore ?? 0) >= 40
+                                  ? colors.onSurface
+                                  : colors.onErrorContainer,
+                            },
+                          ]}
+                        >
+                          Health Score: {digest.financialHealthScore ?? 0}/100
+                        </Text>
+                      </View>
+                    </View>
+
+                    {digest.headline ? (
+                      <Text style={[styles.digestSummaryText, { fontWeight: '700' }]}>
+                        {digest.headline}
+                      </Text>
+                    ) : null}
+
+                    {digest.savingsAssessment ? (
+                      <Text style={styles.digestSummaryText}>{digest.savingsAssessment}</Text>
+                    ) : null}
+
+                    {digest.actionableTips && digest.actionableTips.length > 0 && (
+                      <View style={styles.digestRecommendationsList}>
+                        <Text style={styles.digestSectionTitle}>Key Observations & Actions</Text>
+                        {digest.actionableTips.map((tip, idx) => (
+                          <View key={idx} style={styles.digestRecItem}>
+                            <MaterialIcons name="check-circle" size={16} color={colors.primary} />
+                            <Text style={styles.digestRecText}>{tip}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                ) : (
+                  <View style={styles.aiEmptyBox}>
+                    <Text style={styles.aiEmptyText}>
+                      Track more transactions this month to generate smart AI insights.
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.copilotPromptBtn}
+                      onPress={handleOpenCopilot}
+                      activeOpacity={0.7}
+                    >
+                      <MaterialIcons name="chat-bubble-outline" size={16} color={colors.primary} />
+                      <Text style={styles.copilotBtnText}>Ask Financial Copilot</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
 
               {/* Spending by Category */}
@@ -856,6 +995,106 @@ const getStyles = (colors: ThemeColors) => {
     addRecurringText: {
       ...typography.labelMd,
       color: colors.primary,
+    },
+    aiDigestHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    aiDigestTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    copilotHeaderBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: colors.primaryContainer,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 16,
+    },
+    copilotBtnText: {
+      ...typography.labelMd,
+      color: colors.primary,
+      fontWeight: '600',
+    },
+    aiLoadingBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+      paddingVertical: 20,
+    },
+    aiLoadingText: {
+      ...typography.bodyMd,
+      color: colors.onSurfaceVariant,
+    },
+    aiDigestContent: {
+      gap: 12,
+    },
+    digestScoreRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    digestScoreBadge: {
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 20,
+    },
+    digestScoreText: {
+      ...typography.labelMd,
+      fontWeight: '700',
+    },
+    digestSummaryText: {
+      ...typography.bodyMd,
+      color: colors.onSurface,
+      lineHeight: 20,
+    },
+    digestRecommendationsList: {
+      gap: 8,
+      marginTop: 4,
+      paddingTop: 8,
+      borderTopWidth: 1,
+      borderTopColor: colors.outlineVariant,
+    },
+    digestSectionTitle: {
+      ...typography.labelMd,
+      color: colors.onSurfaceVariant,
+      fontWeight: '600',
+    },
+    digestRecItem: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+    },
+    digestRecText: {
+      ...typography.bodyMd,
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.onSurface,
+      flex: 1,
+    },
+    aiEmptyBox: {
+      alignItems: 'center',
+      paddingVertical: 16,
+      gap: 12,
+    },
+    aiEmptyText: {
+      ...typography.bodyMd,
+      color: colors.onSurfaceVariant,
+      textAlign: 'center',
+    },
+    copilotPromptBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: colors.surfaceContainerHigh,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 20,
     },
   });
   return styles;

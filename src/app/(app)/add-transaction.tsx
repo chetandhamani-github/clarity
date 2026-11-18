@@ -99,6 +99,7 @@ export default function AddTransactionScreen() {
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringFreq, setRecurringFreq] = useState<RecurringFrequency>('monthly');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [isScanningReceipt, setIsScanningReceipt] = useState(false);
 
   // Split Category states
   const [isSplitMode, setIsSplitMode] = useState(false);
@@ -374,6 +375,61 @@ export default function AddTransactionScreen() {
     );
   };
 
+  const handleScanReceipt = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ['image/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (res.canceled || !res.assets || res.assets.length === 0) {
+        return;
+      }
+
+      const asset = res.assets[0];
+      setIsScanningReceipt(true);
+      showToast('Analyzing receipt with AI...', 'info');
+
+      const base64 = await FileSystem.readAsStringAsync(asset.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      const scanResult = await scanReceiptWithAi({
+        imageBase64: base64,
+        mimeType: asset.mimeType || 'image/jpeg',
+      });
+
+      if (scanResult) {
+        if (scanResult.merchant) {
+          setMerchant(scanResult.merchant);
+        }
+        if (scanResult.totalAmount && scanResult.totalAmount > 0) {
+          setAmountStr(scanResult.totalAmount.toString());
+        }
+        if (scanResult.category) {
+          setCategory(scanResult.category);
+        }
+        if (scanResult.date) {
+          setDate(scanResult.date);
+        }
+        if (scanResult.items && scanResult.items.length > 0) {
+          setIsSplitMode(true);
+          setSplitItems(
+            scanResult.items.map((it) => ({
+              category: it.category || scanResult.category || 'Groceries',
+              amount: it.amount ? it.amount.toString() : '0',
+            }))
+          );
+        }
+        showToast('Receipt details auto-filled by AI!', 'success');
+      }
+    } catch {
+      showToast('Could not scan receipt. Please enter manually.', 'error');
+    } finally {
+      setIsScanningReceipt(false);
+    }
+  };
+
   const selectedAccount = accounts.find((a) => a.id === accountId);
 
   return (
@@ -398,7 +454,23 @@ export default function AddTransactionScreen() {
             >
               <MaterialIcons name="content-copy" size={22} color={colors.onSurface} />
             </TouchableOpacity>
-          ) : undefined
+          ) : (
+            <TouchableOpacity
+              onPress={handleScanReceipt}
+              disabled={isScanningReceipt}
+              style={styles.headerScanBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              {isScanningReceipt ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <View style={styles.headerScanContent}>
+                  <MaterialIcons name="document-scanner" size={20} color={colors.primary} />
+                  <Text style={styles.headerScanText}>AI Scan</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )
         }
       />
 
@@ -418,6 +490,33 @@ export default function AddTransactionScreen() {
         keyboardOpeningTime={0}
       >
         <View style={styles.card}>
+          {/* AI Receipt Scanner Banner */}
+          {!isEditing && (
+            <TouchableOpacity
+              style={styles.aiScanBanner}
+              onPress={handleScanReceipt}
+              disabled={isScanningReceipt}
+              activeOpacity={0.7}
+            >
+              <View style={styles.aiScanBannerIcon}>
+                <MaterialIcons name="auto-awesome" size={20} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.aiScanBannerTitle}>
+                  {isScanningReceipt ? 'Scanning receipt with AI...' : 'Scan Receipt with AI'}
+                </Text>
+                <Text style={styles.aiScanBannerSubtitle}>
+                  Auto-fill merchant, amount, category & line items from a photo
+                </Text>
+              </View>
+              {isScanningReceipt ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <MaterialIcons name="arrow-forward" size={18} color={colors.onSurfaceVariant} />
+              )}
+            </TouchableOpacity>
+          )}
+
           {/* Type Switcher */}
           <View style={styles.typeSwitcher}>
             {(['expense', 'income', 'transfer'] as const).map((t) => (
@@ -1625,6 +1724,50 @@ const getStyles = (colors: ThemeColors) => {
     addSplitBtnText: {
       ...typography.labelMd,
       fontWeight: '600',
+    },
+    headerScanBtn: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+    },
+    headerScanContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    headerScanText: {
+      ...typography.labelMd,
+      color: colors.primary,
+      fontWeight: '700',
+    },
+    aiScanBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      backgroundColor: colors.surfaceContainerLow,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      borderRadius: 14,
+      padding: 12,
+      marginBottom: 16,
+    },
+    aiScanBannerIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.primaryContainer,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    aiScanBannerTitle: {
+      ...typography.labelMd,
+      fontWeight: '700',
+      color: colors.onSurface,
+    },
+    aiScanBannerSubtitle: {
+      ...typography.bodyMd,
+      fontSize: 12,
+      lineHeight: 16,
+      color: colors.onSurfaceVariant,
     },
   });
   return styles;

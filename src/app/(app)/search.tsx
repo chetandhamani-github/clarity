@@ -366,6 +366,8 @@ const getStyles = (colors: ThemeColors) => {
       justifyContent: 'center',
     },
     txTextContent: {
+      flex: 1,
+      minWidth: 0,
       justifyContent: 'center',
     },
     txTitle: {

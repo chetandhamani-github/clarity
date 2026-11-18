@@ -13,6 +13,7 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
       sort_order INTEGER NOT NULL DEFAULT 0,
       billing_cycle_day INTEGER,
       due_day INTEGER,
+      credit_limit REAL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -346,6 +347,12 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
 
   try {
     await db.execAsync('ALTER TABLE accounts ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;');
+  } catch {
+    // Column may already exist
+  }
+
+  try {
+    await db.execAsync('ALTER TABLE accounts ADD COLUMN credit_limit REAL;');
   } catch {
     // Column may already exist
   }

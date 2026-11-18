@@ -30,6 +30,7 @@ export default function AddAccountScreen() {
   const [lastFour, setLastFour] = useState('');
   const [billingCycleDayStr, setBillingCycleDayStr] = useState('');
   const [dueDayStr, setDueDayStr] = useState('');
+  const [creditLimitStr, setCreditLimitStr] = useState('');
   const [showTypeSelector, setShowTypeSelector] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
@@ -48,6 +49,7 @@ export default function AddAccountScreen() {
       setLastFour(account.lastFour || '');
       setBillingCycleDayStr(account.billingCycleDay ? account.billingCycleDay.toString() : '');
       setDueDayStr(account.dueDay ? account.dueDay.toString() : '');
+      setCreditLimitStr(account.creditLimit ? account.creditLimit.toString() : '');
       setInitialized(true);
     }
   }, [isEditing, account, initialized]);
@@ -79,6 +81,9 @@ export default function AddAccountScreen() {
     const paymentDay = parseInt(dueDayStr, 10);
     const validDueDay = !isNaN(paymentDay) && paymentDay >= 1 && paymentDay <= 31 ? paymentDay : undefined;
 
+    const creditLimitVal = parseFloat(creditLimitStr);
+    const validCreditLimit = !isNaN(creditLimitVal) && creditLimitVal > 0 ? creditLimitVal : undefined;
+
     const accountData = {
       name: name.trim(),
       type,
@@ -87,6 +92,7 @@ export default function AddAccountScreen() {
       lastFour: lastFour.trim().slice(0, 4),
       billingCycleDay: validCycleDay,
       dueDay: validDueDay,
+      creditLimit: validCreditLimit,
     };
 
     if (isEditing && id) {
@@ -249,6 +255,18 @@ export default function AddAccountScreen() {
                 <Text style={{ ...typography.bodyMd, fontSize: 12, lineHeight: 16, color: colors.onSurfaceVariant }}>
                   Enter the day of the month your statement generates and when payment is due to track billing cycles.
                 </Text>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Total Credit Limit (Optional)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. 100000"
+                  placeholderTextColor={colors.outline}
+                  keyboardType="decimal-pad"
+                  value={creditLimitStr}
+                  onChangeText={setCreditLimitStr}
+                />
               </View>
 
               <View style={{ flexDirection: 'row', gap: 12 }}>

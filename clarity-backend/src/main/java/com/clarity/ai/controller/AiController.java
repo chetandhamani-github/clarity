@@ -6,12 +6,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/ai")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "AI Gateway", description = "Privacy-preserving AI categorization, receipt scanning, and financial assistant endpoints")
 public class AiController {
 
@@ -20,6 +22,7 @@ public class AiController {
     @PostMapping("/categorize")
     @Operation(summary = "Categorize transaction", description = "Classifies a raw merchant or UPI string into standardized financial category with confidence score")
     public ResponseEntity<AiCategorizeResponse> categorize(@Valid @RequestBody AiCategorizeRequest request) {
+        log.info("[AiController] POST /api/v1/ai/categorize - merchant='{}'", request.getMerchant());
         AiCategorizeResponse response = aiService.categorize(request);
         return ResponseEntity.ok(response);
     }
@@ -27,6 +30,7 @@ public class AiController {
     @PostMapping("/receipt-scan")
     @Operation(summary = "Scan receipt image/text", description = "Multimodal extraction of merchant, date, total, and itemized splits from receipt payload")
     public ResponseEntity<ReceiptScanResponse> scanReceipt(@RequestBody ReceiptScanRequest request) {
+        log.info("[AiController] POST /api/v1/ai/receipt-scan");
         ReceiptScanResponse response = aiService.scanReceipt(request);
         return ResponseEntity.ok(response);
     }
@@ -34,13 +38,16 @@ public class AiController {
     @PostMapping("/chat")
     @Operation(summary = "Conversational financial copilot", description = "Answers queries about spending, budgets, and savings using anonymized context")
     public ResponseEntity<AiChatResponse> chat(@Valid @RequestBody AiChatRequest request) {
+        log.info("[AiController] POST /api/v1/ai/chat - message='{}', hasContext={}", request.getMessage(), request.getFinancialContextSummary() != null);
         AiChatResponse response = aiService.chat(request);
+        log.info("[AiController] Chat response reply preview: '{}'", response.getReply() != null && response.getReply().length() > 50 ? response.getReply().substring(0, 50) + "..." : response.getReply());
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/digest")
     @Operation(summary = "Generate monthly financial digest", description = "Analyzes monthly aggregates under 50/30/20 guideline and returns health score & tips")
     public ResponseEntity<MonthlyDigestResponse> generateDigest(@RequestBody MonthlyDigestRequest request) {
+        log.info("[AiController] POST /api/v1/ai/digest");
         MonthlyDigestResponse response = aiService.generateDigest(request);
         return ResponseEntity.ok(response);
     }
