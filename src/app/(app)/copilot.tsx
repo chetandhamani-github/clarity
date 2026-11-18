@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -11,7 +11,8 @@ import {
   ActivityIndicator,
   ScrollView,
   useWindowDimensions,
-  Dimensions,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { Text, Header, useAlert, useToast } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
@@ -21,7 +22,6 @@ import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useMonthlyTotals } from '@/hooks/use-transactions';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
 import { useAccounts } from '@/hooks/use-accounts';
-import { formatCurrency } from '@/utils/format';
 import { chatWithFinancialCopilot } from '@/services/api/ai.api';
 
 interface ChatMessage {
@@ -39,6 +39,14 @@ const SUGGESTED_PROMPTS = [
   'Explain my monthly burn rate and pacing.',
   'What are my key financial observations?',
 ];
+
+function getActionLabel(actionRoute: string): string {
+  if (actionRoute.includes('plan')) return 'Open Budget Plan →';
+  if (actionRoute.includes('bills')) return 'Manage Bills & Subscriptions →';
+  if (actionRoute.includes('goals')) return 'View Savings Goals →';
+  if (actionRoute.includes('accounts')) return 'View Bank Accounts →';
+  return 'View Transactions →';
+}
 
 export default function CopilotScreen() {
   const { colors } = useTheme();
@@ -62,11 +70,22 @@ export default function CopilotScreen() {
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const flatListRef = useRef<FlatList<ChatMessage>>(null);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
 
-  // Detect whether Android OS resized the window or if it's drawing edge-to-edge under the keyboard
-  const screenHeight = Dimensions.get('screen').height;
-  const isAndroidWindowResized = Platform.OS === 'android' && screenHeight - windowHeight > 150;
+  const flatListRef = useRef<FlatList<ChatMessage>>(null);
+  const textInputRef = useRef<TextInput>(null);
+  const isAtBottomRef = useRef(true);
+  const initialWindowHeightRef = useRef(windowHeight);
+
+  if (keyboardHeight === 0 && windowHeight > initialWindowHeightRef.current) {
+    initialWindowHeightRef.current = windowHeight;
+  }
+
+  const scrollToEnd = useCallback((animated = true) => {
+    requestAnimationFrame(() => {
+      flatListRef.current?.scrollToEnd({ animated });
+    });
+  }, []);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -76,7 +95,7 @@ export default function CopilotScreen() {
       setKeyboardHeight(e.endCoordinates.height);
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
-      }, 60);
+      }, 100);
     });
 
     const hideSub = Keyboard.addListener(hideEvent, () => {
@@ -93,7 +112,7 @@ export default function CopilotScreen() {
     {
       id: 'welcome-1',
       sender: 'assistant',
-      text: `Hello! I'm your private Clarity Financial Copilot.\n\nI can analyze your spending patterns, track your 50/30/20 budget targets, and answer questions about your cash flow without sharing any account numbers or personal identity data. How can I assist you today?`,
+      text: `Hello! I'm your Clarity Financial Copilot.\n\nI can analyze your spending patterns, track your 50/30/20 budget targets, and answer questions about your cash flow. How can I assist you today?`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -115,13 +134,12 @@ export default function CopilotScreen() {
     return `Month: ${selectedMonth}/${selectedYear}, Monthly Income: ₹${Math.round(totals.income)}, Monthly Expenses: ₹${Math.round(totals.expenses)}, Net Savings: ₹${Math.round(netSavings)}, Top Spending: [${topCategories || 'None'}], Total Balance: ₹${Math.round(totalBankBalance || 0)}, Budget Plan: ${plan ? `Income ₹${plan.monthlyIncome}, Needs ${plan.needsPercent}%, Wants ${plan.wantsPercent}%, Savings ${plan.savingsPercent}%` : 'Not set'}`;
   }, [totals, spending, accounts, plan, selectedMonth, selectedYear]);
 
-  const handleSendMessage = async (textToSend?: string) => {
+  const handleSendMessage = useCallback(async (textToSend?: string) => {
     const query = (textToSend ?? inputText).trim();
     if (!query || isSending) return;
 
-    const userMsgId = `user-${Date.now()}`;
     const userMsg: ChatMessage = {
-      id: userMsgId,
+      id: `user-${Date.now()}`,
       sender: 'user',
       text: query,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -131,24 +149,16 @@ export default function CopilotScreen() {
     setInputText('');
     setIsSending(true);
 
-    console.log('[Clarity AI] Sending chat message:', { query, context: financialContext });
-    console.tron?.display?.({
-      name: 'Clarity AI Chat',
-      preview: query,
-      value: { query, context: financialContext },
+    requestAnimationFrame(() => {
+      textInputRef.current?.focus();
     });
+
+    setTimeout(() => scrollToEnd(true), 80);
 
     try {
       const response = await chatWithFinancialCopilot({
         message: query,
         financialContextSummary: financialContext,
-      });
-
-      console.log('[Clarity AI] Received response successfully:', response);
-      console.tron?.display?.({
-        name: 'Clarity AI Reply',
-        preview: response.reply?.slice(0, 40) + '...',
-        value: response,
       });
 
       const assistantMsg: ChatMessage = {
@@ -160,14 +170,8 @@ export default function CopilotScreen() {
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
-    } catch (error: any) {
-      console.error('[Clarity AI] Error calling chatWithFinancialCopilot:', {
-        message: error?.message,
-        status: error?.status,
-        data: error?.data,
-        error,
-      });
-      console.tron?.error?.('[Clarity AI] Chat Error', error?.message ?? error);
+      setTimeout(() => scrollToEnd(true), 80);
+    } catch {
       showToast('Could not reach assistant. Please try again.', 'error');
       const errorMsg: ChatMessage = {
         id: `assistant-${Date.now()}`,
@@ -176,10 +180,14 @@ export default function CopilotScreen() {
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, errorMsg]);
+      setTimeout(() => scrollToEnd(true), 80);
     } finally {
       setIsSending(false);
+      requestAnimationFrame(() => {
+        textInputRef.current?.focus();
+      });
     }
-  };
+  }, [inputText, isSending, financialContext, scrollToEnd, showToast]);
 
   const handleClearHistory = () => {
     showAlert(
@@ -206,23 +214,15 @@ export default function CopilotScreen() {
     );
   };
 
-  const handleActionPress = (actionRoute: string) => {
+  const handleActionPress = useCallback((actionRoute: string) => {
     try {
       router.push(actionRoute as any);
     } catch {
       router.push('/(app)/(tabs)/plan');
     }
-  };
+  }, [router]);
 
-  const renderActionLabel = (actionRoute: string) => {
-    if (actionRoute.includes('plan')) return 'Open Budget Plan →';
-    if (actionRoute.includes('bills')) return 'Manage Bills & Subscriptions →';
-    if (actionRoute.includes('goals')) return 'View Savings Goals →';
-    if (actionRoute.includes('accounts')) return 'View Bank Accounts →';
-    return 'View Transactions →';
-  };
-
-  const renderMessageItem = ({ item }: { item: ChatMessage }) => {
+  const renderMessageItem = useCallback(({ item }: { item: ChatMessage }) => {
     const isUser = item.sender === 'user';
 
     return (
@@ -234,7 +234,7 @@ export default function CopilotScreen() {
       >
         {!isUser && (
           <View style={styles.assistantAvatar}>
-            <MaterialIcons name="auto-awesome" size={16} color={colors.onPrimary} />
+            <MaterialIcons name="auto-awesome" size={15} color={colors.onPrimary} />
           </View>
         )}
 
@@ -244,7 +244,10 @@ export default function CopilotScreen() {
             isUser ? styles.bubbleUser : styles.bubbleAssistant,
           ]}
         >
-          <Text style={[styles.messageText, isUser ? styles.messageTextUser : styles.messageTextAssistant]}>
+          <Text
+            selectable
+            style={[styles.messageText, isUser ? styles.messageTextUser : styles.messageTextAssistant]}
+          >
             {item.text}
           </Text>
 
@@ -255,32 +258,61 @@ export default function CopilotScreen() {
               activeOpacity={0.7}
             >
               <MaterialIcons name="arrow-outward" size={14} color={colors.primary} />
-              <Text style={styles.actionBtnText}>{renderActionLabel(item.suggestedAction)}</Text>
+              <Text style={styles.actionBtnText}>{getActionLabel(item.suggestedAction)}</Text>
             </TouchableOpacity>
           )}
 
-          <Text style={[styles.timestampText, isUser ? styles.timestampUser : styles.timestampAssistant]}>
-            {item.timestamp}
-          </Text>
+          <View style={[styles.timestampContainer, isUser ? styles.timestampContainerUser : styles.timestampContainerAssistant]}>
+            <Text style={[styles.timestampText, isUser ? styles.timestampUser : styles.timestampAssistant]}>
+              {item.timestamp}
+            </Text>
+            {isUser && (
+              <MaterialIcons
+                name="done-all"
+                size={14}
+                color="rgba(255, 255, 255, 0.75)"
+                style={styles.readReceiptIcon}
+              />
+            )}
+          </View>
         </View>
       </View>
     );
-  };
+  }, [colors, styles, handleActionPress]);
+
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
+    const isCloseToBottom = distanceFromBottom < 80;
+    isAtBottomRef.current = isCloseToBottom;
+    setShowScrollBottom(distanceFromBottom > 150);
+  }, []);
+
+  const handleContentSizeChange = useCallback(() => {
+    if (isAtBottomRef.current) {
+      scrollToEnd(true);
+    }
+  }, [scrollToEnd]);
 
   // Extra breathing room gap between chat bar and keyboard
-  const KEYBOARD_GAP = 14;
+  const KEYBOARD_GAP = 18;
 
-  // On Android when edge-to-edge is not resizing window, offset the chat wrapper by keyboard height + extra gap
+  // Check if Android OS already resized the window (adjustResize)
+  const isAndroidWindowResized =
+    Platform.OS === 'android' && initialWindowHeightRef.current - windowHeight > 100;
+
   const androidBottomPadding =
     Platform.OS === 'android' && keyboardHeight > 0
-      ? Math.max(0, keyboardHeight - Math.max(0, screenHeight - windowHeight)) + KEYBOARD_GAP
+      ? isAndroidWindowResized
+        ? KEYBOARD_GAP
+        : keyboardHeight + KEYBOARD_GAP
       : 0;
 
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 18 : 0}
     >
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <Header
@@ -297,21 +329,6 @@ export default function CopilotScreen() {
           }
         />
 
-        {/* Privacy & Context Banner */}
-        <View style={styles.contextBanner}>
-          <View style={styles.contextLeft}>
-            <MaterialIcons name="security" size={14} color={colors.primary} />
-            <Text style={styles.contextText}>
-              Privacy Guaranteed • Anonymized context for {selectedMonth}/{selectedYear}
-            </Text>
-          </View>
-          <View style={styles.contextBadge}>
-            <Text style={styles.contextBadgeText}>
-              Net: {formatCurrency(totals.income - totals.expenses)}
-            </Text>
-          </View>
-        </View>
-
         <View style={[styles.chatWrapper, { paddingBottom: androidBottomPadding }]}>
           <FlatList
             ref={flatListRef}
@@ -319,15 +336,29 @@ export default function CopilotScreen() {
             keyExtractor={(item) => item.id}
             renderItem={renderMessageItem}
             contentContainerStyle={styles.messagesList}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-            onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+            keyboardShouldPersistTaps="always"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            showsVerticalScrollIndicator={false}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            onLayout={() => scrollToEnd(false)}
+            onContentSizeChange={handleContentSizeChange}
+            maxToRenderPerBatch={10}
+            windowSize={15}
+            initialNumToRender={15}
+            removeClippedSubviews={Platform.OS === 'android'}
+            ListHeaderComponent={
+              <View style={styles.dateSeparatorContainer}>
+                <View style={styles.dateSeparatorPill}>
+                  <Text style={styles.dateSeparatorText}>Today</Text>
+                </View>
+              </View>
+            }
             ListFooterComponent={
               isSending ? (
                 <View style={styles.thinkingContainer}>
                   <View style={styles.assistantAvatar}>
-                    <MaterialIcons name="auto-awesome" size={16} color={colors.onPrimary} />
+                    <MaterialIcons name="auto-awesome" size={15} color={colors.onPrimary} />
                   </View>
                   <View style={styles.thinkingBubble}>
                     <ActivityIndicator size="small" color={colors.primary} />
@@ -338,6 +369,17 @@ export default function CopilotScreen() {
             }
           />
 
+          {/* Floating Scroll to Bottom Button */}
+          {showScrollBottom && (
+            <TouchableOpacity
+              style={styles.scrollBottomFab}
+              onPress={() => scrollToEnd(true)}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="keyboard-arrow-down" size={24} color={colors.onSurface} />
+            </TouchableOpacity>
+          )}
+
           {/* Suggested Prompts Carousel */}
           {messages.length <= 3 && !isSending && (
             <View style={styles.promptsContainer}>
@@ -346,7 +388,7 @@ export default function CopilotScreen() {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.promptsScroll}
-                keyboardShouldPersistTaps="handled"
+                keyboardShouldPersistTaps="always"
               >
                 {SUGGESTED_PROMPTS.map((prompt, index) => (
                   <TouchableOpacity
@@ -370,13 +412,14 @@ export default function CopilotScreen() {
               {
                 paddingBottom:
                   keyboardHeight > 0
-                    ? 14
+                    ? 20
                     : Math.max(insets.bottom, 16),
               },
             ]}
           >
             <View style={styles.inputInnerWrapper}>
               <TextInput
+                ref={textInputRef}
                 style={styles.textInput}
                 placeholder="Ask about spending, saving, or budget..."
                 placeholderTextColor={colors.onSurfaceVariant}
@@ -385,15 +428,23 @@ export default function CopilotScreen() {
                 multiline
                 maxLength={500}
                 returnKeyType="send"
+                blurOnSubmit={false}
+                onFocus={() => {
+                  setTimeout(() => {
+                    flatListRef.current?.scrollToEnd({ animated: true });
+                  }, 100);
+                }}
                 onSubmitEditing={() => handleSendMessage()}
-                editable={!isSending}
               />
               <TouchableOpacity
                 style={[
                   styles.sendButton,
                   (!inputText.trim() || isSending) && styles.sendButtonDisabled,
                 ]}
-                onPress={() => handleSendMessage()}
+                onPress={() => {
+                  handleSendMessage();
+                  textInputRef.current?.focus();
+                }}
                 disabled={!inputText.trim() || isSending}
                 activeOpacity={0.8}
               >
@@ -421,51 +472,34 @@ const getStyles = (colors: ThemeColors) => {
       padding: 6,
       borderRadius: 20,
     },
-    contextBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      backgroundColor: colors.surfaceContainerLow,
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.outlineVariant,
-    },
-    contextLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      flex: 1,
-    },
-    contextText: {
-      ...typography.labelMd,
-      fontSize: 11,
-      color: colors.onSurfaceVariant,
-      flex: 1,
-    },
-    contextBadge: {
-      backgroundColor: colors.primaryContainer,
-      paddingHorizontal: 8,
-      paddingVertical: 2,
-      borderRadius: 10,
-    },
-    contextBadgeText: {
-      ...typography.labelMd,
-      fontSize: 11,
-      color: colors.onPrimaryContainer,
-      fontWeight: '600',
-    },
     chatWrapper: {
       flex: 1,
     },
+    dateSeparatorContainer: {
+      alignItems: 'center',
+      marginVertical: 12,
+    },
+    dateSeparatorPill: {
+      backgroundColor: colors.surfaceContainerHigh,
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    dateSeparatorText: {
+      ...typography.labelMd,
+      fontSize: 11,
+      color: colors.onSurfaceVariant,
+    },
     messagesList: {
-      padding: 16,
-      gap: 16,
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 8,
     },
     messageRow: {
       flexDirection: 'row',
       alignItems: 'flex-end',
       gap: 8,
+      marginBottom: 10,
     },
     messageRowUser: {
       justifyContent: 'flex-end',
@@ -483,20 +517,26 @@ const getStyles = (colors: ThemeColors) => {
       marginBottom: 2,
     },
     bubbleContainer: {
-      maxWidth: '82%',
+      maxWidth: '80%',
       paddingHorizontal: 14,
-      paddingVertical: 10,
-      borderRadius: 18,
+      paddingTop: 10,
+      paddingBottom: 8,
     },
     bubbleUser: {
       backgroundColor: colors.primary,
+      borderTopLeftRadius: 18,
+      borderTopRightRadius: 18,
+      borderBottomLeftRadius: 18,
       borderBottomRightRadius: 4,
     },
     bubbleAssistant: {
       backgroundColor: colors.surfaceContainerLow,
       borderWidth: 1,
       borderColor: colors.outlineVariant,
-      borderBottomLeftRadius: 4,
+      borderTopLeftRadius: 4,
+      borderTopRightRadius: 18,
+      borderBottomLeftRadius: 18,
+      borderBottomRightRadius: 18,
     },
     messageText: {
       ...typography.bodyMd,
@@ -524,24 +564,57 @@ const getStyles = (colors: ThemeColors) => {
       color: colors.primary,
       fontWeight: '700',
     },
+    timestampContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      marginTop: 4,
+    },
+    timestampContainerUser: {
+      justifyContent: 'flex-end',
+      alignSelf: 'flex-end',
+    },
+    timestampContainerAssistant: {
+      justifyContent: 'flex-start',
+      alignSelf: 'flex-start',
+    },
     timestampText: {
       ...typography.labelMd,
       fontSize: 10,
-      marginTop: 4,
     },
     timestampUser: {
       color: 'rgba(255, 255, 255, 0.75)',
-      alignSelf: 'flex-end',
     },
     timestampAssistant: {
       color: colors.onSurfaceVariant,
-      alignSelf: 'flex-start',
+    },
+    readReceiptIcon: {
+      marginLeft: 1,
+    },
+    scrollBottomFab: {
+      position: 'absolute',
+      right: 16,
+      bottom: 70,
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: colors.surfaceContainerHigh,
+      alignItems: 'center',
+      justifyContent: 'center',
+      elevation: 4,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 4,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.outlineVariant,
+      zIndex: 10,
     },
     thinkingContainer: {
       flexDirection: 'row',
       alignItems: 'flex-end',
       gap: 8,
-      marginTop: 4,
+      marginBottom: 10,
     },
     thinkingBubble: {
       flexDirection: 'row',
@@ -562,7 +635,7 @@ const getStyles = (colors: ThemeColors) => {
     },
     promptsContainer: {
       paddingHorizontal: 16,
-      paddingBottom: 4,
+      paddingBottom: 6,
     },
     promptsTitle: {
       ...typography.labelMd,
@@ -593,7 +666,7 @@ const getStyles = (colors: ThemeColors) => {
       paddingHorizontal: 16,
       paddingTop: 8,
       backgroundColor: colors.background,
-      borderTopWidth: 1,
+      borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.outlineVariant,
     },
     inputInnerWrapper: {

@@ -1,6 +1,9 @@
 server:
   port: ${PORT:8080}
   shutdown: graceful
+  tomcat:
+    max-http-form-post-size: 20MB
+    max-swallow-size: 20MB
 
 clarity:
   admin:
@@ -8,11 +11,15 @@ clarity:
   ai:
     gemini:
       api-key: ${GEMINI_API_KEY:}
-      model: ${GEMINI_MODEL:gemini-1.5-flash}
+      model: ${GEMINI_MODEL:gemini-flash-lite-latest}
 
 spring:
   application:
     name: clarity-backend
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
   lifecycle:
     timeout-per-shutdown-phase: 20s
   datasource:

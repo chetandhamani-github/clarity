@@ -28,7 +28,7 @@ public class AiServiceImpl implements AiService {
     @Value("${clarity.ai.gemini.api-key:}")
     private String geminiApiKey;
 
-    @Value("${clarity.ai.gemini.model:gemini-1.5-flash}")
+    @Value("${clarity.ai.gemini.model:gemini-flash-lite-latest}")
     private String geminiModel;
 
     @Override
@@ -113,83 +113,82 @@ public class AiServiceImpl implements AiService {
 
     @Override
     public ReceiptScanResponse scanReceipt(ReceiptScanRequest request) {
-        // Try Gemini Multimodal Vision first if API key configured and image provided
         if (hasGeminiKey() && request.getImageBase64() != null && !request.getImageBase64().isEmpty()) {
             String prompt = "Extract structured financial data from this receipt. Return ONLY valid JSON with keys: " +
-                    "merchant (string), date (YYYY-MM-DD), totalAmount (number), taxAmount (number), category (string), " +
+                    "merchant (string or null), date (YYYY-MM-DD or null), totalAmount (number or null), taxAmount (number or null), category (string or null), " +
                     "items (array of objects with name, amount, category, quantity). Do not include markdown codeblocks or backticks.";
             String rawJson = callGemini(prompt, request.getImageBase64(), request.getMimeType());
-            if (rawJson != null) {
+            if (rawJson != null && !rawJson.trim().isEmpty()) {
                 try {
-                    String cleanJson = rawJson.replaceAll("```json", "").replaceAll("```", "").trim();
+                    int startIdx = rawJson.indexOf('{');
+                    int endIdx = rawJson.lastIndexOf('}');
+                    String cleanJson = (startIdx != -1 && endIdx > startIdx)
+                            ? rawJson.substring(startIdx, endIdx + 1)
+                            : rawJson.replaceAll("```json", "").replaceAll("```", "").trim();
+
                     JsonNode node = objectMapper.readTree(cleanJson);
                     List<ReceiptItemDTO> items = new ArrayList<>();
                     if (node.has("items") && node.get("items").isArray()) {
                         for (JsonNode it : node.get("items")) {
+                            String itemName = it.hasNonNull("name") ? it.get("name").asText("") : "";
+                            double itemAmount = it.hasNonNull("amount") ? it.get("amount").asDouble(0.0) : 0.0;
+                            String itemCat = it.hasNonNull("category") ? it.get("category").asText("") : "";
+                            int itemQty = it.hasNonNull("quantity") ? it.get("quantity").asInt(1) : 1;
+
                             items.add(ReceiptItemDTO.builder()
-                                    .name(it.path("name").asText("Item"))
-                                    .amount(it.path("amount").asDouble(0.0))
-                                    .category(it.path("category").asText("General"))
-                                    .quantity(it.path("quantity").asInt(1))
+                                    .name(itemName)
+                                    .amount(itemAmount)
+                                    .category(itemCat)
+                                    .quantity(itemQty)
                                     .build());
                         }
                     }
 
+                    String merchantRaw = node.hasNonNull("merchant") ? node.get("merchant").asText() : "";
+                    String merchant = (!merchantRaw.isBlank() && !merchantRaw.equalsIgnoreCase("null"))
+                            ? cleanMerchantName(merchantRaw)
+                            : "";
+
+                    String dateRaw = node.hasNonNull("date") ? node.get("date").asText() : "";
+                    String date = (!dateRaw.isBlank() && !dateRaw.equalsIgnoreCase("null"))
+                            ? dateRaw
+                            : "";
+
+                    String categoryRaw = node.hasNonNull("category") ? node.get("category").asText() : "";
+                    String category = (!categoryRaw.isBlank() && !categoryRaw.equalsIgnoreCase("null"))
+                            ? categoryRaw
+                            : "";
+
+                    double totalAmount = node.hasNonNull("totalAmount") ? node.get("totalAmount").asDouble(0.0) : 0.0;
+                    double taxAmount = node.hasNonNull("taxAmount") ? node.get("taxAmount").asDouble(0.0) : 0.0;
+
+                    if (totalAmount <= 0.0 && !items.isEmpty()) {
+                        totalAmount = items.stream().mapToDouble(ReceiptItemDTO::getAmount).sum();
+                    }
+
                     return ReceiptScanResponse.builder()
-                            .merchant(node.path("merchant").asText("Retail Merchant"))
-                            .date(node.path("date").asText(LocalDate.now().toString()))
-                            .totalAmount(node.path("totalAmount").asDouble(0.0))
-                            .taxAmount(node.path("taxAmount").asDouble(0.0))
-                            .category(node.path("category").asText("Groceries"))
+                            .merchant(merchant)
+                            .date(date)
+                            .totalAmount(totalAmount)
+                            .taxAmount(taxAmount)
+                            .category(category)
                             .items(items)
-                            .confidence(0.95)
+                            .confidence(totalAmount > 0 || !merchant.isEmpty() ? 0.95 : 0.0)
                             .build();
                 } catch (Exception e) {
-                    log.warn("Failed to parse Gemini vision response: {}", e.getMessage());
+                    log.error("[AiService] Failed to parse Gemini vision response: {}", e.getMessage());
                 }
             }
         }
 
-        // Rule-based fallback
-        String text = request.getRawText() != null ? request.getRawText() : "";
-        String merchant = "Retail Merchant";
-        String date = LocalDate.now().toString();
-        double total = 0.0;
-        double tax = 0.0;
-        List<ReceiptItemDTO> items = new ArrayList<>();
-
-        Pattern totalPattern = Pattern.compile("(?i)(?:total|amount|net|paid)[:\\s]*[₹Rs.]*\\s*([0-9]+(?:\\.[0-9]{1,2})?)");
-        Matcher totalMatcher = totalPattern.matcher(text);
-        if (totalMatcher.find()) {
-            try {
-                total = Double.parseDouble(totalMatcher.group(1));
-            } catch (Exception ignored) {}
-        }
-
-        Pattern taxPattern = Pattern.compile("(?i)(?:tax|gst|cgst|sgst)[:\\s]*[₹Rs.]*\\s*([0-9]+(?:\\.[0-9]{1,2})?)");
-        Matcher taxMatcher = taxPattern.matcher(text);
-        if (taxMatcher.find()) {
-            try {
-                tax = Double.parseDouble(taxMatcher.group(1));
-            } catch (Exception ignored) {}
-        }
-
-        if (total <= 0.0) {
-            total = 450.0;
-            tax = 22.5;
-            merchant = "Fresh Supermarket";
-            items.add(ReceiptItemDTO.builder().name("Groceries Item 1").amount(250.0).quantity(1).category("Groceries").build());
-            items.add(ReceiptItemDTO.builder().name("Beverage Item 2").amount(200.0).quantity(1).category("Food & Dining").build());
-        }
-
         return ReceiptScanResponse.builder()
-                .merchant(merchant)
-                .date(date)
-                .totalAmount(total)
-                .taxAmount(tax)
-                .category("Groceries")
-                .items(items)
-                .confidence(0.85)
+                .merchant("")
+                .date("")
+                .totalAmount(0.0)
+                .taxAmount(0.0)
+                .category("")
+                .items(Collections.emptyList())
+                .confidence(0.0)
                 .build();
     }
 
@@ -197,58 +196,22 @@ public class AiServiceImpl implements AiService {
     public AiChatResponse chat(AiChatRequest request) {
         String msg = request.getMessage();
         String context = request.getFinancialContextSummary() != null ? request.getFinancialContextSummary() : "";
-        boolean geminiConfigured = hasGeminiKey();
 
-        log.info("[AiService] Chat request received: message='{}', geminiKeyConfigured={}, contextLength={}",
-                msg, geminiConfigured, context.length());
-
-        // If Gemini is configured, generate natural conversational answer
-        if (geminiConfigured) {
-            log.info("[AiService] Attempting Gemini generative chat...");
+        if (hasGeminiKey()) {
             String prompt = "You are Clarity AI, a private personal finance assistant. Answer concisely in 2-3 sentences based on context.\n" +
                     "Context: " + context + "\nUser question: " + msg;
             String answer = callGemini(prompt, null, null);
             if (answer != null && !answer.trim().isEmpty()) {
-                String action = deriveSuggestedAction(msg);
-                log.info("[AiService] Gemini chat successfully generated response (action={})", action);
                 return AiChatResponse.builder()
                         .reply(answer.trim())
-                        .suggestedAction(action)
+                        .suggestedAction(deriveSuggestedAction(msg))
                         .build();
-            } else {
-                log.warn("[AiService] Gemini response was null/empty; falling back to rule-based engine.");
             }
-        } else {
-            log.info("[AiService] No Gemini API key provided; using rule-based financial copilot fallback.");
         }
-
-        // Rule-based fallback
-        String lower = msg.toLowerCase();
-        String reply;
-        String action;
-
-        if (lower.contains("budget") || lower.contains("spend") || lower.contains("limit")) {
-            reply = "Based on your current plan, spending is tracked against your 50/30/20 allocation. You can review your burn rate and category limits in the Budget Plan tab.";
-            action = "/(app)/(tabs)/plan";
-        } else if (lower.contains("bill") || lower.contains("due") || lower.contains("subscription")) {
-            reply = "You can view all upcoming and overdue bills, as well as recurring subscriptions, in the Bills section.";
-            action = "/(app)/bills";
-        } else if (lower.contains("save") || lower.contains("goal") || lower.contains("target")) {
-            reply = "Setting aside 20% of your monthly income directly into savings goals will build your emergency runway faster.";
-            action = "/(app)/(tabs)/goals";
-        } else if (lower.contains("account") || lower.contains("balance") || lower.contains("bank")) {
-            reply = "All linked bank and wallet balances are synced on-device. Check the Accounts tab to verify balances.";
-            action = "/(app)/(tabs)/accounts";
-        } else {
-            reply = "I'm Clarity's AI Copilot! I can analyze your spending patterns, track recurring bills, and help you reach your savings targets while keeping your data private.";
-            action = "/(app)/(tabs)/index";
-        }
-
-        log.info("[AiService] Rule-based fallback response generated (action={})", action);
 
         return AiChatResponse.builder()
-                .reply(reply)
-                .suggestedAction(action)
+                .reply("I am unable to process your request at the moment. Please try again later.")
+                .suggestedAction(deriveSuggestedAction(msg))
                 .build();
     }
 
@@ -299,13 +262,14 @@ public class AiServiceImpl implements AiService {
 
     private String callGemini(String prompt, String imageBase64, String mimeType) {
         if (!hasGeminiKey()) {
-            log.warn("[AiService] callGemini called, but geminiApiKey is missing or empty.");
             return null;
         }
 
         try {
-            String activeModel = geminiModel != null && !geminiModel.isEmpty() ? geminiModel : "gemini-1.5-flash";
-            log.info("[AiService] Invoking Gemini API with model='{}'...", activeModel);
+            String activeModel = geminiModel != null && !geminiModel.isBlank() ? geminiModel.trim() : "gemini-flash-lite-latest";
+            if (activeModel.contains("1.5") || activeModel.contains("2.5") || activeModel.equals("gemini-flash-latest")) {
+                activeModel = "gemini-flash-lite-latest";
+            }
             String url = "https://generativelanguage.googleapis.com/v1beta/models/"
                     + activeModel
                     + ":generateContent?key=" + geminiApiKey.trim();
@@ -364,16 +328,11 @@ public class AiServiceImpl implements AiService {
                 JsonNode candidates = root.path("candidates");
                 if (candidates.isArray() && !candidates.isEmpty()) {
                     JsonNode textNode = candidates.get(0).path("content").path("parts").get(0).path("text");
-                    log.info("[AiService] Gemini API call successful (200 OK)");
                     return textNode.asText();
-                } else {
-                    log.warn("[AiService] Gemini response had 200 OK but no valid candidates in JSON: {}", response.body());
                 }
-            } else {
-                log.warn("[AiService] Gemini API returned status {}: {}", response.statusCode(), response.body());
             }
         } catch (Exception e) {
-            log.error("[AiService] Failed to invoke Gemini API: {}", e.getMessage(), e);
+            log.error("[AiService] Failed to invoke Gemini API: {}", e.getMessage());
         }
         return null;
     }

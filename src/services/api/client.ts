@@ -101,29 +101,9 @@ class ApiClient {
     return this.authToken;
   }
 
-  private logRequest(method: string, url: string, body?: unknown) {
-    console.log(`[ApiClient] -> ${method} ${url}`, body !== undefined ? body : '');
-    console.tron?.display?.({
-      name: 'API Request',
-      preview: `${method} ${url}`,
-      value: { method, url, body },
-    });
-  }
-
-  private logResponse(method: string, url: string, status: number, data?: unknown) {
-    console.log(`[ApiClient] <- ${method} ${url} [${status}]`, data !== undefined ? data : '');
-    console.tron?.display?.({
-      name: 'API Response',
-      preview: `[${status}] ${method} ${url}`,
-      value: { method, url, status, data },
-      important: status >= 400,
-    });
-  }
-
-  private logError(method: string, url: string, error: unknown) {
-    console.error(`[ApiClient] !! ${method} ${url} ERROR:`, error);
-    console.tron?.error?.(`[ApiClient] ${method} ${url}`, (error as any)?.message ?? error);
-  }
+  private logRequest(_method: string, _url: string, _body?: unknown) {}
+  private logResponse(_method: string, _url: string, _status: number, _data?: unknown) {}
+  private logError(_method: string, _url: string, _error: unknown) {}
 
   private async request<T>(
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',

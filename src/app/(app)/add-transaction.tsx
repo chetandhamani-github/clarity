@@ -12,7 +12,7 @@ import {
 import { calculateNextDate } from '@/services/database/recurring-dao';
 import { evaluateTransactionBudgetAlerts } from '@/services/notifications/alert-engine';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { scanReceiptWithAi } from '@/services/api/ai.api';
 import { ThemeColors, typography, useTheme } from '@/theme';
 import type { RecurringFrequency, TransactionType } from '@/types';
@@ -400,6 +400,8 @@ export default function AddTransactionScreen() {
       });
 
       if (scanResult) {
+        setType('expense');
+
         if (scanResult.merchant) {
           setMerchant(scanResult.merchant);
         }
@@ -407,24 +409,44 @@ export default function AddTransactionScreen() {
           setAmountStr(scanResult.totalAmount.toString());
         }
         if (scanResult.category) {
-          setCategory(scanResult.category);
+          const matched = CATEGORIES.find(
+            (c) => c.toLowerCase() === scanResult.category.toLowerCase()
+          );
+          setCategory(matched || scanResult.category);
         }
         if (scanResult.date) {
-          setDate(scanResult.date);
+          const cleanDate = scanResult.date.includes('T') ? scanResult.date.split('T')[0] : scanResult.date.trim();
+          if (/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+            setDate(cleanDate);
+          }
         }
-        if (scanResult.items && scanResult.items.length > 0) {
-          setIsSplitMode(true);
-          setSplitItems(
-            scanResult.items.map((it) => ({
-              category: it.category || scanResult.category || 'Groceries',
-              amount: it.amount ? it.amount.toString() : '0',
-            }))
-          );
+
+        // Only activate split mode if there are at least 2 distinct items that sum to the total amount
+        if (scanResult.items && scanResult.items.length > 1) {
+          const itemSum = scanResult.items.reduce((acc, it) => acc + (it.amount || 0), 0);
+          const total = scanResult.totalAmount || 0;
+          if (total > 0 && Math.abs(itemSum - total) <= 0.5) {
+            setIsSplitMode(true);
+            setSplitItems(
+              scanResult.items.map((it) => ({
+                category: it.category || scanResult.category || 'Groceries',
+                amount: it.amount ? it.amount.toString() : '0',
+              }))
+            );
+          } else {
+            setIsSplitMode(false);
+          }
+        } else {
+          setIsSplitMode(false);
         }
+
         showToast('Receipt details auto-filled by AI!', 'success');
       }
-    } catch {
-      showToast('Could not scan receipt. Please enter manually.', 'error');
+    } catch (err: any) {
+      const errMsg = err?.message?.includes('timeout')
+        ? 'Receipt scan timed out. Try with a smaller image or enter manually.'
+        : 'Could not scan receipt. Please enter manually.';
+      showToast(errMsg, 'error');
     } finally {
       setIsScanningReceipt(false);
     }
