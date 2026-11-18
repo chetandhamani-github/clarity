@@ -2,7 +2,7 @@ import '@/lib/reactotron';
 import '@/lib/navigation';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, type AppStateStatus, StyleSheet, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
   useFonts,
@@ -13,7 +13,7 @@ import {
 } from '@expo-google-fonts/manrope';
 import * as SplashScreen from 'expo-splash-screen';
 import { initDatabase } from '@/services/database';
-import { ToastProvider, AlertProvider, AppLockModal } from '@/components/ui';
+import { ToastProvider, AlertProvider, AppLockModal, Text } from '@/components/ui';
 import { GoogleDrivePromptModal } from '@/components/modals/GoogleDrivePromptModal';
 import { SmsPermissionPromptModal } from '@/components/modals/SmsPermissionPromptModal';
 import { SmsTransactionPromptModal } from '@/components/modals/SmsTransactionPromptModal';
@@ -21,6 +21,7 @@ import { useSmsStore } from '@/store/useSmsStore';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
+import { typography } from '@/theme';
 import { useTheme } from '@/theme/useTheme';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/lib/query-client';
@@ -49,6 +50,7 @@ function checkInitialLockState(): boolean {
 export default function RootLayout() {
   const [dbReady, setDbReady] = useState(false);
   const [isAppLocked, setIsAppLocked] = useState(checkInitialLockState);
+  const [isScreenShielded, setIsScreenShielded] = useState(false);
   const [showDrivePrompt, setShowDrivePrompt] = useState(false);
   const [showSmsPrompt, setShowSmsPrompt] = useState(false);
   const isTransactionPromptVisible = useSmsStore((state) => state.isPromptVisible);
@@ -175,7 +177,10 @@ export default function RootLayout() {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
         lastBackgroundTime.current = Date.now();
         const state = useAppStore.getState();
-        // Mask screen immediately in task switcher if biometric lock is immediate
+        // Mask screen immediately in task switcher if biometric lock is enabled
+        if (state.biometricEnabled) {
+          setIsScreenShielded(true);
+        }
         if (state.biometricEnabled && state.timeoutSetting === 'immediate') {
           setIsAppLocked(true);
         }
@@ -193,6 +198,7 @@ export default function RootLayout() {
             setIsAppLocked(true);
           }
         }
+        setIsScreenShielded(false);
         lastBackgroundTime.current = null;
 
         // Process due recurring transactions and bill reminders when resuming app
@@ -259,6 +265,24 @@ export default function RootLayout() {
                   <Stack.Screen name="(app)" options={{ headerShown: false }} />
                   <Stack.Screen name="(auth)" options={{ headerShown: false }} />
                 </Stack>
+                {isScreenShielded && !isAppLocked && (
+                  <View
+                    style={[
+                      StyleSheet.absoluteFill,
+                      {
+                        backgroundColor: colors.background,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 99999,
+                      },
+                    ]}
+                  >
+                    <MaterialIcons name="security" size={48} color={colors.primary} />
+                    <Text style={{ marginTop: 12, ...typography.headlineSm, color: colors.onSurface }}>
+                      Clarity Protected
+                    </Text>
+                  </View>
+                )}
                 <AppLockModal visible={isAppLocked} onUnlock={() => setIsAppLocked(false)} />
                 <GoogleDrivePromptModal
                   visible={showDrivePrompt && !isAppLocked}

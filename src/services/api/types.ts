@@ -218,5 +218,20 @@ export interface MonthlyDigestResult {
   financialHealthScore: number;
 }
 
+export interface VoiceParsePayload {
+  transcript: string;
+  availableAccounts?: string[];
+}
+
+export interface VoiceParseResult {
+  merchant: string;
+  amount: number;
+  category: string;
+  account?: string;
+  type?: 'expense' | 'income' | 'transfer';
+  note?: string;
+  confidence: number;
+}
+
 
 

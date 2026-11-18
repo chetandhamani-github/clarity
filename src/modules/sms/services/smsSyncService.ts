@@ -36,6 +36,7 @@ import {
 } from '@/services/notifications/alert-engine';
 import { formatLocalDate } from '@/utils/format';
 import { hasMeaningfulMerchant } from '@/utils/transaction-display';
+import { createReviewItem } from '@/modules/sms/reviewQueue/reviewItemFactory';
 import { SmsPipelineService } from './smsPipelineService';
 
 const LAST_SYNC_KEY = 'clarity_last_sms_sync_timestamp';
@@ -315,20 +316,31 @@ export class SmsSyncService {
         continue;
       }
 
-      const result = await SmsPipelineService.processMessage(message, {
-        checkDatabaseDuplicates: true,
-      });
+      try {
+        const result = await SmsPipelineService.processMessage(message, {
+          checkDatabaseDuplicates: true,
+        });
 
-      if (result.type === 'PARSED') {
-        parsedBatch.push(result.transaction);
-        if (result.transaction.isDuplicate) {
-          duplicates += 1;
-        } else {
-          parsed += 1;
+        if (result.type === 'PARSED') {
+          parsedBatch.push(result.transaction);
+          if (result.transaction.isDuplicate) {
+            duplicates += 1;
+          } else {
+            parsed += 1;
+          }
+        } else if (result.type === 'REVIEW') {
+          reviewBatch.push(result.reviewItem);
+          review += 1;
         }
-      } else if (result.type === 'REVIEW') {
-        reviewBatch.push(result.reviewItem);
-        review += 1;
+      } catch {
+        // Fault-isolation: a single corrupt or unparseable SMS must never terminate the sync batch
+        try {
+          const fallbackReview = createReviewItem(message, 'UNRECOGNIZED_FORMAT', 0.1);
+          reviewBatch.push(fallbackReview);
+          review += 1;
+        } catch {
+          // If even creating review item fails, safely continue batch
+        }
       }
 
       // Check if message contains a utility or bill reminder

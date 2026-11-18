@@ -14,7 +14,7 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
-import { Text, Header, useAlert, useToast } from '@/components/ui';
+import { Text, Header, useAlert, useToast, NoNetworkView } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -23,6 +23,8 @@ import { useMonthlyTotals } from '@/hooks/use-transactions';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
 import { useAccounts } from '@/hooks/use-accounts';
 import { chatWithFinancialCopilot } from '@/services/api/ai.api';
+import { useNetworkStore } from '@/store/use-network-store';
+import { isNetworkError } from '@/services/network/network.service';
 
 interface ChatMessage {
   id: string;
@@ -66,6 +68,14 @@ export default function CopilotScreen() {
   const { plan } = useBudgetPlan();
   const { spending } = useCategorySpending(selectedMonth, selectedYear);
   const { accounts } = useAccounts();
+
+  const isConnected = useNetworkStore((state) => state.isConnected);
+  const isChecking = useNetworkStore((state) => state.isChecking);
+  const checkConnection = useNetworkStore((state) => state.checkConnection);
+
+  useEffect(() => {
+    checkConnection();
+  }, [checkConnection]);
 
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -138,6 +148,11 @@ export default function CopilotScreen() {
     const query = (textToSend ?? inputText).trim();
     if (!query || isSending) return;
 
+    if (!isConnected) {
+      showToast('Cannot send message while offline. Please check your connection.', 'error');
+      return;
+    }
+
     const userMsg: ChatMessage = {
       id: `user-${Date.now()}`,
       sender: 'user',
@@ -171,7 +186,10 @@ export default function CopilotScreen() {
 
       setMessages((prev) => [...prev, assistantMsg]);
       setTimeout(() => scrollToEnd(true), 80);
-    } catch {
+    } catch (err: unknown) {
+      if (isNetworkError(err)) {
+        useNetworkStore.getState().setIsConnected(false);
+      }
       showToast('Could not reach assistant. Please try again.', 'error');
       const errorMsg: ChatMessage = {
         id: `assistant-${Date.now()}`,
@@ -187,7 +205,7 @@ export default function CopilotScreen() {
         textInputRef.current?.focus();
       });
     }
-  }, [inputText, isSending, financialContext, scrollToEnd, showToast]);
+  }, [inputText, isSending, isConnected, financialContext, scrollToEnd, showToast]);
 
   const handleClearHistory = () => {
     showAlert(
@@ -308,6 +326,21 @@ export default function CopilotScreen() {
         : keyboardHeight + KEYBOARD_GAP
       : 0;
 
+  if (!isConnected && messages.length <= 1) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top, flex: 1, backgroundColor: colors.background }]}>
+        <Header showBack title="Clarity Copilot" />
+        <NoNetworkView
+          variant="fullscreen"
+          title="Clarity Copilot Offline"
+          message="Clarity AI runs in the cloud and requires an active internet connection to analyze your spending patterns and answer queries. Please check your network and try again."
+          onRetry={checkConnection}
+          isRetrying={isChecking}
+        />
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.background }}
@@ -328,6 +361,15 @@ export default function CopilotScreen() {
             </TouchableOpacity>
           }
         />
+
+        {!isConnected && (
+          <NoNetworkView
+            variant="banner"
+            message="You're offline. Reconnect to send messages to Copilot."
+            onRetry={checkConnection}
+            isRetrying={isChecking}
+          />
+        )}
 
         <View style={[styles.chatWrapper, { paddingBottom: androidBottomPadding }]}>
           <FlatList
@@ -393,8 +435,14 @@ export default function CopilotScreen() {
                 {SUGGESTED_PROMPTS.map((prompt, index) => (
                   <TouchableOpacity
                     key={index}
-                    style={styles.promptChip}
-                    onPress={() => handleSendMessage(prompt)}
+                    style={[styles.promptChip, !isConnected && { opacity: 0.5 }]}
+                    onPress={() => {
+                      if (!isConnected) {
+                        showToast('Cannot send message while offline. Please check your connection.', 'error');
+                        return;
+                      }
+                      handleSendMessage(prompt);
+                    }}
                     activeOpacity={0.7}
                   >
                     <MaterialIcons name="chat-bubble-outline" size={14} color={colors.primary} />
@@ -420,11 +468,16 @@ export default function CopilotScreen() {
             <View style={styles.inputInnerWrapper}>
               <TextInput
                 ref={textInputRef}
-                style={styles.textInput}
-                placeholder="Ask about spending, saving, or budget..."
+                style={[styles.textInput, !isConnected && { opacity: 0.7 }]}
+                placeholder={
+                  !isConnected
+                    ? 'Offline — Connect to internet to chat...'
+                    : 'Ask about spending, saving, or budget...'
+                }
                 placeholderTextColor={colors.onSurfaceVariant}
                 value={inputText}
                 onChangeText={setInputText}
+                editable={isConnected && !isSending}
                 multiline
                 maxLength={500}
                 returnKeyType="send"
@@ -439,13 +492,13 @@ export default function CopilotScreen() {
               <TouchableOpacity
                 style={[
                   styles.sendButton,
-                  (!inputText.trim() || isSending) && styles.sendButtonDisabled,
+                  (!inputText.trim() || isSending || !isConnected) && styles.sendButtonDisabled,
                 ]}
                 onPress={() => {
                   handleSendMessage();
                   textInputRef.current?.focus();
                 }}
-                disabled={!inputText.trim() || isSending}
+                disabled={!inputText.trim() || isSending || !isConnected}
                 activeOpacity={0.8}
               >
                 {isSending ? (

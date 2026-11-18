@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Text, Header, ListSkeleton, useAlert, useToast } from '@/components/ui';
+import { Text, Header, ListSkeleton, useAlert, useToast, NoNetworkView } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -20,6 +20,8 @@ import { getTransactionDisplayName } from '@/utils/transaction-display';
 import { useAppStore } from '@/store/use-app-store';
 import { fetchMonthlyAiDigest } from '@/services/api/ai.api';
 import type { MonthlyDigestResult } from '@/services/api/types';
+import { useNetworkStore } from '@/store/use-network-store';
+import { isNetworkError } from '@/services/network/network.service';
 
 export default function AnalyticsScreen() {
   const { colors } = useTheme();
@@ -56,8 +58,12 @@ export default function AnalyticsScreen() {
   const { showToast } = useToast();
   const { reports, isLoading: loadingReports } = useMonthlyReports();
 
+  const isConnected = useNetworkStore((state) => state.isConnected);
+  const checkConnection = useNetworkStore((state) => state.checkConnection);
+
   const [digest, setDigest] = useState<MonthlyDigestResult | null>(null);
   const [loadingDigest, setLoadingDigest] = useState(false);
+  const [digestOffline, setDigestOffline] = useState(false);
 
   const handleOpenCopilot = () => {
     router.push({
@@ -66,10 +72,38 @@ export default function AnalyticsScreen() {
     });
   };
 
+  const handleRetryDigest = async () => {
+    await checkConnection();
+    if (totals.income > 0 || totals.expenses > 0) {
+      setLoadingDigest(true);
+      setDigestOffline(false);
+      try {
+        const topCatList =
+          spending?.slice(0, 3).map((s) => `${s.category}: ${Math.round(s.spent)}`) || [];
+        const res = await fetchMonthlyAiDigest({
+          month: selectedMonth,
+          year: selectedYear,
+          totalIncome: totals.income,
+          totalExpenses: totals.expenses,
+          topCategories: topCatList,
+        });
+        setDigest(res);
+        setDigestOffline(false);
+      } catch (err: unknown) {
+        if (isNetworkError(err) || !useNetworkStore.getState().isConnected) {
+          setDigestOffline(true);
+        }
+      } finally {
+        setLoadingDigest(false);
+      }
+    }
+  };
+
   useEffect(() => {
     let isCancelled = false;
     const loadDigest = async () => {
       setLoadingDigest(true);
+      setDigestOffline(false);
       try {
         const topCatList =
           spending?.slice(0, 3).map((s) => `${s.category}: ${Math.round(s.spent)}`) || [];
@@ -82,9 +116,14 @@ export default function AnalyticsScreen() {
         });
         if (!isCancelled) {
           setDigest(res);
+          setDigestOffline(false);
         }
-      } catch {
-        // Fallback gracefully
+      } catch (err: unknown) {
+        if (!isCancelled) {
+          if (isNetworkError(err) || !useNetworkStore.getState().isConnected) {
+            setDigestOffline(true);
+          }
+        }
       } finally {
         if (!isCancelled) setLoadingDigest(false);
       }
@@ -461,6 +500,14 @@ export default function AnalyticsScreen() {
                       </View>
                     )}
                   </View>
+                ) : digestOffline || (!digest && !isConnected) ? (
+                  <NoNetworkView
+                    variant="card"
+                    title="Clarity AI Digest Offline"
+                    message="Clarity AI requires an active internet connection to generate your monthly financial insights and calculate your health score."
+                    onRetry={handleRetryDigest}
+                    isRetrying={loadingDigest}
+                  />
                 ) : (
                   <View style={styles.aiEmptyBox}>
                     <Text style={styles.aiEmptyText}>

@@ -153,8 +153,11 @@ export default function PlanScreen() {
     const projectedMonthEnd = Math.round(dailyBurn * totalDays);
     const variance = projectedMonthEnd - safePlan.monthlyIncome;
     const isOverbudgetRisk = variance > 0;
+    const unpaidBills = billSummary?.unpaidAmount || 0;
     const targetDailyPace =
       daysLeft > 0 ? Math.max(0, (safePlan.monthlyIncome - totals.totalSpent) / daysLeft) : 0;
+    const safeDailySpend =
+      daysLeft > 0 ? Math.max(0, (safePlan.monthlyIncome - totals.totalSpent - unpaidBills) / daysLeft) : 0;
 
     return {
       daysPassed,
@@ -164,9 +167,11 @@ export default function PlanScreen() {
       projectedMonthEnd,
       variance,
       isOverbudgetRisk,
+      unpaidBills: Math.round(unpaidBills),
       targetDailyPace: Math.round(targetDailyPace),
+      safeDailySpend: Math.round(safeDailySpend),
     };
-  }, [safePlan.monthlyIncome, totals.totalSpent]);
+  }, [safePlan.monthlyIncome, totals.totalSpent, billSummary?.unpaidAmount]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -292,6 +297,27 @@ export default function PlanScreen() {
                     ? `At your current pace (${formatCurrency(forecast.dailyBurn)}/day), month-end spend is projected to reach ${formatCurrency(forecast.projectedMonthEnd)} (${formatCurrency(forecast.variance)} over budget). Limit daily spending to ${formatCurrency(forecast.targetDailyPace)} to stay on track.`
                     : `Spending is well-paced at ${formatCurrency(forecast.dailyBurn)}/day. Projected month-end spend is ${formatCurrency(forecast.projectedMonthEnd)} with estimated savings of ${formatCurrency(Math.abs(forecast.variance))}.`}
                 </Text>
+
+                <View style={styles.forecastMetricsRow}>
+                  <View style={styles.forecastMetricItem}>
+                    <Text style={styles.forecastMetricLabel}>Daily Burn</Text>
+                    <Text style={styles.forecastMetricValue}>{formatCurrency(forecast.dailyBurn)}/d</Text>
+                  </View>
+                  <View style={styles.forecastMetricDivider} />
+                  <View style={styles.forecastMetricItem}>
+                    <Text style={styles.forecastMetricLabel}>Safe Today</Text>
+                    <Text style={[styles.forecastMetricValue, { color: colors.primary }]}>
+                      {formatCurrency(forecast.safeDailySpend)}/d
+                    </Text>
+                  </View>
+                  <View style={styles.forecastMetricDivider} />
+                  <View style={styles.forecastMetricItem}>
+                    <Text style={styles.forecastMetricLabel}>Unpaid Bills</Text>
+                    <Text style={styles.forecastMetricValue}>
+                      {formatCurrency(forecast.unpaidBills)}
+                    </Text>
+                  </View>
+                </View>
               </View>
             )}
 
@@ -618,6 +644,37 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.bodyMd,
       color: colors.onSurfaceVariant,
       lineHeight: 20,
+    },
+    forecastMetricsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.surfaceContainerLow,
+      borderRadius: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      marginTop: 4,
+    },
+    forecastMetricItem: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    forecastMetricDivider: {
+      width: StyleSheet.hairlineWidth,
+      height: 24,
+      backgroundColor: colors.outlineVariant,
+    },
+    forecastMetricLabel: {
+      ...typography.labelMd,
+      fontSize: 10,
+      color: colors.onSurfaceVariant,
+      marginBottom: 2,
+    },
+    forecastMetricValue: {
+      ...typography.labelMd,
+      fontWeight: '700',
+      fontSize: 12,
+      color: colors.onSurface,
     },
   });
   return styles;

@@ -18,7 +18,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Text, Header, useAlert, useToast } from '@/components/ui';
 import { typography, useTheme, radius } from '@/theme';
 import { useAppStore } from '@/store/use-app-store';
-import { formatCurrencyPrivacy } from '@/utils/format';
+import { formatCurrencyPrivacy, parseDateSafely } from '@/utils/format';
 import { useSplitwiseStore } from '../store/splitwise.store';
 import { SplitwiseSyncService } from '../services/SplitwiseSyncService';
 import { BalanceCalculator } from '../services/BalanceCalculator';
@@ -1001,7 +1001,7 @@ export function PersonDetailsScreen() {
 
 function formatDate(iso: string): string {
   try {
-    const d = new Date(iso);
+    const d = parseDateSafely(iso);
     const now = new Date();
     const isToday = d.toDateString() === now.toDateString();
     const yesterday = new Date();

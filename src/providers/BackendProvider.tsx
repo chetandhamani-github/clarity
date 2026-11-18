@@ -11,6 +11,7 @@ import { MaintenanceScreen } from '@/components/backend/MaintenanceScreen';
 import { ForceUpdateScreen } from '@/components/backend/ForceUpdateScreen';
 import { useRemoteConfigStore } from '@/store/remoteConfig.store';
 import { useFeatureFlagStore } from '@/store/featureFlag.store';
+import { useNetworkStore, initNetworkMonitoring } from '@/store/use-network-store';
 import { SplitwiseSyncService } from '@/modules/splitwise/services/SplitwiseSyncService';
 
 interface BackendContextValue {
@@ -79,6 +80,7 @@ export function BackendProvider({ children }: BackendProviderProps) {
   }, [installationId, setConfig, setFlags]);
 
   useEffect(() => {
+    const cleanupNetwork = initNetworkMonitoring();
     runStartupSequence();
 
     // Automatically re-evaluate device status when user returns to app (e.g. from admin portal)
@@ -88,7 +90,10 @@ export function BackendProvider({ children }: BackendProviderProps) {
       }
     });
 
-    return () => subscription.remove();
+    return () => {
+      subscription.remove();
+      cleanupNetwork();
+    };
   }, [runStartupSequence]);
 
   return (

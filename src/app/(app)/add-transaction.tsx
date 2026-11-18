@@ -13,7 +13,12 @@ import { calculateNextDate } from '@/services/database/recurring-dao';
 import { evaluateTransactionBudgetAlerts } from '@/services/notifications/alert-engine';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { scanReceiptWithAi } from '@/services/api/ai.api';
+import { VoiceTransactionModal } from '@/components/modals/VoiceTransactionModal';
+import type { ParsedVoiceTransaction } from '@/services/voice/voice-parser';
+import { useNetworkStore } from '@/store/use-network-store';
+import { isNetworkError } from '@/services/network/network.service';
 import { ThemeColors, typography, useTheme } from '@/theme';
 import type { RecurringFrequency, TransactionType } from '@/types';
 import { formatLocalDate, getCurrencySymbol } from '@/utils/format';
@@ -100,6 +105,7 @@ export default function AddTransactionScreen() {
   const [recurringFreq, setRecurringFreq] = useState<RecurringFrequency>('monthly');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isScanningReceipt, setIsScanningReceipt] = useState(false);
+  const isConnected = useNetworkStore((state) => state.isConnected);
 
   // Split Category states
   const [isSplitMode, setIsSplitMode] = useState(false);
@@ -112,7 +118,36 @@ export default function AddTransactionScreen() {
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [showToAccountMenu, setShowToAccountMenu] = useState(false);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [initialized, setInitialized] = useState(false);
+
+  const handleApplyVoiceParsed = (parsed: ParsedVoiceTransaction) => {
+    if (parsed.amount > 0) {
+      setAmountStr(parsed.amount.toString());
+    }
+    if (parsed.merchant) {
+      setMerchant(parsed.merchant);
+    }
+    if (parsed.category) {
+      const matched = CATEGORIES.find(
+        (c) => c.toLowerCase() === parsed.category.toLowerCase()
+      );
+      setCategory(matched || parsed.category);
+    }
+    if (parsed.type) {
+      setType(parsed.type);
+    }
+    if (parsed.accountId) {
+      setAccountId(parsed.accountId);
+    }
+    if (parsed.note) {
+      setNote(parsed.note);
+    }
+    showToast(
+      `Auto-filled: ${parsed.merchant || 'Transaction'} (${getCurrencySymbol()}${parsed.amount.toFixed(2)})`,
+      'success'
+    );
+  };
 
   // Pre-populate if editing
   React.useEffect(() => {
@@ -376,6 +411,15 @@ export default function AddTransactionScreen() {
   };
 
   const handleScanReceipt = async () => {
+    if (!isConnected) {
+      showAlert(
+        'Internet Required',
+        'AI Receipt Scanner uses advanced vision AI in the cloud to read receipts and auto-fill details. Please connect to the internet and try again.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     try {
       const res = await DocumentPicker.getDocumentAsync({
         type: ['image/*'],
@@ -388,15 +432,35 @@ export default function AddTransactionScreen() {
 
       const asset = res.assets[0];
       setIsScanningReceipt(true);
-      showToast('Analyzing receipt with AI...', 'info');
+      showToast('Optimizing and scanning receipt...', 'info');
 
-      const base64 = await FileSystem.readAsStringAsync(asset.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      // Client-side image downscaling to reduce payload from ~10MB to <350KB
+      let base64 = '';
+      let mimeType = 'image/jpeg';
+      try {
+        const manipResult = await manipulateAsync(
+          asset.uri,
+          [{ resize: { width: 1400 } }],
+          { compress: 0.75, format: SaveFormat.JPEG, base64: true }
+        );
+        if (manipResult.base64) {
+          base64 = manipResult.base64;
+          mimeType = 'image/jpeg';
+        }
+      } catch {
+        // Fallback to direct read if manipulation fails on non-standard formats
+      }
+
+      if (!base64) {
+        base64 = await FileSystem.readAsStringAsync(asset.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        mimeType = asset.mimeType || 'image/jpeg';
+      }
 
       const scanResult = await scanReceiptWithAi({
         imageBase64: base64,
-        mimeType: asset.mimeType || 'image/jpeg',
+        mimeType,
       });
 
       if (scanResult) {
@@ -442,11 +506,16 @@ export default function AddTransactionScreen() {
 
         showToast('Receipt details auto-filled by AI!', 'success');
       }
-    } catch (err: any) {
-      const errMsg = err?.message?.includes('timeout')
-        ? 'Receipt scan timed out. Try with a smaller image or enter manually.'
-        : 'Could not scan receipt. Please enter manually.';
-      showToast(errMsg, 'error');
+    } catch (err: unknown) {
+      if (isNetworkError(err)) {
+        useNetworkStore.getState().setIsConnected(false);
+        showToast('Internet connection lost. Please check your connection.', 'error');
+      } else {
+        const errMsg = err instanceof Error && err.message.includes('timeout')
+          ? 'Receipt scan timed out. Try with a smaller image or enter manually.'
+          : 'Could not scan receipt. Please enter manually.';
+        showToast(errMsg, 'error');
+      }
     } finally {
       setIsScanningReceipt(false);
     }
@@ -477,21 +546,33 @@ export default function AddTransactionScreen() {
               <MaterialIcons name="content-copy" size={22} color={colors.onSurface} />
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity
-              onPress={handleScanReceipt}
-              disabled={isScanningReceipt}
-              style={styles.headerScanBtn}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              {isScanningReceipt ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <TouchableOpacity
+                onPress={() => setShowVoiceModal(true)}
+                style={styles.headerScanBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
                 <View style={styles.headerScanContent}>
-                  <MaterialIcons name="document-scanner" size={20} color={colors.primary} />
-                  <Text style={styles.headerScanText}>AI Scan</Text>
+                  <MaterialIcons name="mic" size={18} color={colors.primary} />
+                  <Text style={styles.headerScanText}>Voice</Text>
                 </View>
-              )}
-            </TouchableOpacity>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleScanReceipt}
+                disabled={isScanningReceipt}
+                style={styles.headerScanBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                {isScanningReceipt ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <View style={styles.headerScanContent}>
+                    <MaterialIcons name="document-scanner" size={18} color={colors.primary} />
+                    <Text style={styles.headerScanText}>AI Scan</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
           )
         }
       />
@@ -512,31 +593,50 @@ export default function AddTransactionScreen() {
         keyboardOpeningTime={0}
       >
         <View style={styles.card}>
-          {/* AI Receipt Scanner Banner */}
+          {/* Smart Input Row: Voice & Receipt AI */}
           {!isEditing && (
-            <TouchableOpacity
-              style={styles.aiScanBanner}
-              onPress={handleScanReceipt}
-              disabled={isScanningReceipt}
-              activeOpacity={0.7}
-            >
-              <View style={styles.aiScanBannerIcon}>
-                <MaterialIcons name="auto-awesome" size={20} color={colors.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.aiScanBannerTitle}>
-                  {isScanningReceipt ? 'Scanning receipt with AI...' : 'Scan Receipt with AI'}
-                </Text>
-                <Text style={styles.aiScanBannerSubtitle}>
-                  Auto-fill merchant, amount, category & line items from a photo
-                </Text>
-              </View>
-              {isScanningReceipt ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : (
-                <MaterialIcons name="arrow-forward" size={18} color={colors.onSurfaceVariant} />
-              )}
-            </TouchableOpacity>
+            <View style={styles.smartActionsRow}>
+              <TouchableOpacity
+                style={styles.smartActionCard}
+                onPress={() => setShowVoiceModal(true)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.smartActionIconBox}>
+                  <MaterialIcons name="mic" size={18} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.smartActionTitle}>Voice Add</Text>
+                  <Text style={styles.smartActionSubtitle}>Speak expense</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={16} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.smartActionCard}
+                onPress={handleScanReceipt}
+                disabled={isScanningReceipt}
+                activeOpacity={0.7}
+              >
+                <View style={styles.smartActionIconBox}>
+                  {isScanningReceipt ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <MaterialIcons
+                      name={!isConnected ? 'wifi-off' : 'auto-awesome'}
+                      size={18}
+                      color={!isConnected ? colors.onSurfaceVariant : colors.primary}
+                    />
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.smartActionTitle}>
+                    {isScanningReceipt ? 'Scanning...' : 'Scan Receipt'}
+                  </Text>
+                  <Text style={styles.smartActionSubtitle}>Auto-fill photo</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={16} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            </View>
           )}
 
           {/* Type Switcher */}
@@ -1316,6 +1416,13 @@ export default function AddTransactionScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <VoiceTransactionModal
+        visible={showVoiceModal}
+        onDismiss={() => setShowVoiceModal(false)}
+        onApply={handleApplyVoiceParsed}
+        accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
+      />
     </View>
   );
 }
@@ -1760,6 +1867,42 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       color: colors.primary,
       fontWeight: '700',
+    },
+    smartActionsRow: {
+      flexDirection: 'row',
+      gap: 10,
+      marginBottom: 16,
+    },
+    smartActionCard: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: colors.surfaceContainerLow,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      borderRadius: 14,
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+    },
+    smartActionIconBox: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.primaryContainer,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    smartActionTitle: {
+      ...typography.labelMd,
+      fontWeight: '700',
+      fontSize: 12,
+      color: colors.onSurface,
+    },
+    smartActionSubtitle: {
+      ...typography.labelMd,
+      fontSize: 10,
+      color: colors.onSurfaceVariant,
     },
     aiScanBanner: {
       flexDirection: 'row',

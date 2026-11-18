@@ -1,6 +1,6 @@
 import { getUpcomingBills } from '@/services/database/bill-dao';
 import { insertNotification, getNotifications } from '@/services/database/notification-dao';
-import { formatCurrency } from '@/utils/format';
+import { formatCurrency, parseDateSafely } from '@/utils/format';
 import { DeviceEventEmitter } from 'react-native';
 
 export class BillAlertEngine {
@@ -55,7 +55,7 @@ export class BillAlertEngine {
         const alreadyAlerted = existingNotifications.some((n) => {
           const isSameTitle = n.title.includes(bill.billerName);
           const isRecent =
-            now.getTime() - new Date(n.createdAt).getTime() < 24 * 60 * 60 * 1000;
+            now.getTime() - parseDateSafely(n.createdAt).getTime() < 24 * 60 * 60 * 1000;
           return isSameTitle && isRecent;
         });
 

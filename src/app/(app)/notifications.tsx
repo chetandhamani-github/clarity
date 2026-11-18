@@ -18,7 +18,7 @@ import {
   useClearAllNotifications,
   useDeleteNotification,
 } from '@/hooks/use-notifications';
-import { formatTime } from '@/utils/format';
+import { formatNotificationTime } from '@/utils/format';
 import type { Notification, NotificationType } from '@/types';
 
 type FilterTab = 'all' | 'unread' | 'alert' | 'bill' | 'budget';
@@ -194,7 +194,7 @@ export default function NotificationsScreen() {
               {n.title}
             </Text>
             <View style={styles.cardHeaderActions}>
-              <Text style={styles.cardTime}>{formatTime(n.createdAt)}</Text>
+              <Text style={styles.cardTime}>{formatNotificationTime(n.createdAt)}</Text>
               <TouchableOpacity
                 style={styles.deleteBtn}
                 onPress={(e) => handleDeleteOne(n.id, e)}
@@ -349,7 +349,7 @@ export default function NotificationsScreen() {
 }
 
 const getStyles = (colors: ThemeColors) => {
-  return StyleSheet.create({
+  const styles = StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.surfaceContainerLow,
@@ -519,4 +519,5 @@ const getStyles = (colors: ThemeColors) => {
       fontWeight: '700',
     },
   });
+  return styles;
 };

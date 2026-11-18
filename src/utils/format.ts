@@ -93,26 +93,43 @@ export function formatLocalDate(date: Date = new Date()): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-function parseLocalDate(dateString: string): Date {
-  if (!dateString) return new Date();
-  if (dateString.includes('T')) {
-    return new Date(dateString);
+export function parseDateSafely(dateInput: string | Date | number | null | undefined): Date {
+  if (!dateInput) return new Date();
+  if (dateInput instanceof Date) return dateInput;
+  if (typeof dateInput === 'number') return new Date(dateInput);
+
+  const str = String(dateInput).trim();
+  if (!str) return new Date();
+
+  // Pure digits: timestamp in milliseconds
+  if (/^\d+$/.test(str)) {
+    return new Date(Number(str));
   }
-  const parts = dateString.split('-');
-  if (parts.length === 3) {
-    const [y, m, d] = parts.map(Number);
-    if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
-      return new Date(y, m - 1, d);
-    }
+
+  // Plain calendar date "YYYY-MM-DD" -> parse in local timezone
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    const [y, m, d] = str.split('-').map(Number);
+    return new Date(y, m - 1, d);
   }
-  return new Date(dateString);
+
+  // SQLite datetime format "YYYY-MM-DD HH:MM:SS" (stored in UTC)
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(str)) {
+    return new Date(str.replace(' ', 'T') + 'Z');
+  }
+
+  // ISO string with time but NO timezone indicator "YYYY-MM-DDTHH:MM:SS..." (UTC)
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(str)) {
+    return new Date(str + 'Z');
+  }
+
+  return new Date(str);
 }
 
 export function formatDate(
   dateString: string,
   style: 'short' | 'full' | 'month-day' | 'month-year' = 'short'
 ): string {
-  const date = parseLocalDate(dateString);
+  const date = parseDateSafely(dateString);
 
   switch (style) {
     case 'full':
@@ -148,7 +165,7 @@ export function formatDateGroup(dateString: string): string {
     day: 'numeric',
     year: 'numeric',
   })
-    .format(parseLocalDate(dateString))
+    .format(parseDateSafely(dateString))
     .toUpperCase();
 }
 
@@ -157,12 +174,50 @@ export function formatTime(dateString: string): string {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
-  }).format(new Date(dateString));
+  }).format(parseDateSafely(dateString));
+}
+
+export function formatNotificationTime(dateString: string): string {
+  const date = parseDateSafely(dateString);
+  const now = new Date();
+
+  const isToday =
+    date.getDate() === now.getDate() &&
+    date.getMonth() === now.getMonth() &&
+    date.getFullYear() === now.getFullYear();
+
+  const timeStr = getDateTimeFormatter('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(date);
+
+  if (isToday) {
+    return timeStr;
+  }
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday =
+    date.getDate() === yesterday.getDate() &&
+    date.getMonth() === yesterday.getMonth() &&
+    date.getFullYear() === yesterday.getFullYear();
+
+  if (isYesterday) {
+    return `Yesterday, ${timeStr}`;
+  }
+
+  const dateStr = getDateTimeFormatter('en-US', {
+    month: 'short',
+    day: 'numeric',
+  }).format(date);
+
+  return `${dateStr}, ${timeStr}`;
 }
 
 export function getRelativeTime(dateString: string): string {
   const now = new Date();
-  const date = new Date(dateString);
+  const date = parseDateSafely(dateString);
   const diffMs = now.getTime() - date.getTime();
   const diffMinutes = Math.floor(diffMs / (1000 * 60));
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));

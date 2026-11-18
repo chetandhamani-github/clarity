@@ -10,6 +10,8 @@ public interface AiService {
 
     AiChatResponse chat(AiChatRequest request);
 
+    VoiceParseResponse parseVoiceTransaction(VoiceParseRequest request);
+
     MonthlyDigestResponse generateDigest(MonthlyDigestRequest request);
 }
 

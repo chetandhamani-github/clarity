@@ -216,6 +216,73 @@ public class AiServiceImpl implements AiService {
     }
 
     @Override
+    public VoiceParseResponse parseVoiceTransaction(VoiceParseRequest request) {
+        String transcript = request.getTranscript() != null ? request.getTranscript().trim() : "";
+        if (transcript.isEmpty()) {
+            return VoiceParseResponse.builder()
+                    .merchant("")
+                    .amount(0.0)
+                    .category("General")
+                    .account("")
+                    .type("expense")
+                    .note("")
+                    .confidence(0.0)
+                    .build();
+        }
+
+        if (hasGeminiKey()) {
+            String accountsList = (request.getAvailableAccounts() != null && !request.getAvailableAccounts().isEmpty())
+                    ? String.join(", ", request.getAvailableAccounts())
+                    : "None";
+
+            String prompt = "Extract structured financial transaction data from this spoken voice input: \"" + transcript + "\".\n" +
+                    "Available user accounts: [" + accountsList + "].\n" +
+                    "Return ONLY valid JSON with keys: merchant (string), amount (number), category (string: Groceries, Dining, Rent, Utilities, Transport, Health, Shopping, Entertainment, Subscriptions, Travel, Salary, Personal, Transfer), account (best matching name from available user accounts or empty string), type (expense, income, or transfer), note (string). Do not include markdown codeblocks or backticks.";
+
+            String rawJson = callGemini(prompt, null, null);
+            if (rawJson != null && !rawJson.trim().isEmpty()) {
+                try {
+                    int startIdx = rawJson.indexOf('{');
+                    int endIdx = rawJson.lastIndexOf('}');
+                    String cleanJson = (startIdx != -1 && endIdx > startIdx)
+                            ? rawJson.substring(startIdx, endIdx + 1)
+                            : rawJson.replaceAll("```json", "").replaceAll("```", "").trim();
+
+                    JsonNode node = objectMapper.readTree(cleanJson);
+                    String merchant = node.hasNonNull("merchant") ? cleanMerchantName(node.get("merchant").asText().trim()) : "";
+                    double amount = node.hasNonNull("amount") ? node.get("amount").asDouble(0.0) : 0.0;
+                    String category = node.hasNonNull("category") ? node.get("category").asText("General").trim() : "General";
+                    String account = node.hasNonNull("account") ? node.get("account").asText("").trim() : "";
+                    String type = node.hasNonNull("type") ? node.get("type").asText("expense").toLowerCase().trim() : "expense";
+                    String note = node.hasNonNull("note") ? node.get("note").asText("").trim() : "";
+
+                    return VoiceParseResponse.builder()
+                            .merchant(merchant)
+                            .amount(amount)
+                            .category(category)
+                            .account(account)
+                            .type(type)
+                            .note(note)
+                            .confidence(amount > 0 ? 0.95 : 0.5)
+                            .build();
+                } catch (Exception e) {
+                    log.error("[AiService] Failed to parse voice transaction JSON: {}", e.getMessage());
+                }
+            }
+        }
+
+        return VoiceParseResponse.builder()
+                .merchant("")
+                .amount(0.0)
+                .category("General")
+                .account("")
+                .type("expense")
+                .note(transcript)
+                .confidence(0.0)
+                .build();
+    }
+
+    @Override
     public MonthlyDigestResponse generateDigest(MonthlyDigestRequest request) {
         double income = request.getTotalIncome() != null ? request.getTotalIncome() : 0.0;
         double expenses = request.getTotalExpenses() != null ? request.getTotalExpenses() : 0.0;

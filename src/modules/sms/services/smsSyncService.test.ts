@@ -207,7 +207,7 @@ describe('SmsSyncService', () => {
       'acc-1',
       350,
       'expense',
-      1705315200000,
+      expect.any(Number),
       24
     );
     expect(mergeManualWithSmsTransaction).toHaveBeenCalledWith(

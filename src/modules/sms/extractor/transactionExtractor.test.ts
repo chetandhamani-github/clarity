@@ -361,4 +361,55 @@ describe('TransactionExtractor', () => {
     const res2 = TransactionExtractor.extract(scheduledMsg);
     expect(res2).toBeNull();
   });
+
+  it('correctly prioritizes source account mask over destination card mask in bill payments', () => {
+    const dualMaskMsg: RawSmsMessage = {
+      id: 'dual-mask-1',
+      address: 'HDFCBK',
+      body: 'Rs. 4,500.00 debited from A/c XX1234 towards HDFC Credit Card ending 5678 on 18-Nov-26. Avl Bal Rs 50,000.',
+      date: 1705315200000,
+    };
+    const res = TransactionExtractor.extract(dualMaskMsg);
+    expect(res?.accountMask).toBe('1234');
+    expect(res?.amount).toBe(4500);
+  });
+
+  it('prioritizes domestic currency when foreign currency is present in SMS', () => {
+    const fxMsg: RawSmsMessage = {
+      id: 'fx-1',
+      address: 'ICICIB',
+      body: 'Spent USD 15.00 (approx. INR 1,275.50) on Card XX4321 at GITHUB on 15-Nov-26.',
+      date: 1705315200000,
+    };
+    const res = TransactionExtractor.extract(fxMsg);
+    expect(res?.amount).toBe(1275.5);
+    expect(res?.merchant).toBe('GITHUB');
+  });
+
+  it('extracts NPCI standard UPI format and strips expanded gateway prefixes', () => {
+    const npciMsg: RawSmsMessage = {
+      id: 'npci-1',
+      address: 'SBIUPI',
+      body: 'A/c XX9999 debited by Rs 250.00 on 18-Nov-26. UPI/P2M/432109876543/BHARATPE*CHAI CORNER/HDFC.',
+      date: 1705315200000,
+    };
+    const res = TransactionExtractor.extract(npciMsg);
+    expect(res?.amount).toBe(250);
+    expect(res?.merchant).toBe('CHAI CORNER');
+  });
+
+  it('extracts inline transaction date from SMS text', () => {
+    const datedMsg: RawSmsMessage = {
+      id: 'date-1',
+      address: 'HDFCBK',
+      body: 'Rs. 1,000.00 debited from A/c XX1234 on 15-Jan-25 to Myntra. Avl Bal: Rs 20,000.',
+      date: 1765000000000, // Device delivery date in future
+    };
+    const res = TransactionExtractor.extract(datedMsg);
+    expect(res?.timestamp).not.toBe(1765000000000);
+    const parsedDate = new Date(res!.timestamp);
+    expect(parsedDate.getFullYear()).toBe(2025);
+    expect(parsedDate.getMonth()).toBe(0); // Jan
+    expect(parsedDate.getDate()).toBe(15);
+  });
 });

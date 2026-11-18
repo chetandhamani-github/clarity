@@ -38,6 +38,13 @@ public class AiController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/voice-parse")
+    @Operation(summary = "Parse voice transaction", description = "Extracts amount, vendor, category, and account from a conversational speech transcript")
+    public ResponseEntity<VoiceParseResponse> parseVoiceTransaction(@RequestBody VoiceParseRequest request) {
+        VoiceParseResponse response = aiService.parseVoiceTransaction(request);
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/digest")
     @Operation(summary = "Generate monthly financial digest", description = "Analyzes monthly aggregates under 50/30/20 guideline and returns health score & tips")
     public ResponseEntity<MonthlyDigestResponse> generateDigest(@RequestBody MonthlyDigestRequest request) {

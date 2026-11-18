@@ -16,7 +16,7 @@ import { useRouter } from 'expo-router';
 import { Text, Header } from '@/components/ui';
 import { typography, useTheme, radius } from '@/theme';
 import { useAppStore } from '@/store/use-app-store';
-import { formatCurrencyPrivacy } from '@/utils/format';
+import { formatCurrencyPrivacy, parseDateSafely } from '@/utils/format';
 import { useSplitwiseStore } from '../store/splitwise.store';
 import { SplitwiseRepository } from '../database/splitwise.repository';
 import { SplitwiseSyncService } from '../services/SplitwiseSyncService';
@@ -795,7 +795,7 @@ function PersonCard({ balance, hideBalances, onPress, onSettlePress }: PersonCar
 
 function formatDate(iso: string): string {
   try {
-    const d = new Date(iso);
+    const d = parseDateSafely(iso);
     return d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
   } catch {
     return 'Recent';

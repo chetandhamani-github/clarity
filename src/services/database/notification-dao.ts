@@ -53,19 +53,21 @@ function generateId(): string {
 }
 
 export async function insertNotification(
-  notification: Omit<Notification, 'id' | 'isRead' | 'createdAt'>
+  notification: Omit<Notification, 'id' | 'isRead' | 'createdAt'> & { createdAt?: string }
 ): Promise<void> {
   const db = getDatabase();
   const id = generateId();
+  const createdAt = notification.createdAt || new Date().toISOString();
   await db.runAsync(
-    `INSERT INTO notifications (id, title, description, type, action_url) 
-     VALUES (?, ?, ?, ?, ?);`,
+    `INSERT INTO notifications (id, title, description, type, action_url, created_at) 
+     VALUES (?, ?, ?, ?, ?, ?);`,
     [
       id,
       notification.title,
       notification.description,
       notification.type || 'default',
       notification.actionUrl || '',
+      createdAt,
     ]
   );
 

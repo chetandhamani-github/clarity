@@ -1,5 +1,5 @@
 import { DeviceEventEmitter } from 'react-native';
-import { formatCurrency } from '@/utils/format';
+import { formatCurrency, parseDateSafely } from '@/utils/format';
 import { insertNotification, getNotifications } from '@/services/database/notification-dao';
 import { BillsRepository } from '../database/bills.repository';
 import type { Bill } from '../types/bill.types';
@@ -34,7 +34,7 @@ export class ReminderService {
       const recent = existing.some(
         (n) =>
           n.title.includes(bill.provider || bill.title) &&
-          now.getTime() - new Date(n.createdAt).getTime() < 24 * 60 * 60 * 1000
+          now.getTime() - parseDateSafely(n.createdAt).getTime() < 24 * 60 * 60 * 1000
       );
 
       if (!recent) {
@@ -107,7 +107,7 @@ export class ReminderService {
 
         const alreadyAlerted = existingNotifications.some((n) => {
           const isSameTitle = n.title.includes(name);
-          const isRecent = now.getTime() - new Date(n.createdAt).getTime() < 24 * 60 * 60 * 1000;
+          const isRecent = now.getTime() - parseDateSafely(n.createdAt).getTime() < 24 * 60 * 60 * 1000;
           return isSameTitle && isRecent;
         });
 

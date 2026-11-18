@@ -109,6 +109,8 @@ export class TransactionExtractor {
    */
   public static extractAmount(body: string): number | null {
     let bestMatch: { amount: number; score: number } | null = null;
+    const hasMultipleCurrencies =
+      /(?:rs\.?|inr|₹)/i.test(body) && /(?:usd|eur|gbp|\$|€|£)/i.test(body);
 
     for (const match of body.matchAll(this.MONEY_AMOUNT_REGEX)) {
       const rawAmount = match[1] ?? match[2];
@@ -131,6 +133,9 @@ export class TransactionExtractor {
         this.AMOUNT_BEFORE_TRANSACTION_REGEX.test(before) ||
         this.AMOUNT_AFTER_TRANSACTION_REGEX.test(after);
 
+      const matchedText = match[0].toLowerCase();
+      const isDomesticCurrency = /(?:₹|rs\.?|inr)/.test(matchedText);
+
       let score = 1 - start / 100000;
       if (isDirectTransactionAmount) score += 100;
       if (this.TRANSACTION_CONTEXT_REGEX.test(before) || this.TRANSACTION_CONTEXT_REGEX.test(after)) {
@@ -138,6 +143,12 @@ export class TransactionExtractor {
       }
       if (isBalanceAmount) score -= 100;
       if (isNonTransactionAmount) score -= 80;
+
+      // When message contains both foreign currency and domestic amount (e.g. approx/equivalent INR),
+      // give preference to the domestic amount because the bank account ledger is debited in domestic currency.
+      if (hasMultipleCurrencies && isDomesticCurrency) {
+        score += 40;
+      }
 
       if (!bestMatch || score > bestMatch.score) {
         bestMatch = { amount, score };
@@ -207,8 +218,21 @@ export class TransactionExtractor {
 
   /**
    * Extract account mask (last digits of card or account).
+   * Contextually prioritizes source/debited account over destination cards/accounts.
    */
   public static extractAccountMask(body: string): string | null {
+    // 1. Contextual match: prioritize source/debited or primary account
+    const sourceContextMatch = body.match(
+      /(?:from|debited\s+from|drawn\s+on|charged\s+to|credited\s+to|deposited\s+in)\s+(?:your\s+)?(?:a\/?c|acct|account|card)\s*(?:no\.?)?\s*[:#.\s-]*([xX*•#.-]*\d{3,18})\b/i
+    );
+    if (sourceContextMatch && sourceContextMatch[1]) {
+      const digits = sourceContextMatch[1].replace(/[^0-9]/g, '');
+      if (digits.length >= 3) {
+        return digits.length > 4 ? digits.slice(-4) : digits;
+      }
+    }
+
+    // 2. Standard account mask regexes fallback
     for (const regex of this.ACCOUNT_MASK_REGEXES) {
       const match = body.match(regex);
       if (match && match[1]) {
@@ -396,17 +420,92 @@ export class TransactionExtractor {
     );
   }
 
+  private static readonly MONTH_MAP: Record<string, number> = {
+    jan: 0,
+    feb: 1,
+    mar: 2,
+    apr: 3,
+    may: 4,
+    jun: 5,
+    jul: 6,
+    aug: 7,
+    sep: 8,
+    oct: 9,
+    nov: 10,
+    dec: 11,
+  };
+
+  /**
+   * Extracts the actual transaction date from SMS text if explicitly mentioned,
+   * falling back to the SMS delivery timestamp on device.
+   */
+  public static extractDate(body: string, fallbackTimestamp: number): number {
+    try {
+      // "on DD-Mon-YY" or "on DD-Mon-YYYY" or "on DDMonYY" (e.g. "on 15-Jan-25", "on 12Jan26")
+      const dMonMatch = body.match(
+        /\b(?:on|dated)\s+(\d{1,2})[-/ ]?([A-Za-z]{3})[-/ ]?(\d{2,4})\b/i
+      );
+      if (dMonMatch) {
+        const day = parseInt(dMonMatch[1], 10);
+        const monKey = dMonMatch[2].toLowerCase();
+        const rawYear = parseInt(dMonMatch[3], 10);
+        const year = rawYear < 100 ? 2000 + rawYear : rawYear;
+        const month = this.MONTH_MAP[monKey];
+
+        if (month !== undefined && day >= 1 && day <= 31 && year >= 2020 && year <= 2035) {
+          const fallbackDate = new Date(fallbackTimestamp);
+          const parsed = new Date(year, month, day, fallbackDate.getHours(), fallbackDate.getMinutes());
+          const time = parsed.getTime();
+          if (!isNaN(time)) return time;
+        }
+      }
+
+      // "on DD/MM/YYYY" or "on DD-MM-YYYY" or "on DD/MM/YY"
+      const dNumMatch = body.match(
+        /\b(?:on|dated)\s+(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/i
+      );
+      if (dNumMatch) {
+        const day = parseInt(dNumMatch[1], 10);
+        const month = parseInt(dNumMatch[2], 10) - 1;
+        const rawYear = parseInt(dNumMatch[3], 10);
+        const year = rawYear < 100 ? 2000 + rawYear : rawYear;
+
+        if (month >= 0 && month <= 11 && day >= 1 && day <= 31 && year >= 2020 && year <= 2035) {
+          const fallbackDate = new Date(fallbackTimestamp);
+          const parsed = new Date(year, month, day, fallbackDate.getHours(), fallbackDate.getMinutes());
+          const time = parsed.getTime();
+          if (!isNaN(time)) return time;
+        }
+      }
+    } catch {
+      // Fallback gracefully
+    }
+
+    return fallbackTimestamp;
+  }
+
   /**
    * Extract and clean merchant / counterparty name.
    */
   public static extractMerchant(body: string, bank: string): string {
     let merchant = '';
 
-    for (const pattern of this.MERCHANT_PATTERNS) {
-      const match = body.match(pattern);
-      if (match && match[1]) {
-        merchant = match[1].trim();
-        break;
+    // 0. Check NPCI standard UPI format: UPI/P2M/... or UPI/P2P/... or UPI/DR/...
+    const upiTokenMatch = body.match(/UPI\/(?:P2M|P2P|DR|CR)\/\d+\/([^/;\n]+)/i);
+    if (upiTokenMatch && upiTokenMatch[1]) {
+      const candidate = upiTokenMatch[1].replace(/[-_.]/g, ' ').trim();
+      if (candidate.length >= 2 && !/^\d+$/.test(candidate)) {
+        merchant = candidate;
+      }
+    }
+
+    if (!merchant) {
+      for (const pattern of this.MERCHANT_PATTERNS) {
+        const match = body.match(pattern);
+        if (match && match[1]) {
+          merchant = match[1].trim();
+          break;
+        }
       }
     }
 
@@ -422,10 +521,10 @@ export class TransactionExtractor {
       return '';
     }
 
-    // 1. Unmask payment aggregators and payment gateway prefixes (e.g. "RAZORPAY*ZEPTO" -> "ZEPTO", "BILLDESK*BESCOM" -> "BESCOM", "PAYU*SWIGGY" -> "SWIGGY")
+    // 1. Unmask payment aggregators and payment gateway prefixes
     merchant = merchant
       .replace(
-        /^(?:RAZORPAY|RZP|BILLDESK|BIL|PAYU|CASHFREE|CCAVENUE|PAYTM(?:QR)?|PINELABS|AIRPAY|PAYGNXT|SETU)[*:\s_/-]*/i,
+        /^(?:RAZORPAY|RZP|BILLDESK|BIL|PAYU|CASHFREE|CCAVENUE|BHARATPE|PHONEPE(?:QR)?|GOOGLEPAY|GPAY|PAYTM(?:QR)?|CRED(?:_CLUB)?|PINELABS|AIRPAY|PAYGNXT|SETU|MSWIPE|EZECLICK|AMZN|MOBIKWIK|FREECHARGE)[*:\s_/-]*/i,
         ''
       )
       .trim();
@@ -517,7 +616,6 @@ export class TransactionExtractor {
     const isCard = this.isCreditCard(message.body, message.address);
     const availableBalance = !isCard ? (this.extractAvailableBalance(message.body) ?? undefined) : undefined;
     const merchant = this.extractMerchant(message.body, bank);
-
     return {
       amount,
       type: direction,

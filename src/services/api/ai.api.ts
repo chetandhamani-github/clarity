@@ -6,6 +6,8 @@ import type {
   ReceiptScanResult,
   AiChatPayload,
   AiChatResult,
+  VoiceParsePayload,
+  VoiceParseResult,
   MonthlyDigestPayload,
   MonthlyDigestResult,
 } from './types';
@@ -48,6 +50,21 @@ export async function chatWithFinancialCopilot(
 ): Promise<AiChatResult> {
   const installationId = getInstallationId();
   return apiClient.post<AiChatResult>('/api/v1/ai/chat', payload, {
+    headers: {
+      'X-Installation-Id': installationId,
+    },
+    timeoutMs: 15000,
+  });
+}
+
+/**
+ * Parses conversational voice transcript into structured transaction fields.
+ */
+export async function parseVoiceTransactionWithAi(
+  payload: VoiceParsePayload
+): Promise<VoiceParseResult> {
+  const installationId = getInstallationId();
+  return apiClient.post<VoiceParseResult>('/api/v1/ai/voice-parse', payload, {
     headers: {
       'X-Installation-Id': installationId,
     },

@@ -1,6 +1,7 @@
 import { NativeModules, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
+import { useNetworkStore } from '@/store/use-network-store';
 
 export class ApiError extends Error {
   public status: number;
@@ -125,6 +126,7 @@ class ApiClient {
       Accept: 'application/json',
       'Content-Type': 'application/json',
       ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+      ...(method !== 'GET' ? { 'X-Idempotency-Key': `${Date.now()}-${Math.random().toString(36).substring(2, 9)}` } : {}),
       ...options?.headers,
     };
 
@@ -160,19 +162,25 @@ class ApiClient {
         throw new ApiError(errorMessage, response.status, parsedData);
       }
 
+      useNetworkStore.getState().setIsConnected(true);
       return parsedData as T;
     } catch (err: unknown) {
       clearTimeout(timeoutId);
       this.logError(method, url, err);
 
       if (err instanceof ApiError) {
+        if (err.status === 0 || err.status === 408) {
+          useNetworkStore.getState().setIsConnected(false);
+        }
         throw err;
       }
 
       if (err instanceof Error && err.name === 'AbortError') {
+        useNetworkStore.getState().setIsConnected(false);
         throw new ApiError(`Request timeout after ${timeoutMs}ms`, 408);
       }
 
+      useNetworkStore.getState().setIsConnected(false);
       const fallbackMessage = err instanceof Error ? err.message : 'Network request failed';
       throw new ApiError(fallbackMessage, 0, err);
     }
