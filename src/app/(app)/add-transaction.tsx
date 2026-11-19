@@ -14,6 +14,7 @@ import { calculateNextDate } from '@/services/database/recurring-dao';
 import { evaluateTransactionBudgetAlerts } from '@/services/notifications/alert-engine';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { scanReceiptWithAi } from '@/services/api/ai.api';
 import { VoiceTransactionModal } from '@/components/modals/VoiceTransactionModal';
 import type { ParsedVoiceTransaction } from '@/services/voice/voice-parser';
@@ -130,24 +131,71 @@ export default function AddTransactionScreen() {
   const [showToAccountMenu, setShowToAccountMenu] = useState(false);
   const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [receiptUri, setReceiptUri] = useState<string | null>(null);
+  const [receiptFileName, setReceiptFileName] = useState<string | null>(null);
   const [showFullReceiptModal, setShowFullReceiptModal] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [initialized, setInitialized] = useState(false);
 
-  const handlePickReceiptImage = async () => {
+  const isPdfReceipt = useMemo(() => {
+    if (!receiptUri) return false;
+    if (receiptFileName?.toLowerCase().endsWith('.pdf')) return true;
+    const cleanUri = receiptUri.toLowerCase().split('?')[0];
+    return cleanUri.endsWith('.pdf') || cleanUri.includes('.pdf');
+  }, [receiptUri, receiptFileName]);
+
+  const receiptDisplayName = useMemo(() => {
+    if (receiptFileName) return receiptFileName;
+    if (!receiptUri) return '';
+    try {
+      const segments = decodeURIComponent(receiptUri).split('/');
+      const last = segments[segments.length - 1];
+      if (last && last.trim().length > 0) {
+        return last.split('?')[0];
+      }
+    } catch {
+      // fallback
+    }
+    return isPdfReceipt ? 'document.pdf' : 'Receipt';
+  }, [receiptFileName, receiptUri, isPdfReceipt]);
+
+  const handlePickReceipt = async () => {
     try {
       const res = await DocumentPicker.getDocumentAsync({
-        type: ['image/*'],
+        type: ['image/*', 'application/pdf'],
         copyToCacheDirectory: true,
       });
 
       if (res.canceled || !res.assets || res.assets.length === 0) return;
       const asset = res.assets[0];
       setReceiptUri(asset.uri);
-      showToast('Receipt attached!', 'success');
+      setReceiptFileName(asset.name || null);
+      const isSelectedPdf =
+        asset.name?.toLowerCase().endsWith('.pdf') || asset.mimeType === 'application/pdf';
+      showToast(isSelectedPdf ? 'PDF receipt attached!' : 'Receipt attached!', 'success');
     } catch {
-      showToast('Could not attach receipt image', 'error');
+      showToast('Could not attach receipt file', 'error');
+    }
+  };
+
+  const handleOpenReceipt = async () => {
+    if (!receiptUri) return;
+    if (isPdfReceipt) {
+      try {
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(receiptUri, {
+            mimeType: 'application/pdf',
+            dialogTitle: receiptDisplayName || 'Receipt PDF',
+            UTI: 'com.adobe.pdf',
+          });
+        } else {
+          showToast('File viewing is not available on this device', 'error');
+        }
+      } catch {
+        showToast('Could not open PDF file', 'error');
+      }
+    } else {
+      setShowFullReceiptModal(true);
     }
   };
 
@@ -464,7 +512,7 @@ export default function AddTransactionScreen() {
               isRecurring: false,
               splits: splitsToSave,
               note: note.trim(),
-              receiptUri: transaction?.receiptUri,
+              receiptUri: receiptUri || transaction?.receiptUri,
               tags: tags.length > 0 ? tags : undefined,
               source: 'MANUAL' as const,
               status: 'VERIFIED' as const,
@@ -511,7 +559,7 @@ export default function AddTransactionScreen() {
 
     try {
       const res = await DocumentPicker.getDocumentAsync({
-        type: ['image/*'],
+        type: ['image/*', 'application/pdf'],
         copyToCacheDirectory: true,
       });
 
@@ -527,9 +575,12 @@ export default function AddTransactionScreen() {
         encoding: FileSystem.EncodingType.Base64,
       });
 
+      const isPdfAsset =
+        asset.name?.toLowerCase().endsWith('.pdf') || asset.mimeType === 'application/pdf';
+
       const scanResult = await scanReceiptWithAi({
         imageBase64: base64,
-        mimeType: asset.mimeType || 'image/jpeg',
+        mimeType: isPdfAsset ? 'application/pdf' : (asset.mimeType || 'image/jpeg'),
       });
 
       if (scanResult) {
@@ -585,6 +636,7 @@ export default function AddTransactionScreen() {
         }
 
         setReceiptUri(asset.uri);
+        setReceiptFileName(asset.name || null);
         showToast('Receipt details auto-filled by AI!', 'success');
       }
     } catch (err: unknown) {
@@ -1083,21 +1135,21 @@ export default function AddTransactionScreen() {
               )}
             </View>
 
-            {/* Receipt / Bill Photo Attachment */}
+            {/* Receipt / Document Attachment */}
             <View style={styles.attachmentSection}>
               <View style={styles.attachmentHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <MaterialIcons name="receipt-long" size={18} color={colors.onSurfaceVariant} />
-                  <Text style={styles.attachmentTitle}>Receipt / Bill Photo</Text>
+                  <Text style={styles.attachmentTitle}>Receipt / Document</Text>
                 </View>
                 {!receiptUri && (
                   <TouchableOpacity
                     style={styles.attachBtn}
-                    onPress={handlePickReceiptImage}
+                    onPress={handlePickReceipt}
                     activeOpacity={0.7}
                   >
-                    <MaterialIcons name="add-photo-alternate" size={16} color={colors.primary} />
-                    <Text style={[styles.attachBtnText, { color: colors.primary }]}>Attach Photo</Text>
+                    <MaterialIcons name="attach-file" size={16} color={colors.primary} />
+                    <Text style={[styles.attachBtnText, { color: colors.primary }]}>Attach File / PDF</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -1106,21 +1158,38 @@ export default function AddTransactionScreen() {
                 <View style={[styles.receiptPreviewCard, { backgroundColor: colors.surfaceContainerLow, borderColor: colors.surfaceVariant }]}>
                   <TouchableOpacity
                     style={styles.receiptThumbWrapper}
-                    onPress={() => setShowFullReceiptModal(true)}
+                    onPress={handleOpenReceipt}
                     activeOpacity={0.8}
                   >
-                    <Image source={{ uri: receiptUri }} style={styles.receiptThumbnail} resizeMode="cover" />
+                    {isPdfReceipt ? (
+                      <View style={styles.pdfThumbnailBox}>
+                        <MaterialIcons name="picture-as-pdf" size={24} color={colors.error} />
+                      </View>
+                    ) : (
+                      <Image source={{ uri: receiptUri }} style={styles.receiptThumbnail} resizeMode="cover" />
+                    )}
                     <View style={styles.zoomOverlayBadge}>
-                      <MaterialIcons name="zoom-in" size={14} color="#FFFFFF" />
+                      <MaterialIcons name={isPdfReceipt ? 'open-in-new' : 'zoom-in'} size={14} color="#FFFFFF" />
                     </View>
                   </TouchableOpacity>
-                  <View style={styles.receiptInfoCol}>
-                    <Text style={[styles.receiptAttachedText, { color: colors.onSurface }]}>Receipt Attached</Text>
-                    <Text style={[styles.receiptSubtext, { color: colors.onSurfaceVariant }]}>Tap image to preview full size</Text>
-                  </View>
+                  <TouchableOpacity
+                    style={styles.receiptInfoCol}
+                    onPress={handleOpenReceipt}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.receiptAttachedText, { color: colors.onSurface }]} numberOfLines={1}>
+                      {isPdfReceipt ? 'PDF Document Attached' : 'Receipt Attached'}
+                    </Text>
+                    <Text style={[styles.receiptSubtext, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
+                      {isPdfReceipt ? (receiptDisplayName || 'Tap to view / open PDF') : 'Tap to preview full size'}
+                    </Text>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.removeReceiptBtn, { backgroundColor: colors.surfaceContainerHighest }]}
-                    onPress={() => setReceiptUri(null)}
+                    onPress={() => {
+                      setReceiptUri(null);
+                      setReceiptFileName(null);
+                    }}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
                     <MaterialIcons name="delete-outline" size={18} color={colors.error} />
@@ -1623,8 +1692,8 @@ export default function AddTransactionScreen() {
         accounts={accounts.map((a) => ({ id: a.id, name: a.name, lastFour: a.lastFour }))}
       />
 
-      {/* Fullscreen Receipt Viewer Modal */}
-      {receiptUri && (
+      {/* Fullscreen Receipt Viewer Modal (Images only) */}
+      {receiptUri && !isPdfReceipt && (
         <Modal
           visible={showFullReceiptModal}
           transparent
@@ -2055,7 +2124,7 @@ const getStyles = (colors: ThemeColors) => {
       fontFamily: 'Manrope_600SemiBold',
       color: colors.onSurface,
       textTransform: 'uppercase',
-      letterSpacing: 0.5,
+      letterSpacing: Platform.OS === 'ios' ? 0.5 : 0,
     },
     splitSumText: {
       ...typography.labelMd,
@@ -2219,6 +2288,13 @@ const getStyles = (colors: ThemeColors) => {
     receiptThumbnail: {
       width: '100%',
       height: '100%',
+    },
+    pdfThumbnailBox: {
+      width: '100%',
+      height: '100%',
+      backgroundColor: colors.surfaceContainerHighest,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     zoomOverlayBadge: {
       position: 'absolute',

@@ -394,7 +394,7 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.headlineSm,
       color: colors.onSurface,
       textAlign: 'center',
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
       marginBottom: 8,
     },
     subtitle: {

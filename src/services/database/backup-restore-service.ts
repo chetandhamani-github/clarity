@@ -33,6 +33,8 @@ export interface ClarityBackupPayload {
       biometricEnabled?: boolean;
       timeoutSetting?: 'immediate' | '1min' | '5min' | 'never';
       hideBalances?: boolean;
+      paydayDayOfMonth?: number;
+      safetyBufferAmount?: number;
     };
   };
 }
@@ -149,6 +151,8 @@ export async function generateDatabaseSnapshot(): Promise<ClarityBackupPayload> 
       biometricEnabled: appState.biometricEnabled,
       timeoutSetting: appState.timeoutSetting,
       hideBalances: appState.hideBalances,
+      paydayDayOfMonth: appState.paydayDayOfMonth,
+      safetyBufferAmount: appState.safetyBufferAmount,
     };
   } catch {
     // Graceful fallback if Zustand store unavailable in headless environment
@@ -777,6 +781,12 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
         }
         if (typeof data.preferences.hideBalances === 'boolean') {
           store.setHideBalances(data.preferences.hideBalances);
+        }
+        if (typeof data.preferences.paydayDayOfMonth === 'number') {
+          store.setPaydayDayOfMonth(data.preferences.paydayDayOfMonth);
+        }
+        if (typeof data.preferences.safetyBufferAmount === 'number') {
+          store.setSafetyBufferAmount(data.preferences.safetyBufferAmount);
         }
       } catch {
         // Ignore store update failure in testing/headless mode

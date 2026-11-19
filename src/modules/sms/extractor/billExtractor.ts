@@ -61,6 +61,46 @@ export class BillExtractor {
     /\b(?:credit card statement|card ending(?:\s*(?:in|with|:|-))?\s*\d{4}\s*due)\b/i,
   ];
 
+  // Pre-compiled regex patterns for zero-allocation high throughput extraction
+  private static readonly TOTAL_DUE_REGEX =
+    /(?:total(?:\s+(?:amount|amt))?\s+due|bill\s+amount|amount\s+payable|total\s+payable|due\s+amount|bill\s+of|amount\s+due|amt\s+due|tad|emi\s+of|premium\s+of|installment\s+of|recharge\s+of)\s*(?:is|:)?\s*(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/i;
+
+  private static readonly MIN_DUE_REGEX =
+    /(?:min(?:imum)?(?:\s+(?:amount|amt))?\s+due|min\s+due|mad)\s*(?:is|:)?\s*(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/i;
+
+  private static readonly LIMIT_REGEX =
+    /(?:credit\s+limit|avail(?:able)?\s+(?:limit|bal(?:ance)?)|avl\s+(?:lmt|bal)|card\s+limit)\s*(?:is|:)?\s*(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/gi;
+
+  private static readonly CONTEXTUAL_AMOUNT_REGEX =
+    /(?:(?:bill|due|payable|pay|amount|emi|premium|installment)[^\d\n\r]{0,45}(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)|(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)[^\d\n\r]{0,45}(?:due|bill|payable|emi|premium|installment))/gi;
+
+  private static readonly DAY_FIRST_DATE_REGEX =
+    /(?:due\s+(?:on|date|by)|pay\s+by|payable\s+by|valid\s+till|by|before)(?:\s+is|\s*:|:)?\s*(\d{1,2})(?:st|nd|rd|th)?[\s\-\/\.]([a-zA-Z]{3,9})(?:[\s\-\/\.](\d{2,4}))?/i;
+
+  private static readonly MONTH_FIRST_DATE_REGEX =
+    /(?:due\s+(?:on|date|by)|pay\s+by|payable\s+by|valid\s+till|by|before)(?:\s+is|\s*:|:)?\s*([a-zA-Z]{3,9})[\s\-\/\.](\d{1,2})(?:st|nd|rd|th)?(?:[\s\-\/\.,]+(\d{2,4}))?/i;
+
+  private static readonly NUMERIC_DATE_REGEX =
+    /(?:due\s+(?:on|date|by)|pay\s+by|payable\s+by|valid\s+till|by|before)(?:\s+is|\s*:|:)?\s*(\d{1,2})[\-\/\.](\d{1,2})[\-\/\.](\d{2,4})/i;
+
+  private static readonly CONTEXTUAL_DATE_REGEX =
+    /(?:due|pay|bill|before|till)[^\d\n\r]{0,30}(\d{1,2})(?:st|nd|rd|th)?[\s\-\/\.]([a-zA-Z]{3,9})(?:[\s\-\/\.](\d{2,4}))?/i;
+
+  private static readonly ACCOUNT_REF_REGEX =
+    /(?:ca\s*no\.?|consumer\s*(?:no\.?|id)|sub(?:scriber)?\s*id|a\/c\s*no\.?|account\s*no\.?|policy\s*no\.?|landline\s*no\.?|bp\s*no\.?|k\s*no\.?|service\s*no\.?|connection\s*no\.?)\s*(?:is|:)?\s*([a-zA-Z0-9]{4,16})/i;
+
+  private static readonly CARD_REF_REGEX =
+    /(?:card\s*(?:ending|xx|\.\.)(?:\s*(?:in|with|:|-))?\s*(\d{4}))/i;
+
+  private static readonly PAYMENT_URL_REGEX =
+    /https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)/i;
+
+  private static readonly EMI_WORD_REGEX = /\bemi\b/i;
+  private static readonly LIC_WORD_REGEX = /\blic\b/i;
+  private static readonly DTH_WORD_REGEX = /\bdth\b/i;
+  private static readonly IGL_WORD_REGEX = /\bigl\b/i;
+  private static readonly MGL_WORD_REGEX = /\bmgl\b/i;
+
   /**
    * Fast check to see if an SMS is likely a bill reminder.
    */
@@ -122,34 +162,24 @@ export class BillExtractor {
     let minDue: number | undefined;
 
     // Pattern 1: Explicit "Total Due: Rs. 1,234.00", "Min Amt Due: Rs. 500", "EMI of Rs. 4,500", "Premium of Rs. 12,000"
-    const totalDueMatch = body.match(
-      /(?:total(?:\s+(?:amount|amt))?\s+due|bill\s+amount|amount\s+payable|total\s+payable|due\s+amount|bill\s+of|amount\s+due|amt\s+due|tad|emi\s+of|premium\s+of|installment\s+of|recharge\s+of)\s*(?:is|:)?\s*(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/i
-    );
+    const totalDueMatch = body.match(this.TOTAL_DUE_REGEX);
     if (totalDueMatch) {
       totalDue = parseFloat(totalDueMatch[1].replace(/,/g, ''));
     }
 
-    const minDueMatch = body.match(
-      /(?:min(?:imum)?(?:\s+(?:amount|amt))?\s+due|min\s+due|mad)\s*(?:is|:)?\s*(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/i
-    );
+    const minDueMatch = body.match(this.MIN_DUE_REGEX);
     if (minDueMatch) {
       minDue = parseFloat(minDueMatch[1].replace(/,/g, ''));
     }
 
     // Extract credit limit or available balance figures to avoid false matches in contextual search
-    const limitMatches = Array.from(
-      body.matchAll(
-        /(?:credit\s+limit|avail(?:able)?\s+(?:limit|bal(?:ance)?)|avl\s+(?:lmt|bal)|card\s+limit)\s*(?:is|:)?\s*(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/gi
-      )
-    ).map((m) => parseFloat(m[1].replace(/,/g, '')));
+    const limitMatches = Array.from(body.matchAll(this.LIMIT_REGEX)).map((m) =>
+      parseFloat(m[1].replace(/,/g, ''))
+    );
 
     // Pattern 2: Contextual currency match near bill, due, emi, or premium keywords
     if (totalDue <= 0) {
-      const contextualMatches = Array.from(
-        body.matchAll(
-          /(?:(?:bill|due|payable|pay|amount|emi|premium|installment)[^\d\n\r]{0,45}(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)|(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)[^\d\n\r]{0,45}(?:due|bill|payable|emi|premium|installment))/gi
-        )
-      );
+      const contextualMatches = Array.from(body.matchAll(this.CONTEXTUAL_AMOUNT_REGEX));
 
       for (const m of contextualMatches) {
         const valStr = m[1] || m[2];
@@ -200,9 +230,7 @@ export class BillExtractor {
     };
 
     // 1. Day-first textual: "due on 25-Sep-2026", "25 Sep 2026", "25.Sep.2026", "25th Sep 2026"
-    const dayFirstTextMatch = body.match(
-      /(?:due\s+(?:on|date|by)|pay\s+by|payable\s+by|valid\s+till|by|before)(?:\s+is|\s*:|:)?\s*(\d{1,2})(?:st|nd|rd|th)?[\s\-\/\.]([a-zA-Z]{3,9})(?:[\s\-\/\.](\d{2,4}))?/i
-    );
+    const dayFirstTextMatch = body.match(this.DAY_FIRST_DATE_REGEX);
     if (dayFirstTextMatch) {
       const day = parseInt(dayFirstTextMatch[1], 10);
       const monthStr = dayFirstTextMatch[2].toLowerCase();
@@ -214,9 +242,7 @@ export class BillExtractor {
     }
 
     // 2. Month-first textual: "due by Oct 25, 2026", "due date: October 25"
-    const monthFirstTextMatch = body.match(
-      /(?:due\s+(?:on|date|by)|pay\s+by|payable\s+by|valid\s+till|by|before)(?:\s+is|\s*:|:)?\s*([a-zA-Z]{3,9})[\s\-\/\.](\d{1,2})(?:st|nd|rd|th)?(?:[\s\-\/\.,]+(\d{2,4}))?/i
-    );
+    const monthFirstTextMatch = body.match(this.MONTH_FIRST_DATE_REGEX);
     if (monthFirstTextMatch) {
       const monthStr = monthFirstTextMatch[1].toLowerCase();
       const month = MONTH_MAP[monthStr];
@@ -228,9 +254,7 @@ export class BillExtractor {
     }
 
     // 3. Numeric date: "DD-MM-YYYY", "DD/MM/YYYY", "DD.MM.YYYY", "DD-MM-YY", "DD/MM/YY", "DD.MM.YY"
-    const numericDateMatch = body.match(
-      /(?:due\s+(?:on|date|by)|pay\s+by|payable\s+by|valid\s+till|by|before)(?:\s+is|\s*:|:)?\s*(\d{1,2})[\-\/\.](\d{1,2})[\-\/\.](\d{2,4})/i
-    );
+    const numericDateMatch = body.match(this.NUMERIC_DATE_REGEX);
     if (numericDateMatch) {
       const day = parseInt(numericDateMatch[1], 10);
       const month = parseInt(numericDateMatch[2], 10);
@@ -243,9 +267,7 @@ export class BillExtractor {
     }
 
     // 4. Fallback contextual date near due/pay/bill
-    const contextualDateMatch = body.match(
-      /(?:due|pay|bill|before|till)[^\d\n\r]{0,30}(\d{1,2})(?:st|nd|rd|th)?[\s\-\/\.]([a-zA-Z]{3,9})(?:[\s\-\/\.](\d{2,4}))?/i
-    );
+    const contextualDateMatch = body.match(this.CONTEXTUAL_DATE_REGEX);
     if (contextualDateMatch) {
       const day = parseInt(contextualDateMatch[1], 10);
       const monthStr = contextualDateMatch[2].toLowerCase();
@@ -410,8 +432,8 @@ export class BillExtractor {
 
     // 5. Piped Gas / LPG
     if (
-      /\bigl\b/i.test(text) ||
-      /\bmgl\b/i.test(text) ||
+      this.IGL_WORD_REGEX.test(text) ||
+      this.MGL_WORD_REGEX.test(text) ||
       text.includes('mahanagar gas') ||
       text.includes('indraprastha gas') ||
       text.includes('adani gas') ||
@@ -424,8 +446,8 @@ export class BillExtractor {
       text.includes('gas bill')
     ) {
       let name = 'Piped Gas';
-      if (/\bigl\b/i.test(text) || text.includes('indraprastha')) name = 'IGL Gas';
-      else if (/\bmgl\b/i.test(text) || text.includes('mahanagar')) name = 'Mahanagar Gas';
+      if (this.IGL_WORD_REGEX.test(text) || text.includes('indraprastha')) name = 'IGL Gas';
+      else if (this.MGL_WORD_REGEX.test(text) || text.includes('mahanagar')) name = 'Mahanagar Gas';
       else if (text.includes('adani')) name = 'Adani Total Gas';
       else if (text.includes('gujarat gas')) name = 'Gujarat Gas';
       else if (text.includes('hp gas')) name = 'HP Gas';
@@ -455,7 +477,7 @@ export class BillExtractor {
 
     // 7. Loan EMI (avoiding matching inside 'premium' by checking word boundary)
     if (
-      /\bemi\b/i.test(text) ||
+      this.EMI_WORD_REGEX.test(text) ||
       text.includes('loan account') ||
       text.includes('loan emi') ||
       text.includes('installment') ||
@@ -484,7 +506,7 @@ export class BillExtractor {
       text.includes('tata play') ||
       text.includes('tata sky') ||
       text.includes('dish tv') ||
-      /\bdth\b/i.test(text) ||
+      this.DTH_WORD_REGEX.test(text) ||
       text.includes('airtel digital tv') ||
       text.includes('sun direct') ||
       text.includes('d2h') ||
@@ -502,7 +524,7 @@ export class BillExtractor {
     // 9. Insurance
     if (
       text.includes('insurance') ||
-      /\blic\b/i.test(text) ||
+      this.LIC_WORD_REGEX.test(text) ||
       text.includes('policy') ||
       text.includes('premium') ||
       text.includes('hdfc life') ||
@@ -516,7 +538,7 @@ export class BillExtractor {
       text.includes('niva bupa')
     ) {
       let name = 'Insurance Premium';
-      if (/\blic\b/i.test(text)) name = 'LIC Insurance';
+      if (this.LIC_WORD_REGEX.test(text)) name = 'LIC Insurance';
       else if (text.includes('hdfc life')) name = 'HDFC Life';
       else if (text.includes('icici pru')) name = 'ICICI Prudential';
       else if (text.includes('max life')) name = 'Max Life Insurance';
@@ -537,17 +559,13 @@ export class BillExtractor {
    */
   public static extractAccountReference(body: string): string | undefined {
     // 1. CA / Consumer / Sub ID / Account No / BP No / K No / Service No / Connection No
-    const refMatch = body.match(
-      /(?:ca\s*no\.?|consumer\s*(?:no\.?|id)|sub(?:scriber)?\s*id|a\/c\s*no\.?|account\s*no\.?|policy\s*no\.?|landline\s*no\.?|bp\s*no\.?|k\s*no\.?|service\s*no\.?|connection\s*no\.?)\s*(?:is|:)?\s*([a-zA-Z0-9]{4,16})/i
-    );
+    const refMatch = body.match(this.ACCOUNT_REF_REGEX);
     if (refMatch) {
       return refMatch[1].trim();
     }
 
     // 2. Card ending XX1234 or ending in/with/: 1234
-    const cardMatch = body.match(
-      /(?:card\s*(?:ending|xx|\.\.)(?:\s*(?:in|with|:|-))?\s*(\d{4}))/i
-    );
+    const cardMatch = body.match(this.CARD_REF_REGEX);
     if (cardMatch) {
       return `Card ..${cardMatch[1]}`;
     }
@@ -559,9 +577,7 @@ export class BillExtractor {
    * Extracts payment link / URL if available in the SMS.
    */
   public static extractPaymentUrl(body: string): string | undefined {
-    const urlMatch = body.match(
-      /https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)/i
-    );
+    const urlMatch = body.match(this.PAYMENT_URL_REGEX);
     return urlMatch ? urlMatch[0] : undefined;
   }
 }

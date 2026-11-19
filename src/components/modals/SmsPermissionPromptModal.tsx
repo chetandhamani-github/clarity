@@ -178,7 +178,7 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.headlineSm,
       color: colors.onSurface,
       textAlign: 'center',
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
       marginBottom: 8,
     },
     subtitle: {
@@ -233,7 +233,7 @@ const getStyles = (colors: ThemeColors) => {
     },
     primaryButtonText: {
       ...typography.bodyMd,
-      fontWeight: '600',
+      fontFamily: 'Manrope_600SemiBold',
     },
     skipButton: {
       alignItems: 'center',

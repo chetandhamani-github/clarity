@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   Vibration,
   View,
+  Platform,
 } from 'react-native';
 
 interface ReorderableAccountSectionProps {
@@ -253,6 +254,7 @@ export function ReorderableAccountSection({
             isLiability && { color: colors.error },
           ]}
           numberOfLines={1}
+          adjustsFontSizeToFit
         >
           {subtotalText}
         </Text>
@@ -432,14 +434,14 @@ const getStyles = (colors: ThemeColors) => {
     sectionHeaderLabel: {
       ...typography.labelMd,
       color: colors.outline,
-      letterSpacing: 0.8,
-      fontWeight: '700',
+      letterSpacing: Platform.OS === 'ios' ? 0.8 : 0,
+      fontFamily: 'Manrope_700Bold',
     },
     sectionSubtotal: {
       ...typography.headlineSm,
       fontSize: 16,
       color: colors.onSurface,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
     },
     accountItem: {
       flex: 1,
@@ -468,7 +470,7 @@ const getStyles = (colors: ThemeColors) => {
     },
     accountName: {
       ...typography.bodyMd,
-      fontWeight: '600',
+      fontFamily: 'Manrope_600SemiBold',
       color: colors.onSurface,
     },
     accountBadgeRow: {
@@ -481,10 +483,15 @@ const getStyles = (colors: ThemeColors) => {
       paddingHorizontal: 6,
       paddingVertical: 1,
       borderRadius: 4,
+      flexShrink: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     bankBadgeText: {
       fontSize: 10,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
+      lineHeight: 14,
+      textAlignVertical: 'center',
     },
     accountType: {
       ...typography.labelMd,
@@ -498,7 +505,7 @@ const getStyles = (colors: ThemeColors) => {
     accountBalanceActive: {
       ...typography.headlineSm,
       fontSize: 16,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
       color: colors.onSurface,
     },
     owedBadge: {

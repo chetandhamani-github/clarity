@@ -73,15 +73,15 @@ export function BackupRevisionsModal({
 
         <View style={styles.itemDetails}>
           <View style={styles.itemHeaderRow}>
-            <Text style={styles.itemDateText}>{dateStr} • {timeStr}</Text>
+            <Text style={styles.itemDateText} numberOfLines={1}>{dateStr} • {timeStr}</Text>
             {index === 0 && (
               <View style={[styles.badge, { backgroundColor: colors.primaryContainer }]}>
-                <Text style={[styles.badgeText, { color: colors.onPrimaryContainer }]}>Latest</Text>
+                <Text style={[styles.badgeText, { color: colors.onPrimaryContainer }]} numberOfLines={1}>Latest</Text>
               </View>
             )}
             {item.keepForever && (
               <View style={[styles.badge, { backgroundColor: colors.secondaryContainer }]}>
-                <Text style={[styles.badgeText, { color: colors.onSecondaryContainer }]}>Pinned</Text>
+                <Text style={[styles.badgeText, { color: colors.onSecondaryContainer }]} numberOfLines={1}>Pinned</Text>
               </View>
             )}
           </View>
@@ -400,11 +400,16 @@ const getStyles = (colors: ThemeColors) =>
       paddingHorizontal: 6,
       paddingVertical: 2,
       borderRadius: 6,
+      flexShrink: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     badgeText: {
       ...typography.labelSm,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
       fontSize: 10,
+      lineHeight: 14,
+      textAlignVertical: 'center',
     },
     itemSubRow: {
       flexDirection: 'row',

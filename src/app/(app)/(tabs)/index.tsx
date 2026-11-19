@@ -1,6 +1,7 @@
 import { Header, HomeSkeleton, ProgressBar, Text, useToast } from '@/components/ui';
 import { UpcomingBillsWidget } from '@/modules/bills';
 import { SplitwiseWidget } from '@/modules/splitwise';
+import { SafeToSpendWidget } from '@/components/dashboard/SafeToSpendWidget';
 import { AnnouncementBanner } from '@/components/backend';
 import { ReorderableBankAccounts, OnboardingChecklistCard } from '@/components/common';
 import { VoiceTransactionModal } from '@/components/modals/VoiceTransactionModal';
@@ -23,6 +24,7 @@ import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
 import { usePortfolioSummary } from '@/hooks/use-investments';
+import { useInvalidateCashflow } from '@/hooks/use-cashflow';
 import { useMonthlyTotals, useNetWorthHistory, useTransactions, useCreateTransaction } from '@/hooks/use-transactions';
 import { useDoubleBackToExit } from '@/hooks/use-double-back-to-exit';
 import { useSmsSync } from '@/hooks/useSmsSync';
@@ -82,6 +84,7 @@ export default function DashboardScreen() {
   );
 
   // Fetch Data
+  const invalidateCashflow = useInvalidateCashflow();
   const { accounts, isLoading: accountsLoading, refetch: refetchAccounts } = useAccounts();
   const {
     transactions,
@@ -170,6 +173,7 @@ export default function DashboardScreen() {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
+      invalidateCashflow();
       await Promise.all([
         refetchAccounts(),
         refetchTransactions(),
@@ -182,6 +186,7 @@ export default function DashboardScreen() {
       setRefreshing(false);
     }
   }, [
+    invalidateCashflow,
     refetchAccounts,
     refetchTransactions,
     refetchTotals,
@@ -656,6 +661,9 @@ export default function DashboardScreen() {
                 hasBudgetPlan={Boolean(plan && plan.monthlyIncome > 0)}
                 googleDriveConnected={googleDriveConnected}
               />
+
+              {/* Predictive Cash Flow & Safe to Spend Engine */}
+              <SafeToSpendWidget />
 
               {/* Snapshot Row */}
               <View style={styles.snapshotRow}>
@@ -1261,7 +1269,8 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       fontSize: 11,
       lineHeight: 15,
-      fontWeight: '600',
+      fontFamily: 'Manrope_600SemiBold',
+      textAlignVertical: 'center',
     },
   });
   return styles;

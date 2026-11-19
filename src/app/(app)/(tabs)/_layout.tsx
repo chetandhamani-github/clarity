@@ -1,9 +1,9 @@
 import { Text } from '@/components/ui';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { ThemeColors, typography, useTheme } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Tabs, useRouter } from 'expo-router';
 import { Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { useSafeInsets } from '@/hooks/use-safe-insets';
 
 const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   index: 'home',
@@ -19,7 +19,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeInsets();
   const { colors } = useTheme();
   const styles = getStyles(colors);
-  const safeBottomPadding = Math.max(insets.bottom, 28) + (Platform.OS === 'android' ? 8 : 4);
+  const safeBottomPadding = Math.max(insets.bottom, 28) + (Platform.OS === 'android' ? 0 : 4);
 
   return (
     <View style={[styles.tabBarContainer, { paddingBottom: safeBottomPadding }]}>

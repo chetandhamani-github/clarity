@@ -298,6 +298,7 @@ export default function NotificationsScreen() {
                         styles.tabCountText,
                         isActive && styles.tabCountTextActive,
                       ]}
+                      numberOfLines={1}
                     >
                       {tab.count}
                     </Text>
@@ -390,24 +391,29 @@ const getStyles = (colors: ThemeColors) => {
     tabPillText: {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
-      fontWeight: '600',
+      fontFamily: 'Manrope_600SemiBold',
     },
     tabPillTextActive: {
       color: colors.onPrimary,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
     },
     tabCountBadge: {
       backgroundColor: colors.surfaceContainerLowest,
       paddingHorizontal: 6,
       paddingVertical: 1,
       borderRadius: 10,
+      flexShrink: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     tabCountBadgeActive: {
       backgroundColor: colors.primaryContainer,
     },
     tabCountText: {
       fontSize: 11,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
+      lineHeight: 14,
+      textAlignVertical: 'center',
       color: colors.onSurfaceVariant,
     },
     tabCountTextActive: {

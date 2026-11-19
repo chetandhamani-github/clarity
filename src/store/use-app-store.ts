@@ -33,6 +33,8 @@ interface AppState {
   hasDismissedOnboardingChecklist: boolean;
   hasCustomBackupPassphrase: boolean;
   isPostResetLocked: boolean;
+  paydayDayOfMonth: number;
+  safetyBufferAmount: number;
   setHasHydrated: (value: boolean) => void;
   setOnboarded: (value: boolean) => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -50,6 +52,8 @@ interface AppState {
   setHasDismissedOnboardingChecklist: (dismissed: boolean) => void;
   setHasCustomBackupPassphrase: (value: boolean) => void;
   setPostResetLocked: (locked: boolean) => void;
+  setPaydayDayOfMonth: (day: number) => void;
+  setSafetyBufferAmount: (amt: number) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -72,6 +76,8 @@ export const useAppStore = create<AppState>()(
       hasDismissedOnboardingChecklist: false,
       hasCustomBackupPassphrase: false,
       isPostResetLocked: false,
+      paydayDayOfMonth: 1,
+      safetyBufferAmount: 2000,
       setHasHydrated: (value) => set({ _hasHydrated: value }),
       setOnboarded: (value) => set({ hasOnboarded: value }),
       setTheme: (theme) => set({ theme }),
@@ -95,6 +101,8 @@ export const useAppStore = create<AppState>()(
         set({ hasDismissedOnboardingChecklist: dismissed }),
       setHasCustomBackupPassphrase: (value) => set({ hasCustomBackupPassphrase: value }),
       setPostResetLocked: (locked) => set({ isPostResetLocked: locked }),
+      setPaydayDayOfMonth: (day) => set({ paydayDayOfMonth: Math.min(31, Math.max(1, day)) }),
+      setSafetyBufferAmount: (amt) => set({ safetyBufferAmount: Math.max(0, amt) }),
     }),
     {
       name: 'app-storage',

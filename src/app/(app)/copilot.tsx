@@ -383,7 +383,7 @@ export default function CopilotScreen() {
             ListHeaderComponent={
               <View style={styles.dateSeparatorContainer}>
                 <View style={styles.dateSeparatorPill}>
-                  <Text style={styles.dateSeparatorText}>Today</Text>
+                  <Text style={styles.dateSeparatorText} numberOfLines={1}>Today</Text>
                 </View>
               </View>
             }
@@ -437,7 +437,7 @@ export default function CopilotScreen() {
                     activeOpacity={0.7}
                   >
                     <MaterialIcons name="chat-bubble-outline" size={14} color={colors.primary} />
-                    <Text style={styles.promptChipText}>{prompt}</Text>
+                    <Text style={styles.promptChipText} numberOfLines={1}>{prompt}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -528,6 +528,9 @@ const getStyles = (colors: ThemeColors) => {
       paddingHorizontal: 12,
       paddingVertical: 4,
       borderRadius: 12,
+      flexShrink: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     dateSeparatorText: {
       ...typography.labelMd,

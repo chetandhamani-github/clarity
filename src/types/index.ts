@@ -367,4 +367,45 @@ export interface InvestmentMaturityItem {
   daysRemaining?: number;
 }
 
+export interface CashFlowEvent {
+  id: string;
+  name: string;
+  type: 'bill' | 'recurring' | 'sip' | 'income' | 'discretionary';
+  amount: number;
+  date: string;
+}
+
+export interface CashFlowDayProjection {
+  date: string; // YYYY-MM-DD
+  dayOfWeek: string;
+  dayOfMonth: number;
+  projectedBalance: number;
+  projectedInflow: number;
+  projectedOutflow: number;
+  events: CashFlowEvent[];
+  isDeficit: boolean;
+}
+
+export interface SafeToSpendSummary {
+  currentLiquidCash: number;
+  committedBillsTotal: number;
+  committedRecurringTotal: number;
+  committedSipTotal: number;
+  totalCommittedObligations: number;
+  safetyBuffer: number;
+  safeToSpendTotal: number;
+  safeToSpendDaily: number;
+  daysToNextPayday: number;
+  nextPaydayDate: string;
+  paydayDayOfMonth: number;
+  runwayDays: number;
+  dailyDiscretionaryBurn: number;
+  projections: CashFlowDayProjection[];
+  burnProjections: CashFlowDayProjection[];
+  cycleProjections: CashFlowDayProjection[];
+  hasCashCrunch: boolean;
+  cashCrunchDate?: string;
+  cashCrunchShortfall?: number;
+}
+
 

@@ -332,7 +332,7 @@ export default function AccountDetailsScreen() {
                   }
                 >
                   <MaterialIcons name="payment" size={20} color={colors.onPrimary} />
-                  <Text style={styles.payBillBtnText}>Pay Bill / Settle Debt</Text>
+                  <Text style={styles.payBillBtnText} numberOfLines={1}>Pay Bill / Settle Debt</Text>
                 </TouchableOpacity>
               )}
 
@@ -961,7 +961,7 @@ const getStyles = (colors: ThemeColors) => {
     payBillBtnText: {
       ...typography.labelMd,
       color: colors.onPrimary,
-      fontWeight: '600',
+      fontFamily: 'Manrope_700Bold',
     },
     billingCycleCard: {
       backgroundColor: colors.surfaceContainerLowest,

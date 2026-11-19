@@ -127,7 +127,7 @@ export function PassphraseModal({
                     {isLoading ? (
                       <ActivityIndicator size="small" color={colors.onPrimary} />
                     ) : (
-                      <Text style={styles.confirmText}>{confirmText}</Text>
+                      <Text style={styles.confirmText} numberOfLines={1}>{confirmText}</Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -186,7 +186,7 @@ const getStyles = (colors: ThemeColors) => {
     title: {
       ...typography.headlineSm,
       color: colors.onSurface,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
       textAlign: 'center',
     },
     description: {
@@ -244,7 +244,7 @@ const getStyles = (colors: ThemeColors) => {
     confirmText: {
       ...typography.labelMd,
       color: colors.onPrimary,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
     },
     helperError: {
       ...typography.bodySm,

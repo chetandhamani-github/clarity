@@ -220,7 +220,7 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
               {/* Reason Badge */}
               <View style={styles.reasonBadge}>
                 <MaterialIcons name="info-outline" size={16} color={colors.primary} />
-                <Text style={styles.reasonBadgeText}>
+                <Text style={styles.reasonBadgeText} numberOfLines={1}>
                   {formatReason(currentItem.reason)}
                 </Text>
               </View>
@@ -433,6 +433,7 @@ const getStyles = (colors: ThemeColors) => {
       borderRadius: radius.md,
       alignSelf: 'flex-start',
       marginBottom: spacing.md,
+      flexShrink: 0,
     },
     reasonBadgeText: {
       fontFamily: 'Manrope_600SemiBold',

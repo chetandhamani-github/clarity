@@ -998,7 +998,7 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
       textTransform: 'uppercase',
-      letterSpacing: 0.6,
+      letterSpacing: Platform.OS === 'ios' ? 0.6 : 0,
     },
     firstSectionHeader: {
       borderTopLeftRadius: 16,

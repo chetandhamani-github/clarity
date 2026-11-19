@@ -359,9 +359,9 @@ const getStyles = (colors: ThemeColors) => {
     sectionTitle: {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
       textTransform: 'uppercase',
-      letterSpacing: 0.5,
+      letterSpacing: Platform.OS === 'ios' ? 0.5 : 0,
     },
     chipRow: {
       flexDirection: 'row',

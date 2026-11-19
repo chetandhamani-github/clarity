@@ -364,6 +364,7 @@ export default function InvestmentsScreen() {
                                 styles.calendarTypeBadgeText,
                                 { color: isSip ? '#3B82F6' : '#10B981' },
                               ]}
+                              numberOfLines={1}
                             >
                               {isSip ? 'MONTHLY SIP' : 'FD MATURITY'}
                             </Text>
@@ -555,7 +556,7 @@ export default function InvestmentsScreen() {
                           {h.sipDayOfMonth && (
                             <View style={styles.tagPill}>
                               <MaterialIcons name="repeat" size={12} color={colors.primary} />
-                              <Text style={styles.tagPillText}>
+                              <Text style={styles.tagPillText} numberOfLines={1}>
                                 SIP: {formatCurrency(h.sipAmount || 0)} on {h.sipDayOfMonth}th
                               </Text>
                             </View>
@@ -563,7 +564,7 @@ export default function InvestmentsScreen() {
                           {h.maturityDate && (
                             <View style={styles.tagPill}>
                               <MaterialIcons name="alarm" size={12} color="#10B981" />
-                              <Text style={[styles.tagPillText, { color: '#10B981' }]}>
+                              <Text style={[styles.tagPillText, { color: '#10B981' }]} numberOfLines={1}>
                                 Matures: {h.maturityDate}
                               </Text>
                             </View>
@@ -571,7 +572,7 @@ export default function InvestmentsScreen() {
                           {h.folioOrAccountNumber && (
                             <View style={styles.tagPill}>
                               <MaterialIcons name="tag" size={12} color={colors.onSurfaceVariant} />
-                              <Text style={styles.tagPillText}>
+                              <Text style={styles.tagPillText} numberOfLines={1}>
                                 {h.folioOrAccountNumber}
                               </Text>
                             </View>
@@ -826,6 +827,9 @@ function getStyles(colors: ThemeColors) {
       paddingHorizontal: 6,
       paddingVertical: 2,
       borderRadius: radius.full,
+      flexShrink: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     calendarTypeBadgeText: {
       ...typography.labelMd,
@@ -1002,6 +1006,7 @@ function getStyles(colors: ThemeColors) {
       paddingHorizontal: 8,
       paddingVertical: 3,
       borderRadius: radius.md,
+      flexShrink: 0,
     },
     tagPillText: {
       ...typography.labelMd,

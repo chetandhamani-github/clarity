@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
   title: {
     ...typography.headlineMd,
     fontSize: 26,
-    fontWeight: '800',
+    fontFamily: 'Manrope_700Bold',
     marginBottom: 4,
     letterSpacing: -0.3,
   },

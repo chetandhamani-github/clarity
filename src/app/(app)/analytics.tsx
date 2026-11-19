@@ -474,6 +474,7 @@ export default function AnalyticsScreen() {
                                   : colors.onErrorContainer,
                             },
                           ]}
+                          numberOfLines={1}
                         >
                           Health Score: {digest.financialHealthScore ?? 0}/100
                         </Text>
@@ -1092,10 +1093,15 @@ const getStyles = (colors: ThemeColors) => {
       paddingHorizontal: 12,
       paddingVertical: 4,
       borderRadius: 20,
+      flexShrink: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     digestScoreText: {
       ...typography.labelMd,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
+      lineHeight: 16,
+      textAlignVertical: 'center',
     },
     digestSummaryText: {
       ...typography.bodyMd,

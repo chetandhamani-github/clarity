@@ -299,6 +299,7 @@ export default function AddInvestmentScreen() {
                         fontFamily: isSelected ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
                       },
                     ]}
+                    numberOfLines={1}
                   >
                     {cls.label}
                   </Text>
@@ -331,6 +332,7 @@ export default function AddInvestmentScreen() {
                       styles.subTypeText,
                       { color: isSubSelected ? colors.onPrimary : colors.onSurfaceVariant },
                     ]}
+                    numberOfLines={1}
                   >
                     {sub.label}
                   </Text>

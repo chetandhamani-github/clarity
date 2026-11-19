@@ -894,9 +894,9 @@ const getStyles = (colors: ThemeColors) => {
       color: colors.onSurfaceVariant,
       fontSize: 11,
       marginBottom: 8,
-      fontWeight: '600',
+      fontFamily: 'Manrope_600SemiBold',
       textTransform: 'uppercase',
-      letterSpacing: 0.5,
+      letterSpacing: Platform.OS === 'ios' ? 0.5 : 0,
     },
     chipsRow: {
       flexDirection: 'row',
@@ -990,9 +990,9 @@ const getStyles = (colors: ThemeColors) => {
       color: colors.onSurfaceVariant,
       fontSize: 11,
       marginBottom: 6,
-      fontWeight: '600',
+      fontFamily: 'Manrope_600SemiBold',
       textTransform: 'uppercase',
-      letterSpacing: 0.5,
+      letterSpacing: Platform.OS === 'ios' ? 0.5 : 0,
     },
     accountChipsScroll: {
       flexDirection: 'row',

@@ -192,12 +192,12 @@ export default function GoalsScreen({ showBack = false }: GoalsScreenProps = {})
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.goalTitle} numberOfLines={1}>{goal.name}</Text>
-                        <Text style={styles.goalAmounts}>
+                        <Text style={styles.goalAmounts} numberOfLines={1}>
                           {formatCurrency(goal.currentAmount)} / {formatCurrency(goal.targetAmount)}
                         </Text>
                       </View>
                     </View>
-                    <Text style={styles.goalPercent}>{progress.toFixed(0)}%</Text>
+                    <Text style={styles.goalPercent} numberOfLines={1}>{progress.toFixed(0)}%</Text>
                   </View>
 
                   <View style={styles.goalCardBottom}>
@@ -292,7 +292,7 @@ const getStyles = (colors: ThemeColors) => {
     },
     goalPercent: {
       ...typography.bodyLg,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
       color: colors.primary,
       flexShrink: 0,
     },

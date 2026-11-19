@@ -7,6 +7,7 @@ import {
   Image,
   ActivityIndicator,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { Text, Header, AccountsSkeleton } from '@/components/ui';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
@@ -216,6 +217,7 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
                                           : '#EF4444',
                                     },
                                   ]}
+                                  numberOfLines={1}
                                 >
                                   {portfolioSummary.unrealizedGainLoss >= 0 ? '+' : ''}
                                   {portfolioSummary.gainLossPercentage.toFixed(1)}%
@@ -611,6 +613,7 @@ function AccountDetailCard({
                             : '#10B981',
                       },
                     ]}
+                    numberOfLines={1}
                   >
                     {creditDetails.utilization}% {creditDetails.utilization > 30 ? (creditDetails.utilization >= 80 ? 'Critical' : 'Caution') : 'Safe (<30%)'}
                   </Text>
@@ -635,10 +638,10 @@ function AccountDetailCard({
               </View>
 
               <View style={styles.utilizationFooterRow}>
-                <Text style={styles.utilizationSubtext}>
+                <Text style={styles.utilizationSubtext} numberOfLines={1}>
                   Used: {formatCurrency(creditDetails.spent)} / Limit: {formatCurrency(creditDetails.limit)}
                 </Text>
-                <Text style={[styles.utilizationSubtext, { color: colors.primary, fontWeight: '700' }]}>
+                <Text style={[styles.utilizationSubtext, { color: colors.primary, fontFamily: 'Manrope_700Bold' }]} numberOfLines={1}>
                   {formatCurrency(creditDetails.available)} available
                 </Text>
               </View>
@@ -687,6 +690,7 @@ function AccountDetailCard({
                                 creditDetails.daysUntilDue <= 3 ? colors.error : colors.onPrimaryContainer,
                             },
                           ]}
+                          numberOfLines={1}
                         >
                           {creditDetails.daysUntilDue === 0 ? 'Due Today' : `${creditDetails.daysUntilDue}d left`}
                         </Text>
@@ -703,7 +707,7 @@ function AccountDetailCard({
       {hasOutstandingDebt && onSettleDebt && (
         <TouchableOpacity style={styles.payBillButton} onPress={onSettleDebt}>
           <MaterialIcons name="payment" size={18} color={colors.onPrimary} />
-          <Text style={styles.payBillButtonText}>Pay Bill / Settle Debt</Text>
+          <Text style={styles.payBillButtonText} numberOfLines={1}>Pay Bill / Settle Debt</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -792,7 +796,7 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       color: colors.onPrimary,
       opacity: 0.8,
-      letterSpacing: 1,
+      letterSpacing: Platform.OS === 'ios' ? 1 : 0,
     },
     totalBalance: {
       ...typography.dataLg,
@@ -865,7 +869,7 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
       textTransform: 'uppercase',
-      letterSpacing: 0.6,
+      letterSpacing: Platform.OS === 'ios' ? 0.6 : 0,
       marginBottom: 4,
     },
     detailsBalance: {
@@ -942,8 +946,8 @@ const getStyles = (colors: ThemeColors) => {
     bankBadgeText: {
       fontSize: 11,
       lineHeight: 15,
-      fontWeight: '700',
-      letterSpacing: 0.5,
+      fontFamily: 'Manrope_700Bold',
+      letterSpacing: Platform.OS === 'ios' ? 0.5 : 0,
     },
     creditCardDetailsBox: {
       marginTop: 12,
@@ -964,11 +968,16 @@ const getStyles = (colors: ThemeColors) => {
       paddingHorizontal: 8,
       paddingVertical: 2,
       borderRadius: 10,
+      flexShrink: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     utilizationBadgeText: {
       ...typography.labelMd,
       fontSize: 10,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
+      lineHeight: 14,
+      textAlignVertical: 'center',
     },
     utilizationProgressTrack: {
       height: 6,
@@ -1027,11 +1036,16 @@ const getStyles = (colors: ThemeColors) => {
       paddingHorizontal: 6,
       paddingVertical: 1,
       borderRadius: 6,
+      flexShrink: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     dueBadgeText: {
       ...typography.labelMd,
       fontSize: 10,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
+      lineHeight: 14,
+      textAlignVertical: 'center',
     },
     portfolioCockpitCard: {
       borderRadius: 16,
@@ -1068,11 +1082,16 @@ const getStyles = (colors: ThemeColors) => {
       paddingHorizontal: 6,
       paddingVertical: 1,
       borderRadius: 6,
+      flexShrink: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     miniPnlText: {
       ...typography.labelMd,
       fontFamily: 'Manrope_700Bold',
       fontSize: 10,
+      lineHeight: 14,
+      textAlignVertical: 'center',
     },
     allocationBarContainer: {
       marginTop: 12,

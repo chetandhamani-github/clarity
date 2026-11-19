@@ -371,10 +371,10 @@ export async function mergeOrInsertSmsBill(extracted: {
 
   const existing = await db.getFirstAsync<BillReminderRow>(
     `SELECT * FROM bill_reminders 
-     WHERE (biller_name LIKE ? OR biller_category = ? OR ? LIKE '%' || biller_name || '%')
+     WHERE (biller_name LIKE ? OR ? LIKE '%' || biller_name || '%' OR (account_reference IS NOT NULL AND account_reference != '' AND account_reference = ?))
        AND due_date BETWEEN ? AND ?
      LIMIT 1`,
-    [`%${extracted.billerName}%`, extracted.billerCategory, extracted.billerName, minRange, maxRange]
+    [`%${extracted.billerName}%`, extracted.billerName, extracted.accountReference ?? '', minRange, maxRange]
   );
 
   if (existing) {

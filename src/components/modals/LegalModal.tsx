@@ -163,7 +163,7 @@ const getStyles = (colors: ThemeColors) => {
     title: {
       ...typography.headlineSm,
       color: colors.onSurface,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
     },
     content: {
       flex: 1,
@@ -178,12 +178,12 @@ const getStyles = (colors: ThemeColors) => {
     effectiveDate: {
       ...typography.labelMd,
       color: colors.primary,
-      fontWeight: '600',
+      fontFamily: 'Manrope_600SemiBold',
     },
     heading: {
       ...typography.bodyLg,
       color: colors.onSurface,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
       marginTop: 8,
     },
     paragraph: {

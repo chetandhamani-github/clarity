@@ -508,6 +508,20 @@ export default function SettingsScreen() {
 
             <TouchableOpacity
               style={styles.settingItem}
+              onPress={() => router.navigate('/(app)/cashflow')}
+            >
+              <View style={styles.settingItemLeft}>
+                <MaterialIcons name="speed" size={24} color="#10B981" />
+                <View style={styles.settingTextContainer}>
+                  <Text style={styles.settingTitle}>Cash Flow & Safe to Spend</Text>
+                  <Text style={styles.settingSub}>30-day runway projection & daily disposable allowance</Text>
+                </View>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingItem}
               onPress={() => router.navigate('/manage-categories')}
             >
               <View style={styles.settingItemLeft}>
@@ -671,7 +685,7 @@ export default function SettingsScreen() {
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                   <MaterialIcons name="description" size={18} color={colors.onSurface} />
-                  <Text style={styles.btnSecondaryText}>EXPORT STATEMENT (PDF / CSV)</Text>
+                  <Text style={styles.btnSecondaryText} numberOfLines={1}>EXPORT STATEMENT (PDF / CSV)</Text>
                 </View>
               </TouchableOpacity>
               <TouchableOpacity
@@ -680,7 +694,7 @@ export default function SettingsScreen() {
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                   <MaterialIcons name="file-upload" size={18} color={colors.onSurface} />
-                  <Text style={styles.btnSecondaryText}>IMPORT STATEMENT (CSV)</Text>
+                  <Text style={styles.btnSecondaryText} numberOfLines={1}>IMPORT STATEMENT (CSV)</Text>
                 </View>
               </TouchableOpacity>
               <TouchableOpacity
