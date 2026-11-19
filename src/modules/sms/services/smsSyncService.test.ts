@@ -265,5 +265,39 @@ describe('SmsSyncService', () => {
     );
     expect(SmsDao.linkClarityTransaction).toHaveBeenCalledWith('pending-upi-1', 'clarity-tx-1');
   });
+
+  it('syncs accounts and bills during initial scan when skipHistoricalTransactions is true, but skips creating transactions', async () => {
+    const { insertTransaction } = require('@/services/database/transaction-dao');
+    const { getAllAccounts } = require('@/services/database/account-dao');
+    getAllAccounts.mockResolvedValue(initialAccounts);
+
+    const result = await SmsSyncService.runInitialScan({
+      autoCreateClarityTransactions: false,
+      skipHistoricalTransactions: true,
+    });
+
+    expect(result.scannedCount).toBe(2);
+    expect(result.parsedCount).toBe(1);
+    expect(result.newTransactions).toHaveLength(0);
+    expect(insertTransaction).not.toHaveBeenCalled();
+    expect(SmsDao.saveReviewQueueBatch).not.toHaveBeenCalled();
+    expect(SmsSyncService.getLastSyncTimestamp()).toBe(1705315300000);
+  });
+
+  it('runs initial scan with skipHistoricalTransactions when incremental scan runs without an existing cursor', async () => {
+    // mmkv has no timestamp and SmsDao returns null
+    mmkv.remove('clarity_last_sms_sync_timestamp');
+    (SmsDao.getLatestSmsTimestamp as jest.Mock).mockResolvedValue(null);
+
+    const { insertTransaction } = require('@/services/database/transaction-dao');
+    const result = await SmsSyncService.runIncrementalScan({
+      autoCreateClarityTransactions: false,
+    });
+
+    expect(result.scannedCount).toBe(2);
+    expect(result.newTransactions).toHaveLength(0);
+    expect(insertTransaction).not.toHaveBeenCalled();
+    expect(SmsSyncService.getLastSyncTimestamp()).toBe(1705315300000);
+  });
 });
 

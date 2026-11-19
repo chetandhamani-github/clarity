@@ -14,7 +14,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter } from 'expo-router';
 import { useDebtPayoff } from '@/hooks/use-debt-payoff';
-import { formatCurrency } from '@/utils/format';
+import { formatCurrency, getCurrencySymbol } from '@/utils/format';
 import type { DebtItem } from '@/services/debt/debt-payoff-service';
 
 const EXTRA_PAYMENT_PRESETS = [0, 1000, 2500, 5000, 10000];
@@ -200,7 +200,7 @@ export default function DebtPayoffScreen() {
                 <View style={styles.metricCol}>
                   <Text style={styles.metricLabel}>Interest Saved</Text>
                   <Text style={[styles.metricValue, { color: '#10B981' }]}>
-                    {interestSaved > 0 ? formatCurrency(interestSaved) : '₹0'}
+                    {interestSaved > 0 ? formatCurrency(interestSaved) : formatCurrency(0)}
                   </Text>
                 </View>
               </View>
@@ -349,7 +349,7 @@ export default function DebtPayoffScreen() {
               onChangeText={setTempApr}
             />
 
-            <Text style={[styles.inputLabel, { marginTop: 12 }]}>MINIMUM MONTHLY PAYMENT (₹)</Text>
+            <Text style={[styles.inputLabel, { marginTop: 12 }]}>MINIMUM MONTHLY PAYMENT ({getCurrencySymbol()})</Text>
             <TextInput
               style={[styles.modalInput, { color: colors.onSurface, borderColor: colors.surfaceVariant }]}
               keyboardType="numeric"

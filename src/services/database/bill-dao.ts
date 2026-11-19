@@ -171,7 +171,7 @@ export async function insertBill(
     DeviceEventEmitter.emit('notificationsUpdated');
   }
 
-  return {
+  const newBill: BillReminder = {
     id,
     source: data.source || 'MANUAL',
     billerName: data.billerName,
@@ -190,6 +190,15 @@ export async function insertBill(
     smsId: data.smsId,
     createdAt,
   };
+
+  try {
+    const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
+    BillAlertEngine.scheduleNativeBillReminder(newBill).catch(() => {});
+  } catch {
+    // Ignore
+  }
+
+  return newBill;
 }
 
 export async function updateBill(
@@ -258,18 +267,46 @@ export async function updateBill(
   params.push(id);
   await db.runAsync(`UPDATE bill_reminders SET ${sets.join(', ')} WHERE id = ?`, params);
   DeviceEventEmitter.emit('billsUpdated');
+
+  try {
+    const updated = await getBillById(id);
+    if (updated) {
+      const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
+      if (updated.status === 'PAID' || updated.status === 'DISMISSED') {
+        BillAlertEngine.cancelNativeBillReminder(id).catch(() => {});
+      } else {
+        BillAlertEngine.scheduleNativeBillReminder(updated).catch(() => {});
+      }
+    }
+  } catch {
+    // Ignore
+  }
 }
 
 export async function deleteBill(id: string): Promise<void> {
   const db = getDatabase();
   await db.runAsync('DELETE FROM bill_reminders WHERE id = ?', [id]);
   DeviceEventEmitter.emit('billsUpdated');
+
+  try {
+    const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
+    BillAlertEngine.cancelNativeBillReminder(id).catch(() => {});
+  } catch {
+    // Ignore
+  }
 }
 
 export async function dismissBill(id: string): Promise<void> {
   const db = getDatabase();
   await db.runAsync("UPDATE bill_reminders SET status = 'DISMISSED' WHERE id = ?", [id]);
   DeviceEventEmitter.emit('billsUpdated');
+
+  try {
+    const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
+    BillAlertEngine.cancelNativeBillReminder(id).catch(() => {});
+  } catch {
+    // Ignore
+  }
 }
 
 /**
@@ -340,6 +377,13 @@ export async function markBillAsPaid(
     await db.withTransactionAsync(executeSettle);
   } else {
     await executeSettle();
+  }
+
+  try {
+    const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
+    BillAlertEngine.cancelNativeBillReminder(id).catch(() => {});
+  } catch {
+    // Ignore
   }
 
   DeviceEventEmitter.emit('billsUpdated');

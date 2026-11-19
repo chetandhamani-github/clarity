@@ -108,38 +108,10 @@ export async function exportFullBackupToJSON(): Promise<{
   message?: string;
 }> {
   try {
-    const db = getDatabase();
-    const accounts = await getAllAccounts();
-    const transactions = await getTransactions();
-    const plan = await getCurrentBudgetPlan();
-    const categories = await getAllCategories();
-    const goals = await getGoals();
-    const contributions = await db.getAllAsync<any>('SELECT * FROM goal_contributions');
-    const recurring = await db.getAllAsync<any>('SELECT * FROM recurring_transactions');
-    let investments: any[] = [];
-    try {
-      investments = await db.getAllAsync<any>('SELECT * FROM investment_holdings');
-    } catch {
-      // table fallback
-    }
+    const { generateDatabaseSnapshot } = await import('@/services/database/backup-restore-service');
+    const snapshot = await generateDatabaseSnapshot();
 
-    const backupData = {
-      app: 'Clarity Personal Finance',
-      version: '1.0.0',
-      exportedAt: new Date().toISOString(),
-      data: {
-        accounts,
-        transactions,
-        budgetPlan: plan,
-        budgetCategories: categories,
-        goals,
-        goalContributions: contributions,
-        recurringTransactions: recurring,
-        investmentHoldings: investments,
-      },
-    };
-
-    const jsonString = JSON.stringify(backupData, null, 2);
+    const jsonString = JSON.stringify(snapshot, null, 2);
     const filename = `clarity_full_backup_${new Date().toISOString().split('T')[0]}.json`;
     const fileUri = `${FileSystem.cacheDirectory}${filename}`;
 

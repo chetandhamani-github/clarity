@@ -275,6 +275,14 @@ export async function checkUpcomingBillReminders(): Promise<void> {
         dueDay: acc.due_day ?? undefined,
       });
     }
+
+    try {
+      const { BillAlertEngine } = await import('./bill-alert-engine');
+      await BillAlertEngine.evaluateUpcomingBillAlerts();
+      await BillAlertEngine.syncAllNativeBillReminders();
+    } catch {
+      // Ignore
+    }
   } catch {
     // Error checking upcoming bill reminders
   }

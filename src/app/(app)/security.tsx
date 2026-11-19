@@ -6,9 +6,14 @@ import {
   TouchableOpacity,
   Switch,
   ActivityIndicator,
+  DeviceEventEmitter,
 } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import { useQueryClient } from '@tanstack/react-query';
 import { Text, Button, Header, useToast, useAlert } from '@/components/ui';
+import { PassphraseModal } from '@/components/modals/PassphraseModal';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -17,6 +22,10 @@ import { useAppStore } from '@/store/use-app-store';
 import { clearDatabase } from '@/services/database';
 import { clearAutoBackupTimer } from '@/services/cloud/google-drive-service';
 import { exportFullBackupToJSON } from '@/services/export/export-service';
+import {
+  restoreFromLocalJSONString,
+  getLocalTransactionsCountAfter,
+} from '@/services/database/backup-restore-service';
 import { useAccounts } from '@/hooks/use-accounts';
 
 export default function SecurityPrivacyScreen() {
@@ -33,7 +42,11 @@ export default function SecurityPrivacyScreen() {
   const setBiometricEnabled = useAppStore((state) => state.setBiometricEnabled);
   const setTimeoutSetting = useAppStore((state) => state.setTimeoutSetting);
 
+  const queryClient = useQueryClient();
   const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [pendingLocalContent, setPendingLocalContent] = useState<string | null>(null);
+  const [passphraseModalVisible, setPassphraseModalVisible] = useState(false);
 
   const handleToggleBiometrics = async (value: boolean) => {
     if (!value) {
@@ -93,6 +106,91 @@ export default function SecurityPrivacyScreen() {
       }
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const processLocalRestore = async (content: string, passphrase?: string) => {
+    setIsImporting(true);
+    try {
+      const result = await restoreFromLocalJSONString(content, passphrase);
+      if (!result.success && result.isEncrypted) {
+        setPendingLocalContent(content);
+        setPassphraseModalVisible(true);
+        return;
+      }
+
+      if (result.success) {
+        useAppStore.getState().setPostResetLocked(false);
+        await queryClient.invalidateQueries();
+        DeviceEventEmitter.emit('billsUpdated');
+        DeviceEventEmitter.emit('notificationsUpdated');
+        DeviceEventEmitter.emit('splitwiseUpdated');
+        showToast(
+          `Data restored successfully! (${result.summary?.accountCount || 0} accounts, ${result.summary?.transactionCount || 0} transactions)`,
+          'success'
+        );
+      } else {
+        showToast(result.error || 'Failed to restore from file', 'error');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Restore failed', 'error');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleImportLocalBackup = async () => {
+    try {
+      const doc = await DocumentPicker.getDocumentAsync({
+        type: ['application/json', 'application/octet-stream', '*/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (doc.canceled || !doc.assets || doc.assets.length === 0) {
+        return;
+      }
+
+      const file = doc.assets[0];
+      const content = await FileSystem.readAsStringAsync(file.uri, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      // Quick conflict check if the backup has an exportedAt timestamp
+      let conflictWarning = '';
+      try {
+        const parsed = JSON.parse(content);
+        if (parsed?.exportedAt) {
+          const newerTxCount = await getLocalTransactionsCountAfter(parsed.exportedAt);
+          if (newerTxCount > 0) {
+            conflictWarning = `\n\n⚠️ Warning: You have ${newerTxCount} local transaction${newerTxCount > 1 ? 's' : ''} logged since this backup was made. Restoring will overwrite them.`;
+          }
+        }
+      } catch {
+        // Encrypted or non-JSON preview
+      }
+
+      showAlert(
+        'Restore from File',
+        `Restore data from "${file.name}"? This will replace your current local accounts and transactions with the backup version.${conflictWarning}`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Restore',
+            style: 'destructive',
+            onPress: () => processLocalRestore(content),
+          },
+        ]
+      );
+    } catch (err: any) {
+      showToast(err?.message || 'Could not select backup file', 'error');
+    }
+  };
+
+  const handlePassphraseSubmit = (passphrase: string) => {
+    setPassphraseModalVisible(false);
+    if (pendingLocalContent) {
+      processLocalRestore(pendingLocalContent, passphrase);
+      setPendingLocalContent(null);
     }
   };
 
@@ -297,6 +395,30 @@ export default function SecurityPrivacyScreen() {
               </TouchableOpacity>
             </View>
 
+            {/* Restore Local Backup */}
+            <View style={styles.listItem}>
+              <View style={styles.listItemTextContent}>
+                <Text style={styles.cardTitle}>Restore from Backup File</Text>
+                <Text style={styles.cardSubtitle}>
+                  Import and restore your data from a local Clarity JSON backup file.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.textBtn}
+                onPress={handleImportLocalBackup}
+                disabled={isImporting}
+              >
+                {isImporting ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <>
+                    <MaterialIcons name="file-upload" size={18} color={colors.primary} />
+                    <Text style={styles.textBtnText}>Import JSON</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+
             {/* Delete Account */}
             <View
               style={[
@@ -325,6 +447,18 @@ export default function SecurityPrivacyScreen() {
           <Button title="Save Changes" onPress={() => router.back()} style={styles.saveBtn} />
         </View>
       </ScrollView>
+
+      <PassphraseModal
+        visible={passphraseModalVisible}
+        title="Encrypted Backup"
+        description="Enter the recovery passphrase used to encrypt this backup file."
+        confirmText="Decrypt & Restore"
+        onClose={() => {
+          setPassphraseModalVisible(false);
+          setPendingLocalContent(null);
+        }}
+        onSubmit={handlePassphraseSubmit}
+      />
     </View>
   );
 }

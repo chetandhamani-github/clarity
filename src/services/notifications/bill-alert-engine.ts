@@ -2,6 +2,14 @@ import { getUpcomingBills } from '@/services/database/bill-dao';
 import { insertNotification, getNotifications } from '@/services/database/notification-dao';
 import { formatCurrency, parseDateSafely } from '@/utils/format';
 import { DeviceEventEmitter } from 'react-native';
+import type { BillReminder } from '@/types';
+
+let Notifications: any = null;
+try {
+  Notifications = require('expo-notifications');
+} catch {
+  // Graceful fallback for test/headless environments
+}
 
 export class BillAlertEngine {
   /**
@@ -77,6 +85,93 @@ export class BillAlertEngine {
       return alertedCount;
     } catch {
       return 0;
+    }
+  }
+
+  /**
+   * Schedules a native system notification trigger for an upcoming bill reminder.
+   * Fires on the reminder date at 9:00 AM local time, even if the app remains closed.
+   */
+  public static async scheduleNativeBillReminder(bill: BillReminder): Promise<void> {
+    if (!Notifications || typeof Notifications.scheduleNotificationAsync !== 'function') {
+      return;
+    }
+    if (bill.status === 'PAID' || bill.status === 'DISMISSED') {
+      await this.cancelNativeBillReminder(bill.id);
+      return;
+    }
+    if (!bill.dueDate) return;
+
+    try {
+      await this.cancelNativeBillReminder(bill.id);
+
+      const [bYear, bMonth, bDay] = bill.dueDate.split('-').map(Number);
+      if (!bYear || !bMonth || !bDay) return;
+
+      const reminderDays = bill.reminderDaysBefore ?? 1;
+      // 9:00 AM on reminder target date
+      const targetDate = new Date(bYear, bMonth - 1, bDay, 9, 0, 0, 0);
+      targetDate.setDate(targetDate.getDate() - reminderDays);
+
+      const now = new Date();
+      const dueEnd = new Date(bYear, bMonth - 1, bDay, 23, 59, 59, 999);
+
+      if (dueEnd.getTime() < now.getTime()) {
+        // Bill is already past due date, do not schedule a future alarm
+        return;
+      }
+
+      // If the reminder trigger time has already passed today, but due date is today or future:
+      // trigger in 10 seconds so user receives immediate awareness
+      const trigger =
+        targetDate.getTime() > now.getTime()
+          ? targetDate
+          : new Date(now.getTime() + 10 * 1000);
+
+      await Notifications.scheduleNotificationAsync({
+        identifier: `bill-reminder-${bill.id}`,
+        content: {
+          title: `Bill Reminder: ${bill.billerName}`,
+          body: `${bill.billerName} bill of ${formatCurrency(bill.amountDue)} is due on ${bill.dueDate}.`,
+          data: { billId: bill.id, url: '/(app)/bills' },
+          sound: true,
+        },
+        trigger,
+      });
+    } catch {
+      // Ignore notification permission / scheduling errors in test/headless mode
+    }
+  }
+
+  /**
+   * Cancels any scheduled native system notification for a bill.
+   */
+  public static async cancelNativeBillReminder(billId: string): Promise<void> {
+    if (!Notifications || typeof Notifications.cancelScheduledNotificationAsync !== 'function') {
+      return;
+    }
+    try {
+      await Notifications.cancelScheduledNotificationAsync(`bill-reminder-${billId}`);
+    } catch {
+      // Ignore
+    }
+  }
+
+  /**
+   * Re-syncs all active upcoming bills into native scheduled notifications.
+   */
+  public static async syncAllNativeBillReminders(): Promise<void> {
+    try {
+      const upcoming = await getUpcomingBills(30);
+      for (const bill of upcoming) {
+        if (bill.status !== 'PAID' && bill.status !== 'DISMISSED') {
+          await this.scheduleNativeBillReminder(bill);
+        } else {
+          await this.cancelNativeBillReminder(bill.id);
+        }
+      }
+    } catch {
+      // Ignore
     }
   }
 }

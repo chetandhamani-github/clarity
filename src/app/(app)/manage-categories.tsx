@@ -21,7 +21,7 @@ import {
   useUpdateCategory,
   useDeleteCategory,
 } from '@/hooks/use-budget';
-import { formatCurrency } from '@/utils/format';
+import { formatCurrency, getCurrencySymbol } from '@/utils/format';
 import type { BudgetCategory, BucketType } from '@/types';
 
 type MaterialIconName = keyof typeof MaterialIcons.glyphMap;
@@ -394,7 +394,7 @@ export default function ManageCategoriesScreen() {
                       color: colors.onSurface,
                     },
                   ]}
-                  placeholder="₹ 0.00"
+                  placeholder={`${getCurrencySymbol()} 0.00`}
                   placeholderTextColor={colors.onSurfaceVariant}
                   keyboardType="numeric"
                   value={limit}

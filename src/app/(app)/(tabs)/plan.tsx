@@ -22,7 +22,7 @@ import {
   useCreateCategory,
 } from '@/hooks/use-budget';
 import { useMonthlyBillSummary } from '@/hooks/use-bills';
-import { formatCurrency } from '@/utils/format';
+import { formatCurrency, getCurrencySymbol } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
 import type { BucketType, CategorySpending } from '@/types';
 
@@ -902,7 +902,9 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
                       },
                     ]}
                   >
-                    <Text style={[styles.currencyPrefix, { color: colors.onSurface }]}>₹</Text>
+                    <Text style={[styles.currencyPrefix, { color: colors.onSurface }]}>
+                      {getCurrencySymbol()}
+                    </Text>
                     <TextInput
                       style={[styles.amountInput, { color: colors.onSurface }]}
                       keyboardType="numeric"

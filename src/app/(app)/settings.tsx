@@ -92,10 +92,20 @@ export default function SettingsScreen() {
           showToast('SMS permission is required to scan messages', 'error');
           return;
         }
+        await syncSms({
+          autoCreateClarityTransactions: false,
+          skipHistoricalTransactions: true,
+        });
+        queryClient.invalidateQueries({ queryKey: ['transactions'] });
+        queryClient.invalidateQueries({ queryKey: ['accounts'] });
+        queryClient.invalidateQueries({ queryKey: ['bills'] });
+        showToast('SMS auto-tracking enabled! Accounts and bills synced.', 'success');
+        return;
       }
       await syncSms({ autoCreateClarityTransactions: false });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['bills'] });
       showToast('SMS scan completed successfully!', 'success');
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'SMS scan failed', 'error');
@@ -126,17 +136,34 @@ export default function SettingsScreen() {
   };
 
   const handleRestoreFromDrive = async (passphrase?: string) => {
+    let newerTxCount = 0;
+    if (driveLastBackupTime) {
+      try {
+        const { getLocalTransactionsCountAfter } = await import(
+          '@/services/database/backup-restore-service'
+        );
+        newerTxCount = await getLocalTransactionsCountAfter(driveLastBackupTime);
+      } catch {
+        // Ignore
+      }
+    }
+
     const backupDateMsg = driveLastBackupTime
       ? ` (Backup from: ${new Date(driveLastBackupTime).toLocaleString()})`
       : '';
+    const conflictWarning =
+      newerTxCount > 0
+        ? `\n\n⚠️ Warning: You have ${newerTxCount} local transaction${newerTxCount > 1 ? 's' : ''} logged since this backup was made. Restoring will replace them with the backup version.`
+        : '';
+
     showAlert(
       'Restore from Google Drive',
-      `This will restore accounts, transactions, and goals from Google Drive and replace local data${backupDateMsg}. Would you like to proceed?`,
+      `This will restore accounts, transactions, and goals from Google Drive and replace local data${backupDateMsg}.${conflictWarning}\n\nWould you like to proceed?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Restore',
-          style: 'default',
+          style: newerTxCount > 0 ? 'destructive' : 'default',
           onPress: async () => {
             const res = await restoreFromDrive(passphrase);
             if (!res.success && res.isEncrypted) {

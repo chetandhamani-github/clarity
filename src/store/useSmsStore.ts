@@ -26,6 +26,7 @@ interface SmsStoreState {
   requestPermission: () => Promise<SmsPermissionStatus>;
   startInitialSync: (options?: SyncOptions) => Promise<void>;
   startIncrementalSync: (options?: SyncOptions) => Promise<void>;
+  initializeBaseline: () => Promise<number>;
   cancelSync: () => void;
   refreshAnalytics: () => Promise<void>;
   refreshReviewQueueCount: () => Promise<void>;
@@ -97,6 +98,7 @@ export const useSmsStore = create<SmsStoreState>((set, get) => ({
 
       if (
         options?.autoCreateClarityTransactions === false &&
+        !options?.skipHistoricalTransactions &&
         result.newTransactions &&
         result.newTransactions.length > 0
       ) {
@@ -142,6 +144,7 @@ export const useSmsStore = create<SmsStoreState>((set, get) => ({
 
       if (
         options?.autoCreateClarityTransactions === false &&
+        !options?.skipHistoricalTransactions &&
         result.newTransactions &&
         result.newTransactions.length > 0
       ) {
@@ -158,6 +161,12 @@ export const useSmsStore = create<SmsStoreState>((set, get) => ({
       });
       throw err;
     }
+  },
+
+  initializeBaseline: async () => {
+    const baseline = await SmsSyncService.initializeBaseline();
+    set({ lastSyncTimestamp: baseline });
+    return baseline;
   },
 
   cancelSync: () => {

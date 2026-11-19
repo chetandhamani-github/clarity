@@ -37,7 +37,7 @@ const TRIGGER_SOURCES: { label: string; value: RuleTrigger; icon: keyof typeof M
 
 const CONDITION_FIELDS: { label: string; value: RuleConditionField }[] = [
   { label: 'Merchant Name', value: 'merchant' },
-  { label: 'Amount (₹)', value: 'amount' },
+  { label: 'Amount', value: 'amount' },
   { label: 'Category', value: 'category' },
   { label: 'Notes', value: 'note' },
 ];

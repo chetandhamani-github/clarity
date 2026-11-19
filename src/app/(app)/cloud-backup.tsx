@@ -87,17 +87,34 @@ export default function CloudBackupScreen() {
   };
 
   const handleRestoreFromDrive = async (passphrase?: string) => {
+    let newerTxCount = 0;
+    if (driveLastBackupTime) {
+      try {
+        const { getLocalTransactionsCountAfter } = await import(
+          '@/services/database/backup-restore-service'
+        );
+        newerTxCount = await getLocalTransactionsCountAfter(driveLastBackupTime);
+      } catch {
+        // Ignore
+      }
+    }
+
     const backupDateMsg = driveLastBackupTime
       ? ` (Backup from: ${new Date(driveLastBackupTime).toLocaleString()})`
       : '';
+    const conflictWarning =
+      newerTxCount > 0
+        ? `\n\n⚠️ Warning: You have ${newerTxCount} local transaction${newerTxCount > 1 ? 's' : ''} logged since this backup was created. Restoring will overwrite them with the backup version.`
+        : '';
+
     showAlert(
       'Restore from Google Drive',
-      `This will restore accounts, transactions, and goals from Google Drive and replace local data${backupDateMsg}. Would you like to proceed?`,
+      `This will restore accounts, transactions, and goals from Google Drive and replace local data${backupDateMsg}.${conflictWarning}\n\nWould you like to proceed?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Restore',
-          style: 'default',
+          style: newerTxCount > 0 ? 'destructive' : 'default',
           onPress: async () => {
             const res = await restoreFromDrive(passphrase);
             if (!res.success && res.isEncrypted) {
@@ -120,16 +137,46 @@ export default function CloudBackupScreen() {
 
   const handleSelectRevision = async (rev: GoogleDriveRevisionInfo) => {
     try {
-      setSelectedRevisionId(rev.id);
-      const res = await restoreRevisionFromDrive(rev.id);
-      setRevisionsModalVisible(false);
-
-      if (res.success) {
-        setSelectedRevisionId(null);
-      } else if (res.isEncrypted) {
-        setPassphraseMode('decrypt');
-        setPassphraseModalVisible(true);
+      let newerTxCount = 0;
+      if (rev.modifiedTime) {
+        try {
+          const { getLocalTransactionsCountAfter } = await import(
+            '@/services/database/backup-restore-service'
+          );
+          newerTxCount = await getLocalTransactionsCountAfter(rev.modifiedTime);
+        } catch {
+          // Ignore
+        }
       }
+
+      const conflictWarning =
+        newerTxCount > 0
+          ? `\n\n⚠️ Warning: You have ${newerTxCount} local transaction${newerTxCount > 1 ? 's' : ''} logged since this snapshot was created. Restoring will overwrite them.`
+          : '';
+
+      showAlert(
+        'Restore Snapshot Version',
+        `Restore snapshot from ${new Date(rev.modifiedTime).toLocaleString()}?${conflictWarning}`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Restore',
+            style: newerTxCount > 0 ? 'destructive' : 'default',
+            onPress: async () => {
+              setSelectedRevisionId(rev.id);
+              const res = await restoreRevisionFromDrive(rev.id);
+              setRevisionsModalVisible(false);
+
+              if (res.success) {
+                setSelectedRevisionId(null);
+              } else if (res.isEncrypted) {
+                setPassphraseMode('decrypt');
+                setPassphraseModalVisible(true);
+              }
+            },
+          },
+        ]
+      );
     } catch {
       setRevisionsModalVisible(false);
     }

@@ -11,7 +11,7 @@ export interface ChatMessage {
 const getInitialWelcomeMessage = (): ChatMessage => ({
   id: 'welcome-1',
   sender: 'assistant',
-  text: `Hello! I'm your Clarity Financial Copilot.\n\nI can analyze your spending patterns, track your 50/30/20 budget targets, and answer questions about your cash flow. How can I assist you today?`,
+  text: `Hello! I'm your Clarity Financial Copilot.\n\nI can analyze your spending patterns, track investments & net worth, monitor bills & debts, and answer questions about your cash flow. How can I assist you today?`,
   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
 });
 

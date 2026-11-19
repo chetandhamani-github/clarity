@@ -15,6 +15,7 @@ export function useSmsSync() {
     requestPermission,
     startInitialSync,
     startIncrementalSync,
+    initializeBaseline,
     cancelSync,
     setPendingTransactions,
     openTransactionPrompt,
@@ -38,7 +39,10 @@ export function useSmsSync() {
     if (lastSyncTimestamp) {
       await startIncrementalSync(options);
     } else {
-      await startInitialSync(options);
+      await startInitialSync({
+        ...options,
+        skipHistoricalTransactions: true,
+      });
     }
   };
 
@@ -55,6 +59,7 @@ export function useSmsSync() {
     sync,
     startInitialSync,
     startIncrementalSync,
+    initializeBaseline,
     cancelSync,
     setPendingTransactions,
     openTransactionPrompt,

@@ -856,3 +856,82 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
     }
   }
 }
+
+/**
+ * Queries the count of local transactions created or dated after a given ISO timestamp.
+ * Used for detecting potential data conflicts before cloud or local restore.
+ */
+export async function getLocalTransactionsCountAfter(isoTimestamp: string): Promise<number> {
+  try {
+    const db = getDatabase();
+    const datePrefix = isoTimestamp.includes('T') ? isoTimestamp.split('T')[0] : isoTimestamp;
+    const row = await db.getFirstAsync<{ count: number }>(
+      'SELECT COUNT(*) as count FROM transactions WHERE created_at > ? OR date > ?',
+      [isoTimestamp, datePrefix]
+    );
+    return row?.count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Restores local database from a raw JSON string (supporting plain Clarity backup or encrypted format).
+ */
+export async function restoreFromLocalJSONString(
+  rawContent: string,
+  passphrase?: string
+): Promise<{
+  success: boolean;
+  summary?: BackupMetadata;
+  isEncrypted?: boolean;
+  error?: string;
+}> {
+  try {
+    let jsonToParse = rawContent.trim();
+
+    // Check if payload is encrypted with AES-256-GCM
+    let isEncrypted = false;
+    try {
+      const parsedCheck = JSON.parse(jsonToParse);
+      if (parsedCheck && parsedCheck.salt && parsedCheck.iv && parsedCheck.ciphertext) {
+        isEncrypted = true;
+      }
+    } catch {
+      // Not JSON
+    }
+
+    if (isEncrypted) {
+      if (!passphrase) {
+        return { success: false, isEncrypted: true };
+      }
+      const { decryptBackupPayload } = await import('@/services/cloud/backup-crypto');
+      const encryptedObj = JSON.parse(jsonToParse);
+      jsonToParse = await decryptBackupPayload(encryptedObj, passphrase);
+    }
+
+    const payload = JSON.parse(jsonToParse);
+
+    // Normalize legacy or alternative shapes if needed
+    let canonicalPayload: ClarityBackupPayload = payload;
+    if (payload.data && !payload.appName) {
+      canonicalPayload = {
+        version: payload.version || 1,
+        appName: 'Clarity',
+        exportedAt: payload.exportedAt || new Date().toISOString(),
+        checksum: payload.checksum,
+        data: payload.data,
+      };
+    }
+
+    await restoreDatabaseFromSnapshot(canonicalPayload);
+    const summary = getBackupSummary(canonicalPayload);
+
+    return { success: true, summary };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error?.message || 'Failed to restore database from local file.',
+    };
+  }
+}

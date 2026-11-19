@@ -32,8 +32,11 @@ export function SmsPermissionPromptModal({ visible, onDismiss }: Props) {
       const status = await requestPermission();
       if (status === 'granted') {
         setHasSeenSmsPrompt(true);
-        await startInitialSync({ autoCreateClarityTransactions: false });
-        showToast('SMS scan completed successfully!', 'success');
+        await startInitialSync({
+          autoCreateClarityTransactions: false,
+          skipHistoricalTransactions: true,
+        });
+        showToast('SMS auto-tracking enabled! Accounts and bills synced.', 'success');
         onDismiss();
       } else if (status === 'permanently_denied') {
         setHasSeenSmsPrompt(true);
@@ -72,8 +75,8 @@ export function SmsPermissionPromptModal({ visible, onDismiss }: Props) {
               {/* Title & Description */}
               <Text style={styles.title}>Automate Expense Tracking</Text>
               <Text style={styles.subtitle}>
-                Allow Clarity to scan bank SMS messages on your device to automatically track
-                transactions, bills, subscriptions, and salary credits.
+                Allow Clarity to detect bank SMS messages on your device to automatically track
+                future transactions, bills, subscriptions, and salary credits.
               </Text>
 
               {/* Feature Points */}

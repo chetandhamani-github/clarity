@@ -198,8 +198,11 @@ public class AiServiceImpl implements AiService {
         String context = request.getFinancialContextSummary() != null ? request.getFinancialContextSummary() : "";
 
         if (hasGeminiKey()) {
-            String prompt = "You are Clarity AI, a private personal finance assistant. Answer concisely in 2-3 sentences based on context.\n" +
-                    "Context: " + context + "\nUser question: " + msg;
+            String prompt = "You are Clarity AI, a knowledgeable and private personal finance copilot. " +
+                    "Answer accurately, helpfully, and concisely in 2-3 sentences based on the user's financial context.\n" +
+                    "The context includes income, expenses, category spending, accounts, investments & portfolio, debts, bills, savings goals, and cashflow.\n" +
+                    "Always format monetary values cleanly using the currency symbol provided in the context (e.g. ₹, $, €, £). If the user asks about something not present in the context, politely state what is known and advise accordingly.\n\n" +
+                    "Financial Context:\n" + context + "\n\nUser Question: " + msg;
             String answer = callGemini(prompt, null, null);
             if (answer != null && !answer.trim().isEmpty()) {
                 return AiChatResponse.builder()
@@ -406,10 +409,36 @@ public class AiServiceImpl implements AiService {
 
     private String deriveSuggestedAction(String msg) {
         String lower = msg.toLowerCase();
-        if (lower.contains("budget") || lower.contains("spend")) return "/(app)/(tabs)/plan";
-        if (lower.contains("bill") || lower.contains("subscription")) return "/(app)/bills";
-        if (lower.contains("goal") || lower.contains("save")) return "/(app)/(tabs)/goals";
-        if (lower.contains("account")) return "/(app)/(tabs)/accounts";
+        if (lower.contains("invest") || lower.contains("portfolio") || lower.contains("stock") ||
+                lower.contains("mutual fund") || lower.contains("sip") || lower.contains("gold") ||
+                lower.contains("asset") || lower.contains("holding") || lower.contains("wealth") ||
+                lower.contains("net worth")) {
+            return "/(app)/investments";
+        }
+        if (lower.contains("debt") || lower.contains("loan") || lower.contains("borrow") ||
+                lower.contains("payoff") || lower.contains("snowball") || lower.contains("avalanche") ||
+                lower.contains("credit card debt")) {
+            return "/(app)/debt-payoff";
+        }
+        if (lower.contains("cashflow") || lower.contains("runway") || lower.contains("safe to spend") ||
+                lower.contains("burn rate") || lower.contains("crunch") || lower.contains("payday")) {
+            return "/(app)/cashflow";
+        }
+        if (lower.contains("health") || lower.contains("score") || lower.contains("financial health")) {
+            return "/(app)/financial-health";
+        }
+        if (lower.contains("budget") || lower.contains("spend") || lower.contains("plan") || lower.contains("target")) {
+            return "/(app)/(tabs)/plan";
+        }
+        if (lower.contains("bill") || lower.contains("subscription") || lower.contains("due")) {
+            return "/(app)/bills";
+        }
+        if (lower.contains("goal") || lower.contains("save") || lower.contains("saving")) {
+            return "/(app)/(tabs)/goals";
+        }
+        if (lower.contains("account") || lower.contains("bank") || lower.contains("balance")) {
+            return "/(app)/(tabs)/accounts";
+        }
         return "/(app)/(tabs)/transactions";
     }
 

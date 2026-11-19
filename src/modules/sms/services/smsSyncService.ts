@@ -45,6 +45,7 @@ const DEFAULT_CHUNK_SIZE = 200;
 export interface SyncOptions {
   batchSize?: number;
   autoCreateClarityTransactions?: boolean;
+  skipHistoricalTransactions?: boolean;
   onProgress?: (progress: SmsSyncProgress) => void;
 }
 
@@ -74,6 +75,25 @@ export class SmsSyncService {
 
   public static setLastSyncTimestamp(timestamp: number): void {
     mmkv.set(LAST_SYNC_KEY, timestamp.toString());
+  }
+
+  /**
+   * Initializes the SMS sync cursor to the current timestamp (or latest existing SMS)
+   * without processing or importing any past historical messages.
+   * This ensures that only future transactions received after this point are scanned.
+   */
+  public static async initializeBaseline(): Promise<number> {
+    let baseline = Date.now();
+    try {
+      const recent = await SmsReaderService.getRecentSms(1);
+      if (recent.length > 0 && recent[0].date > 0) {
+        baseline = Math.max(baseline, recent[0].date + 1);
+      }
+    } catch {
+      // Fallback to Date.now() if reading SMS fails
+    }
+    this.setLastSyncTimestamp(baseline);
+    return baseline;
   }
 
   public static cancelSync(): void {
@@ -120,7 +140,7 @@ export class SmsSyncService {
     try {
       reportProgress('fetching', 0, 0, 0, 0);
 
-      if (options.autoCreateClarityTransactions !== false) {
+      if (options.autoCreateClarityTransactions !== false && !options.skipHistoricalTransactions) {
         await this.retryUnlinkedTransactions();
       }
 
@@ -141,20 +161,30 @@ export class SmsSyncService {
           const { parsedBatch, reviewBatch, parsed, review, duplicates } =
             await this.processSmsBatch(batch);
 
+          if (options.skipHistoricalTransactions) {
+            for (const tx of parsedBatch) {
+              tx.transactionId = 'HISTORICAL_SKIPPED';
+            }
+          }
+
           reportProgress('saving', scannedCount + batch.length, 0, batchIndex, isLastBatch ? batchIndex : 0);
           await SmsDao.saveSmsBatch(batch);
           await SmsDao.saveParsedTransactionsBatch(parsedBatch);
-          await SmsDao.saveReviewQueueBatch(reviewBatch);
+          if (!options.skipHistoricalTransactions) {
+            await SmsDao.saveReviewQueueBatch(reviewBatch);
+          }
 
           // Unconditionally auto-fetch and sync bank accounts from SMS messages
           await this.syncBankAccountsFromParsedBatch(parsedBatch);
 
-          if (options.autoCreateClarityTransactions !== false) {
-            await this.syncToClarityTransactions(parsedBatch);
-          } else {
-            for (const tx of parsedBatch) {
-              if (!tx.isDuplicate && !tx.transactionId) {
-                newTransactions.push(tx);
+          if (!options.skipHistoricalTransactions) {
+            if (options.autoCreateClarityTransactions !== false) {
+              await this.syncToClarityTransactions(parsedBatch);
+            } else {
+              for (const tx of parsedBatch) {
+                if (!tx.isDuplicate && !tx.transactionId) {
+                  newTransactions.push(tx);
+                }
               }
             }
           }
@@ -174,8 +204,21 @@ export class SmsSyncService {
           await this.autoRepairMisassignedAccounts();
         }
 
+        if (options.skipHistoricalTransactions) {
+          try {
+            const database = getDatabase();
+            await database.runAsync(
+              "UPDATE parsed_transactions SET transaction_id = 'HISTORICAL_SKIPPED' WHERE transaction_id IS NULL"
+            );
+          } catch {
+            // Ignored
+          }
+        }
+
         if (maxSeenTimestamp > 0) {
           this.setLastSyncTimestamp(maxSeenTimestamp);
+        } else {
+          this.setLastSyncTimestamp(Date.now());
         }
 
         // Evaluate bill reminders for proactive notifications
@@ -203,7 +246,10 @@ export class SmsSyncService {
     }
 
     if (!lastSync) {
-      return this.runInitialScan(options);
+      return this.runInitialScan({
+        ...options,
+        skipHistoricalTransactions: true,
+      });
     }
 
     this.isSyncing = true;

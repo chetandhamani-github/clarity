@@ -22,21 +22,32 @@ import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useMonthlyTotals } from '@/hooks/use-transactions';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
 import { useAccounts } from '@/hooks/use-accounts';
+import { useInvestments, usePortfolioSummary } from '@/hooks/use-investments';
+import { useMonthlyBillSummary } from '@/hooks/use-bills';
+import { useGoals } from '@/hooks/use-goals';
+import { useSafeToSpend } from '@/hooks/use-cashflow';
+import { useDebtPayoff } from '@/hooks/use-debt-payoff';
 import { chatWithFinancialCopilot } from '@/services/api/ai.api';
 import { fetchRemoteConfig } from '@/services/api/config.api';
 import { useNetworkStore } from '@/store/use-network-store';
 import { isNetworkError } from '@/services/network/network.service';
 import { ChatMessage, useCopilotStore } from '@/store/use-copilot-store';
+import { getCurrencySymbol } from '@/utils/format';
 
 const SUGGESTED_PROMPTS = [
-  'How can I save more money this month?',
+  'What is my total net worth and investment breakdown?',
+  'How are my investments and portfolio performing?',
   'Am I meeting my 50/30/20 budget targets?',
-  'How much did I spend on food and dining?',
-  'Explain my monthly burn rate and pacing.',
-  'What are my key financial observations?',
+  'What are my upcoming bills and debt commitments?',
+  'What is my safe-to-spend balance and runway?',
+  'How can I save more money this month?',
 ];
 
 function getActionLabel(actionRoute: string): string {
+  if (actionRoute.includes('investments')) return 'View Investments & Portfolio →';
+  if (actionRoute.includes('debt-payoff')) return 'Open Debt Payoff Planner →';
+  if (actionRoute.includes('cashflow')) return 'View Cashflow & Runway →';
+  if (actionRoute.includes('financial-health')) return 'View Financial Health →';
   if (actionRoute.includes('plan')) return 'Open Budget Plan →';
   if (actionRoute.includes('bills')) return 'Manage Bills & Subscriptions →';
   if (actionRoute.includes('goals')) return 'View Savings Goals →';
@@ -62,6 +73,12 @@ export default function CopilotScreen() {
   const { plan } = useBudgetPlan();
   const { spending } = useCategorySpending(selectedMonth, selectedYear);
   const { accounts } = useAccounts();
+  const { summary: portfolioSummary } = usePortfolioSummary();
+  const { holdings } = useInvestments();
+  const { data: billSummary } = useMonthlyBillSummary(selectedMonth, selectedYear);
+  const { goals } = useGoals();
+  const { summary: safeToSpendSummary } = useSafeToSpend();
+  const { debts } = useDebtPayoff();
 
   const isConnected = useNetworkStore((state) => state.isConnected);
   const isChecking = useNetworkStore((state) => state.isChecking);
@@ -121,22 +138,184 @@ export default function CopilotScreen() {
   const setMessages = useCopilotStore((state) => state.setMessages);
   const clearMessages = useCopilotStore((state) => state.clearMessages);
 
-  // Anonymized context summary constructed on-device
+  // Comprehensive anonymized context summary constructed on-device across all financial pillars
   const financialContext = useMemo(() => {
-    const netSavings = totals.income - totals.expenses;
-    const topCategories = spending
-      ?.filter((s) => s.spent > 0)
-      .sort((a, b) => b.spent - a.spent)
-      .slice(0, 3)
-      .map((s) => `${s.category}: ₹${Math.round(s.spent)}`)
+    const parts: string[] = [];
+    const sym = getCurrencySymbol();
+
+    // 1. Period
+    parts.push(`[PERIOD] Month: ${selectedMonth}/${selectedYear}`);
+
+    // 2. Monthly Cashflow & Savings
+    const income = totals?.income || 0;
+    const expenses = totals?.expenses || 0;
+    const netSavings = income - expenses;
+    parts.push(
+      `[MONTHLY CASHFLOW] Income: ${sym}${Math.round(income)}, Expenses: ${sym}${Math.round(expenses)}, Net Savings: ${sym}${Math.round(netSavings)}`
+    );
+
+    // 3. Category Spending Breakdown
+    const activeSpending = (spending || [])
+      .filter((s) => s.spent > 0)
+      .sort((a, b) => b.spent - a.spent);
+    if (activeSpending.length > 0) {
+      const topCategories = activeSpending
+        .slice(0, 6)
+        .map(
+          (s) =>
+            `${s.category}: ${sym}${Math.round(s.spent)}${s.limit > 0 ? ` (Budget: ${sym}${Math.round(s.limit)})` : ''}`
+        )
+        .join(', ');
+      parts.push(`[TOP SPENDING CATEGORIES] ${topCategories}`);
+    }
+
+    // 4. Accounts & Liquid Balances
+    const safeAccounts = Array.isArray(accounts) ? accounts : [];
+    const liquidAccounts = safeAccounts.filter((a) =>
+      ['savings', 'current', 'wallet', 'checking'].includes(a.type)
+    );
+    const totalLiquidCash = liquidAccounts.reduce(
+      (sum, a) => sum + (a.balance > 0 ? a.balance : 0),
+      0
+    );
+    const liquidBreakdown = liquidAccounts
+      .filter((a) => a.balance > 0)
+      .map((a) => `${a.name}: ${sym}${Math.round(a.balance)}`)
       .join(', ');
 
-    const totalBankBalance = accounts
-      ?.filter((a) => a.balance > 0)
-      .reduce((sum, a) => sum + a.balance, 0);
+    parts.push(
+      `[LIQUID CASH & ACCOUNTS] Total Liquid Cash: ${sym}${Math.round(totalLiquidCash)}${
+        liquidBreakdown ? ` (${liquidBreakdown})` : ''
+      }`
+    );
 
-    return `Month: ${selectedMonth}/${selectedYear}, Monthly Income: ₹${Math.round(totals.income)}, Monthly Expenses: ₹${Math.round(totals.expenses)}, Net Savings: ₹${Math.round(netSavings)}, Top Spending: [${topCategories || 'None'}], Total Balance: ₹${Math.round(totalBankBalance || 0)}, Budget Plan: ${plan ? `Income ₹${plan.monthlyIncome}, Needs ${plan.needsPercent}%, Wants ${plan.wantsPercent}%, Savings ${plan.savingsPercent}%` : 'Not set'}`;
-  }, [totals, spending, accounts, plan, selectedMonth, selectedYear]);
+    // 5. Net Worth & Investments Portfolio
+    if (portfolioSummary) {
+      const p = portfolioSummary;
+      const gainSign = p.unrealizedGainLoss >= 0 ? '+' : '';
+      const allocSummary = (p.allocations || [])
+        .filter((a) => a.amount > 0)
+        .map((a) => `${a.label}: ${sym}${Math.round(a.amount)} (${Math.round(a.percentage)}%)`)
+        .join(', ');
+
+      const totalSipCommitment = (holdings || [])
+        .filter((h) => (h.sipAmount || 0) > 0)
+        .reduce((sum, h) => sum + (h.sipAmount || 0), 0);
+
+      const topHoldings = (holdings || [])
+        .slice(0, 5)
+        .map(
+          (h) =>
+            `${h.name} (${h.subType || h.assetClass}): Value ${sym}${Math.round(h.currentValue)} [Invested: ${sym}${Math.round(h.investedAmount)}]`
+        )
+        .join(', ');
+
+      parts.push(
+        `[NET WORTH & INVESTMENTS] Total Net Worth: ${sym}${Math.round(
+          p.totalNetWorthWithInvestments
+        )}, Total Portfolio Value: ${sym}${Math.round(
+          p.totalPortfolioValue
+        )}, Total Invested: ${sym}${Math.round(
+          p.totalInvestedAmount
+        )}, Unrealized Gain/Loss: ${gainSign}${sym}${Math.round(
+          p.unrealizedGainLoss
+        )} (${gainSign}${p.gainLossPercentage.toFixed(1)}%), Holdings Count: ${p.holdingsCount}${
+          allocSummary ? `, Asset Allocation: [${allocSummary}]` : ''
+        }${totalSipCommitment > 0 ? `, Active Monthly SIP Total: ${sym}${Math.round(totalSipCommitment)}` : ''}${
+          topHoldings ? `, Top Holdings: [${topHoldings}]` : ''
+        }`
+      );
+    } else {
+      parts.push(`[NET WORTH & INVESTMENTS] No investment portfolio recorded yet.`);
+    }
+
+    // 6. Debts & Liabilities
+    const safeDebts = Array.isArray(debts) ? debts : [];
+    const totalDebt = safeDebts.reduce((sum, d) => sum + (d.balance || 0), 0);
+    if (safeDebts.length > 0) {
+      const debtDetails = safeDebts
+        .map(
+          (d) =>
+            `${d.name} (${d.type}): ${sym}${Math.round(d.balance)}${
+              d.interestRate ? ` @ ${d.interestRate}% APR` : ''
+            }`
+        )
+        .join(', ');
+      parts.push(
+        `[DEBTS & LIABILITIES] Total Outstanding Debt: ${sym}${Math.round(totalDebt)} across ${
+          safeDebts.length
+        } account(s) (${debtDetails})`
+      );
+    } else {
+      parts.push(`[DEBTS & LIABILITIES] Total Outstanding Debt: ${sym}0 (No active debts)`);
+    }
+
+    // 7. Bills & Subscriptions
+    if (billSummary) {
+      parts.push(
+        `[BILLS & OBLIGATIONS] Monthly Committed Bills: ${sym}${Math.round(
+          billSummary.totalCommitted || 0
+        )}, Paid: ${sym}${Math.round(billSummary.totalPaid || 0)}, Pending: ${sym}${Math.round(
+          billSummary.totalPending || 0
+        )}, Overdue: ${sym}${Math.round(billSummary.totalOverdue || 0)}, Upcoming Due Count: ${
+          billSummary.upcomingCount || 0
+        }`
+      );
+    }
+
+    // 8. Savings Goals
+    const safeGoals = Array.isArray(goals) ? goals : [];
+    if (safeGoals.length > 0) {
+      const goalsSummary = safeGoals
+        .slice(0, 4)
+        .map((g) => {
+          const pct = g.targetAmount > 0 ? Math.round((g.currentAmount / g.targetAmount) * 100) : 0;
+          return `${g.name}: ${sym}${Math.round(g.currentAmount)}/${sym}${Math.round(g.targetAmount)} (${pct}%)`;
+        })
+        .join(', ');
+      parts.push(`[SAVINGS GOALS] ${goalsSummary}`);
+    }
+
+    // 9. Cashflow Runway & Safe to Spend
+    if (safeToSpendSummary) {
+      const s = safeToSpendSummary;
+      parts.push(
+        `[SAFE TO SPEND & RUNWAY] Safe to Spend: ${sym}${Math.round(
+          s.safeToSpendTotal
+        )} total (${sym}${Math.round(s.safeToSpendDaily)}/day), Runway: ${s.runwayDays} days, Days to Payday: ${
+          s.daysToNextPayday
+        }${
+          s.hasCashCrunch
+            ? `, WARNING: Cash Crunch projected on ${s.cashCrunchDate} with shortfall of ${sym}${Math.round(
+                s.cashCrunchShortfall || 0
+              )}`
+            : ''
+        }`
+      );
+    }
+
+    // 10. Budget Plan Targets
+    if (plan) {
+      parts.push(
+        `[BUDGET PLAN] Income: ${sym}${plan.monthlyIncome}, Needs: ${plan.needsPercent}%, Wants: ${plan.wantsPercent}%, Savings: ${plan.savingsPercent}%`
+      );
+    }
+
+    return parts.join('\n');
+  }, [
+    selectedMonth,
+    selectedYear,
+    totals,
+    spending,
+    accounts,
+    portfolioSummary,
+    holdings,
+    debts,
+    billSummary,
+    goals,
+    safeToSpendSummary,
+    plan,
+  ]);
 
   const handleSendMessage = useCallback(async (textToSend?: string) => {
     const query = (textToSend ?? inputText).trim();

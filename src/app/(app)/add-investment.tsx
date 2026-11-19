@@ -21,7 +21,7 @@ import {
 } from '@/hooks/use-investments';
 import { useAccounts } from '@/hooks/use-accounts';
 import type { AssetClass, InvestmentSubType } from '@/types';
-import { formatCurrency, formatLocalDate } from '@/utils/format';
+import { formatCurrency, formatLocalDate, getCurrencySymbol } from '@/utils/format';
 
 interface AssetClassOption {
   label: string;
@@ -362,7 +362,7 @@ export default function AddInvestmentScreen() {
               <Text style={styles.inputLabel}>Invested (Principal)*</Text>
               <TextInput
                 style={styles.input}
-                placeholder="₹0.00"
+                placeholder={`${getCurrencySymbol()}0.00`}
                 placeholderTextColor={colors.outline}
                 keyboardType="decimal-pad"
                 value={investedAmountStr}
@@ -374,7 +374,7 @@ export default function AddInvestmentScreen() {
               <Text style={styles.inputLabel}>Current Market Value*</Text>
               <TextInput
                 style={styles.input}
-                placeholder="₹0.00"
+                placeholder={`${getCurrencySymbol()}0.00`}
                 placeholderTextColor={colors.outline}
                 keyboardType="decimal-pad"
                 value={currentValueStr}
@@ -539,7 +539,7 @@ export default function AddInvestmentScreen() {
                   <Text style={styles.inputLabel}>Monthly SIP Amount</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="₹5,000"
+                    placeholder={`${getCurrencySymbol()}5,000`}
                     placeholderTextColor={colors.outline}
                     keyboardType="decimal-pad"
                     value={sipAmountStr}

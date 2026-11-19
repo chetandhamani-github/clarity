@@ -165,7 +165,11 @@ export default function DashboardScreen() {
   const handleEnableSms = async () => {
     const status = await requestSmsPermission();
     if (status === 'granted') {
-      await syncSms({ autoCreateClarityTransactions: false });
+      await syncSms({
+        autoCreateClarityTransactions: false,
+        skipHistoricalTransactions: true,
+      });
+      showToast('SMS auto-tracking enabled! Accounts and bills synced.', 'success');
       refetchTransactions();
       refetchAccounts();
       refetchTotals();

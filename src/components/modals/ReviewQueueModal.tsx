@@ -8,6 +8,7 @@ import { spacing } from '@/theme/spacing';
 import { ThemeColors, useTheme } from '@/theme/useTheme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
+import { getCurrencySymbol } from '@/utils/format';
 import { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -302,7 +303,7 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
                 </View>
 
                 {/* Amount Input */}
-                <Text style={styles.fieldLabel}>Amount (₹)</Text>
+                <Text style={styles.fieldLabel}>Amount ({getCurrencySymbol()})</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="0.00"
