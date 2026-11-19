@@ -215,6 +215,85 @@ describe('BillService', () => {
         expect(result.isNew).toBe(false);
         expect(result.bill.status).toBe('paid');
       });
+
+      it('creates a new bill for next billing cycle when previous cycle was already paid', async () => {
+        // Mock existing previous month bill (paid) with same account reference
+        mockDb.getAllAsync
+          .mockResolvedValueOnce([]) // candidates within ±30d
+          .mockResolvedValueOnce([
+            {
+              id: 'bill-prev-paid',
+              title: 'Airtel Broadband',
+              provider: 'Airtel Xstream Fiber',
+              category: 'internet',
+              amount: 1178,
+              min_amount: null,
+              due_date: '2026-10-18',
+              status: 'paid',
+              account_reference: '08041234567',
+              payment_url: null,
+              sms_id: 'sms-prev',
+            },
+          ]);
+
+        mockDb.getFirstAsync
+          .mockResolvedValueOnce(null) // no sms_id match
+          .mockResolvedValueOnce(null); // no prior payment tx match
+
+        // New bill due in the future (December 2026)
+        const result = await BillService.mergeOrInsertExternalBill({
+          title: 'Airtel Xstream Fiber',
+          provider: 'Airtel Xstream Fiber',
+          category: 'internet',
+          amount: 1178,
+          dueDate: '2026-12-18',
+          accountReference: '08041234567',
+          source: 'sms',
+          smsId: 'sms-dec',
+        });
+
+        expect(result.isNew).toBe(true);
+        expect(result.bill.dueDate).toBe('2026-12-18');
+        expect(result.bill.status).toBe('upcoming');
+        expect(mockDb.runAsync).toHaveBeenCalledWith(
+          expect.stringContaining('INSERT INTO bills'),
+          expect.anything()
+        );
+      });
+
+      it('matches early payment 20 days prior to due date using tokenized merchant name', async () => {
+        // Unpaid HDFC Credit Card bill due on 2026-10-25
+        mockDb.getAllAsync.mockResolvedValueOnce([
+          {
+            id: 'bill-hdfc-unpaid',
+            title: 'HDFC Bank Credit Card',
+            provider: 'HDFC Bank Credit Card',
+            amount: 18450,
+            min_amount: 920,
+            account_reference: 'Card ..4821',
+          },
+        ]);
+
+        mockDb.getFirstAsync.mockResolvedValueOnce({
+          id: 'bill-hdfc-unpaid',
+          title: 'HDFC Bank Credit Card',
+          provider: 'HDFC Bank Credit Card',
+          category: 'credit_card',
+          amount: 18450,
+          due_date: '2026-10-25',
+          status: 'upcoming',
+        });
+
+        // User pays on 2026-10-05 (20 days early) via CRED UPI
+        const matched = await BillService.matchTransactionWithUnpaidBill(
+          'UPI/CRED/HDFC/PAYMENT-4821',
+          18450,
+          '2026-10-05'
+        );
+
+        expect(matched).not.toBeNull();
+        expect(matched?.id).toBe('bill-hdfc-unpaid');
+      });
     });
   });
 });

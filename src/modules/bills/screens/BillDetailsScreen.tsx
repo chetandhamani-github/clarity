@@ -5,6 +5,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Linking,
+  Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
@@ -150,7 +151,7 @@ export function BillDetailsScreen() {
             <Text style={[styles.heroProvider, { color: colors.onSurfaceVariant }]}>{bill.provider}</Text>
           ) : null}
 
-          <Text style={[styles.heroAmount, { color: colors.onSurface }]}>
+          <Text style={[styles.heroAmount, { color: colors.onSurface }]} numberOfLines={1} adjustsFontSizeToFit>
             {formatCurrencyPrivacy(bill.amount, hideBalances)}
           </Text>
 
@@ -307,7 +308,7 @@ export function BillDetailsScreen() {
           {
             backgroundColor: colors.surfaceContainerLow,
             borderTopColor: colors.outlineVariant,
-            paddingBottom: Math.max(20, insets.bottom + 12),
+            paddingBottom: Math.max(insets.bottom, 28) + 16,
           },
         ]}
       >
@@ -392,7 +393,7 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     ...typography.headlineSm,
-    fontWeight: '800',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 20,
     textAlign: 'center',
   },
@@ -403,7 +404,7 @@ const styles = StyleSheet.create({
   },
   heroAmount: {
     ...typography.displayLg,
-    fontWeight: '800',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 32,
     marginVertical: 10,
   },
@@ -424,9 +425,9 @@ const styles = StyleSheet.create({
   },
   recurringPillText: {
     ...typography.labelMd,
+    fontFamily: 'Manrope_600SemiBold',
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '600',
   },
   sectionCard: {
     borderRadius: radius.md,
@@ -435,9 +436,9 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...typography.labelMd,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 11,
-    letterSpacing: 0.8,
+    letterSpacing: Platform.OS === 'ios' ? 0.8 : 0,
     marginBottom: 12,
   },
   infoRow: {

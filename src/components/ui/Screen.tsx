@@ -7,7 +7,7 @@ export interface ScreenProps extends ViewProps {
   edges?: ('top' | 'bottom')[];
 }
 
-export const Screen = ({ style, edges = ['top'], ...props }: ScreenProps) => {
+export const Screen = ({ style, edges = ['top', 'bottom'], ...props }: ScreenProps) => {
   const { colors } = useTheme();
   const insets = useSafeInsets();
   const styles = getStyles(colors);

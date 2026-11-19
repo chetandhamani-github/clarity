@@ -18,6 +18,9 @@ export class BillSettlementEngine {
     }
 
     try {
+      let modernSettled = false;
+      let modernBillerName = '';
+
       // 1. Settle in modern Bills module (displayed in UI)
       try {
         const modernMatched = await BillService.matchTransactionWithUnpaidBill(
@@ -31,34 +34,51 @@ export class BillSettlementEngine {
             transaction.date.split('T')[0],
             transaction.id
           );
+          modernSettled = true;
+          modernBillerName = modernMatched.provider || modernMatched.title;
         }
       } catch {
         // Fallback or ignore error
       }
 
       // 2. Settle in legacy bill-dao
-      const matched = await findMatchingUnpaidBill(
-        transaction.merchant || transaction.category,
-        transaction.amount,
-        transaction.date,
-        7, // 7-day window around due date
-        0.02 // 2% tolerance
-      );
+      let legacyUpdatedBill: BillReminder | undefined;
+      let legacyNextBill: BillReminder | undefined;
+      let legacyBillerName = '';
 
-      if (!matched) {
+      try {
+        const matched = await findMatchingUnpaidBill(
+          transaction.merchant || transaction.category,
+          transaction.amount,
+          transaction.date,
+          30, // 30-day window around due date
+          0.02 // 2% tolerance
+        );
+
+        if (matched) {
+          const { updatedBill, nextBill } = await markBillAsPaid(
+            matched.id,
+            transaction.date.split('T')[0],
+            transaction.id
+          );
+          legacyUpdatedBill = updatedBill;
+          legacyNextBill = nextBill;
+          legacyBillerName = matched.billerName;
+        }
+      } catch {
+        // Ignore legacy error
+      }
+
+      if (!modernSettled && !legacyUpdatedBill) {
         return { settled: false };
       }
 
-      const { updatedBill, nextBill } = await markBillAsPaid(
-        matched.id,
-        transaction.date.split('T')[0],
-        transaction.id
-      );
+      const settledName = modernBillerName || legacyBillerName || 'Bill';
 
       // Create notification
       await insertNotification({
         title: 'Bill Paid',
-        description: `Your ${matched.billerName} bill of ${formatCurrency(transaction.amount)} was automatically matched and marked as paid.`,
+        description: `Your ${settledName} bill of ${formatCurrency(transaction.amount)} was automatically matched and marked as paid.`,
         type: 'bill',
         actionUrl: '/(app)/bills',
       });
@@ -68,8 +88,8 @@ export class BillSettlementEngine {
 
       return {
         settled: true,
-        bill: updatedBill,
-        nextBill,
+        bill: legacyUpdatedBill,
+        nextBill: legacyNextBill,
       };
     } catch {
       return { settled: false };

@@ -69,9 +69,11 @@ export function OnboardingChecklistCard({
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <View style={styles.titleRow}>
-            <Text style={styles.title}>Getting Started</Text>
+            <Text style={styles.title} numberOfLines={1}>
+              Getting Started
+            </Text>
             <View style={styles.badge}>
-              <Text style={styles.badgeText}>
+              <Text style={styles.badgeText} numberOfLines={1}>
                 {completedCount}/{tasks.length}
               </Text>
             </View>
@@ -152,21 +154,25 @@ const getStyles = (colors: ThemeColors) => {
     },
     title: {
       ...typography.headlineSm,
+      fontFamily: 'Manrope_700Bold',
       fontSize: 18,
       lineHeight: 24,
       color: colors.onSurface,
-      fontWeight: '700',
+      flexShrink: 1,
     },
     badge: {
       backgroundColor: colors.primaryContainer,
       paddingHorizontal: 8,
       paddingVertical: 2,
       borderRadius: 10,
+      flexShrink: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     badgeText: {
       ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
       color: colors.onPrimaryContainer,
-      fontWeight: '700',
     },
     subtitle: {
       ...typography.bodyMd,

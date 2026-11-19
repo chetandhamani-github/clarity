@@ -167,7 +167,7 @@ export default function ManageCategoriesScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom, backgroundColor: colors.background }]}>
       <Header
         showBack
         title="Manage Categories"
@@ -268,7 +268,7 @@ export default function ManageCategoriesScreen() {
                           </Text>
                         </View>
                         {cat.limit > 0 && (
-                          <Text style={[styles.limitText, { color: colors.onSurfaceVariant }]}>
+                          <Text style={[styles.limitText, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
                             Limit: {formatCurrency(cat.limit)}/mo
                           </Text>
                         )}
@@ -310,7 +310,7 @@ export default function ManageCategoriesScreen() {
             activeOpacity={1}
             onPress={() => setModalVisible(false)}
           />
-          <View style={[styles.modalContent, { backgroundColor: colors.surfaceContainerLowest, paddingBottom: Math.max(insets.bottom, 24) + 8 }]}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surfaceContainerLowest, paddingBottom: Math.max(insets.bottom, 24) + 16 }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.onSurface }]}>
                 {editingCategory ? 'Edit Category' : 'New Category'}

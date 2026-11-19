@@ -1,7 +1,7 @@
 import { useTheme } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, Platform } from 'react-native';
 import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { Text } from './Text';
@@ -142,6 +142,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                           : '#FFFFFF',
                     },
                   ]}
+                  numberOfLines={1}
                 >
                   {toast.action.label}
                 </Text>
@@ -200,7 +201,7 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    fontFamily: 'Manrope_700Bold',
+    letterSpacing: Platform.OS === 'ios' ? 0.5 : 0,
   },
 });

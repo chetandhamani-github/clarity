@@ -22,6 +22,7 @@ import { useSafeInsets } from '@/hooks/use-safe-insets';
 
 import { useAccounts } from '@/hooks/use-accounts';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
+import { usePortfolioSummary } from '@/hooks/use-investments';
 import { useMonthlyTotals, useNetWorthHistory, useTransactions, useCreateTransaction } from '@/hooks/use-transactions';
 import { useDoubleBackToExit } from '@/hooks/use-double-back-to-exit';
 import { useSmsSync } from '@/hooks/useSmsSync';
@@ -50,6 +51,7 @@ export default function DashboardScreen() {
   const openSmsTransactionPrompt = useSmsStore((state) => state.openTransactionPrompt);
   const { showToast } = useToast();
   const { mutate: createTransaction } = useCreateTransaction();
+  const { summary: portfolioSummary } = usePortfolioSummary();
 
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
@@ -199,10 +201,18 @@ export default function DashboardScreen() {
   // Only show skeleton on initial cold load before cached data exists
   const showSkeleton = !hasLoadedRef.current && isAnyLoading;
 
-  // Calculate Net Worth
+  // Calculate Comprehensive Net Worth (Accounts + Investments)
   const netWorth = useMemo(() => {
-    return accounts.reduce((sum, account) => sum + account.balance, 0);
-  }, [accounts]);
+    const liquidNetWorth = accounts.reduce((sum, account) => sum + account.balance, 0);
+    const investmentsValue = portfolioSummary
+      ? Math.max(
+          0,
+          portfolioSummary.totalPortfolioValue -
+            (portfolioSummary.allocations.find((a) => a.assetClass === 'cash')?.amount || 0)
+        )
+      : 0;
+    return liquidNetWorth + investmentsValue;
+  }, [accounts, portfolioSummary]);
 
   // Calculate Budget Progress
   const budgetProgress = useMemo(() => {
@@ -542,6 +552,36 @@ export default function DashboardScreen() {
                     }}
                   />
                 </View>
+
+                {/* Wealth Portfolio Quick Link */}
+                <TouchableOpacity
+                  style={[
+                    styles.portfolioPillRow,
+                    {
+                      backgroundColor: colors.surfaceContainerLow,
+                      borderColor: colors.surfaceVariant,
+                    },
+                  ]}
+                  onPress={() => router.push('/(app)/investments')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.portfolioPillLeft}>
+                    <MaterialIcons name="insights" size={14} color="#3B82F6" />
+                    <Text style={[styles.portfolioPillText, { color: colors.onSurface }]}>
+                      {portfolioSummary && portfolioSummary.holdingsCount > 0
+                        ? `Investments: ${formatCurrencyPrivacy(
+                            portfolioSummary.totalPortfolioValue -
+                              (portfolioSummary.allocations.find((a) => a.assetClass === 'cash')?.amount || 0),
+                            false,
+                            hideBalances
+                          )}`
+                        : 'Wealth & Investments Cockpit'}
+                    </Text>
+                  </View>
+                  <Text style={[styles.portfolioPillCta, { color: colors.primary }]}>
+                    {portfolioSummary && portfolioSummary.holdingsCount > 0 ? 'Cockpit →' : 'Explore →'}
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               {/* Quick Actions: Voice Add & Copilot */}
@@ -620,20 +660,24 @@ export default function DashboardScreen() {
               {/* Snapshot Row */}
               <View style={styles.snapshotRow}>
                 <View style={styles.snapshotCard}>
-                  <Text style={styles.snapshotLabel}>INCOME</Text>
-                  <Text style={styles.snapshotValue}>
+                  <Text style={styles.snapshotLabel} numberOfLines={1}>INCOME</Text>
+                  <Text style={styles.snapshotValue} numberOfLines={1} adjustsFontSizeToFit>
                     {formatCurrencyPrivacy(monthlyTotals.income, hideBalances)}
                   </Text>
                 </View>
                 <View style={styles.snapshotCard}>
-                  <Text style={styles.snapshotLabel}>EXPENSES</Text>
-                  <Text style={styles.snapshotValue}>
+                  <Text style={styles.snapshotLabel} numberOfLines={1}>EXPENSES</Text>
+                  <Text style={styles.snapshotValue} numberOfLines={1} adjustsFontSizeToFit>
                     {formatCurrencyPrivacy(monthlyTotals.expenses, hideBalances)}
                   </Text>
                 </View>
                 <View style={styles.snapshotCard}>
-                  <Text style={styles.snapshotLabel}>SAVED</Text>
-                  <Text style={[styles.snapshotValue, { color: colors.primary }]}>
+                  <Text style={styles.snapshotLabel} numberOfLines={1}>SAVED</Text>
+                  <Text
+                    style={[styles.snapshotValue, { color: colors.primary }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
                     {formatCurrencyPrivacy(savedAmount, hideBalances)}
                   </Text>
                 </View>
@@ -696,8 +740,8 @@ export default function DashboardScreen() {
                   <TouchableOpacity style={styles.budgetCard} onPress={() => router.navigate('/plan')}>
                     <View style={styles.budgetItem}>
                       <View style={styles.budgetRow}>
-                        <Text style={styles.budgetType}>Needs ({plan.needsPercent}%)</Text>
-                        <Text style={styles.budgetAmount}>
+                        <Text style={styles.budgetType} numberOfLines={1}>Needs ({plan.needsPercent}%)</Text>
+                        <Text style={styles.budgetAmount} numberOfLines={1} adjustsFontSizeToFit>
                           {formatCurrencyPrivacy(budgetProgress.needsSpent, hideBalances)} /{' '}
                           {formatCurrencyPrivacy(needsLimit, hideBalances)}
                         </Text>
@@ -711,8 +755,8 @@ export default function DashboardScreen() {
 
                     <View style={styles.budgetItem}>
                       <View style={styles.budgetRow}>
-                        <Text style={styles.budgetType}>Wants ({plan.wantsPercent}%)</Text>
-                        <Text style={styles.budgetAmount}>
+                        <Text style={styles.budgetType} numberOfLines={1}>Wants ({plan.wantsPercent}%)</Text>
+                        <Text style={styles.budgetAmount} numberOfLines={1} adjustsFontSizeToFit>
                           {formatCurrencyPrivacy(budgetProgress.wantsSpent, hideBalances)} /{' '}
                           {formatCurrencyPrivacy(wantsLimit, hideBalances)}
                         </Text>
@@ -726,8 +770,8 @@ export default function DashboardScreen() {
 
                     <View style={styles.budgetItem}>
                       <View style={styles.budgetRow}>
-                        <Text style={styles.budgetType}>Savings ({plan.savingsPercent}%)</Text>
-                        <Text style={styles.budgetAmount}>
+                        <Text style={styles.budgetType} numberOfLines={1}>Savings ({plan.savingsPercent}%)</Text>
+                        <Text style={styles.budgetAmount} numberOfLines={1} adjustsFontSizeToFit>
                           {formatCurrencyPrivacy(budgetProgress.savingsSpent, hideBalances)} /{' '}
                           {formatCurrencyPrivacy(savingsLimit, hideBalances)}
                         </Text>
@@ -871,7 +915,7 @@ export default function DashboardScreen() {
         onDismiss={() => setShowVoiceModal(false)}
         onApply={handleApplyVoiceFromHome}
         onSave={handleDirectSaveVoice}
-        accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
+        accounts={accounts.map((a) => ({ id: a.id, name: a.name, lastFour: a.lastFour }))}
       />
     </View>
   );
@@ -1054,6 +1098,33 @@ const getStyles = (colors: ThemeColors) => {
       overflow: 'hidden',
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    portfolioPillRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      marginTop: 12,
+    },
+    portfolioPillLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      flex: 1,
+    },
+    portfolioPillText: {
+      ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
+      fontSize: 12,
+    },
+    portfolioPillCta: {
+      ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
+      fontSize: 12,
+      marginLeft: 8,
     },
     snapshotRow: {
       flexDirection: 'row',

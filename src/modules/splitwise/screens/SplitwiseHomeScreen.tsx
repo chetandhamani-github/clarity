@@ -156,6 +156,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
         {
           backgroundColor: colors.background,
           paddingTop: insets.top,
+          paddingBottom: isMainTab ? 0 : insets.bottom,
         },
       ]}
     >
@@ -186,7 +187,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: isMainTab ? insets.bottom + 120 : insets.bottom + 32 },
+          { paddingBottom: isMainTab ? insets.bottom + 120 : insets.bottom + 64 },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -210,11 +211,15 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
           ]}
         >
           <View style={styles.heroTopRow}>
-            <View>
+            <View style={{ flex: 1, marginRight: 8 }}>
               <Text style={[styles.heroSubLabel, { color: colors.onSurfaceVariant }]}>
                 OVERALL NET BALANCE
               </Text>
-              <Text style={[styles.heroMainAmount, { color: netColor }]}>
+              <Text
+                style={[styles.heroMainAmount, { color: netColor }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
                 {isNetOwed ? '+' : ''}
                 {formatCurrencyPrivacy(netBalance, hideBalances)}
               </Text>
@@ -241,14 +246,18 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
             <View style={styles.metricColumn}>
               <View style={styles.metricLabelRow}>
                 <View style={[styles.miniDot, { backgroundColor: '#10b981' }]} />
-                <Text style={[styles.metricLabel, { color: colors.onSurfaceVariant }]}>
+                <Text style={[styles.metricLabel, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
                   Total Receivable
                 </Text>
               </View>
-              <Text style={[styles.metricAmount, { color: '#10b981' }]}>
+              <Text
+                style={[styles.metricAmount, { color: '#10b981' }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
                 +{formatCurrencyPrivacy(overallSummary.remainingReceivable, hideBalances)}
               </Text>
-              <Text style={[styles.metricSubtext, { color: colors.onSurfaceVariant }]}>
+              <Text style={[styles.metricSubtext, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
                 Owed to you
               </Text>
             </View>
@@ -259,14 +268,18 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
             <View style={styles.metricColumn}>
               <View style={styles.metricLabelRow}>
                 <View style={[styles.miniDot, { backgroundColor: '#ef4444' }]} />
-                <Text style={[styles.metricLabel, { color: colors.onSurfaceVariant }]}>
+                <Text style={[styles.metricLabel, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
                   Total Payable
                 </Text>
               </View>
-              <Text style={[styles.metricAmount, { color: '#ef4444' }]}>
+              <Text
+                style={[styles.metricAmount, { color: '#ef4444' }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
                 -{formatCurrencyPrivacy(overallSummary.remainingPayable, hideBalances)}
               </Text>
-              <Text style={[styles.metricSubtext, { color: colors.onSurfaceVariant }]}>
+              <Text style={[styles.metricSubtext, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
                 You owe
               </Text>
             </View>
@@ -823,7 +836,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
               {
                 backgroundColor: colors.surfaceContainerLowest,
                 borderColor: colors.outlineVariant,
-                paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 40 : 24),
+                paddingBottom: Math.max(insets.bottom, 24) + 16,
               },
             ]}
           >
@@ -1116,7 +1129,7 @@ const styles = StyleSheet.create({
     ...typography.labelMd,
     fontSize: 11,
     fontFamily: 'Manrope_700Bold',
-    letterSpacing: 0.8,
+    letterSpacing: Platform.OS === 'ios' ? 0.8 : 0,
     marginBottom: 4,
   },
   heroMainAmount: {

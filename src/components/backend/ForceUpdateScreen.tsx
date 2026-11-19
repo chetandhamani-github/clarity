@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useTheme } from '@/theme/useTheme';
 import { getCurrentAppVersion } from '@/services/api/device.api';
 
@@ -10,6 +11,7 @@ interface ForceUpdateScreenProps {
 
 export function ForceUpdateScreen({ minimumVersion }: ForceUpdateScreenProps) {
   const { colors } = useTheme();
+  const insets = useSafeInsets();
   const currentVersion = getCurrentAppVersion();
 
   const handleUpdate = () => {
@@ -24,7 +26,16 @@ export function ForceUpdateScreen({ minimumVersion }: ForceUpdateScreenProps) {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background,
+          paddingTop: insets.top + 16,
+          paddingBottom: insets.bottom + 16,
+        },
+      ]}
+    >
       <View
         style={[
           styles.iconContainer,

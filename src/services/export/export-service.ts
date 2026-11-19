@@ -116,6 +116,12 @@ export async function exportFullBackupToJSON(): Promise<{
     const goals = await getGoals();
     const contributions = await db.getAllAsync<any>('SELECT * FROM goal_contributions');
     const recurring = await db.getAllAsync<any>('SELECT * FROM recurring_transactions');
+    let investments: any[] = [];
+    try {
+      investments = await db.getAllAsync<any>('SELECT * FROM investment_holdings');
+    } catch {
+      // table fallback
+    }
 
     const backupData = {
       app: 'Clarity Personal Finance',
@@ -129,6 +135,7 @@ export async function exportFullBackupToJSON(): Promise<{
         goals,
         goalContributions: contributions,
         recurringTransactions: recurring,
+        investmentHoldings: investments,
       },
     };
 

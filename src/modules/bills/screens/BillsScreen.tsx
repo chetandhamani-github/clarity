@@ -1,24 +1,25 @@
-import React, { useState } from 'react';
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  RefreshControl,
-} from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { Header, Text } from '@/components/ui';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
-import { useRouter } from 'expo-router';
-import { Text, Header } from '@/components/ui';
-import { typography, useTheme, radius } from '@/theme';
 import { useAppStore } from '@/store/use-app-store';
+import { radius, typography, useTheme } from '@/theme';
 import { formatCurrencyPrivacy } from '@/utils/format';
-import { useBills } from '../hooks/useBills';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useState } from 'react';
+import {
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { BillCard } from '../components/BillCard';
 import { SubscriptionCard } from '../components/SubscriptionCard';
-import { BILL_CATEGORIES } from '../types/bill.types';
+import { useBills } from '../hooks/useBills';
 import type { BillsTab } from '../store/bills.store';
+import { BILL_CATEGORIES } from '../types/bill.types';
 
 export function BillsScreen() {
   const { colors } = useTheme();
@@ -56,7 +57,7 @@ export function BillsScreen() {
   ];
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <Header
         title="Bills & Utilities"
         showBack
@@ -193,7 +194,11 @@ export function BillsScreen() {
                 <MaterialIcons name="subscriptions" size={16} color="#a855f7" />
               </View>
             </View>
-            <Text style={[styles.summaryCardAmount, { color: colors.onSurface }]}>
+            <Text
+              style={[styles.summaryCardAmount, { color: colors.onSurface }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
               {formatCurrencyPrivacy(summary.monthlySubscriptionSpend, hideBalances)}
               <Text style={[styles.monthUnit, { color: colors.onSurfaceVariant }]}>/mo</Text>
             </Text>
@@ -494,9 +499,9 @@ const styles = StyleSheet.create({
   },
   summaryCardLabel: {
     ...typography.labelMd,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 10,
-    letterSpacing: 0.5,
+    ...(Platform.OS === 'ios' ? { letterSpacing: 0.5 } : {}),
   },
   miniIconBox: {
     width: 26,
@@ -507,13 +512,13 @@ const styles = StyleSheet.create({
   },
   summaryCardAmount: {
     ...typography.headlineSm,
-    fontWeight: '800',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 17,
     marginBottom: 2,
   },
   monthUnit: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
   },
   summaryCardSubtext: {
     ...typography.bodyMd,

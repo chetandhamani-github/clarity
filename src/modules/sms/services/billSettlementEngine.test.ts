@@ -95,4 +95,32 @@ describe('BillSettlementEngine', () => {
     expect(res.settled).toBe(false);
     expect(markBillAsPaid).not.toHaveBeenCalled();
   });
+
+  it('settles when modern BillService matches an unpaid bill even if legacy dao has none', async () => {
+    (BillService.matchTransactionWithUnpaidBill as jest.Mock).mockResolvedValueOnce({
+      id: 'modern-bill-1',
+      title: 'Airtel Xstream Fiber',
+      provider: 'Airtel Xstream Fiber',
+      amount: 1178,
+    });
+    (findMatchingUnpaidBill as jest.Mock).mockResolvedValueOnce(null);
+
+    const res = await BillSettlementEngine.settleBillsForTransaction({
+      id: 'tx-airtel',
+      merchant: 'Airtel Broadband Pay',
+      amount: 1178,
+      type: 'expense',
+      date: '2026-10-10',
+      category: 'Bills',
+    });
+
+    expect(res.settled).toBe(true);
+    expect(BillService.markBillPaid).toHaveBeenCalledWith('modern-bill-1', '2026-10-10', 'tx-airtel');
+    expect(insertNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Bill Paid',
+        description: expect.stringContaining('Airtel Xstream Fiber'),
+      })
+    );
+  });
 });

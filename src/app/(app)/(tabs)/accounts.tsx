@@ -16,6 +16,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { LineChart } from 'react-native-gifted-charts';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useAccountHistory } from '@/hooks/use-transactions';
+import { usePortfolioSummary } from '@/hooks/use-investments';
 import {
   formatCurrency,
   formatCurrencyWhole,
@@ -38,6 +39,7 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
   const router = useRouter();
 
   const { accounts, isLoading, refetch } = useAccounts();
+  const { summary: portfolioSummary } = usePortfolioSummary();
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [isDraggingAccounts, setIsDraggingAccounts] = useState(false);
   const { hideBalances, toggleHideBalances } = useAppStore();
@@ -62,7 +64,7 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
   const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: showBack ? insets.bottom : 0 }]}>
       <Header
         isMainTab={!showBack}
         showBack={showBack}
@@ -166,6 +168,100 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
                       )}
                     </View>
                   </View>
+
+                  {/* Wealth & Asset Allocation Cockpit Banner */}
+                  <TouchableOpacity
+                    style={[
+                      styles.portfolioCockpitCard,
+                      {
+                        backgroundColor: colors.surfaceContainerLowest,
+                        borderColor: colors.surfaceVariant,
+                      },
+                    ]}
+                    onPress={() => router.push('/(app)/investments')}
+                    activeOpacity={0.88}
+                  >
+                    <View style={styles.portfolioHeaderRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                        <View
+                          style={[
+                            styles.portfolioIconCircle,
+                            { backgroundColor: 'rgba(59, 130, 246, 0.12)' },
+                          ]}
+                        >
+                          <MaterialIcons name="insights" size={20} color="#3B82F6" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={styles.portfolioCardTitle}>Wealth & Portfolio</Text>
+                            {portfolioSummary && portfolioSummary.unrealizedGainLoss !== 0 && (
+                              <View
+                                style={[
+                                  styles.miniPnlBadge,
+                                  {
+                                    backgroundColor:
+                                      portfolioSummary.unrealizedGainLoss >= 0
+                                        ? 'rgba(16, 185, 129, 0.12)'
+                                        : 'rgba(239, 68, 68, 0.12)',
+                                  },
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.miniPnlText,
+                                    {
+                                      color:
+                                        portfolioSummary.unrealizedGainLoss >= 0
+                                          ? '#10B981'
+                                          : '#EF4444',
+                                    },
+                                  ]}
+                                >
+                                  {portfolioSummary.unrealizedGainLoss >= 0 ? '+' : ''}
+                                  {portfolioSummary.gainLossPercentage.toFixed(1)}%
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={styles.portfolioCardSubtitle} numberOfLines={1}>
+                            {portfolioSummary && portfolioSummary.holdingsCount > 0
+                              ? `${portfolioSummary.holdingsCount} assets • ${formatCurrencyPrivacy(portfolioSummary.totalPortfolioValue, false, hideBalances)}`
+                              : 'Track Mutual Funds, Stocks, FDs, Gold & SIPs'}
+                          </Text>
+                        </View>
+                      </View>
+                      <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+                    </View>
+
+                    {/* Allocation Horizontal Stacked Bar */}
+                    {portfolioSummary && portfolioSummary.allocations.length > 0 && (
+                      <View style={styles.allocationBarContainer}>
+                        <View style={styles.allocationStackedBar}>
+                          {portfolioSummary.allocations.map((alloc) => (
+                            <View
+                              key={alloc.assetClass}
+                              style={{
+                                flex: Math.max(alloc.percentage, 2),
+                                backgroundColor: alloc.color,
+                                height: 6,
+                              }}
+                            />
+                          ))}
+                        </View>
+
+                        <View style={styles.allocationPillsRow}>
+                          {portfolioSummary.allocations.slice(0, 4).map((alloc) => (
+                            <View key={alloc.assetClass} style={styles.miniAllocPill}>
+                              <View style={[styles.miniDot, { backgroundColor: alloc.color }]} />
+                              <Text style={styles.miniAllocText}>
+                                {alloc.label.split(' ')[0]}: {alloc.percentage}%
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                  </TouchableOpacity>
 
                   {/* Assets Section */}
                   {assetAccounts.length > 0 && (
@@ -936,6 +1032,79 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       fontSize: 10,
       fontWeight: '700',
+    },
+    portfolioCockpitCard: {
+      borderRadius: 16,
+      borderWidth: 1,
+      padding: 16,
+      marginTop: 14,
+    },
+    portfolioHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    portfolioIconCircle: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    portfolioCardTitle: {
+      ...typography.titleMedium,
+      fontFamily: 'Manrope_700Bold',
+      fontSize: 14,
+      lineHeight: 18,
+      color: colors.onSurface,
+    },
+    portfolioCardSubtitle: {
+      ...typography.bodyMd,
+      fontSize: 11,
+      color: colors.onSurfaceVariant,
+      marginTop: 2,
+    },
+    miniPnlBadge: {
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: 6,
+    },
+    miniPnlText: {
+      ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
+      fontSize: 10,
+    },
+    allocationBarContainer: {
+      marginTop: 12,
+      paddingTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: colors.surfaceContainerHigh,
+    },
+    allocationStackedBar: {
+      flexDirection: 'row',
+      borderRadius: 3,
+      overflow: 'hidden',
+      marginBottom: 8,
+    },
+    allocationPillsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    miniAllocPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    miniDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+    },
+    miniAllocText: {
+      ...typography.labelMd,
+      fontSize: 10,
+      color: colors.onSurfaceVariant,
     },
   });
   return styles;

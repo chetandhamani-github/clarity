@@ -134,6 +134,7 @@ export default function GoalDetailsScreen() {
         {
           backgroundColor: colors.background,
           paddingTop: insets.top,
+          paddingBottom: insets.bottom,
         },
       ]}
     >
@@ -158,7 +159,10 @@ export default function GoalDetailsScreen() {
       {goal && (
         <KeyboardAwareScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 48 }]}
+          contentContainerStyle={StyleSheet.flatten([
+            styles.scrollContent,
+            { paddingBottom: 32 },
+          ])}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           enableOnAndroid={true}
@@ -383,7 +387,7 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
       textTransform: 'uppercase',
-      letterSpacing: 0.6,
+      letterSpacing: Platform.OS === 'ios' ? 0.6 : 0,
     },
     heroDescription: {
       ...typography.bodyMd,

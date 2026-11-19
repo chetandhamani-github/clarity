@@ -21,6 +21,7 @@ export const Text = ({ variant = 'bodyMd', color, style, ...props }: Props) => {
 
   return (
     <RNText
+      textBreakStrategy={Platform.OS === 'android' ? 'simple' : undefined}
       style={[
         Platform.OS === 'android' ? { includeFontPadding: false } : undefined,
         typography[variant],

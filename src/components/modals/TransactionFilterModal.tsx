@@ -122,7 +122,6 @@ export function TransactionFilterModal({ visible, filters, onClose, onApply }: P
           styles.container,
           {
             paddingTop: insets.top,
-            paddingBottom: insets.bottom,
           },
         ]}
       >
@@ -281,7 +280,7 @@ export function TransactionFilterModal({ visible, filters, onClose, onApply }: P
         </ScrollView>
 
         {/* Footer */}
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 28) + 16 }]}>
           <TouchableOpacity style={styles.applyButton} onPress={handleApply}>
             <Text style={styles.applyButtonText}>
               Apply Filters {activeCount > 0 ? `(${activeCount})` : ''}

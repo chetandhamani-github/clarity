@@ -205,6 +205,7 @@ export function AddBillScreen() {
         styles.container,
         {
           paddingTop: insets.top,
+          paddingBottom: insets.bottom,
           backgroundColor: colors.background,
         },
       ]}
@@ -222,10 +223,10 @@ export function AddBillScreen() {
 
       <KeyboardAwareScrollView
         style={styles.keyboardView}
-        contentContainerStyle={[
+        contentContainerStyle={StyleSheet.flatten([
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 48 },
-        ]}
+          { paddingBottom: 32 },
+        ])}
         showsVerticalScrollIndicator={false}
         enableOnAndroid={true}
         enableAutomaticScroll={true}
@@ -785,8 +786,8 @@ const styles = StyleSheet.create({
   },
   amountLabel: {
     ...typography.labelMd,
-    fontWeight: '700',
-    letterSpacing: 1,
+    fontFamily: 'Manrope_700Bold',
+    letterSpacing: Platform.OS === 'ios' ? 1 : 0,
     fontSize: 11,
     marginBottom: 6,
   },
@@ -797,13 +798,13 @@ const styles = StyleSheet.create({
   },
   currencySymbol: {
     ...typography.displayLg,
-    fontWeight: '800',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 30,
     marginRight: 4,
   },
   amountInput: {
     ...typography.displayLg,
-    fontWeight: '800',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 32,
     textAlign: 'left',
     padding: 0,

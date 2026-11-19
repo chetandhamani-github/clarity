@@ -225,25 +225,25 @@ export function GroupDetailsScreen() {
 
           <View style={styles.statsRow}>
             <View style={styles.statCol}>
-              <Text style={[styles.statLabel, { color: colors.onSurfaceVariant }]}>
+              <Text style={[styles.statLabel, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
                 TOTAL SPEND
               </Text>
-              <Text style={[styles.statValue, { color: colors.onSurface }]}>
+              <Text style={[styles.statValue, { color: colors.onSurface }]} numberOfLines={1} adjustsFontSizeToFit>
                 {formatCurrencyPrivacy(totalSpend, hideBalances)}
               </Text>
             </View>
 
             <View style={styles.statCol}>
-              <Text style={[styles.statLabel, { color: colors.onSurfaceVariant }]}>
+              <Text style={[styles.statLabel, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
                 EXPENSES
               </Text>
-              <Text style={[styles.statValue, { color: colors.primary }]}>
+              <Text style={[styles.statValue, { color: colors.primary }]} numberOfLines={1} adjustsFontSizeToFit>
                 {activeGroupExpenses.length}
               </Text>
             </View>
 
             <View style={styles.statCol}>
-              <Text style={[styles.statLabel, { color: colors.onSurfaceVariant }]}>
+              <Text style={[styles.statLabel, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
                 YOUR POSITION
               </Text>
               <Text
@@ -258,6 +258,8 @@ export function GroupDetailsScreen() {
                           : colors.onSurfaceVariant,
                   },
                 ]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
               >
                 {myBalance > 0.009
                   ? `+${formatCurrencyPrivacy(myBalance, hideBalances)}`
@@ -659,7 +661,7 @@ export function GroupDetailsScreen() {
           styles.bottomBar,
           {
             backgroundColor: colors.background,
-            paddingBottom: Math.max(insets.bottom, 16) + 8,
+            paddingBottom: Math.max(insets.bottom, 28) + 16,
           },
         ]}
       >
@@ -697,7 +699,7 @@ export function GroupDetailsScreen() {
               {
                 backgroundColor: colors.surfaceContainerLow,
                 borderColor: colors.outlineVariant,
-                paddingBottom: Math.max(insets.bottom, 24),
+                paddingBottom: Math.max(insets.bottom, 24) + 16,
               },
             ]}
           >
@@ -828,11 +830,11 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 10,
     fontFamily: 'Manrope_700Bold',
-    letterSpacing: 0.5,
+    letterSpacing: Platform.OS === 'ios' ? 0.5 : 0,
   },
   statValue: {
     fontSize: 18,
-    fontFamily: 'Manrope_800ExtraBold',
+    fontFamily: 'Manrope_700Bold',
     marginTop: 4,
   },
   tabSwitcher: {
@@ -932,7 +934,7 @@ const styles = StyleSheet.create({
   },
   expenseAmount: {
     fontSize: 16,
-    fontFamily: 'Manrope_800ExtraBold',
+    fontFamily: 'Manrope_700Bold',
   },
   expenseSplitType: {
     fontSize: 10,
@@ -1026,7 +1028,7 @@ const styles = StyleSheet.create({
   },
   simplifiedAmount: {
     fontSize: 15,
-    fontFamily: 'Manrope_800ExtraBold',
+    fontFamily: 'Manrope_700Bold',
   },
   membersBalancesList: {
     gap: 8,

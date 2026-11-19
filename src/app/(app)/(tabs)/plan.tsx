@@ -288,7 +288,7 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
   }, [spending, activeCategoryFilter]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: showBack ? insets.bottom : 0 }]}>
       <Header
         isMainTab={!showBack}
         showBack={showBack}
@@ -332,28 +332,30 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
             {/* Summary Cards Grid */}
             <View style={styles.summaryGrid}>
               <View style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>Monthly Income</Text>
-                <Text style={styles.summaryValue}>{formatCurrency(safePlan.monthlyIncome)}</Text>
+                <Text style={styles.summaryLabel} numberOfLines={1}>Monthly Income</Text>
+                <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit>{formatCurrency(safePlan.monthlyIncome)}</Text>
               </View>
 
               <View style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>Allocated</Text>
-                <Text style={styles.summaryValue}>{formatCurrency(safePlan.monthlyIncome)}</Text>
+                <Text style={styles.summaryLabel} numberOfLines={1}>Allocated</Text>
+                <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit>{formatCurrency(safePlan.monthlyIncome)}</Text>
               </View>
 
               <View style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>Spent / Saved</Text>
-                <Text style={styles.summaryValue}>{formatCurrency(totals.totalSpent)}</Text>
+                <Text style={styles.summaryLabel} numberOfLines={1}>Spent / Saved</Text>
+                <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit>{formatCurrency(totals.totalSpent)}</Text>
               </View>
 
               <View style={[styles.summaryCard, styles.summaryCardHighlight]}>
                 <View style={styles.highlightBackground} />
-                <Text style={styles.summaryLabel}>{remaining >= 0 ? 'Remaining' : 'Overspent'}</Text>
+                <Text style={styles.summaryLabel} numberOfLines={1}>{remaining >= 0 ? 'Remaining' : 'Overspent'}</Text>
                 <Text
                   style={[
                     styles.summaryValue,
                     { color: remaining >= 0 ? colors.primary : colors.error },
                   ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
                 >
                   {formatCurrency(remaining)}
                 </Text>
@@ -417,20 +419,32 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
 
                 <View style={styles.forecastMetricsRow}>
                   <View style={styles.forecastMetricItem}>
-                    <Text style={styles.forecastMetricLabel}>Daily Burn</Text>
-                    <Text style={styles.forecastMetricValue}>{formatCurrency(forecast.dailyBurn)}/d</Text>
+                    <Text style={styles.forecastMetricLabel} numberOfLines={1} adjustsFontSizeToFit>
+                      Daily Burn
+                    </Text>
+                    <Text style={styles.forecastMetricValue} numberOfLines={1} adjustsFontSizeToFit>
+                      {formatCurrency(forecast.dailyBurn)}/d
+                    </Text>
                   </View>
                   <View style={styles.forecastMetricDivider} />
                   <View style={styles.forecastMetricItem}>
-                    <Text style={styles.forecastMetricLabel}>Safe Today</Text>
-                    <Text style={[styles.forecastMetricValue, { color: colors.primary }]}>
+                    <Text style={styles.forecastMetricLabel} numberOfLines={1} adjustsFontSizeToFit>
+                      Safe Today
+                    </Text>
+                    <Text
+                      style={[styles.forecastMetricValue, { color: colors.primary }]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                    >
                       {formatCurrency(forecast.safeDailySpend)}/d
                     </Text>
                   </View>
                   <View style={styles.forecastMetricDivider} />
                   <View style={styles.forecastMetricItem}>
-                    <Text style={styles.forecastMetricLabel}>Unpaid Bills</Text>
-                    <Text style={styles.forecastMetricValue}>
+                    <Text style={styles.forecastMetricLabel} numberOfLines={1} adjustsFontSizeToFit>
+                      Unpaid Bills
+                    </Text>
+                    <Text style={styles.forecastMetricValue} numberOfLines={1} adjustsFontSizeToFit>
                       {formatCurrency(forecast.unpaidBills)}
                     </Text>
                   </View>
@@ -455,7 +469,7 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
                 <View style={styles.progressSection}>
                   <View style={styles.progressTextRow}>
                     <Text style={styles.progressLabel}>Spent</Text>
-                    <Text style={styles.progressValue}>
+                    <Text style={styles.progressValue} numberOfLines={1} adjustsFontSizeToFit>
                       {formatCurrency(totals.needsSpent)} / {formatCurrency(needsLimit)}
                     </Text>
                   </View>
@@ -513,7 +527,7 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
                 <View style={styles.progressSection}>
                   <View style={styles.progressTextRow}>
                     <Text style={styles.progressLabel}>Spent</Text>
-                    <Text style={styles.progressValue}>
+                    <Text style={styles.progressValue} numberOfLines={1} adjustsFontSizeToFit>
                       {formatCurrency(totals.wantsSpent)} / {formatCurrency(wantsLimit)}
                     </Text>
                   </View>
@@ -546,7 +560,7 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
                 <View style={styles.progressSection}>
                   <View style={styles.progressTextRow}>
                     <Text style={styles.progressLabel}>Saved</Text>
-                    <Text style={styles.progressValue}>
+                    <Text style={styles.progressValue} numberOfLines={1} adjustsFontSizeToFit>
                       {formatCurrency(totals.savingsSpent)} / {formatCurrency(savingsLimit)}
                     </Text>
                   </View>
@@ -709,7 +723,7 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
 
                           <View style={styles.categoryCardRight}>
                             <View style={styles.amountRow}>
-                              <Text style={[styles.spentAmountText, { color: colors.onSurface }]}>
+                              <Text style={[styles.spentAmountText, { color: colors.onSurface }]} numberOfLines={1}>
                                 {formatCurrency(cat.spent)}
                               </Text>
                               {hasLimit && (
@@ -718,6 +732,7 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
                                     styles.limitAmountText,
                                     { color: colors.onSurfaceVariant },
                                   ]}
+                                  numberOfLines={1}
                                 >
                                   {' / ' + formatCurrency(cat.limit)}
                                 </Text>
@@ -818,7 +833,7 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
               styles.capModalContainer,
               {
                 backgroundColor: colors.surfaceContainerLowest,
-                paddingBottom: Math.max(insets.bottom, 24) + 12,
+                paddingBottom: Math.max(insets.bottom, 28) + 20,
               },
             ]}
           >
@@ -1173,6 +1188,7 @@ const getStyles = (colors: ThemeColors) => {
     forecastMetricItem: {
       flex: 1,
       alignItems: 'center',
+      paddingHorizontal: 2,
     },
     forecastMetricDivider: {
       width: StyleSheet.hairlineWidth,
@@ -1182,14 +1198,18 @@ const getStyles = (colors: ThemeColors) => {
     forecastMetricLabel: {
       ...typography.labelMd,
       fontSize: 10,
+      lineHeight: 14,
       color: colors.onSurfaceVariant,
       marginBottom: 2,
+      textAlign: 'center',
     },
     forecastMetricValue: {
       ...typography.labelMd,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
       fontSize: 12,
+      lineHeight: 16,
       color: colors.onSurface,
+      textAlign: 'center',
     },
     categoryBudgetsSection: {
       gap: 16,
@@ -1309,6 +1329,7 @@ const getStyles = (colors: ThemeColors) => {
       alignItems: 'center',
       justifyContent: 'center',
       alignSelf: 'flex-end',
+      flexShrink: 0,
     },
     statusPillText: {
       fontFamily: 'Manrope_700Bold',
@@ -1323,6 +1344,7 @@ const getStyles = (colors: ThemeColors) => {
       paddingHorizontal: 8,
       paddingVertical: 3,
       borderRadius: 8,
+      flexShrink: 0,
       alignSelf: 'flex-end',
     },
     setCapBadgeText: {

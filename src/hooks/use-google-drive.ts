@@ -5,12 +5,15 @@ import {
     clearTokens,
     deleteAllBackups,
     downloadBackup,
+    downloadBackupRevision,
     findBackupFile,
     getSavedTokens,
     getStoredBackupPassphrase,
+    listBackupRevisions,
     setStoredBackupPassphrase,
     uploadBackup,
     type GoogleDriveBackupInfo,
+    type GoogleDriveRevisionInfo,
 } from '@/services/cloud/google-drive-service';
 import {
     generateDatabaseSnapshot,
@@ -79,6 +82,8 @@ export function useGoogleDrive() {
 
         await restoreDatabaseFromSnapshot(downloadRes.data);
         const summary = getBackupSummary(downloadRes.data);
+
+        useAppStore.getState().setPostResetLocked(false);
 
         if (downloadRes.metadata?.modifiedTime) {
           setLastCloudBackupTime(downloadRes.metadata.modifiedTime);
@@ -241,13 +246,14 @@ export function useGoogleDrive() {
         await setStoredBackupPassphrase(passphrase);
       }
       const snapshot = await generateDatabaseSnapshot();
-      const result = await uploadBackup(snapshot, { passphrase });
+      const result = await uploadBackup(snapshot, { passphrase, pinRevision: true });
 
       if (!result.success) {
         showToast(result.error || 'Failed to upload backup', 'error');
         return false;
       }
 
+      useAppStore.getState().setPostResetLocked(false);
       const nowStr = result.modifiedTime || new Date().toISOString();
       setLastCloudBackupTime(nowStr);
       showToast('Encrypted backup saved to Google Drive!', 'success');
@@ -266,7 +272,7 @@ export function useGoogleDrive() {
   const performSilentAutoBackup = useCallback(
     async (_reason = 'auto-sync'): Promise<boolean> => {
       const currentState = useAppStore.getState();
-      if (!currentState.googleDriveConnected || !currentState.autoBackupEnabled) {
+      if (!currentState.googleDriveConnected || !currentState.autoBackupEnabled || currentState.isPostResetLocked) {
         return false;
       }
 
@@ -289,6 +295,84 @@ export function useGoogleDrive() {
       }
     },
     []
+  );
+
+  /**
+   * Retrieve list of available backup revisions from Google Drive.
+   */
+  const getDriveRevisions = useCallback(async (): Promise<GoogleDriveRevisionInfo[]> => {
+    const res = await listBackupRevisions();
+    if (res.success && res.revisions) {
+      return res.revisions;
+    }
+    if (res.error && !res.error.includes('No backup')) {
+      showToast(res.error, 'error');
+    }
+    return [];
+  }, [showToast]);
+
+  /**
+   * Restore database from a specific historical Google Drive revision.
+   */
+  const restoreRevisionFromDrive = useCallback(
+    async (
+      revisionId: string,
+      passphrase?: string
+    ): Promise<{
+      success: boolean;
+      summary?: BackupMetadata;
+      isEncrypted?: boolean;
+      error?: string;
+    }> => {
+      setIsRestoring(true);
+      try {
+        const downloadRes = await downloadBackupRevision(revisionId, passphrase);
+        if (!downloadRes.success || !downloadRes.data) {
+          if (downloadRes.isEncrypted) {
+            return { success: false, isEncrypted: true, error: downloadRes.error };
+          }
+          showToast(downloadRes.error || 'Failed to download revision', 'error');
+          return { success: false, error: downloadRes.error };
+        }
+
+        await restoreDatabaseFromSnapshot(downloadRes.data);
+        const summary = getBackupSummary(downloadRes.data);
+
+        useAppStore.getState().setPostResetLocked(false);
+
+        if (downloadRes.metadata?.modifiedTime) {
+          setLastCloudBackupTime(downloadRes.metadata.modifiedTime);
+        }
+
+        await queryClient.invalidateQueries();
+        DeviceEventEmitter.emit('billsUpdated');
+        DeviceEventEmitter.emit('notificationsUpdated');
+        DeviceEventEmitter.emit('splitwiseUpdated');
+
+        try {
+          const { useBillsStore } = await import('@/modules/bills/store/bills.store');
+          useBillsStore.getState().loadData().catch(() => {});
+        } catch {
+          // Ignore
+        }
+
+        showToast(
+          `Version restored successfully! (${summary.accountCount} accounts, ${summary.transactionCount} transactions)`,
+          'success'
+        );
+
+        // Resave as the latest snapshot so future auto-sync builds on top of restored state
+        uploadBackup(downloadRes.data).catch(() => {});
+
+        return { success: true, summary };
+      } catch (error: any) {
+        showToast(error?.message || 'Failed to restore revision', 'error');
+        return { success: false, error: error?.message };
+      } finally {
+        setIsRestoring(false);
+      }
+    },
+    [queryClient, setLastCloudBackupTime, showToast]
   );
 
   /**
@@ -361,6 +445,8 @@ export function useGoogleDrive() {
     backupNow,
     performSilentAutoBackup,
     restoreFromDrive,
+    getDriveRevisions,
+    restoreRevisionFromDrive,
     checkAvailableBackup,
     deleteBackupsFromDrive,
     getBackupPassphrase: getStoredBackupPassphrase,

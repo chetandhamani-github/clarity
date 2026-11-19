@@ -25,6 +25,9 @@ import { useSplitwiseStore } from '../store/splitwise.store';
 import { SplitwiseSyncService } from '../services/SplitwiseSyncService';
 import { BalanceCalculator } from '../services/BalanceCalculator';
 import type { Debt, Settlement, ExpenseWithSplits } from '../types/splitwise.types';
+import { useQueryClient } from '@tanstack/react-query';
+import { getDatabase } from '@/services/database';
+import { deleteTransaction } from '@/services/database/transaction-dao';
 
 type ActivityTab = 'ALL' | 'DEBTS' | 'SETTLEMENTS';
 
@@ -46,6 +49,7 @@ export function PersonDetailsScreen() {
   const { hideBalances } = useAppStore();
   const { showAlert } = useAlert();
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
   const { personId } = useLocalSearchParams<{ personId: string }>();
 
   const {
@@ -242,8 +246,30 @@ export function PersonDetailsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
+              // 1. Delete Splitwise settlement record
               await deleteSettlement(settlement.id);
-              showToast('Settlement deleted', 'success');
+
+              // 2. Clean up linked personal ledger transaction and restore account balance
+              try {
+                const db = getDatabase();
+                const linkedTx = await db.getFirstAsync<{ id: string }>(
+                  'SELECT id FROM transactions WHERE parsed_tx_id = ?',
+                  [`splitwise_settlement_${settlement.id}`]
+                );
+                if (linkedTx) {
+                  await deleteTransaction(linkedTx.id);
+                  queryClient.invalidateQueries({ queryKey: ['transactions'] });
+                  queryClient.invalidateQueries({ queryKey: ['accounts'] });
+                  queryClient.invalidateQueries({ queryKey: ['monthlyTotals'] });
+                  queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+                  queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
+                  queryClient.invalidateQueries({ queryKey: ['netWorthHistory'] });
+                }
+              } catch {
+                // Ignore if linked transaction cleanup fails
+              }
+
+              showToast('Settlement deleted & balance restored', 'success');
               SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {});
             } catch (e: unknown) {
               const msg = e instanceof Error ? e.message : 'Failed to delete settlement';
@@ -378,6 +404,7 @@ export function PersonDetailsScreen() {
         {
           backgroundColor: colors.background,
           paddingTop: insets.top,
+          paddingBottom: insets.bottom,
         },
       ]}
     >
@@ -418,7 +445,7 @@ export function PersonDetailsScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 48 },
+          { paddingBottom: insets.bottom + 64 },
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -499,7 +526,11 @@ export function PersonDetailsScreen() {
                 <Text style={[styles.balanceSubLabel, { color: colors.onSurfaceVariant }]}>
                   CURRENT BALANCE
                 </Text>
-                <Text style={[styles.balanceMainAmount, { color: balanceColor }]}>
+                <Text
+                  style={[styles.balanceMainAmount, { color: balanceColor }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
                   {isOwedToMe ? '+' : isYouOwe ? '-' : ''}
                   {formatCurrencyPrivacy(Math.abs(personBalance.netBalance), hideBalances)}
                 </Text>
@@ -913,7 +944,7 @@ export function PersonDetailsScreen() {
               {
                 backgroundColor: colors.surfaceContainerLowest,
                 borderColor: colors.outlineVariant,
-                paddingBottom: Math.max(insets.bottom, 24),
+                paddingBottom: Math.max(insets.bottom, 24) + 16,
               },
             ]}
           >
@@ -1023,7 +1054,7 @@ export function PersonDetailsScreen() {
               {
                 backgroundColor: colors.surfaceContainerLowest,
                 borderColor: colors.outlineVariant,
-                paddingBottom: Math.max(insets.bottom, 24),
+                paddingBottom: Math.max(insets.bottom, 24) + 16,
               },
             ]}
           >
@@ -1228,7 +1259,7 @@ const styles = StyleSheet.create({
     ...typography.labelMd,
     fontSize: 11,
     lineHeight: 14,
-    letterSpacing: 0.8,
+    letterSpacing: Platform.OS === 'ios' ? 0.8 : 0,
     fontFamily: 'Manrope_700Bold',
   },
   balanceMainAmount: {

@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Text, Header, ListSkeleton } from '@/components/ui';
@@ -60,7 +61,7 @@ export default function SearchScreen() {
   ];
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <Header showBack title="Search" />
 
       <View style={styles.content}>
@@ -114,10 +115,10 @@ export default function SearchScreen() {
         {/* Search Results */}
         <KeyboardAwareScrollView
           style={styles.resultsContainer}
-          contentContainerStyle={[
+          contentContainerStyle={StyleSheet.flatten([
             styles.resultsScrollContent,
-            { paddingBottom: insets.bottom + 120 },
-          ]}
+            { paddingBottom: 40 },
+          ])}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           enableOnAndroid={true}
@@ -339,7 +340,7 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
       textTransform: 'uppercase',
-      letterSpacing: 0.6,
+      letterSpacing: Platform.OS === 'ios' ? 0.6 : 0,
     },
     transactionItem: {
       flexDirection: 'row',

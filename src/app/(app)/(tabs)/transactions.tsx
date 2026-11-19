@@ -575,7 +575,7 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
   }, [isLoading, styles]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: showBack ? insets.bottom : 0 }]}>
       <Header
         isMainTab={selectedIds.size === 0 && !showBack}
         showBack={selectedIds.size > 0 || showBack}
@@ -698,7 +698,7 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
           activeOpacity={1}
           onPress={() => setBulkCategoryModalVisible(false)}
         >
-          <View style={[styles.bulkModalSheet, { backgroundColor: colors.surfaceContainerLowest, paddingBottom: Math.max(insets.bottom, 24) + 8 }]}>
+          <View style={[styles.bulkModalSheet, { backgroundColor: colors.surfaceContainerLowest, paddingBottom: Math.max(insets.bottom, 24) + 16 }]}>
             <View style={styles.bulkModalHeader}>
               <Text style={[styles.bulkModalTitle, { color: colors.onSurface }]}>Change Category</Text>
               <TouchableOpacity onPress={() => setBulkCategoryModalVisible(false)}>
@@ -735,7 +735,7 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
           activeOpacity={1}
           onPress={() => setBulkAccountModalVisible(false)}
         >
-          <View style={[styles.bulkModalSheet, { backgroundColor: colors.surfaceContainerLowest, paddingBottom: Math.max(insets.bottom, 24) + 8 }]}>
+          <View style={[styles.bulkModalSheet, { backgroundColor: colors.surfaceContainerLowest, paddingBottom: Math.max(insets.bottom, 24) + 16 }]}>
             <View style={styles.bulkModalHeader}>
               <Text style={[styles.bulkModalTitle, { color: colors.onSurface }]}>Move to Account</Text>
               <TouchableOpacity onPress={() => setBulkAccountModalVisible(false)}>

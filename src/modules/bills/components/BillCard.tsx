@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Linking, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Text, useToast, useAlert } from '@/components/ui';
@@ -291,8 +291,8 @@ const styles = StyleSheet.create({
     ...typography.labelMd,
     fontSize: 10,
     lineHeight: 14,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    fontFamily: 'Manrope_700Bold',
+    ...(Platform.OS === 'ios' ? { letterSpacing: 0.5 } : {}),
     textAlignVertical: 'center',
   },
   actionRow: {
@@ -315,9 +315,9 @@ const styles = StyleSheet.create({
   payOnlineButtonText: {
     ...typography.labelMd,
     color: '#ffffff',
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 11,
-    letterSpacing: 0.3,
+    ...(Platform.OS === 'ios' ? { letterSpacing: 0.3 } : {}),
   },
   markPaidButton: {
     flexDirection: 'row',
@@ -331,9 +331,9 @@ const styles = StyleSheet.create({
   },
   markPaidButtonText: {
     ...typography.labelMd,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 11,
-    letterSpacing: 0.3,
+    ...(Platform.OS === 'ios' ? { letterSpacing: 0.3 } : {}),
   },
   moreButton: {
     padding: 7,

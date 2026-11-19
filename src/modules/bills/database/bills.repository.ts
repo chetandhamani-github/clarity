@@ -159,6 +159,8 @@ export class BillsRepository {
       CREATE INDEX IF NOT EXISTS idx_bills_due_date ON bills(due_date ASC);
       CREATE INDEX IF NOT EXISTS idx_bills_status ON bills(status);
       CREATE INDEX IF NOT EXISTS idx_bills_category ON bills(category);
+      CREATE INDEX IF NOT EXISTS idx_bills_sms_id ON bills(sms_id);
+      CREATE INDEX IF NOT EXISTS idx_bills_account_ref ON bills(account_reference);
       CREATE INDEX IF NOT EXISTS idx_subscriptions_renewal ON subscriptions(next_renewal_date ASC);
       CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
     `);

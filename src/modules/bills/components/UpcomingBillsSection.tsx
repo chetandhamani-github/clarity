@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Text, SkeletonBox, SkeletonCircle, SkeletonText } from '@/components/ui';
@@ -223,9 +223,9 @@ const styles = StyleSheet.create({
   },
   viewAllText: {
     ...typography.labelMd,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 12,
-    letterSpacing: 0.5,
+    ...(Platform.OS === 'ios' ? { letterSpacing: 0.5 } : {}),
   },
   emptyContainer: {
     flexDirection: 'row',

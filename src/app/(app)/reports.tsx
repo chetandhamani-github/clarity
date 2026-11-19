@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { Text, Header, ListSkeleton } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -22,7 +22,7 @@ export default function ReportsScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <Header
         showBack
         title="Reports History"
@@ -197,7 +197,7 @@ const getStyles = (colors: ThemeColors) => {
     reportSubtitle: {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
-      letterSpacing: 0.8,
+      letterSpacing: Platform.OS === 'ios' ? 0.8 : 0,
       marginTop: 4,
     },
     reportGrid: {

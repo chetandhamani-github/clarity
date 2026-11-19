@@ -59,16 +59,14 @@ export const typography = {
     fontFamily: 'Manrope_600SemiBold',
     fontSize: 12,
     lineHeight: 18,
-    letterSpacing: 0.5,
-    ...(Platform.OS === 'ios' ? { fontWeight: '600' as const } : {}),
+    ...(Platform.OS === 'ios' ? { letterSpacing: 0.5, fontWeight: '600' as const } : {}),
     ...androidFontFix,
   },
   labelSm: {
     fontFamily: 'Manrope_600SemiBold',
     fontSize: 11,
     lineHeight: 16,
-    letterSpacing: 0.5,
-    ...(Platform.OS === 'ios' ? { fontWeight: '600' as const } : {}),
+    ...(Platform.OS === 'ios' ? { letterSpacing: 0.5, fontWeight: '600' as const } : {}),
     ...androidFontFix,
   },
 };

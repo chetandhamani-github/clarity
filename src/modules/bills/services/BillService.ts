@@ -159,8 +159,9 @@ export class BillService {
       [minRange, maxRange]
     );
 
-    // Also include candidates by account reference if present
+    // Also include candidates by account reference if present (optimized targeted seek)
     if (extracted.accountReference && extracted.accountReference.trim()) {
+      const cleanRef = extracted.accountReference.trim();
       const refMatches = await db.getAllAsync<{
         id: string;
         title: string;
@@ -176,7 +177,8 @@ export class BillService {
       }>(
         `SELECT id, title, provider, category, amount, min_amount, due_date, status, account_reference, payment_url, sms_id 
          FROM bills 
-         WHERE account_reference IS NOT NULL AND account_reference != ''`
+         WHERE account_reference = ? OR account_reference LIKE ?`,
+        [cleanRef, `%${cleanRef}%`]
       );
 
       for (const rm of refMatches) {
@@ -266,11 +268,21 @@ export class BillService {
         score += 20;
       }
 
-      // 3e. Due date proximity
+      // 3e. Due date proximity and Cycle Isolation Guard
       const [cYear, cMonth, cDay] = cand.due_date.split('-').map(Number);
       const dayDiff = Math.abs(
         Math.round((new Date(cYear, cMonth - 1, cDay).getTime() - dueTime) / (1000 * 60 * 60 * 24))
       );
+
+      // Cycle Isolation Guard:
+      // 1. If candidate is already paid and due date is more than 10 days away, it belongs to an earlier cycle!
+      if (cand.status === 'paid' && dayDiff > 10) {
+        continue;
+      }
+      // 2. If candidate is from a completely distinct billing cycle (> 18 days apart), do not merge
+      if (dayDiff > 18) {
+        continue;
+      }
 
       if (dayDiff === 0) {
         score += 25;
@@ -376,12 +388,15 @@ export class BillService {
 
   /**
    * Matches an expense transaction with unpaid bills to auto-settle them.
+   * Handles early payments (up to 30 days prior to due date), late payments (up to 10 days overdue),
+   * and tokenized matching across payment aggregators (CRED, BBPS, UPI, NetBanking).
    */
   public static async matchTransactionWithUnpaidBill(
     merchant: string,
     amount: number,
     transactionDate: string,
-    toleranceDays: number = 7,
+    toleranceDaysBefore: number = 30,
+    toleranceDaysAfter: number = 10,
     tolerancePct: number = 0.02
   ): Promise<Bill | null> {
     const db = getDatabase();
@@ -391,27 +406,37 @@ export class BillService {
     const [y, m, d] = txDate.split('-').map(Number);
     const targetTime = new Date(y, m - 1, d).getTime();
 
-    const minDate = new Date(targetTime - toleranceDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const maxDate = new Date(targetTime + toleranceDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    // A bill paid today could be due anywhere from toleranceDaysAfter ago (late) up to toleranceDaysBefore ahead (early)
+    const minDueDate = new Date(targetTime - toleranceDaysAfter * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const maxDueDate = new Date(targetTime + toleranceDaysBefore * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     const rows = await db.getAllAsync<{ id: string; provider: string; title: string; amount: number; min_amount: number | null; account_reference: string | null }>(
       `SELECT id, provider, title, amount, min_amount, account_reference 
        FROM bills 
        WHERE (status = 'upcoming' OR status = 'overdue')
          AND due_date BETWEEN ? AND ?`,
-      [minDate, maxDate]
+      [minDueDate, maxDueDate]
     );
 
-    const cleanMerchant = merchant.toLowerCase().trim();
+    const cleanMerchant = merchant.toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
+    const merchantTokens = new Set(cleanMerchant.split(/\s+/).filter((t) => t.length >= 3));
+    const noiseWords = new Set(['payment', 'billdesk', 'autopay', 'bill', 'paid', 'transfer', 'imps', 'neft', 'rtgs', 'bank']);
 
     for (const r of rows) {
-      const cleanProvider = (r.provider || r.title).toLowerCase().trim();
-      const isNameMatch =
+      const cleanProvider = (r.provider || r.title).toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
+      const providerTokens = cleanProvider.split(/\s+/).filter((t) => t.length >= 3 && !noiseWords.has(t));
+
+      const isDirectMatch =
         cleanMerchant.includes(cleanProvider) ||
         cleanProvider.includes(cleanMerchant) ||
-        (r.account_reference && cleanMerchant.includes(r.account_reference.toLowerCase()));
+        (r.account_reference && cleanMerchant.includes(r.account_reference.toLowerCase().replace(/[^a-z0-9]/g, '')));
 
-      if (!isNameMatch) continue;
+      let isTokenMatch = false;
+      if (!isDirectMatch && providerTokens.length > 0) {
+        isTokenMatch = providerTokens.some((token) => merchantTokens.has(token));
+      }
+
+      if (!isDirectMatch && !isTokenMatch) continue;
 
       const matchesTotal = Math.abs(r.amount - amount) <= Math.max(1, r.amount * tolerancePct);
       const matchesMin = r.min_amount != null && Math.abs(r.min_amount - amount) <= Math.max(1, r.min_amount * tolerancePct);

@@ -56,6 +56,13 @@ export interface GoogleDriveBackupInfo {
   size?: number;
 }
 
+export interface GoogleDriveRevisionInfo {
+  id: string;
+  modifiedTime: string;
+  size?: number;
+  keepForever?: boolean;
+}
+
 export interface GoogleAuthTokens {
   accessToken: string;
   refreshToken?: string;
@@ -431,7 +438,7 @@ export async function findBackupFile(accessToken: string): Promise<GoogleDriveBa
  */
 export async function uploadBackup(
   snapshot: ClarityBackupPayload,
-  options?: { allowEmptyOverwrite?: boolean; allowInteractive?: boolean; passphrase?: string }
+  options?: { allowEmptyOverwrite?: boolean; allowInteractive?: boolean; passphrase?: string; pinRevision?: boolean }
 ): Promise<{ success: boolean; modifiedTime?: string; error?: string }> {
   try {
     const allowInteractive = options?.allowInteractive ?? true;
@@ -458,13 +465,18 @@ export async function uploadBackup(
 
     const isMeaningful = isMeaningfulDatabaseSnapshot(snapshot);
 
-    // Safeguard: Never overwrite an existing cloud backup with an empty/cleared local database
+    // Safeguard 1: Never overwrite an existing cloud backup with an empty/cleared local database
     if (existingFile && !isMeaningful && !options?.allowEmptyOverwrite) {
       return {
         success: false,
         error: 'Aborted: Cloud backup contains data, but current local device data is empty. Prevented accidental overwrite.',
       };
     }
+
+    // Safeguard 2: Volumetric circuit breaker
+    // If remote backup exists (> 3KB) and local payload is drastically smaller (< 35% of remote) with minimal transactions,
+    // prevent silent auto-overwrite to avoid replacing a populated cloud backup with a near-blank test database.
+    const localTxCount = Array.isArray(snapshot.data?.transactions) ? snapshot.data.transactions.length : 0;
 
     // Enforce AES-256-GCM encryption client-side before sending to Google Drive
     // Guarantees zero unencrypted/plain-text financial records on Google Cloud
@@ -479,6 +491,20 @@ export async function uploadBackup(
 
     const encryptedPayload = await encryptBackupPayload(snapshot, encryptionPassphrase);
     const jsonContent = JSON.stringify(encryptedPayload, null, 2);
+
+    if (
+      existingFile &&
+      existingFile.size &&
+      existingFile.size > 3000 &&
+      jsonContent.length < existingFile.size * 0.35 &&
+      localTxCount < 3 &&
+      !options?.allowEmptyOverwrite
+    ) {
+      return {
+        success: false,
+        error: 'Aborted: Cloud backup contains significantly more data than local device. Prevented accidental overwrite.',
+      };
+    }
 
     let response: Response;
 
@@ -560,6 +586,30 @@ export async function uploadBackup(
 
     const resData = await response.json();
     const modifiedTime = resData.modifiedTime || new Date().toISOString();
+    const fileId = resData.id || existingFile?.fileId;
+
+    if (fileId && options?.pinRevision) {
+      try {
+        const revUrl = `${DRIVE_FILES_ENDPOINT}/${fileId}/revisions?fields=revisions(id)&orderBy=modifiedTime%20desc`;
+        const revRes = await fetch(revUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+        if (revRes.ok) {
+          const revData = await revRes.json();
+          const latestRev = revData.revisions?.[revData.revisions.length - 1];
+          if (latestRev?.id) {
+            await fetch(`${DRIVE_FILES_ENDPOINT}/${fileId}/revisions/${latestRev.id}`, {
+              method: 'PATCH',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ keepForever: true }),
+            });
+          }
+        }
+      } catch {
+        // Pinning failure non-blocking
+      }
+    }
 
     return { success: true, modifiedTime };
   } catch (error: any) {
@@ -735,6 +785,174 @@ export async function downloadBackup(passphrase?: string): Promise<{
 }
 
 /**
+ * List historical backup revisions available in Google Drive AppData folder.
+ */
+export async function listBackupRevisions(): Promise<{
+  success: boolean;
+  revisions?: GoogleDriveRevisionInfo[];
+  error?: string;
+}> {
+  try {
+    let accessToken = await getValidAccessToken();
+    if (!accessToken) {
+      return { success: false, error: 'Google Drive is not connected or token expired.' };
+    }
+
+    let backupInfo: GoogleDriveBackupInfo | null = null;
+    try {
+      backupInfo = await findBackupFile(accessToken);
+    } catch (findErr: any) {
+      if (findErr?.message === 'UNAUTHORIZED') {
+        accessToken = await getValidAccessToken(true);
+        if (accessToken) {
+          backupInfo = await findBackupFile(accessToken);
+        }
+      }
+    }
+
+    if (!backupInfo) {
+      return { success: false, error: 'No backup file found in Google Drive.' };
+    }
+
+    const revUrl = `${DRIVE_FILES_ENDPOINT}/${backupInfo.fileId}/revisions?fields=revisions(id,modifiedTime,size,keepForever)`;
+    let revRes = await fetch(revUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (revRes.status === 401) {
+      accessToken = await getValidAccessToken(true);
+      if (accessToken) {
+        revRes = await fetch(revUrl, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+      }
+    }
+
+    if (!revRes.ok) {
+      return { success: false, error: 'Failed to fetch revision history from Google Drive.' };
+    }
+
+    const data = await revRes.json();
+    const rawList = Array.isArray(data.revisions) ? data.revisions : [];
+    const revisions: GoogleDriveRevisionInfo[] = rawList
+      .map((r: any) => ({
+        id: String(r.id),
+        modifiedTime: r.modifiedTime || new Date().toISOString(),
+        size: r.size ? parseInt(r.size, 10) : undefined,
+        keepForever: Boolean(r.keepForever),
+      }))
+      .reverse(); // Newest first
+
+    return { success: true, revisions };
+  } catch (error: any) {
+    return { success: false, error: error?.message || 'Failed to list backup revisions.' };
+  }
+}
+
+/**
+ * Download a specific historical revision by revisionId.
+ */
+export async function downloadBackupRevision(
+  revisionId: string,
+  passphrase?: string
+): Promise<{
+  success: boolean;
+  data?: ClarityBackupPayload;
+  metadata?: GoogleDriveBackupInfo;
+  error?: string;
+  isEncrypted?: boolean;
+}> {
+  try {
+    let accessToken = await getValidAccessToken();
+    if (!accessToken) {
+      return { success: false, error: 'Google Drive is not connected or token expired.' };
+    }
+
+    let backupInfo: GoogleDriveBackupInfo | null = null;
+    try {
+      backupInfo = await findBackupFile(accessToken);
+    } catch (findErr: any) {
+      if (findErr?.message === 'UNAUTHORIZED') {
+        accessToken = await getValidAccessToken(true);
+        if (accessToken) {
+          backupInfo = await findBackupFile(accessToken);
+        }
+      }
+    }
+
+    if (!backupInfo) {
+      return { success: false, error: 'No backup file found in Google Drive.' };
+    }
+
+    const revDlUrl = `${DRIVE_FILES_ENDPOINT}/${backupInfo.fileId}/revisions/${revisionId}?alt=media`;
+    let response = await fetch(revDlUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (response.status === 401) {
+      accessToken = await getValidAccessToken(true);
+      if (accessToken) {
+        response = await fetch(revDlUrl, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+      }
+    }
+
+    if (!response.ok) {
+      return { success: false, error: `Failed to download revision (${response.status})` };
+    }
+
+    const responseText = await response.text();
+    let rawJson: any;
+    try {
+      rawJson = JSON.parse(responseText);
+    } catch {
+      return { success: false, error: 'Revision file is not valid JSON.' };
+    }
+
+    let payload: ClarityBackupPayload;
+    if (isEncryptedBackup(rawJson)) {
+      const keyToUse = passphrase || (await getStoredBackupPassphrase());
+      if (!keyToUse) {
+        return {
+          success: false,
+          isEncrypted: true,
+          metadata: backupInfo,
+          error: 'This backup is encrypted with a passphrase.',
+        };
+      }
+      try {
+        payload = await decryptBackupPayload<ClarityBackupPayload>(rawJson, keyToUse);
+        if (passphrase) {
+          await setStoredBackupPassphrase(passphrase, true);
+        }
+      } catch (decErr: any) {
+        return {
+          success: false,
+          isEncrypted: true,
+          metadata: backupInfo,
+          error: decErr?.message || 'Incorrect passphrase.',
+        };
+      }
+    } else {
+      payload = rawJson;
+    }
+
+    if (!payload || !payload.data) {
+      return { success: false, error: 'Revision does not contain valid Clarity backup data.' };
+    }
+
+    return {
+      success: true,
+      data: payload,
+      metadata: backupInfo,
+    };
+  } catch (error: any) {
+    return { success: false, error: error?.message || 'Failed to download revision.' };
+  }
+}
+
+/**
  * Delete all Clarity backup files from Google Drive AppData folder.
  */
 export async function deleteAllBackups(
@@ -809,6 +1027,16 @@ export async function deleteAllBackups(
 let autoBackupDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
+ * Cancel any pending debounced auto-backup timer.
+ */
+export function clearAutoBackupTimer(): void {
+  if (autoBackupDebounceTimer) {
+    clearTimeout(autoBackupDebounceTimer);
+    autoBackupDebounceTimer = null;
+  }
+}
+
+/**
  * Standalone background auto-sync utility.
  */
 export async function syncDatabaseToDriveSilently(reason = 'auto-sync'): Promise<boolean> {
@@ -819,7 +1047,7 @@ export async function syncDatabaseToDriveSilently(reason = 'auto-sync'): Promise
     );
     const state = useAppStore.getState();
 
-    if (!state.googleDriveConnected || !state.autoBackupEnabled) {
+    if (!state.googleDriveConnected || !state.autoBackupEnabled || state.isPostResetLocked) {
       return false;
     }
 

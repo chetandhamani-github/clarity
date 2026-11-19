@@ -5,6 +5,7 @@ import { useSmsStore } from '@/store/useSmsStore';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
 import { ThemeColors, useTheme } from '@/theme/useTheme';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
@@ -28,6 +29,7 @@ interface ReviewQueueModalProps {
 export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
   const { colors } = useTheme();
   const styles = getStyles(colors);
+  const insets = useSafeInsets();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const refreshReviewQueueCount = useSmsStore((state) => state.refreshReviewQueueCount);
@@ -170,7 +172,7 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         style={styles.modalOverlay}
       >
-        <View style={styles.modalContainer}>
+        <View style={[styles.modalContainer, { paddingBottom: Math.max(insets.bottom, 24) + 16 }]}>
           {/* Header */}
           <View style={styles.headerRow}>
             <View style={styles.headerTitleCol}>

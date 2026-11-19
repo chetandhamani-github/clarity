@@ -8,16 +8,22 @@ export function calculateSafeInsets(
 ): EdgeInsets {
   const top =
     insets.top > 0
-      ? insets.top
+      ? platform === 'android'
+        ? Math.max(insets.top, statusBarHeight ?? 24)
+        : insets.top
       : platform === 'android'
-        ? (statusBarHeight ?? 24)
-        : 0;
+        ? (statusBarHeight ?? 28)
+        : platform === 'ios'
+          ? 20
+          : 0;
 
   const bottom =
     insets.bottom > 0
-      ? Math.max(insets.bottom, platform === 'android' ? 16 : 0)
+      ? platform === 'android'
+        ? Math.max(insets.bottom, 28)
+        : insets.bottom
       : platform === 'android'
-        ? 24
+        ? 28
         : platform === 'ios'
           ? 20
           : 0;

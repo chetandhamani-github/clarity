@@ -260,7 +260,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <Header
         showBack
         title="Intelligence & System"
@@ -494,6 +494,20 @@ export default function SettingsScreen() {
 
             <TouchableOpacity
               style={styles.settingItem}
+              onPress={() => router.navigate('/(app)/investments')}
+            >
+              <View style={styles.settingItemLeft}>
+                <MaterialIcons name="insights" size={24} color="#3B82F6" />
+                <View style={styles.settingTextContainer}>
+                  <Text style={styles.settingTitle}>Wealth & Investments Cockpit</Text>
+                  <Text style={styles.settingSub}>Track mutual funds, stocks, FDs, gold & SIPs</Text>
+                </View>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingItem}
               onPress={() => router.navigate('/manage-categories')}
             >
               <View style={styles.settingItemLeft}>
@@ -505,304 +519,28 @@ export default function SettingsScreen() {
               </View>
               <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
             </TouchableOpacity>
-          </View>
-        </View>
 
-        {/* Google Drive Cloud Backup */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Google Drive Cloud Backup</Text>
-          <View style={[styles.card, { minHeight: 'auto', gap: 16 }]}>
-            {isDriveConnected ? (
-              <>
-                <View style={styles.driveStatusRow}>
-                  <View
-                    style={[
-                      styles.driveIconBox,
-                      { backgroundColor: colors.primaryContainer },
-                    ]}
-                  >
-                    <MaterialIcons name="cloud-done" size={24} color={colors.onPrimaryContainer} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.driveStatusTitle}>Connected to Google Drive</Text>
-                    <Text style={styles.driveStatusEmail} numberOfLines={1}>
-                      {driveUserEmail || 'Personal Cloud Vault'}
-                    </Text>
-                    <Text style={styles.driveLastBackupText}>
-                      Last Backup:{' '}
-                      {driveLastBackupTime
-                        ? new Date(driveLastBackupTime).toLocaleString()
-                        : 'Not backed up yet'}
-                    </Text>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        backgroundColor: colors.surfaceContainerHighest,
-                        borderRadius: 6,
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
-                        gap: 4,
-                        marginTop: 6,
-                        alignSelf: 'flex-start',
-                      }}
-                    >
-                      <MaterialIcons name="lock" size={13} color={colors.primary} />
-                      <Text style={{ ...typography.labelMd, color: colors.primary, fontWeight: '700' }}>
-                        AES-256-GCM Encrypted
-                      </Text>
-                    </View>
-                  </View>
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => router.navigate('/(app)/cloud-backup')}
+            >
+              <View style={styles.settingItemLeft}>
+                <MaterialIcons
+                  name="cloud-queue"
+                  size={24}
+                  color={isDriveConnected ? colors.primary : colors.secondary}
+                />
+                <View style={styles.settingTextContainer}>
+                  <Text style={styles.settingTitle}>Cloud Backup & Restore</Text>
+                  <Text style={styles.settingSub}>
+                    {isDriveConnected
+                      ? `Google Drive (${driveUserEmail || 'Connected'})`
+                      : 'Google Drive • Disconnected'}
+                  </Text>
                 </View>
-
-                {/* Automatic Cloud Sync Toggle */}
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    paddingVertical: 12,
-                    paddingHorizontal: 14,
-                    backgroundColor: colors.surfaceContainer,
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: colors.surfaceVariant,
-                  }}
-                >
-                  <View style={{ flex: 1, marginRight: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={styles.settingTitle}>Automatic Cloud Sync</Text>
-                      {isAutoSyncing && (
-                        <ActivityIndicator size="small" color={colors.primary} />
-                      )}
-                    </View>
-                    <Text style={styles.settingSub}>
-                      Auto-syncs encrypted snapshots silently in background.
-                    </Text>
-                  </View>
-                  <Switch
-                    value={autoBackupEnabled}
-                    onValueChange={(val) => setAutoBackupEnabled(val)}
-                    trackColor={{ false: colors.surfaceContainerHighest, true: colors.primary }}
-                    thumbColor={colors.onPrimary}
-                  />
-                </View>
-
-                {autoBackupEnabled && (
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: 12,
-                      backgroundColor: colors.surfaceContainerLowest,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: colors.surfaceVariant,
-                    }}
-                  >
-                    <View style={{ flex: 1, marginRight: 12 }}>
-                      <Text style={styles.settingTitle}>Only on Wi-Fi</Text>
-                      <Text style={styles.settingSub}>
-                        Prevent cloud backups over cellular mobile data.
-                      </Text>
-                    </View>
-                    <Switch
-                      value={autoBackupOnlyWifi}
-                      onValueChange={(val) => setAutoBackupOnlyWifi(val)}
-                      trackColor={{ false: colors.surfaceContainerHighest, true: colors.primary }}
-                      thumbColor={colors.onPrimary}
-                    />
-                  </View>
-                )}
-
-                {!hasCustomBackupPassphrase ? (
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      padding: 12,
-                      backgroundColor: colors.warningContainer,
-                      borderRadius: 12,
-                      gap: 10,
-                      borderWidth: 1,
-                      borderColor: colors.warning,
-                    }}
-                  >
-                    <MaterialIcons name="warning" size={22} color={colors.warning} />
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={{
-                          ...typography.labelMd,
-                          color: colors.onWarningContainer,
-                          fontWeight: '700',
-                        }}
-                      >
-                        No Recovery Passphrase Set
-                      </Text>
-                      <Text
-                        style={{
-                          ...typography.bodySm,
-                          color: colors.onWarningContainer,
-                          lineHeight: 16,
-                          marginTop: 2,
-                        }}
-                      >
-                        Without a passphrase, this backup cannot be restored if you lose this device.
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      style={{
-                        backgroundColor: colors.warning,
-                        paddingVertical: 6,
-                        paddingHorizontal: 10,
-                        borderRadius: 8,
-                      }}
-                      onPress={() => {
-                        setPassphraseMode('encrypt');
-                        setPassphraseModalVisible(true);
-                      }}
-                    >
-                      <Text
-                        style={{
-                          ...typography.labelSm,
-                          color: colors.onWarning,
-                          fontWeight: '700',
-                        }}
-                      >
-                        SET KEY
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingVertical: 8,
-                      paddingHorizontal: 12,
-                      backgroundColor: colors.surfaceContainer,
-                      borderRadius: 10,
-                      gap: 8,
-                    }}
-                  >
-                    <MaterialIcons name="verified-user" size={18} color={colors.primary} />
-                    <Text style={{ ...typography.bodySm, color: colors.onSurfaceVariant, flex: 1 }}>
-                      End-to-end encrypted with your secret passphrase. Safe for device recovery.
-                    </Text>
-                  </View>
-                )}
-
-                <View style={{ gap: 8 }}>
-                  <TouchableOpacity
-                    style={styles.btnPrimary}
-                    onPress={() => backupDriveNow()}
-                    disabled={isBackingUpDrive || isRestoringDrive || isDeletingDriveBackups}
-                  >
-                    {isBackingUpDrive ? (
-                      <ActivityIndicator size="small" color={colors.onPrimary} />
-                    ) : (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <MaterialIcons name="cloud-upload" size={18} color={colors.onPrimary} />
-                        <Text style={styles.btnPrimaryText}>BACKUP NOW (ENCRYPTED)</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.btnSecondary}
-                    onPress={() => {
-                      setPassphraseMode('encrypt');
-                      setPassphraseModalVisible(true);
-                    }}
-                    disabled={isBackingUpDrive || isRestoringDrive || isDeletingDriveBackups}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                      <MaterialIcons name="vpn-key" size={18} color={colors.primary} />
-                      <Text style={[styles.btnSecondaryText, { color: colors.primary }]}>
-                        SET / CHANGE PASSPHRASE
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.btnSecondary}
-                    onPress={() => handleRestoreFromDrive()}
-                    disabled={isBackingUpDrive || isRestoringDrive || isDeletingDriveBackups}
-                  >
-                    {isRestoringDrive ? (
-                      <ActivityIndicator size="small" color={colors.onSurface} />
-                    ) : (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <MaterialIcons name="cloud-download" size={18} color={colors.onSurface} />
-                        <Text style={styles.btnSecondaryText}>RESTORE FROM DRIVE</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.btnSecondary, { borderColor: colors.error, borderWidth: 1 }]}
-                    onPress={handleDeleteDriveBackups}
-                    disabled={isBackingUpDrive || isRestoringDrive || isDeletingDriveBackups}
-                  >
-                    {isDeletingDriveBackups ? (
-                      <ActivityIndicator size="small" color={colors.error} />
-                    ) : (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <MaterialIcons name="delete-forever" size={18} color={colors.error} />
-                        <Text style={[styles.btnSecondaryText, { color: colors.error }]}>
-                          DELETE CLOUD BACKUPS
-                        </Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.btnSecondary, { borderColor: colors.outlineVariant, borderWidth: 1 }]}
-                    onPress={handleDisconnectDrive}
-                    disabled={isBackingUpDrive || isRestoringDrive || isDeletingDriveBackups}
-                  >
-                    <Text style={[styles.btnSecondaryText, { color: colors.onSurfaceVariant }]}>
-                      DISCONNECT DRIVE
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            ) : (
-              <>
-                <View style={styles.driveStatusRow}>
-                  <View
-                    style={[
-                      styles.driveIconBox,
-                      { backgroundColor: colors.surfaceContainerHighest },
-                    ]}
-                  >
-                    <MaterialIcons name="cloud-queue" size={24} color={colors.onSurfaceVariant} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.driveStatusTitle}>Cloud Backup Not Connected</Text>
-                    <Text style={styles.driveStatusEmail}>
-                      Connect Google Drive to safely synchronize accounts, transactions, and goals.
-                    </Text>
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.btnPrimary}
-                  onPress={handleConnectDrive}
-                  disabled={isConnectingDrive}
-                >
-                  {isConnectingDrive ? (
-                    <ActivityIndicator size="small" color={colors.onPrimary} />
-                  ) : (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <MaterialIcons name="add-to-drive" size={18} color={colors.onPrimary} />
-                      <Text style={styles.btnPrimaryText}>CONNECT GOOGLE DRIVE</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </>
-            )}
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -1055,29 +793,6 @@ export default function SettingsScreen() {
         type={legalModalType}
         onClose={() => setLegalModalType(null)}
       />
-
-      <PassphraseModal
-        visible={passphraseModalVisible}
-        title={passphraseMode === 'encrypt' ? 'Set Recovery Passphrase' : 'Enter Backup Passphrase'}
-        description={
-          passphraseMode === 'encrypt'
-            ? 'Set a secret passphrase to encrypt your cloud backup. You will need this passphrase to restore your financial data if your device is lost or replaced.'
-            : 'This backup is client-side encrypted with AES-256-GCM. Enter your secret passphrase to decrypt and restore.'
-        }
-        confirmText={passphraseMode === 'encrypt' ? 'Encrypt & Backup' : 'Unlock & Restore'}
-        onSkip={
-          passphraseMode === 'encrypt'
-            ? () => {
-                setPassphraseModalVisible(false);
-                showToast('Using device-only key. You can set a recovery passphrase anytime.', 'info');
-              }
-            : undefined
-        }
-        skipText="Skip for now"
-        isLoading={isBackingUpDrive || isRestoringDrive}
-        onClose={() => setPassphraseModalVisible(false)}
-        onSubmit={handlePassphraseSubmit}
-      />
     </View>
   );
 }
@@ -1247,6 +962,7 @@ const getStyles = (colors: ThemeColors) => {
     },
     btnPrimaryText: {
       ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
       color: colors.onPrimary,
       textAlign: 'center',
     },
@@ -1260,6 +976,7 @@ const getStyles = (colors: ThemeColors) => {
     },
     btnSecondaryText: {
       ...typography.labelMd,
+      fontFamily: 'Manrope_600SemiBold',
       color: colors.onSurface,
       textAlign: 'center',
     },

@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useMemo } from 'react';
-import { View, StyleSheet, TouchableOpacity, DeviceEventEmitter } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, DeviceEventEmitter, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui';
@@ -14,7 +14,7 @@ export function SplitwiseWidget() {
   const router = useRouter();
   const { hideBalances } = useAppStore();
 
-  const { people, debts, settlements, loadAllData } = useSplitwiseStore();
+  const { people, debts, settlements, expenses, loadAllData } = useSplitwiseStore();
 
   const handleRefresh = useCallback(() => {
     loadAllData();
@@ -34,37 +34,44 @@ export function SplitwiseWidget() {
     return BalanceCalculator.calculateOverallSummary(people, debts, settlements);
   }, [people, debts, settlements]);
 
+  const peopleBalances = useMemo(() => {
+    return BalanceCalculator.calculatePeopleBalances(people, debts, settlements, expenses);
+  }, [people, debts, settlements, expenses]);
+
+  const peopleWhoOweMeCount = useMemo(() => {
+    return peopleBalances.filter((pb) => pb.status === 'OWED_TO_ME').length;
+  }, [peopleBalances]);
+
+  const peopleIOweCount = useMemo(() => {
+    return peopleBalances.filter((pb) => pb.status === 'YOU_OWE').length;
+  }, [peopleBalances]);
+
   const netBalance = summary.netBalance;
   const isOwed = netBalance > 0;
   const isOwe = netBalance < 0;
-  const isSettled = netBalance === 0;
-
-  const statusLabel = isOwed
-    ? 'You Are Owed'
-    : isOwe
-      ? 'You Owe'
-      : 'All Settled Up';
-
-  const statusColor = isOwed ? '#10b981' : isOwe ? '#ef4444' : '#06b6d4';
-  const statusBg = isOwed
-    ? 'rgba(16, 185, 129, 0.12)'
-    : isOwe
-      ? 'rgba(239, 68, 68, 0.12)'
-      : 'rgba(6, 182, 212, 0.12)';
 
   const handlePress = () => {
     router.navigate('/(app)/splitwise');
   };
 
+  const handleRecordSettlement = () => {
+    router.push('/(app)/add-splitwise-settlement');
+  };
+
+  const handleAddExpense = () => {
+    router.push('/(app)/add-splitwise-expense');
+  };
+
   return (
     <View style={styles.container}>
+      {/* Widget Header */}
       <View style={styles.header}>
         <View style={styles.headerTitleRow}>
-          <Text style={[styles.title, { color: colors.onSurface }]}>Splitwise</Text>
+          <Text style={[styles.title, { color: colors.onSurface }]}>Receivables & Payables</Text>
           {summary.activePeopleCount > 0 && (
             <View style={[styles.countBadge, { backgroundColor: colors.primaryContainer }]}>
               <Text style={[styles.countBadgeText, { color: colors.onPrimaryContainer }]} numberOfLines={1}>
-                {summary.activePeopleCount} {summary.activePeopleCount === 1 ? 'friend' : 'friends'}
+                {summary.activePeopleCount} active
               </Text>
             </View>
           )}
@@ -78,71 +85,189 @@ export function SplitwiseWidget() {
         </TouchableOpacity>
       </View>
 
+      {/* Main Container Card */}
       <TouchableOpacity
         style={[
-          styles.card,
+          styles.mainCard,
           {
             backgroundColor: colors.surfaceContainerLowest,
             borderColor: colors.surfaceVariant,
           },
         ]}
         onPress={handlePress}
-        activeOpacity={0.85}
+        activeOpacity={0.9}
       >
-        <View style={styles.cardLeft}>
-          <View style={[styles.iconCircle, { backgroundColor: statusBg }]}>
-            <MaterialIcons
-              name={isOwed ? 'call-received' : isOwe ? 'call-made' : 'group'}
-              size={22}
-              color={statusColor}
-            />
-          </View>
-
-          <View style={styles.infoCol}>
-            <Text style={[styles.statusLabel, { color: colors.onSurfaceVariant }]}>
-              {statusLabel}
-            </Text>
-            <Text style={[styles.netBalanceText, { color: statusColor }]}>
-              {formatCurrencyPrivacy(Math.abs(netBalance), hideBalances)}
-            </Text>
-
-            {people.length > 0 && (
-              <View style={styles.metaRow}>
-                <Text style={[styles.metaText, { color: colors.onSurfaceVariant }]}>
-                  {summary.remainingReceivable > 0 && (
-                    <Text style={{ color: '#10b981', fontWeight: '600' }}>
-                      +{formatCurrencyPrivacy(summary.remainingReceivable, hideBalances)}
-                    </Text>
-                  )}
-                  {summary.remainingReceivable > 0 && summary.remainingPayable > 0 && '  •  '}
-                  {summary.remainingPayable > 0 && (
-                    <Text style={{ color: '#ef4444', fontWeight: '600' }}>
-                      -{formatCurrencyPrivacy(summary.remainingPayable, hideBalances)}
-                    </Text>
-                  )}
-                  {summary.remainingReceivable === 0 && summary.remainingPayable === 0 && 'No pending debts'}
-                </Text>
-              </View>
-            )}
-
-            {people.length === 0 && (
-              <Text style={[styles.metaText, { color: colors.onSurfaceVariant }]}>
-                Track split bills & debts with friends
+        {/* Net Standing Header Banner */}
+        <View style={[styles.netStandingBanner, { backgroundColor: colors.surfaceContainerLow }]}>
+          <View style={styles.netStandingLeft}>
+            <View
+              style={[
+                styles.netIconDot,
+                {
+                  backgroundColor: isOwed
+                    ? 'rgba(16, 185, 129, 0.15)'
+                    : isOwe
+                      ? 'rgba(239, 68, 68, 0.15)'
+                      : 'rgba(6, 182, 212, 0.15)',
+                },
+              ]}
+            >
+              <MaterialIcons
+                name={isOwed ? 'trending-up' : isOwe ? 'trending-down' : 'done-all'}
+                size={16}
+                color={isOwed ? '#10b981' : isOwe ? '#ef4444' : '#06b6d4'}
+              />
+            </View>
+            <View>
+              <Text style={[styles.netStandingLabel, { color: colors.onSurfaceVariant }]}>
+                NET BALANCE
               </Text>
-            )}
+              <Text
+                style={[
+                  styles.netStandingValue,
+                  {
+                    color: isOwed ? '#10b981' : isOwe ? '#ef4444' : colors.onSurface,
+                  },
+                ]}
+              >
+                {netBalance === 0
+                  ? 'All Settled Up (₹0)'
+                  : `${isOwed ? '+' : '-'}${formatCurrencyPrivacy(Math.abs(netBalance), hideBalances)}`}
+              </Text>
+            </View>
           </View>
-        </View>
 
-        <View style={styles.cardRight}>
-          <View
-            style={[
-              styles.arrowCircle,
-              { backgroundColor: colors.surfaceContainerHigh },
-            ]}
-          >
+          <View style={styles.chevronWrapper}>
             <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
           </View>
         </View>
+
+        {/* Dual Split Cards: Receivables vs Payables */}
+        {people.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <View
+              style={[
+                styles.emptyIconCircle,
+                { backgroundColor: colors.surfaceContainerHigh },
+              ]}
+            >
+              <MaterialIcons name="groups" size={26} color={colors.primary} />
+            </View>
+            <View style={styles.emptyContent}>
+              <Text style={[styles.emptyTitle, { color: colors.onSurface }]}>
+                Shared Expenses & Group Bills
+              </Text>
+              <Text style={[styles.emptySubtitle, { color: colors.onSurfaceVariant }]}>
+                Split dining, trips, or flatmate bills with friends and auto-reconcile settlements.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.emptyAddBtn, { backgroundColor: colors.primary }]}
+              onPress={() => router.push('/(app)/add-splitwise-expense')}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="add" size={16} color={colors.onPrimary} />
+              <Text style={[styles.emptyAddBtnText, { color: colors.onPrimary }]}>
+                Add Expense
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <View style={styles.metricsRow}>
+              {/* Receivables Card */}
+              <View
+                style={[
+                  styles.metricCard,
+                  {
+                    backgroundColor: 'rgba(16, 185, 129, 0.06)',
+                    borderColor: 'rgba(16, 185, 129, 0.2)',
+                  },
+                ]}
+              >
+                <View style={styles.metricHeaderRow}>
+                  <View
+                    style={[
+                      styles.metricIconCircle,
+                      { backgroundColor: 'rgba(16, 185, 129, 0.15)' },
+                    ]}
+                  >
+                    <MaterialIcons name="call-received" size={14} color="#10b981" />
+                  </View>
+                  <Text style={[styles.metricLabel, { color: '#059669' }]}>RECEIVABLES</Text>
+                </View>
+
+                <Text style={[styles.metricAmount, { color: '#10b981' }]} numberOfLines={1} adjustsFontSizeToFit>
+                  +{formatCurrencyPrivacy(summary.remainingReceivable, hideBalances)}
+                </Text>
+
+                <Text style={[styles.metricSubtext, { color: colors.onSurfaceVariant }]}>
+                  {peopleWhoOweMeCount > 0
+                    ? `${peopleWhoOweMeCount} ${peopleWhoOweMeCount === 1 ? 'friend owes' : 'friends owe'} you`
+                    : 'None pending'}
+                </Text>
+              </View>
+
+              {/* Payables Card */}
+              <View
+                style={[
+                  styles.metricCard,
+                  {
+                    backgroundColor: 'rgba(239, 68, 68, 0.06)',
+                    borderColor: 'rgba(239, 68, 68, 0.2)',
+                  },
+                ]}
+              >
+                <View style={styles.metricHeaderRow}>
+                  <View
+                    style={[
+                      styles.metricIconCircle,
+                      { backgroundColor: 'rgba(239, 68, 68, 0.15)' },
+                    ]}
+                  >
+                    <MaterialIcons name="call-made" size={14} color="#ef4444" />
+                  </View>
+                  <Text style={[styles.metricLabel, { color: '#dc2626' }]}>PAYABLES</Text>
+                </View>
+
+                <Text style={[styles.metricAmount, { color: '#ef4444' }]} numberOfLines={1} adjustsFontSizeToFit>
+                  -{formatCurrencyPrivacy(summary.remainingPayable, hideBalances)}
+                </Text>
+
+                <Text style={[styles.metricSubtext, { color: colors.onSurfaceVariant }]}>
+                  {peopleIOweCount > 0
+                    ? `You owe ${peopleIOweCount} ${peopleIOweCount === 1 ? 'friend' : 'friends'}`
+                    : 'None pending'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Quick Action Buttons Bar */}
+            <View style={[styles.actionsRow, { borderTopColor: colors.outlineVariant }]}>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: colors.surfaceContainerHigh }]}
+                onPress={handleRecordSettlement}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="handshake" size={16} color={colors.primary} />
+                <Text style={[styles.actionBtnText, { color: colors.primary }]}>
+                  Record Settlement
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: colors.surfaceContainerHigh }]}
+                onPress={handleAddExpense}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="group-add" size={16} color={colors.primary} />
+                <Text style={[styles.actionBtnText, { color: colors.primary }]}>
+                  Split Expense
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -169,14 +294,14 @@ const styles = StyleSheet.create({
   countBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 10,
+    borderRadius: radius.full,
     flexShrink: 0,
   },
   countBadgeText: {
     ...typography.labelMd,
-    fontWeight: '700',
-    fontSize: 12,
-    lineHeight: 16,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 11,
+    lineHeight: 15,
   },
   viewAllButton: {
     paddingVertical: 4,
@@ -185,64 +310,159 @@ const styles = StyleSheet.create({
   },
   viewAllText: {
     ...typography.labelMd,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 12,
-    letterSpacing: 0.5,
+    ...(Platform.OS === 'ios' ? { letterSpacing: 0.5 } : {}),
   },
-  card: {
+  mainCard: {
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  netStandingBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  cardLeft: {
+  netStandingLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    flex: 1,
+    gap: 12,
   },
-  iconCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  infoCol: {
-    flex: 1,
-  },
-  statusLabel: {
-    ...typography.labelMd,
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  netBalanceText: {
-    ...typography.headlineSm,
-    fontFamily: 'Manrope_700Bold',
-    fontSize: 22,
-    lineHeight: 30,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  metaText: {
-    ...typography.bodyMd,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  cardRight: {
-    marginLeft: 8,
-  },
-  arrowCircle: {
+  netIconDot: {
     width: 32,
     height: 32,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  netStandingLabel: {
+    ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 10,
+    ...(Platform.OS === 'ios' ? { letterSpacing: 0.8 } : {}),
+  },
+  netStandingValue: {
+    ...typography.headlineSm,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  chevronWrapper: {
+    padding: 2,
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 16,
+    paddingBottom: 12,
+  },
+  metricCard: {
+    flex: 1,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    padding: 12,
+  },
+  metricHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  metricIconCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metricLabel: {
+    ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 10,
+    ...(Platform.OS === 'ios' ? { letterSpacing: 0.5 } : {}),
+  },
+  metricAmount: {
+    ...typography.headlineSm,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 16,
+    lineHeight: 22,
+    marginBottom: 2,
+  },
+  metricSubtext: {
+    ...typography.bodyMd,
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: radius.md,
+  },
+  actionBtnText: {
+    ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  emptyContainer: {
+    padding: 16,
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyContent: {
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  emptyTitle: {
+    ...typography.titleMedium,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    ...typography.bodyMd,
+    fontSize: 12,
+    lineHeight: 16,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  emptyAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    marginTop: 6,
+  },
+  emptyAddBtnText: {
+    ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 12,
+    lineHeight: 16,
   },
 });

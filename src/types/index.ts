@@ -287,3 +287,84 @@ export type {
   SubscriptionStatus,
 } from '@/modules/bills/types/bill.types';
 
+// ----------------------------------------------------------------------------
+// Investment & Wealth Portfolio Cockpit Types (Net Worth 2.0)
+// ----------------------------------------------------------------------------
+
+export type AssetClass =
+  | 'equity'
+  | 'debt_fixed_income'
+  | 'gold'
+  | 'cash'
+  | 'real_estate'
+  | 'crypto';
+
+export type InvestmentSubType =
+  | 'mutual_fund'
+  | 'stocks'
+  | 'etf'
+  | 'fd'
+  | 'rd'
+  | 'ppf'
+  | 'epf'
+  | 'nps'
+  | 'sgb'
+  | 'physical_gold'
+  | 'digital_gold'
+  | 'real_estate'
+  | 'crypto'
+  | 'other';
+
+export interface InvestmentHolding {
+  id: string;
+  accountId?: string;
+  accountName?: string;
+  name: string;
+  assetClass: AssetClass;
+  subType: InvestmentSubType;
+  investedAmount: number;
+  currentValue: number;
+  units?: number;
+  navOrPrice?: number;
+  folioOrAccountNumber?: string;
+  interestRate?: number;
+  maturityDate?: string; // YYYY-MM-DD
+  sipAmount?: number;
+  sipDayOfMonth?: number; // 1-31
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AssetAllocationItem {
+  assetClass: AssetClass;
+  label: string;
+  amount: number;
+  percentage: number;
+  color: string;
+  icon: string;
+}
+
+export interface PortfolioSummary {
+  totalPortfolioValue: number;
+  totalInvestedAmount: number;
+  unrealizedGainLoss: number;
+  gainLossPercentage: number;
+  totalNetWorthWithInvestments: number;
+  allocations: AssetAllocationItem[];
+  holdingsCount: number;
+}
+
+export interface InvestmentMaturityItem {
+  id: string;
+  name: string;
+  type: 'SIP' | 'MATURITY';
+  dateOrDay: string;
+  amount: number;
+  assetClass: AssetClass;
+  subType: InvestmentSubType;
+  interestRate?: number;
+  daysRemaining?: number;
+}
+
+

@@ -88,7 +88,10 @@ export default function BudgetSetupScreen() {
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+        contentContainerStyle={StyleSheet.flatten([
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + 120 },
+        ])}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
@@ -292,7 +295,7 @@ export default function BudgetSetupScreen() {
       </KeyboardAwareScrollView>
 
       {/* Fixed Bottom Action Area */}
-      <View style={[styles.bottomActionArea, { paddingBottom: Math.max(insets.bottom + 20, 16) }]}>
+      <View style={[styles.bottomActionArea, { paddingBottom: Math.max(insets.bottom, 28) + 16 }]}>
         <TouchableOpacity
           style={[styles.confirmButton, (isPending || totalPct !== 100) && { opacity: 0.5 }]}
           onPress={handleSave}
@@ -355,7 +358,7 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
       textTransform: 'uppercase',
-      letterSpacing: 0.6,
+      letterSpacing: Platform.OS === 'ios' ? 0.6 : 0,
       marginBottom: 4,
     },
     incomeInputRow: {
@@ -521,7 +524,8 @@ const getStyles = (colors: ThemeColors) => {
     confirmButtonText: {
       ...typography.labelMd,
       color: colors.onPrimary,
-      letterSpacing: 1,
+      fontFamily: 'Manrope_700Bold',
+      letterSpacing: Platform.OS === 'ios' ? 1 : 0,
     },
     extraSpace: {
       marginBottom: 30,

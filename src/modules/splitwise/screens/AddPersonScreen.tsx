@@ -68,6 +68,7 @@ export function AddPersonScreen() {
         {
           backgroundColor: colors.background,
           paddingTop: insets.top,
+          paddingBottom: insets.bottom,
         },
       ]}
     >
@@ -92,10 +93,10 @@ export function AddPersonScreen() {
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[
+        contentContainerStyle={StyleSheet.flatten([
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 48 },
-        ]}
+          { paddingBottom: 32 },
+        ])}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}

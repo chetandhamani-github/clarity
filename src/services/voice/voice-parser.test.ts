@@ -41,6 +41,44 @@ describe('voice-parser', () => {
     expect(decimal.amount).toBe(120.5);
   });
 
+  it('correctly distinguishes account names from generic keywords like salary and bank', async () => {
+    // "salary" keyword should not falsely trigger "ICICI Salary" when SBI is specified
+    const incomeResult = await parseVoiceTranscript('Salary 50000 into SBI', accounts);
+    expect(incomeResult.amount).toBe(50000);
+    expect(incomeResult.type).toBe('income');
+    expect(incomeResult.accountId).toBe('acc-2');
+
+    // "bank" keyword should not falsely trigger "HDFC Bank" when SBI is specified
+    const expenseResult = await parseVoiceTranscript('Paid 200 at Starbucks using SBI bank card', accounts);
+    expect(expenseResult.amount).toBe(200);
+    expect(expenseResult.accountId).toBe('acc-2');
+
+    const depositResult = await parseVoiceTranscript('Received 5000 from client into HDFC', accounts);
+    expect(depositResult.amount).toBe(5000);
+    expect(depositResult.accountId).toBe('acc-1');
+
+    // Explicit "income" keyword
+    const freelanceResult = await parseVoiceTranscript('Income 25000 from client in SBI', accounts);
+    expect(freelanceResult.amount).toBe(25000);
+    expect(freelanceResult.type).toBe('income');
+    expect(freelanceResult.accountId).toBe('acc-2');
+
+    // Hinglish "HDFC se" postposition
+    const hinglishResult = await parseVoiceTranscript('Paid 400 for dinner HDFC se', accounts);
+    expect(hinglishResult.amount).toBe(400);
+    expect(hinglishResult.accountId).toBe('acc-1');
+  });
+
+  it('matches accounts using last four digits when provided', async () => {
+    const cardAccounts = [
+      { id: 'card-1', name: 'HDFC Bank', lastFour: '1122' },
+      { id: 'card-2', name: 'HDFC Bank', lastFour: '4455' },
+    ];
+    const res = await parseVoiceTranscript('Paid 900 for groceries with card 4455', cardAccounts);
+    expect(res.amount).toBe(900);
+    expect(res.accountId).toBe('card-2');
+  });
+
   it('handles empty input gracefully', async () => {
     const result = await parseVoiceTranscript('');
     expect(result.amount).toBe(0);

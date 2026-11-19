@@ -22,6 +22,7 @@ export interface ClarityBackupPayload {
     splitwise_people?: any[];
     splitwise_debts?: any[];
     splitwise_settlements?: any[];
+    investment_holdings?: any[];
     sms_messages?: any[];
     parsed_transactions?: any[];
     sms_review_queue?: any[];
@@ -133,6 +134,7 @@ export async function generateDatabaseSnapshot(): Promise<ClarityBackupPayload> 
   const splitwise_people = await safeGetAll('SELECT * FROM splitwise_people');
   const splitwise_debts = await safeGetAll('SELECT * FROM splitwise_debts');
   const splitwise_settlements = await safeGetAll('SELECT * FROM splitwise_settlements');
+  const investment_holdings = await safeGetAll('SELECT * FROM investment_holdings');
   const sms_messages = await safeGetAll('SELECT * FROM sms_messages');
   const parsed_transactions = await safeGetAll('SELECT * FROM parsed_transactions');
   const sms_review_queue = await safeGetAll('SELECT * FROM sms_review_queue');
@@ -167,6 +169,7 @@ export async function generateDatabaseSnapshot(): Promise<ClarityBackupPayload> 
     splitwise_people,
     splitwise_debts,
     splitwise_settlements,
+    investment_holdings,
     sms_messages,
     parsed_transactions,
     sms_review_queue,
@@ -245,6 +248,7 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
         DELETE FROM splitwise_settlements;
         DELETE FROM splitwise_debts;
         DELETE FROM splitwise_people;
+        DELETE FROM investment_holdings;
       `);
     } catch {
       // Ignore if some tables do not exist in older migrations
@@ -712,6 +716,43 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
               rq.extracted_data ?? rq.extractedData ?? null,
               rqStatus,
               rq.created_at ?? rq.createdAt ?? new Date().toISOString(),
+            ]
+          );
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    // 20. Insert Investment Holdings (if present)
+    if (Array.isArray(data.investment_holdings)) {
+      for (const inv of data.investment_holdings) {
+        try {
+          await db.runAsync(
+            `INSERT OR REPLACE INTO investment_holdings (
+               id, account_id, name, asset_class, sub_type, invested_amount,
+               current_value, units, nav_or_price, folio_or_account_number,
+               interest_rate, maturity_date, sip_amount, sip_day_of_month,
+               notes, created_at, updated_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              inv.id,
+              inv.account_id ?? inv.accountId ?? null,
+              inv.name,
+              inv.asset_class ?? inv.assetClass,
+              inv.sub_type ?? inv.subType,
+              inv.invested_amount ?? inv.investedAmount ?? 0,
+              inv.current_value ?? inv.currentValue ?? 0,
+              inv.units ?? null,
+              inv.nav_or_price ?? inv.navOrPrice ?? null,
+              inv.folio_or_account_number ?? inv.folioOrAccountNumber ?? null,
+              inv.interest_rate ?? inv.interestRate ?? null,
+              inv.maturity_date ?? inv.maturityDate ?? null,
+              inv.sip_amount ?? inv.sipAmount ?? null,
+              inv.sip_day_of_month ?? inv.sipDayOfMonth ?? null,
+              inv.notes ?? null,
+              inv.created_at ?? inv.createdAt ?? new Date().toISOString(),
+              inv.updated_at ?? inv.updatedAt ?? new Date().toISOString(),
             ]
           );
         } catch {

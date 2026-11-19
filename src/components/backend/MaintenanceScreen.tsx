@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useTheme } from '@/theme/useTheme';
 
 interface MaintenanceScreenProps {
@@ -9,9 +10,19 @@ interface MaintenanceScreenProps {
 
 export function MaintenanceScreen({ onRetry }: MaintenanceScreenProps) {
   const { colors } = useTheme();
+  const insets = useSafeInsets();
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background,
+          paddingTop: insets.top + 16,
+          paddingBottom: insets.bottom + 16,
+        },
+      ]}
+    >
       <View
         style={[
           styles.iconContainer,

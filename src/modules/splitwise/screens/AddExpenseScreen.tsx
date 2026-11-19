@@ -257,6 +257,7 @@ export function AddExpenseScreen() {
         {
           backgroundColor: colors.background,
           paddingTop: insets.top,
+          paddingBottom: insets.bottom,
         },
       ]}
     >
@@ -281,10 +282,10 @@ export function AddExpenseScreen() {
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[
+        contentContainerStyle={StyleSheet.flatten([
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 48 },
-        ]}
+          { paddingBottom: 32 },
+        ])}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
@@ -760,7 +761,7 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 11,
     fontFamily: 'Manrope_700Bold',
-    letterSpacing: 0.5,
+    letterSpacing: Platform.OS === 'ios' ? 0.5 : 0,
     marginBottom: 6,
   },
   amountInputRow: {
@@ -770,12 +771,12 @@ const styles = StyleSheet.create({
   },
   currencySymbol: {
     fontSize: 32,
-    fontFamily: 'Manrope_800ExtraBold',
+    fontFamily: 'Manrope_700Bold',
     marginRight: 6,
   },
   amountInput: {
     fontSize: 32,
-    fontFamily: 'Manrope_800ExtraBold',
+    fontFamily: 'Manrope_700Bold',
     flex: 1,
     paddingVertical: 0,
     textAlignVertical: 'center',

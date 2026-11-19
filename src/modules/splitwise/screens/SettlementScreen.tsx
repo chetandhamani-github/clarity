@@ -10,13 +10,14 @@ import {
   Modal,
   KeyboardAvoidingView,
   Keyboard,
+  Switch,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
-import { Text, Header, DatePickerModal, useAlert } from '@/components/ui';
+import { Text, Header, DatePickerModal, useAlert, useToast } from '@/components/ui';
 import { typography, useTheme, radius } from '@/theme';
 import { formatCurrencyPrivacy } from '@/utils/format';
 import { useAppStore } from '@/store/use-app-store';
@@ -24,6 +25,10 @@ import { useSplitwiseStore } from '../store/splitwise.store';
 import { SplitwiseSyncService } from '../services/SplitwiseSyncService';
 import { BalanceCalculator } from '../services/BalanceCalculator';
 import type { SettlementType } from '../types/splitwise.types';
+import { useAccounts } from '@/hooks/use-accounts';
+import { insertTransaction } from '@/services/database/transaction-dao';
+import { useQueryClient } from '@tanstack/react-query';
+import type { TransactionType } from '@/types';
 
 export interface SettlementFormData {
   personId: string;
@@ -74,6 +79,25 @@ export function SettlementScreen() {
     loadAllData,
     isLoading,
   } = useSplitwiseStore();
+
+  const { accounts, isLoading: isLoadingAccounts } = useAccounts();
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
+
+  const [reconcileAccount, setReconcileAccount] = useState(true);
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [showAccountPicker, setShowAccountPicker] = useState(false);
+
+  useEffect(() => {
+    if (accounts.length > 0 && !selectedAccountId) {
+      setSelectedAccountId(accounts[0].id);
+    }
+  }, [accounts, selectedAccountId]);
+
+  const selectedAccount = useMemo(
+    () => accounts.find((a) => a.id === selectedAccountId),
+    [accounts, selectedAccountId]
+  );
 
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
   const yesterdayStr = useMemo(() => {
@@ -211,7 +235,7 @@ export function SettlementScreen() {
         createdAtIso = !isNaN(dateObj.getTime()) ? dateObj.toISOString() : new Date().toISOString();
       }
 
-      await addSettlement({
+      const newSettlement = await addSettlement({
         personId: data.personId,
         groupId: params.groupId || undefined,
         amount: amt,
@@ -221,7 +245,53 @@ export function SettlementScreen() {
         createdAt: createdAtIso,
       });
 
+      // 1-Tap Auto-Reconcile with Clarity Personal Accounts Ledger
+      if (reconcileAccount && selectedAccountId && selectedAccount) {
+        const isTheyPaid = data.type === 'THEY_PAID';
+        const personName = selectedPerson?.name || 'Friend';
+        const txType: TransactionType = isTheyPaid ? 'income' : 'expense';
+        const merchant = isTheyPaid
+          ? `Settlement from ${personName}`
+          : `Settlement to ${personName}`;
+        const note = data.description.trim()
+          ? `Splitwise: ${data.description.trim()}`
+          : `Splitwise settlement with ${personName}`;
+
+        await insertTransaction({
+          accountId: selectedAccountId,
+          amount: amt,
+          type: txType,
+          merchant,
+          category: 'Loan & Debt Repayment',
+          date: data.date,
+          isRecurring: false,
+          note,
+          tags: ['splitwise-settlement'],
+          source: 'MANUAL',
+          status: 'VERIFIED',
+          parsedTxId: `splitwise_settlement_${newSettlement.id}`,
+        });
+
+        // Invalidate react-query cache so all screens reflect new balance and transaction
+        queryClient.invalidateQueries({ queryKey: ['transactions'] });
+        queryClient.invalidateQueries({ queryKey: ['accounts'] });
+        queryClient.invalidateQueries({ queryKey: ['monthlyTotals'] });
+        queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+        queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
+        queryClient.invalidateQueries({ queryKey: ['netWorthHistory'] });
+      }
+
       SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {});
+
+      if (reconcileAccount && selectedAccountId && selectedAccount) {
+        showToast(
+          `Settlement recorded & ${selectedAccount.name} updated!`,
+          'success'
+        );
+      } else {
+        showToast('Settlement recorded successfully', 'success');
+      }
+
       router.back();
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Failed to record settlement';
@@ -254,6 +324,7 @@ export function SettlementScreen() {
         {
           backgroundColor: colors.background,
           paddingTop: insets.top,
+          paddingBottom: insets.bottom,
         },
       ]}
     >
@@ -278,10 +349,10 @@ export function SettlementScreen() {
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[
+        contentContainerStyle={StyleSheet.flatten([
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 48 },
-        ]}
+          { paddingBottom: 32 },
+        ])}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
@@ -769,6 +840,113 @@ export function SettlementScreen() {
           </View>
         </View>
 
+        {/* CARD: BANK ACCOUNT RECONCILIATION */}
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: colors.surfaceContainerLow,
+              borderColor: colors.outlineVariant,
+            },
+          ]}
+        >
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.labelWithIcon}>
+              <MaterialIcons name="account-balance" size={18} color={colors.primary} />
+              <Text style={[styles.cardSectionTitle, { color: colors.onSurface }]}>
+                Reconcile with Bank Account
+              </Text>
+            </View>
+
+            <Switch
+              value={reconcileAccount && accounts.length > 0}
+              onValueChange={setReconcileAccount}
+              trackColor={{ false: colors.surfaceContainerHighest, true: colors.primary }}
+              thumbColor="#ffffff"
+              disabled={accounts.length === 0}
+            />
+          </View>
+
+          {reconcileAccount && accounts.length > 0 ? (
+            <View style={styles.reconcileBody}>
+              <Text style={[styles.reconcileSubtitle, { color: colors.onSurfaceVariant }]}>
+                {isTheyPaid
+                  ? `Deposit ${parsedAmount > 0 ? `₹${parsedAmount}` : 'settlement'} into your account:`
+                  : `Deduct ${parsedAmount > 0 ? `₹${parsedAmount}` : 'settlement'} from your account:`}
+              </Text>
+
+              <TouchableOpacity
+                style={[
+                  styles.accountSelectorBox,
+                  {
+                    backgroundColor: colors.surfaceContainerLowest,
+                    borderColor: colors.surfaceVariant,
+                  },
+                ]}
+                onPress={() => setShowAccountPicker(true)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.accountSelectorLeft}>
+                  <View
+                    style={[
+                      styles.accountIconBadge,
+                      {
+                        backgroundColor: isTheyPaid
+                          ? 'rgba(16, 185, 129, 0.12)'
+                          : 'rgba(239, 68, 68, 0.12)',
+                      },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name={
+                        selectedAccount?.type === 'credit'
+                          ? 'credit-card'
+                          : selectedAccount?.type === 'wallet'
+                            ? 'payments'
+                            : 'account-balance'
+                      }
+                      size={18}
+                      color={isTheyPaid ? '#10b981' : '#ef4444'}
+                    />
+                  </View>
+                  <View style={styles.accountSelectorInfo}>
+                    <Text style={[styles.accountSelectorName, { color: colors.onSurface }]}>
+                      {selectedAccount?.name || 'Select Account'}
+                    </Text>
+                    {selectedAccount && (
+                      <Text
+                        style={[styles.accountSelectorBalance, { color: colors.onSurfaceVariant }]}
+                      >
+                        Balance: {formatCurrencyPrivacy(selectedAccount.balance, hideBalances)}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+
+                <MaterialIcons name="expand-more" size={20} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+
+              <View style={styles.reconcileTagRow}>
+                <View style={[styles.tagBadge, { backgroundColor: colors.surfaceContainerHigh }]}>
+                  <MaterialIcons name="label" size={12} color={colors.primary} />
+                  <Text style={[styles.tagBadgeText, { color: colors.primary }]}>
+                    #splitwise-settlement
+                  </Text>
+                </View>
+                <Text style={[styles.reconcileHelpText, { color: colors.onSurfaceVariant }]}>
+                  Updates actual balance & creates linked ledger transaction
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <Text style={[styles.reconcileDisabledNote, { color: colors.onSurfaceVariant }]}>
+              {accounts.length === 0
+                ? 'No bank accounts found. Create an account in the Accounts tab to auto-sync settlements.'
+                : 'Off: Settlement will be recorded only in Splitwise without affecting bank balances.'}
+            </Text>
+          )}
+        </View>
+
         {/* CARD 6: DATE SELECTOR CARD */}
         <View
           style={[
@@ -913,7 +1091,7 @@ export function SettlementScreen() {
               {
                 backgroundColor: colors.surfaceContainerLowest,
                 borderColor: colors.outlineVariant,
-                paddingBottom: Math.max(insets.bottom, 24),
+                paddingBottom: Math.max(insets.bottom, 24) + 16,
               },
             ]}
           >
@@ -1047,6 +1225,111 @@ export function SettlementScreen() {
                   </TouchableOpacity>
                 </View>
               )}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Account Picker Modal */}
+      <Modal
+        visible={showAccountPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAccountPicker(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdropTouch}
+            activeOpacity={1}
+            onPress={() => setShowAccountPicker(false)}
+          />
+          <View
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: colors.surfaceContainerLowest,
+                borderColor: colors.outlineVariant,
+                paddingBottom: Math.max(insets.bottom, 24) + 16,
+              },
+            ]}
+          >
+            <View style={styles.modalHeaderRow}>
+              <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Select Account</Text>
+              <TouchableOpacity
+                onPress={() => setShowAccountPicker(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.friendsListScroll}
+              showsVerticalScrollIndicator={false}
+            >
+              {accounts.map((acc) => {
+                const isSelected = acc.id === selectedAccountId;
+                return (
+                  <TouchableOpacity
+                    key={acc.id}
+                    style={[
+                      styles.friendItem,
+                      {
+                        backgroundColor: isSelected
+                          ? colors.primaryContainer + '20'
+                          : colors.surfaceContainerLow,
+                        borderColor: isSelected ? colors.primary : colors.outlineVariant,
+                      },
+                    ]}
+                    onPress={() => {
+                      setSelectedAccountId(acc.id);
+                      setShowAccountPicker(false);
+                    }}
+                  >
+                    <View
+                      style={[
+                        styles.friendItemAvatar,
+                        {
+                          backgroundColor: isSelected
+                            ? colors.primary
+                            : colors.surfaceContainerHigh,
+                        },
+                      ]}
+                    >
+                      <MaterialIcons
+                        name={
+                          acc.type === 'credit'
+                            ? 'credit-card'
+                            : acc.type === 'wallet'
+                              ? 'payments'
+                              : 'account-balance'
+                        }
+                        size={18}
+                        color={isSelected ? colors.onPrimary : colors.onSurface}
+                      />
+                    </View>
+                    <View style={styles.friendItemInfo}>
+                      <Text style={[styles.friendItemName, { color: colors.onSurface }]}>
+                        {acc.name}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.friendItemPhone,
+                          { color: colors.onSurfaceVariant },
+                        ]}
+                      >
+                        {acc.institution} • {formatCurrencyPrivacy(acc.balance, hideBalances)}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <MaterialIcons name="check" size={20} color={colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
@@ -1224,7 +1507,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_700Bold',
     fontSize: 11,
     lineHeight: 14,
-    letterSpacing: 0.8,
+    letterSpacing: Platform.OS === 'ios' ? 0.8 : 0,
     marginBottom: 8,
   },
   amountInputRow: {
@@ -1551,5 +1834,82 @@ const styles = StyleSheet.create({
     ...typography.labelMd,
     fontFamily: 'Manrope_700Bold',
     fontSize: 12,
+  },
+  reconcileBody: {
+    marginTop: 4,
+  },
+  reconcileSubtitle: {
+    ...typography.bodyMd,
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 10,
+  },
+  accountSelectorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  accountSelectorLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  accountIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accountSelectorInfo: {
+    flex: 1,
+  },
+  accountSelectorName: {
+    ...typography.bodyMd,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  accountSelectorBalance: {
+    ...typography.labelMd,
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 2,
+  },
+  reconcileTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
+  },
+  tagBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+  },
+  tagBadgeText: {
+    ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  reconcileHelpText: {
+    ...typography.labelMd,
+    fontSize: 11,
+    lineHeight: 14,
+    flex: 1,
+  },
+  reconcileDisabledNote: {
+    ...typography.bodyMd,
+    fontSize: 12,
+    lineHeight: 17,
   },
 });

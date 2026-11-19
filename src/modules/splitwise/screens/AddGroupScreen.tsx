@@ -128,6 +128,7 @@ export function AddGroupScreen() {
         {
           backgroundColor: colors.background,
           paddingTop: insets.top,
+          paddingBottom: insets.bottom,
         },
       ]}
     >
@@ -152,10 +153,10 @@ export function AddGroupScreen() {
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[
+        contentContainerStyle={StyleSheet.flatten([
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 48 },
-        ]}
+          { paddingBottom: 32 },
+        ])}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
@@ -581,7 +582,7 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 11,
     fontFamily: 'Manrope_700Bold',
-    letterSpacing: 0.5,
+    letterSpacing: Platform.OS === 'ios' ? 0.5 : 0,
     marginBottom: 6,
   },
   inputWrapper: {

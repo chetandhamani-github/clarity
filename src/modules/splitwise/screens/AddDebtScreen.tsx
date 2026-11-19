@@ -212,6 +212,7 @@ export function AddDebtScreen() {
         {
           backgroundColor: colors.background,
           paddingTop: insets.top,
+          paddingBottom: insets.bottom,
         },
       ]}
     >
@@ -236,10 +237,10 @@ export function AddDebtScreen() {
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[
+        contentContainerStyle={StyleSheet.flatten([
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 48 },
-        ]}
+          { paddingBottom: 32 },
+        ])}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
@@ -751,7 +752,7 @@ export function AddDebtScreen() {
               {
                 backgroundColor: colors.surfaceContainerLowest,
                 borderColor: colors.outlineVariant,
-                paddingBottom: Math.max(insets.bottom, 24),
+                paddingBottom: Math.max(insets.bottom, 24) + 16,
               },
             ]}
           >
@@ -1062,7 +1063,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_700Bold',
     fontSize: 11,
     lineHeight: 14,
-    letterSpacing: 0.8,
+    letterSpacing: Platform.OS === 'ios' ? 0.8 : 0,
     marginBottom: 8,
   },
   amountInputRow: {

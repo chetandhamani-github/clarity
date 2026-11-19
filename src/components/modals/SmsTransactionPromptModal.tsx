@@ -139,7 +139,7 @@ export function SmsTransactionPromptModal({ visible, onDismiss }: Props) {
               {/* Summary Bar */}
               <View style={styles.summaryBar}>
                 <View style={styles.summaryInfo}>
-                  <Text style={styles.summaryLabel}>
+                  <Text style={styles.summaryLabel} numberOfLines={1}>
                     Selected ({selectedCount}/{totalCount})
                   </Text>
                   <Text style={styles.summaryAmount}>

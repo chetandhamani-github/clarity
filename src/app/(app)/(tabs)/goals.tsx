@@ -79,7 +79,7 @@ export default function GoalsScreen({ showBack = false }: GoalsScreenProps = {})
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: showBack ? insets.bottom : 0 }]}>
       <Header
         isMainTab={!showBack}
         showBack={showBack}
@@ -102,7 +102,10 @@ export default function GoalsScreen({ showBack = false }: GoalsScreenProps = {})
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 140 }]}
+        contentContainerStyle={StyleSheet.flatten([
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + 140 },
+        ])}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}

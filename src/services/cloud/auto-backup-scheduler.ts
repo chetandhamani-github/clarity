@@ -15,7 +15,7 @@ export async function checkAndRunScheduledBackup(reason = 'scheduled-daily'): Pr
   try {
     const state = useAppStore.getState();
 
-    if (!state.googleDriveConnected || !state.autoBackupEnabled) {
+    if (!state.googleDriveConnected || !state.autoBackupEnabled || state.isPostResetLocked) {
       return false;
     }
 

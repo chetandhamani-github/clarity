@@ -5,6 +5,7 @@ import { useAccounts } from '@/hooks/use-accounts';
 import { useCreateTransaction } from '@/hooks/use-transactions';
 import { VoiceTransactionModal } from '@/components/modals/VoiceTransactionModal';
 import { useToast } from '@/components/ui';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useTheme } from '@/theme';
 import { formatLocalDate, getCurrencySymbol } from '@/utils/format';
 import { haptics } from '@/utils/haptics';
@@ -13,6 +14,7 @@ import type { ParsedVoiceTransaction } from '@/services/voice/voice-parser';
 export default function VoiceAddScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const insets = useSafeInsets();
   const { showToast } = useToast();
   const { accounts, isLoading } = useAccounts();
   const { mutate: createTransaction } = useCreateTransaction();
@@ -94,7 +96,7 @@ export default function VoiceAddScreen() {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background, paddingBottom: insets.bottom }]}>
       {isLoading ? (
         <ActivityIndicator size="large" color={colors.primary} />
       ) : (
@@ -103,7 +105,7 @@ export default function VoiceAddScreen() {
           onDismiss={handleDismiss}
           onApply={handleApply}
           onSave={handleDirectSave}
-          accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
+          accounts={accounts.map((a) => ({ id: a.id, name: a.name, lastFour: a.lastFour }))}
         />
       )}
     </View>

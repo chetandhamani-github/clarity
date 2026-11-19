@@ -275,9 +275,9 @@ export default function ImportStatementScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <Header title="Import Statement" showBack />
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 48 }]}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 64 }]}>
         {/* Step 1: Select Target Account */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>1. Target Account</Text>
@@ -459,7 +459,7 @@ export default function ImportStatementScreen() {
         onRequestClose={() => setPdfPasswordModalVisible(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
+          <View style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 24) + 16 }]}>
             <View style={styles.modalHeader}>
               <View style={styles.modalIconBox}>
                 <MaterialIcons name="lock-outline" size={24} color={colors.primary} />

@@ -452,7 +452,7 @@ export default function CopilotScreen() {
                 paddingBottom:
                   keyboardHeight > 0
                     ? 20
-                    : Math.max(insets.bottom, 16) + 8,
+                    : Math.max(insets.bottom, 28) + 16,
               },
             ]}
           >

@@ -232,8 +232,9 @@ export default function AddTransactionScreen() {
       }
       if (params.note) setNote(params.note);
       if (params.type) setType(params.type);
+      if (params.accountId) setAccountId(params.accountId);
     }
-  }, [params.amount, params.merchant, params.category, params.note, params.type, isEditing]);
+  }, [params.amount, params.merchant, params.category, params.note, params.type, params.accountId, isEditing]);
 
   const handleSave = () => {
     Keyboard.dismiss();
@@ -609,6 +610,7 @@ export default function AddTransactionScreen() {
         styles.container,
         {
           paddingTop: insets.top,
+          paddingBottom: insets.bottom,
         },
       ]}
     >
@@ -655,10 +657,10 @@ export default function AddTransactionScreen() {
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[
+        contentContainerStyle={StyleSheet.flatten([
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 48 },
-        ]}
+          { paddingBottom: 32 },
+        ])}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
@@ -1319,7 +1321,7 @@ export default function AddTransactionScreen() {
           onPress={() => setShowCategoryMenu(false)}
         >
           <View
-            style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}
+            style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 24) + 16 }]}
             onStartShouldSetResponder={() => true}
           >
             <View style={styles.modalHeader}>
@@ -1439,7 +1441,7 @@ export default function AddTransactionScreen() {
           onPress={() => setShowAccountMenu(false)}
         >
           <View
-            style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}
+            style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 24) + 16 }]}
             onStartShouldSetResponder={() => true}
           >
             <View style={styles.modalHeader}>
@@ -1533,7 +1535,7 @@ export default function AddTransactionScreen() {
           onPress={() => setShowToAccountMenu(false)}
         >
           <View
-            style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}
+            style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 24) + 16 }]}
             onStartShouldSetResponder={() => true}
           >
             <View style={styles.modalHeader}>
@@ -1618,7 +1620,7 @@ export default function AddTransactionScreen() {
         visible={showVoiceModal}
         onDismiss={() => setShowVoiceModal(false)}
         onApply={handleApplyVoiceParsed}
-        accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
+        accounts={accounts.map((a) => ({ id: a.id, name: a.name, lastFour: a.lastFour }))}
       />
 
       {/* Fullscreen Receipt Viewer Modal */}

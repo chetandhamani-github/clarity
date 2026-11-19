@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { Text, Header, DetailSkeleton } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
@@ -217,7 +218,7 @@ export default function AccountDetailsScreen() {
   const branding = account ? getBankBranding(account.institution || account.name) : null;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <Header
         showBack
         title="Account Details"
@@ -526,6 +527,9 @@ export default function AccountDetailsScreen() {
                           paddingHorizontal: 8,
                           paddingVertical: 2,
                           borderRadius: 12,
+                          flexShrink: 0,
+                          alignItems: 'center',
+                          justifyContent: 'center',
                           backgroundColor:
                             creditUtilizationInfo.status === 'danger'
                               ? colors.errorContainer
@@ -537,7 +541,7 @@ export default function AccountDetailsScreen() {
                         <Text
                           style={{
                             ...typography.labelMd,
-                            fontWeight: '700',
+                            fontFamily: 'Manrope_700Bold',
                             color:
                               creditUtilizationInfo.status === 'danger'
                                 ? colors.onErrorContainer
@@ -545,6 +549,7 @@ export default function AccountDetailsScreen() {
                                 ? colors.onSurface
                                 : colors.onPrimaryContainer,
                           }}
+                          numberOfLines={1}
                         >
                           {Math.round(creditUtilizationInfo.utilizationPercent)}% Used
                         </Text>
@@ -821,7 +826,7 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
       textTransform: 'uppercase',
-      letterSpacing: 1,
+      letterSpacing: Platform.OS === 'ios' ? 1 : 0,
       marginBottom: 4,
     },
     balanceText: {

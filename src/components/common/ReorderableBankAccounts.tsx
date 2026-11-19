@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
     Animated,
     GestureResponderEvent,
+    Platform,
     ScrollView,
     StyleSheet,
     TouchableOpacity,
@@ -334,7 +335,7 @@ export function ReorderableBankAccounts({
                         { backgroundColor: branding.backgroundColor },
                       ]}
                     >
-                      <Text style={[styles.bankPillText, { color: branding.color }]}>
+                      <Text style={[styles.bankPillText, { color: branding.color }]} numberOfLines={1}>
                         {branding.shortName}
                       </Text>
                     </View>
@@ -390,8 +391,8 @@ const getStyles = (colors: ThemeColors) => {
     viewAllText: {
       ...typography.labelMd,
       color: colors.primary,
-      fontWeight: '700',
-      letterSpacing: 0.5,
+      fontFamily: 'Manrope_700Bold',
+      letterSpacing: Platform.OS === 'ios' ? 0.5 : 0,
     },
     scrollContent: {
       paddingVertical: 2,
@@ -419,10 +420,15 @@ const getStyles = (colors: ThemeColors) => {
       paddingHorizontal: 6,
       paddingVertical: 2,
       borderRadius: 6,
+      flexShrink: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     bankPillText: {
       fontSize: 10,
-      fontWeight: '700',
+      fontFamily: 'Manrope_700Bold',
+      lineHeight: 14,
+      textAlignVertical: 'center',
     },
     cardBody: {
       marginTop: 12,

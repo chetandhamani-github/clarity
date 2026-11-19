@@ -54,6 +54,23 @@ describe('BillExtractor', () => {
     expect(bill?.paymentUrl).toBe('https://bescom.org/pay');
   });
 
+  it('should correctly parse regional Discoms with dot-separated dates (e.g. UPPCL)', () => {
+    const msg: RawSmsMessage = {
+      id: '3b',
+      address: 'VK-UPPCL',
+      body: 'UPPCL Electricity bill for Consumer No 98765432 of Rs 1,420.00 is generated. Due date is 15.11.2026. Please pay timely.',
+      date: new Date('2026-11-01').getTime(),
+    };
+
+    const bill = BillExtractor.extractBill(msg);
+    expect(bill).not.toBeNull();
+    expect(bill?.billerName).toBe('UPPCL Electricity');
+    expect(bill?.billerCategory).toBe('electricity');
+    expect(bill?.amountDue).toBe(1420);
+    expect(bill?.dueDate).toBe('2026-11-15');
+    expect(bill?.accountReference).toBe('98765432');
+  });
+
   it('should correctly parse Credit Card statements with Total and Min Due (e.g. HDFC Credit Card)', () => {
     const msg: RawSmsMessage = {
       id: '4',
@@ -73,6 +90,24 @@ describe('BillExtractor', () => {
     expect(bill?.paymentUrl).toBe('https://hdfcbank.com/cardpay');
   });
 
+  it('should guard against Credit Limit confusion in credit card SMS', () => {
+    const msg: RawSmsMessage = {
+      id: '4b',
+      address: 'VM-SBICRD',
+      body: 'Statement for SBI Card ending in 9812: Total Amt Due: Rs 24,500.00, Min Amt Due: Rs 1,225.00, Credit Limit: Rs 1,50,000, Avl Lmt: Rs 1,25,500. Due on 15-Nov-2026.',
+      date: new Date('2026-10-25').getTime(),
+    };
+
+    const bill = BillExtractor.extractBill(msg);
+    expect(bill).not.toBeNull();
+    expect(bill?.billerName).toBe('SBI Credit Card');
+    expect(bill?.billerCategory).toBe('credit_card');
+    expect(bill?.amountDue).toBe(24500);
+    expect(bill?.minAmountDue).toBe(1225);
+    expect(bill?.dueDate).toBe('2026-11-15');
+    expect(bill?.accountReference).toBe('Card ..9812');
+  });
+
   it('should correctly parse Broadband bill reminders (e.g. Airtel Xstream Fiber)', () => {
     const msg: RawSmsMessage = {
       id: '5',
@@ -90,7 +125,36 @@ describe('BillExtractor', () => {
     expect(bill?.accountReference).toBe('08041234567');
   });
 
-  it('should correctly parse Piped Gas bills (e.g. IGL Gas)', () => {
+  it('should parse Month-first dates (e.g. Oct 25, 2026)', () => {
+    const msg: RawSmsMessage = {
+      id: '5b',
+      address: 'AD-JIOFBR',
+      body: 'Your JioFiber bill of Rs 1,178 is generated. Payment due date: Oct 25, 2026. Pay via MyJio app.',
+      date: new Date('2026-10-10').getTime(),
+    };
+
+    const bill = BillExtractor.extractBill(msg);
+    expect(bill).not.toBeNull();
+    expect(bill?.billerName).toBe('JioFiber');
+    expect(bill?.dueDate).toBe('2026-10-25');
+    expect(bill?.amountDue).toBe(1178);
+  });
+
+  it('should handle Year Rollover when bill arrives in Dec for Jan due date', () => {
+    const msg: RawSmsMessage = {
+      id: '5c',
+      address: 'VM-HDFCBK',
+      body: 'Your HDFC Bank Credit Card bill of Rs 8,450 is due on 05-Jan. Pay now to avoid late charges.',
+      date: new Date('2026-12-28').getTime(),
+    };
+
+    const bill = BillExtractor.extractBill(msg);
+    expect(bill).not.toBeNull();
+    expect(bill?.dueDate).toBe('2027-01-05');
+    expect(bill?.amountDue).toBe(8450);
+  });
+
+  it('should correctly parse Piped Gas bills with BP No (e.g. IGL Gas)', () => {
     const msg: RawSmsMessage = {
       id: '6',
       address: 'BW-IGLGAS',
@@ -104,5 +168,39 @@ describe('BillExtractor', () => {
     expect(bill?.billerCategory).toBe('gas');
     expect(bill?.amountDue).toBe(860);
     expect(bill?.dueDate).toBe('2026-09-30');
+    expect(bill?.accountReference).toBe('40012938');
+  });
+
+  it('should correctly parse Loan EMI reminders (e.g. Bajaj Finserv)', () => {
+    const msg: RawSmsMessage = {
+      id: '7',
+      address: 'AD-BAJAJF',
+      body: 'Dear Customer, your Bajaj Finserv EMI of Rs. 4,500.00 for Loan Account 883921 is due on 02-11-2026. Keep sufficient balance.',
+      date: new Date('2026-10-28').getTime(),
+    };
+
+    const bill = BillExtractor.extractBill(msg);
+    expect(bill).not.toBeNull();
+    expect(bill?.billerName).toBe('Bajaj Finserv EMI');
+    expect(bill?.billerCategory).toBe('loan_emi');
+    expect(bill?.amountDue).toBe(4500);
+    expect(bill?.dueDate).toBe('2026-11-02');
+  });
+
+  it('should correctly parse Insurance Premium reminders (e.g. LIC)', () => {
+    const msg: RawSmsMessage = {
+      id: '8',
+      address: 'VM-LICIND',
+      body: 'LIC Insurance Premium of Rs 12,500 for Policy No: 49102938 is due on 20-Oct-2026. Pay online at licindia.in',
+      date: new Date('2026-10-01').getTime(),
+    };
+
+    const bill = BillExtractor.extractBill(msg);
+    expect(bill).not.toBeNull();
+    expect(bill?.billerName).toBe('LIC Insurance');
+    expect(bill?.billerCategory).toBe('insurance');
+    expect(bill?.amountDue).toBe(12500);
+    expect(bill?.dueDate).toBe('2026-10-20');
+    expect(bill?.accountReference).toBe('49102938');
   });
 });

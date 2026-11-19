@@ -112,7 +112,7 @@ export function SubscriptionCard({ subscription, onPress }: SubscriptionCardProp
               {subscription.billingCycle.toUpperCase()} • {renewalText}
             </Text>
             {subscription.billingCycle !== 'monthly' && (
-              <Text style={[styles.monthlyNormalized, { color: colors.primary }]}>
+              <Text style={[styles.monthlyNormalized, { color: colors.primary }]} numberOfLines={1}>
                 ({formatCurrencyPrivacy(monthlyCost, hideBalances)}/mo)
               </Text>
             )}

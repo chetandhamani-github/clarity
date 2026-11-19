@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useAppStore } from '@/store/use-app-store';
 import { clearDatabase } from '@/services/database';
+import { clearAutoBackupTimer } from '@/services/cloud/google-drive-service';
 import { exportFullBackupToJSON } from '@/services/export/export-service';
 import { useAccounts } from '@/hooks/use-accounts';
 
@@ -106,6 +107,8 @@ export default function SecurityPrivacyScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
+              clearAutoBackupTimer();
+              useAppStore.getState().setPostResetLocked(true);
               await clearDatabase();
               showToast('All local data was permanently cleared', 'success');
               router.replace('/(app)/(tabs)/dashboard' as any);
@@ -119,7 +122,7 @@ export default function SecurityPrivacyScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <Header showBack title="Security & Privacy" />
 
       <ScrollView

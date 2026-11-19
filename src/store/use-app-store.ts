@@ -32,6 +32,7 @@ interface AppState {
   hideBalances: boolean;
   hasDismissedOnboardingChecklist: boolean;
   hasCustomBackupPassphrase: boolean;
+  isPostResetLocked: boolean;
   setHasHydrated: (value: boolean) => void;
   setOnboarded: (value: boolean) => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -48,6 +49,7 @@ interface AppState {
   toggleHideBalances: () => void;
   setHasDismissedOnboardingChecklist: (dismissed: boolean) => void;
   setHasCustomBackupPassphrase: (value: boolean) => void;
+  setPostResetLocked: (locked: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -69,6 +71,7 @@ export const useAppStore = create<AppState>()(
       hideBalances: false,
       hasDismissedOnboardingChecklist: false,
       hasCustomBackupPassphrase: false,
+      isPostResetLocked: false,
       setHasHydrated: (value) => set({ _hasHydrated: value }),
       setOnboarded: (value) => set({ hasOnboarded: value }),
       setTheme: (theme) => set({ theme }),
@@ -91,6 +94,7 @@ export const useAppStore = create<AppState>()(
       setHasDismissedOnboardingChecklist: (dismissed) =>
         set({ hasDismissedOnboardingChecklist: dismissed }),
       setHasCustomBackupPassphrase: (value) => set({ hasCustomBackupPassphrase: value }),
+      setPostResetLocked: (locked) => set({ isPostResetLocked: locked }),
     }),
     {
       name: 'app-storage',

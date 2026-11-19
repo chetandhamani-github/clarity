@@ -370,6 +370,29 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
       updated_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_merchant_rules_pattern ON merchant_category_rules(merchant_pattern);
+
+    CREATE TABLE IF NOT EXISTS investment_holdings (
+      id TEXT PRIMARY KEY NOT NULL,
+      account_id TEXT,
+      name TEXT NOT NULL,
+      asset_class TEXT NOT NULL CHECK(asset_class IN ('equity', 'debt_fixed_income', 'gold', 'cash', 'real_estate', 'crypto')),
+      sub_type TEXT NOT NULL,
+      invested_amount REAL NOT NULL DEFAULT 0,
+      current_value REAL NOT NULL DEFAULT 0,
+      units REAL,
+      nav_or_price REAL,
+      folio_or_account_number TEXT,
+      interest_rate REAL,
+      maturity_date TEXT,
+      sip_amount REAL,
+      sip_day_of_month INTEGER,
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_investments_asset_class ON investment_holdings(asset_class);
+    CREATE INDEX IF NOT EXISTS idx_investments_maturity ON investment_holdings(maturity_date);
   `);
 
   await runSplitwiseMigrations(db);

@@ -5,7 +5,12 @@ import {
   stopSpeechRecognition,
   supportsOnDeviceSpeechRecognition,
 } from '@/services/voice/speech-recognition';
-import { ParsedVoiceTransaction, parseVoiceTranscript, UserAccountRef } from '@/services/voice/voice-parser';
+import {
+  ParsedVoiceTransaction,
+  parseVoiceTranscript,
+  UserAccountRef,
+  matchAccountFromText,
+} from '@/services/voice/voice-parser';
 import { ThemeColors, typography, useTheme } from '@/theme';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { getCurrencySymbol } from '@/utils/format';
@@ -230,6 +235,21 @@ export function VoiceTransactionModal({
     Keyboard.dismiss();
 
     try {
+      // If we already have a parsed transaction and the user speaks/types an account switch (e.g. "use SBI", "from HDFC", "SBI")
+      if (parsedResult && parsedResult.amount > 0) {
+        const matchedAccId = matchAccountFromText(text.toLowerCase(), accounts);
+        const hasAmount = /(?:rs\.?|inr|₹|\$)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i.test(text);
+        if (matchedAccId && !hasAmount) {
+          setParsedResult({
+            ...parsedResult,
+            accountId: matchedAccId,
+          });
+          setInputPhrase('');
+          setIsProcessing(false);
+          return;
+        }
+      }
+
       const result = await parseVoiceTranscript(text, accounts);
       setParsedResult(result);
     } catch {
@@ -239,19 +259,23 @@ export function VoiceTransactionModal({
     }
   };
 
+  const currentAccountId = parsedResult?.accountId || accounts[0]?.id;
+  const selectedAccount = accounts.find((a) => a.id === currentAccountId);
+
   const handleApply = () => {
     if (parsedResult) {
-      onApply(parsedResult);
+      onApply({ ...parsedResult, accountId: currentAccountId });
       handleClose();
     }
   };
 
   const handleSave = () => {
     if (parsedResult) {
+      const updated = { ...parsedResult, accountId: currentAccountId };
       if (onSave) {
-        onSave(parsedResult);
+        onSave(updated);
       } else {
-        onApply(parsedResult);
+        onApply(updated);
       }
       handleClose();
     }
@@ -294,7 +318,7 @@ export function VoiceTransactionModal({
               paddingBottom:
                 keyboardHeight > 0
                   ? keyboardHeight + 16
-                  : Math.max(insets.bottom, 24) + 12,
+                  : Math.max(insets.bottom, 24) + 16,
             },
           ]}
         >
@@ -570,7 +594,64 @@ export function VoiceTransactionModal({
                       {parsedResult.type.charAt(0).toUpperCase() + parsedResult.type.slice(1)}
                     </Text>
                   </View>
+
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Account</Text>
+                    <View style={styles.accountDetailValueBox}>
+                      <MaterialIcons name="account-balance" size={15} color={colors.primary} style={{ marginRight: 6 }} />
+                      <Text style={styles.detailValue} numberOfLines={1}>
+                        {selectedAccount?.name || 'Default Account'}
+                        {selectedAccount?.lastFour ? ` (•••• ${selectedAccount.lastFour})` : ''}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
+
+                {/* Account Selection Chips */}
+                {accounts.length > 0 && (
+                  <View style={styles.accountSelectorContainer}>
+                    <Text style={styles.accountSelectorTitle}>Bank / Wallet Account</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.accountChipsScroll}
+                    >
+                      {accounts.map((acc) => {
+                        const isSelected = acc.id === currentAccountId;
+                        return (
+                          <TouchableOpacity
+                            key={acc.id}
+                            style={[
+                              styles.accountChip,
+                              isSelected && styles.accountChipSelected,
+                            ]}
+                            onPress={() => {
+                              setParsedResult((prev) =>
+                                prev ? { ...prev, accountId: acc.id } : null
+                              );
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <MaterialIcons
+                              name="account-balance"
+                              size={14}
+                              color={isSelected ? colors.onPrimary : colors.onSurfaceVariant}
+                            />
+                            <Text
+                              style={[
+                                styles.accountChipText,
+                                isSelected && styles.accountChipTextSelected,
+                              ]}
+                            >
+                              {acc.name}
+                              {acc.lastFour ? ` •••• ${acc.lastFour}` : ''}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
 
                 {/* Action Buttons */}
                 <View style={styles.actionsRow}>
@@ -582,7 +663,8 @@ export function VoiceTransactionModal({
                       handleStartListening();
                     }}
                   >
-                    <Text style={styles.retryBtnText}>Clear</Text>
+                    <MaterialIcons name="refresh" size={16} color={colors.onSurfaceVariant} style={{ marginRight: 4 }} />
+                    <Text style={styles.retryBtnText}>Re-record</Text>
                   </TouchableOpacity>
 
                   {onSave ? (
@@ -895,12 +977,59 @@ const getStyles = (colors: ThemeColors) => {
       fontWeight: '700',
       fontSize: 15,
     },
+    accountDetailValueBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      maxWidth: '65%',
+    },
+    accountSelectorContainer: {
+      marginBottom: 16,
+    },
+    accountSelectorTitle: {
+      ...typography.labelMd,
+      color: colors.onSurfaceVariant,
+      fontSize: 11,
+      marginBottom: 6,
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    accountChipsScroll: {
+      flexDirection: 'row',
+      gap: 8,
+      paddingVertical: 2,
+    },
+    accountChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: colors.surfaceContainerHigh,
+      borderRadius: 16,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.outlineVariant,
+    },
+    accountChipSelected: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    accountChipText: {
+      ...typography.labelMd,
+      fontSize: 12,
+      color: colors.onSurface,
+    },
+    accountChipTextSelected: {
+      color: colors.onPrimary,
+      fontWeight: '700',
+    },
     actionsRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
     },
     retryBtn: {
+      flexDirection: 'row',
       paddingVertical: 12,
       paddingHorizontal: 16,
       borderRadius: 12,

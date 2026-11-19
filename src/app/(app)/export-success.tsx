@@ -142,7 +142,7 @@ export default function ExportSuccessScreen() {
       </ScrollView>
 
       {/* Footer */}
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 28) + 16 }]}>
         <TouchableOpacity
           style={styles.cancelBtn}
           onPress={() => router.back()}

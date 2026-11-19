@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { Text } from '@/components/ui';
 import { useTheme, typography } from '@/theme';
 import type { BillStatus } from '../types/bill.types';
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
   text: {
     ...typography.labelMd,
     fontFamily: 'Manrope_700Bold',
-    letterSpacing: 0.2,
+    ...(Platform.OS === 'ios' ? { letterSpacing: 0.2 } : {}),
   },
   textSm: {
     fontSize: 11,

@@ -116,12 +116,12 @@ export default function AddAccountScreen() {
     ACCOUNT_TYPES.find((t) => t.value === type)?.label ?? 'Savings Account';
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <Header showBack title={isEditing ? 'Edit Account' : 'Add Account'} />
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 48 }]}
+        contentContainerStyle={StyleSheet.flatten([styles.scrollContent, { paddingBottom: 32 }])}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}

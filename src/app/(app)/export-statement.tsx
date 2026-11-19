@@ -108,12 +108,12 @@ export default function ExportStatementScreen() {
   ];
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom, backgroundColor: colors.background }]}>
       <Header showBack title="Export Statement" />
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 140 }]}
+        contentContainerStyle={StyleSheet.flatten([styles.scrollContent, { paddingBottom: 40 }])}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
@@ -416,8 +416,8 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...typography.labelMd,
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    fontWeight: '600',
+    letterSpacing: Platform.OS === 'ios' ? 0.6 : 0,
+    fontFamily: 'Manrope_600SemiBold',
   },
   formatRow: {
     flexDirection: 'row',

@@ -19,7 +19,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeInsets();
   const { colors } = useTheme();
   const styles = getStyles(colors);
-  const safeBottomPadding = Math.max(insets.bottom, Platform.OS === 'ios' ? 24 : 12);
+  const safeBottomPadding = Math.max(insets.bottom, 28) + (Platform.OS === 'android' ? 8 : 4);
 
   return (
     <View style={[styles.tabBarContainer, { paddingBottom: safeBottomPadding }]}>

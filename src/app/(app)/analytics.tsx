@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { Text, Header, ListSkeleton, useAlert, useToast, NoNetworkView } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -207,7 +207,7 @@ export default function AnalyticsScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <Header
         showBack
         title="Analytics Overview"
@@ -379,7 +379,9 @@ export default function AnalyticsScreen() {
                 <View style={styles.netWorthCard}>
                   <View>
                     <Text style={styles.netWorthLabel}>NET WORTH</Text>
-                    <Text style={styles.netWorthAmount}>{formatCurrencyPrivacy(netWorth, hideBalances)}</Text>
+                    <Text style={styles.netWorthAmount} numberOfLines={1} adjustsFontSizeToFit>
+                      {formatCurrencyPrivacy(netWorth, hideBalances)}
+                    </Text>
                   </View>
 
                   <View style={styles.netWorthBars}>
@@ -774,7 +776,7 @@ const getStyles = (colors: ThemeColors) => {
     cashFlowLabel: {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
-      letterSpacing: 0.6,
+      letterSpacing: Platform.OS === 'ios' ? 0.6 : 0,
     },
     cashFlowBadge: {
       backgroundColor: colors.surfaceContainer,
@@ -880,7 +882,7 @@ const getStyles = (colors: ThemeColors) => {
     netWorthLabel: {
       ...typography.labelMd,
       color: colors.onSurfaceVariant,
-      letterSpacing: 0.6,
+      letterSpacing: Platform.OS === 'ios' ? 0.6 : 0,
       marginBottom: 8,
     },
     netWorthAmount: {
