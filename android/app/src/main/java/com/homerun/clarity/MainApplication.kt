@@ -15,6 +15,7 @@ import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ExpoReactHostFactory
 
 import com.homerun.clarity.sms.SmsReaderPackage
+import com.homerun.clarity.notification.NotificationListenerPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -24,6 +25,7 @@ class MainApplication : Application(), ReactApplication {
       packageList =
         PackageList(this).packages.apply {
           add(SmsReaderPackage())
+          add(NotificationListenerPackage())
         }
     )
   }

@@ -35,6 +35,7 @@
     },
     "plugins": [
       "./plugins/withSmsReader",
+      "./plugins/withNotificationListener",
       "expo-router",
       [
         "expo-speech-recognition",

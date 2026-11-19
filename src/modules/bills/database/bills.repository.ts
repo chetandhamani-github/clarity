@@ -109,10 +109,17 @@ function mapSubscriptionRow(row: SubscriptionRow): Subscription {
 }
 
 export class BillsRepository {
+  private static schemaInitialized = false;
+
+  public static resetSchemaCache(): void {
+    this.schemaInitialized = false;
+  }
+
   /**
    * Initializes schema and ensures tables exist.
    */
   public static async ensureSchema(): Promise<void> {
+    if (this.schemaInitialized) return;
     const db = getDatabase();
     if (typeof db.execAsync === 'function') {
       await db.execAsync(`
@@ -164,6 +171,7 @@ export class BillsRepository {
       CREATE INDEX IF NOT EXISTS idx_subscriptions_renewal ON subscriptions(next_renewal_date ASC);
       CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
     `);
+      this.schemaInitialized = true;
     }
   }
 

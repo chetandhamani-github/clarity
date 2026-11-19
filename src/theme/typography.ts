@@ -2,7 +2,14 @@ import { Platform } from 'react-native';
 
 const androidFontFix = Platform.OS === 'android' ? { includeFontPadding: false as const } : {};
 
-export const typography = {
+export const fontFamilies = {
+  regular: 'Manrope_400Regular',
+  medium: 'Manrope_500Medium',
+  semiBold: 'Manrope_600SemiBold',
+  bold: 'Manrope_700Bold',
+} as const;
+
+const typographyStyles = {
   displayLg: {
     fontFamily: 'Manrope_700Bold',
     fontSize: 32,
@@ -70,3 +77,7 @@ export const typography = {
     ...androidFontFix,
   },
 };
+
+export type TypographyVariant = keyof typeof typographyStyles;
+
+export const typography = Object.assign(typographyStyles, { fontFamilies });

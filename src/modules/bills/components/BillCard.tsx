@@ -9,6 +9,7 @@ import { formatCurrencyPrivacy } from '@/utils/format';
 import { getBillerBranding } from '@/utils/icons';
 import { BillStatusBadge } from './BillStatusBadge';
 import { useBills } from '../hooks/useBills';
+import { BillAlertEngine } from '@/services/notifications/bill-alert-engine';
 import type { Bill } from '../types/bill.types';
 
 interface BillCardProps {
@@ -51,6 +52,36 @@ export function BillCard({ bill, onPress }: BillCardProps) {
       {
         text: 'View Details',
         onPress: () => router.navigate({ pathname: '/(app)/bill-details', params: { billId: bill.id } }),
+      },
+      {
+        text: 'Snooze Reminder (3h)',
+        onPress: async () => {
+          await BillAlertEngine.snoozeNativeBillReminder(
+            {
+              id: bill.id,
+              billerName: bill.title,
+              amountDue: bill.amount,
+              dueDate: bill.dueDate,
+            },
+            3
+          );
+          showToast('Reminder snoozed for 3 hours', 'info');
+        },
+      },
+      {
+        text: 'Snooze Reminder (1 day)',
+        onPress: async () => {
+          await BillAlertEngine.snoozeNativeBillReminder(
+            {
+              id: bill.id,
+              billerName: bill.title,
+              amountDue: bill.amount,
+              dueDate: bill.dueDate,
+            },
+            24
+          );
+          showToast('Reminder snoozed for 1 day', 'info');
+        },
       },
       {
         text: 'Edit',

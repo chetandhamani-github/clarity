@@ -161,9 +161,15 @@ export class SmsSyncService {
           const { parsedBatch, reviewBatch, parsed, review, duplicates } =
             await this.processSmsBatch(batch);
 
+          // 1. Unconditionally auto-fetch and sync bank accounts from SMS messages
+          await this.syncBankAccountsFromParsedBatch(parsedBatch);
+
+          // 2. If skipping historical transactions, mark them as skipped so they are not imported or queued
           if (options.skipHistoricalTransactions) {
             for (const tx of parsedBatch) {
-              tx.transactionId = 'HISTORICAL_SKIPPED';
+              tx.isDuplicate = true;
+              tx.duplicateOf = 'HISTORICAL_SKIPPED';
+              tx.transactionId = undefined;
             }
           }
 
@@ -173,9 +179,6 @@ export class SmsSyncService {
           if (!options.skipHistoricalTransactions) {
             await SmsDao.saveReviewQueueBatch(reviewBatch);
           }
-
-          // Unconditionally auto-fetch and sync bank accounts from SMS messages
-          await this.syncBankAccountsFromParsedBatch(parsedBatch);
 
           if (!options.skipHistoricalTransactions) {
             if (options.autoCreateClarityTransactions !== false) {
@@ -208,7 +211,7 @@ export class SmsSyncService {
           try {
             const database = getDatabase();
             await database.runAsync(
-              "UPDATE parsed_transactions SET transaction_id = 'HISTORICAL_SKIPPED' WHERE transaction_id IS NULL"
+              "UPDATE parsed_transactions SET is_duplicate = 1, duplicate_of = 'HISTORICAL_SKIPPED' WHERE transaction_id IS NULL"
             );
           } catch {
             // Ignored
@@ -547,7 +550,7 @@ export class SmsSyncService {
     let accounts = await getAllAccounts();
 
     for (const transaction of parsedBatch) {
-      if (transaction.isDuplicate) continue;
+      if (transaction.isDuplicate && transaction.duplicateOf !== 'HISTORICAL_SKIPPED') continue;
 
       try {
         const rawBank = (transaction.bank || '').trim();

@@ -26,10 +26,32 @@ export function getDatabase(): SQLite.SQLiteDatabase {
 }
 
 export async function clearDatabase(): Promise<void> {
-  if (!db) return;
-  // Drop tables
-  await db.execAsync('PRAGMA foreign_keys = OFF;');
-  await db.execAsync(`
+  const activeDb = db ?? (await initDatabase());
+  if (!activeDb) return;
+
+  await activeDb.execAsync('PRAGMA foreign_keys = OFF;');
+
+  try {
+    const userObjects = await activeDb.getAllAsync<{ name: string; type: string }>(
+      "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%';"
+    );
+    for (const obj of userObjects) {
+      if (obj.type === 'view') {
+        await activeDb.execAsync(`DROP VIEW IF EXISTS "${obj.name}";`);
+      } else {
+        await activeDb.execAsync(`DROP TABLE IF EXISTS "${obj.name}";`);
+      }
+    }
+  } catch (error) {
+    console.warn('Dynamic table drop encountered error, falling back to static drops:', error);
+  }
+
+  // Static fallback drops to guarantee all known tables are purged
+  await activeDb.execAsync(`
+    DROP TABLE IF EXISTS splitwise_expense_splits;
+    DROP TABLE IF EXISTS splitwise_expenses;
+    DROP TABLE IF EXISTS splitwise_group_members;
+    DROP TABLE IF EXISTS splitwise_groups;
     DROP TABLE IF EXISTS splitwise_settlements;
     DROP TABLE IF EXISTS splitwise_debts;
     DROP TABLE IF EXISTS splitwise_people;
@@ -46,14 +68,19 @@ export async function clearDatabase(): Promise<void> {
     DROP TABLE IF EXISTS budget_categories;
     DROP TABLE IF EXISTS budget_plans;
     DROP TABLE IF EXISTS recurring_transactions;
+    DROP TABLE IF EXISTS transaction_tags;
+    DROP TABLE IF EXISTS tags;
     DROP TABLE IF EXISTS transactions;
     DROP TABLE IF EXISTS accounts;
+    DROP TABLE IF EXISTS notifications_new;
     DROP TABLE IF EXISTS notifications;
     DROP TABLE IF EXISTS merchant_category_rules;
     DROP TABLE IF EXISTS smart_rules;
   `);
-  await db.execAsync('PRAGMA foreign_keys = ON;');
+
+  await activeDb.execAsync('PRAGMA foreign_keys = ON;');
+
   // Re-run migrations and seeds
-  await runMigrations(db);
-  await seedDatabase(db);
+  await runMigrations(activeDb);
+  await seedDatabase(activeDb);
 }

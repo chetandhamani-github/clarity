@@ -102,8 +102,7 @@ export class SmsDao {
     if (messages.length === 0) return;
     const db = getDatabase();
 
-    await db.execAsync('BEGIN TRANSACTION');
-    try {
+    const execute = async () => {
       for (const msg of messages) {
         await db.runAsync(
           `INSERT OR IGNORE INTO sms_messages (id, address, body, date, date_sent, status)
@@ -111,10 +110,19 @@ export class SmsDao {
           [msg.id, msg.address, msg.body, msg.date, msg.dateSent ?? null, 'read']
         );
       }
-      await db.execAsync('COMMIT');
-    } catch (err) {
-      await db.execAsync('ROLLBACK');
-      throw err;
+    };
+
+    if (typeof db.withTransactionAsync === 'function') {
+      await db.withTransactionAsync(execute);
+    } else {
+      await db.execAsync('BEGIN TRANSACTION');
+      try {
+        await execute();
+        await db.execAsync('COMMIT');
+      } catch (err) {
+        await db.execAsync('ROLLBACK');
+        throw err;
+      }
     }
   }
 
@@ -163,8 +171,7 @@ export class SmsDao {
     if (transactions.length === 0) return;
     const db = getDatabase();
 
-    await db.execAsync('BEGIN TRANSACTION');
-    try {
+    const execute = async () => {
       for (const tx of transactions) {
         const txDate = new Date(tx.timestamp).toISOString();
         await db.runAsync(
@@ -192,10 +199,19 @@ export class SmsDao {
           ]
         );
       }
-      await db.execAsync('COMMIT');
-    } catch (err) {
-      await db.execAsync('ROLLBACK');
-      throw err;
+    };
+
+    if (typeof db.withTransactionAsync === 'function') {
+      await db.withTransactionAsync(execute);
+    } else {
+      await db.execAsync('BEGIN TRANSACTION');
+      try {
+        await execute();
+        await db.execAsync('COMMIT');
+      } catch (err) {
+        await db.execAsync('ROLLBACK');
+        throw err;
+      }
     }
   }
 
@@ -254,8 +270,7 @@ export class SmsDao {
     if (items.length === 0) return;
     const db = getDatabase();
 
-    await db.execAsync('BEGIN TRANSACTION');
-    try {
+    const execute = async () => {
       for (const item of items) {
         await db.runAsync(
           `INSERT OR REPLACE INTO sms_review_queue 
@@ -274,10 +289,19 @@ export class SmsDao {
           ]
         );
       }
-      await db.execAsync('COMMIT');
-    } catch (err) {
-      await db.execAsync('ROLLBACK');
-      throw err;
+    };
+
+    if (typeof db.withTransactionAsync === 'function') {
+      await db.withTransactionAsync(execute);
+    } else {
+      await db.execAsync('BEGIN TRANSACTION');
+      try {
+        await execute();
+        await db.execAsync('COMMIT');
+      } catch (err) {
+        await db.execAsync('ROLLBACK');
+        throw err;
+      }
     }
   }
 

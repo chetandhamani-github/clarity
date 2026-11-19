@@ -1,10 +1,10 @@
 import React from 'react';
 import { Text as RNText, TextProps, StyleSheet, TextStyle, Platform } from 'react-native';
-import { typography } from '../../theme';
+import { typography, TypographyVariant } from '../../theme';
 import { useTheme } from '@/theme';
 
 interface Props extends TextProps {
-  variant?: keyof typeof typography;
+  variant?: TypographyVariant;
   color?: string;
 }
 

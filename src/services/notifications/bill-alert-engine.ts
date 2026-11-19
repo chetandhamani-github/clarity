@@ -11,6 +11,15 @@ try {
   // Graceful fallback for test/headless environments
 }
 
+export interface SchedulableBill {
+  id: string;
+  billerName: string;
+  amountDue: number;
+  dueDate: string;
+  reminderDaysBefore?: number;
+  status?: string;
+}
+
 export class BillAlertEngine {
   /**
    * Evaluates all upcoming and overdue bills to trigger proactive notifications.
@@ -92,11 +101,14 @@ export class BillAlertEngine {
    * Schedules a native system notification trigger for an upcoming bill reminder.
    * Fires on the reminder date at 9:00 AM local time, even if the app remains closed.
    */
-  public static async scheduleNativeBillReminder(bill: BillReminder): Promise<void> {
+  public static async scheduleNativeBillReminder(bill: SchedulableBill): Promise<void> {
     if (!Notifications || typeof Notifications.scheduleNotificationAsync !== 'function') {
       return;
     }
-    if (bill.status === 'PAID' || bill.status === 'DISMISSED') {
+    const isSettled =
+      bill.status?.toUpperCase() === 'PAID' ||
+      bill.status?.toUpperCase() === 'DISMISSED';
+    if (isSettled) {
       await this.cancelNativeBillReminder(bill.id);
       return;
     }
@@ -154,6 +166,37 @@ export class BillAlertEngine {
       await Notifications.cancelScheduledNotificationAsync(`bill-reminder-${billId}`);
     } catch {
       // Ignore
+    }
+  }
+
+  /**
+   * Snoozes a scheduled bill reminder by the specified number of hours.
+   */
+  public static async snoozeNativeBillReminder(
+    bill: { id: string; billerName: string; amountDue: number; dueDate: string },
+    snoozeHours: number = 3
+  ): Promise<Date | null> {
+    if (!Notifications || typeof Notifications.scheduleNotificationAsync !== 'function') {
+      return null;
+    }
+    try {
+      await this.cancelNativeBillReminder(bill.id);
+      const snoozeTarget = new Date(Date.now() + snoozeHours * 60 * 60 * 1000);
+
+      await Notifications.scheduleNotificationAsync({
+        identifier: `bill-reminder-${bill.id}`,
+        content: {
+          title: `Snoozed Reminder: ${bill.billerName}`,
+          body: `${bill.billerName} bill of ${formatCurrency(bill.amountDue)} is due on ${bill.dueDate}.`,
+          data: { billId: bill.id, url: '/(app)/bills' },
+          sound: true,
+        },
+        trigger: snoozeTarget,
+      });
+
+      return snoozeTarget;
+    } catch {
+      return null;
     }
   }
 

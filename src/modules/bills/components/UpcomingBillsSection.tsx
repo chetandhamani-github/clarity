@@ -1,14 +1,15 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Linking, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Text, SkeletonBox, SkeletonCircle, SkeletonText } from '@/components/ui';
+import { Text, SkeletonBox, SkeletonCircle, SkeletonText, useToast, useAlert } from '@/components/ui';
 import { useTheme, typography } from '@/theme';
 import { useAppStore } from '@/store/use-app-store';
 import { formatCurrencyPrivacy } from '@/utils/format';
 import { getBillerBranding } from '@/utils/icons';
 import { BillStatusBadge } from './BillStatusBadge';
 import { useBills } from '../hooks/useBills';
+import { BillAlertEngine } from '@/services/notifications/bill-alert-engine';
 import type { Bill } from '../types/bill.types';
 
 interface UpcomingBillsSectionProps {
@@ -20,9 +21,62 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
   const router = useRouter();
   const { hideBalances } = useAppStore();
   const { upcomingBills, isLoading, markBillPaid } = useBills();
+  const { showToast } = useToast();
+  const { showAlert } = useAlert();
 
   const handleMarkPaid = async (bill: Bill) => {
-    await markBillPaid(bill.id);
+    try {
+      await markBillPaid(bill.id);
+      showToast(`${bill.title} marked as paid`, 'success');
+    } catch {
+      showToast('Failed to mark bill as paid', 'error');
+    }
+  };
+
+  const handleSnooze = (bill: Bill) => {
+    showAlert('Snooze Bill Reminder', `Snooze notifications for ${bill.title}?`, [
+      {
+        text: 'Snooze 3 Hours',
+        onPress: async () => {
+          await BillAlertEngine.snoozeNativeBillReminder(
+            {
+              id: bill.id,
+              billerName: bill.title,
+              amountDue: bill.amount,
+              dueDate: bill.dueDate,
+            },
+            3
+          );
+          showToast('Reminder snoozed for 3 hours', 'info');
+        },
+      },
+      {
+        text: 'Snooze 1 Day',
+        onPress: async () => {
+          await BillAlertEngine.snoozeNativeBillReminder(
+            {
+              id: bill.id,
+              billerName: bill.title,
+              amountDue: bill.amount,
+              dueDate: bill.dueDate,
+            },
+            24
+          );
+          showToast('Reminder snoozed for 1 day', 'info');
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const handlePay = async (bill: Bill) => {
+    if (bill.paymentUrl) {
+      try {
+        await Linking.openURL(bill.paymentUrl);
+      } catch {
+        showToast('Could not open payment URL', 'error');
+      }
+    }
   };
 
   if (isLoading && upcomingBills.length === 0) {
@@ -139,7 +193,7 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
               >
                 <View style={styles.cardTopRow}>
                   <View style={[styles.iconCircle, { backgroundColor: branding.backgroundColor }]}>
-                    <MaterialIcons name={branding.icon as any} size={18} color={branding.color} />
+                    <MaterialIcons name={branding.icon} size={18} color={branding.color} />
                   </View>
                   <BillStatusBadge
                     status={bill.status}
@@ -162,9 +216,43 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
                 </View>
 
                 <View style={styles.cardActions}>
+                  {bill.paymentUrl ? (
+                    <TouchableOpacity
+                      style={[
+                        styles.actionBtn,
+                        {
+                          backgroundColor: colors.surfaceContainerLowest,
+                          borderColor: colors.outlineVariant,
+                        },
+                      ]}
+                      onPress={() => handlePay(bill)}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialIcons name="open-in-new" size={13} color={colors.onSurface} />
+                      <Text style={[styles.actionBtnText, { color: colors.onSurface }]}>PAY</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
                   <TouchableOpacity
                     style={[
-                      styles.markPaidBtn,
+                      styles.actionBtn,
+                      {
+                        backgroundColor: colors.surfaceContainerLowest,
+                        borderColor: colors.outlineVariant,
+                      },
+                    ]}
+                    onPress={() => handleSnooze(bill)}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialIcons name="snooze" size={13} color={colors.onSurfaceVariant} />
+                    <Text style={[styles.actionBtnText, { color: colors.onSurfaceVariant }]}>
+                      SNOOZE
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.actionBtn,
                       {
                         backgroundColor: colors.surfaceContainerLowest,
                         borderColor: colors.outlineVariant,
@@ -173,8 +261,8 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
                     onPress={() => handleMarkPaid(bill)}
                     activeOpacity={0.8}
                   >
-                    <MaterialIcons name="check" size={14} color={colors.primary} />
-                    <Text style={[styles.markPaidBtnText, { color: colors.primary }]}>PAID</Text>
+                    <MaterialIcons name="check" size={13} color={colors.primary} />
+                    <Text style={[styles.actionBtnText, { color: colors.primary }]}>PAID</Text>
                   </TouchableOpacity>
                 </View>
               </TouchableOpacity>
@@ -302,21 +390,23 @@ const styles = StyleSheet.create({
   },
   cardActions: {
     marginTop: 12,
+    flexDirection: 'row',
+    gap: 6,
   },
-  markPaidBtn: {
+  actionBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 3,
     borderWidth: 1,
     paddingVertical: 7,
     borderRadius: 8,
-    width: '100%',
   },
-  markPaidBtnText: {
+  actionBtnText: {
     ...typography.labelMd,
     fontFamily: 'Manrope_700Bold',
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 10,
+    lineHeight: 14,
   },
 });

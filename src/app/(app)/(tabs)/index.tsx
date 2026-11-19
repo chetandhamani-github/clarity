@@ -159,13 +159,13 @@ export default function DashboardScreen() {
     permissionStatus: smsPermissionStatus,
     isSyncing: isSmsSyncing,
     requestPermission: requestSmsPermission,
-    sync: syncSms,
+    startInitialSync,
   } = useSmsSync();
 
   const handleEnableSms = async () => {
     const status = await requestSmsPermission();
     if (status === 'granted') {
-      await syncSms({
+      await startInitialSync({
         autoCreateClarityTransactions: false,
         skipHistoricalTransactions: true,
       });

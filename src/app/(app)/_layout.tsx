@@ -2,9 +2,12 @@ import React from 'react';
 import { Stack } from 'expo-router';
 import { useTheme } from '@/theme';
 import { SmartClipboardPrompt } from '@/components/clipboard/SmartClipboardPrompt';
+import { BillDetectedPromptModal } from '@/components/modals/BillDetectedPromptModal';
+import { useNotificationListener } from '@/modules/notifications';
 
 export default function AppLayout() {
   const { colors } = useTheme();
+  useNotificationListener();
 
   return (
     <>
@@ -22,6 +25,7 @@ export default function AppLayout() {
         <Stack.Screen name="transactions" />
         <Stack.Screen name="bills" />
         <Stack.Screen name="bill-details" />
+        <Stack.Screen name="notification-settings" />
         <Stack.Screen name="splitwise" />
         <Stack.Screen name="splitwise-people" />
         <Stack.Screen name="splitwise-person-details" />
@@ -39,6 +43,7 @@ export default function AppLayout() {
         <Stack.Screen name="add-splitwise-settlement" options={{ presentation: 'modal' }} />
       </Stack>
       <SmartClipboardPrompt />
+      <BillDetectedPromptModal />
     </>
   );
 }

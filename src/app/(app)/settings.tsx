@@ -6,7 +6,7 @@ import { useGoals } from '@/hooks/use-goals';
 import { useGoogleDrive } from '@/hooks/use-google-drive';
 import { useNotifications } from '@/hooks/use-notifications';
 import { useSmsSync } from '@/hooks/useSmsSync';
-import { clearDatabase } from '@/services/database';
+import { resetEntireAppData } from '@/services/app-reset';
 import { useAppStore } from '@/store/use-app-store';
 import { useAuthStore } from '@/store/use-auth-store';
 import { ThemeColors, typography, useTheme } from '@/theme';
@@ -72,6 +72,7 @@ export default function SettingsScreen() {
     isSyncing: isSmsSyncing,
     progress: smsProgress,
     lastSyncTimestamp,
+    startInitialSync,
     sync: syncSms,
     requestPermission: requestSmsPermission,
   } = useSmsSync();
@@ -92,21 +93,15 @@ export default function SettingsScreen() {
           showToast('SMS permission is required to scan messages', 'error');
           return;
         }
-        await syncSms({
-          autoCreateClarityTransactions: false,
-          skipHistoricalTransactions: true,
-        });
-        queryClient.invalidateQueries({ queryKey: ['transactions'] });
-        queryClient.invalidateQueries({ queryKey: ['accounts'] });
-        queryClient.invalidateQueries({ queryKey: ['bills'] });
-        showToast('SMS auto-tracking enabled! Accounts and bills synced.', 'success');
-        return;
       }
-      await syncSms({ autoCreateClarityTransactions: false });
+      await startInitialSync({
+        autoCreateClarityTransactions: false,
+        skipHistoricalTransactions: true,
+      });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['bills'] });
-      showToast('SMS scan completed successfully!', 'success');
+      showToast('SMS scan completed! Accounts and bills synced.', 'success');
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'SMS scan failed', 'error');
     }
@@ -250,9 +245,9 @@ export default function SettingsScreen() {
           onPress: async () => {
             try {
               setIsResetting(true);
-              await clearDatabase();
-              queryClient.clear();
+              await resetEntireAppData(queryClient);
               showToast('App data has been reset to defaults', 'success');
+              router.navigate('/(app)/(tabs)');
             } catch {
               showToast('Failed to reset app data', 'error');
             } finally {
@@ -501,6 +496,21 @@ export default function SettingsScreen() {
                 <View style={styles.settingTextContainer}>
                   <Text style={styles.settingTitle}>Bills & Utilities</Text>
                   <Text style={styles.settingSub}>Reminders, recurring bills & auto-settlement</Text>
+                </View>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => router.navigate('/(app)/notification-settings')}
+            >
+              <View style={styles.settingItemLeft}>
+                <MaterialIcons name="notifications-active" size={24} color={colors.primary} />
+                <View style={styles.settingTextContainer}>
+                  <Text style={styles.settingTitle}>Notification & Bill Tracking</Text>
+                  <Text style={styles.settingSub}>
+                    Auto-detect transactions & scheduled bill alerts
+                  </Text>
                 </View>
               </View>
               <MaterialIcons name="chevron-right" size={24} color={colors.outline} />

@@ -12,6 +12,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme, typography, ThemeColors } from '@/theme';
 import { useSmsSync } from '@/hooks/useSmsSync';
 import { useAppStore } from '@/store/use-app-store';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface Props {
   visible: boolean;
@@ -24,6 +25,7 @@ export function SmsPermissionPromptModal({ visible, onDismiss }: Props) {
   const { requestPermission, startInitialSync, isSyncing, progress } = useSmsSync();
   const setHasSeenSmsPrompt = useAppStore((state) => state.setHasSeenSmsPrompt);
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleEnable = async () => {
@@ -36,6 +38,9 @@ export function SmsPermissionPromptModal({ visible, onDismiss }: Props) {
           autoCreateClarityTransactions: false,
           skipHistoricalTransactions: true,
         });
+        queryClient.invalidateQueries({ queryKey: ['accounts'] });
+        queryClient.invalidateQueries({ queryKey: ['bills'] });
+        queryClient.invalidateQueries({ queryKey: ['transactions'] });
         showToast('SMS auto-tracking enabled! Accounts and bills synced.', 'success');
         onDismiss();
       } else if (status === 'permanently_denied') {

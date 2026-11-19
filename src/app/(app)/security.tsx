@@ -19,8 +19,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useAppStore } from '@/store/use-app-store';
-import { clearDatabase } from '@/services/database';
-import { clearAutoBackupTimer } from '@/services/cloud/google-drive-service';
+import { resetEntireAppData } from '@/services/app-reset';
 import { exportFullBackupToJSON } from '@/services/export/export-service';
 import {
   restoreFromLocalJSONString,
@@ -205,11 +204,9 @@ export default function SecurityPrivacyScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              clearAutoBackupTimer();
-              useAppStore.getState().setPostResetLocked(true);
-              await clearDatabase();
+              await resetEntireAppData(queryClient);
               showToast('All local data was permanently cleared', 'success');
-              router.replace('/(app)/(tabs)/dashboard' as any);
+              router.navigate('/(app)/(tabs)');
             } catch {
               showToast('Failed to clear local data', 'error');
             }
