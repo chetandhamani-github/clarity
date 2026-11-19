@@ -1,8 +1,7 @@
-/* eslint-disable react-native/no-unused-styles */
-import React from 'react';
-import { TouchableOpacity, Text as RNText, StyleSheet, TouchableOpacityProps } from 'react-native';
+import { ThemeColors, useTheme } from '@/theme';
+import { StyleSheet, TouchableOpacity, TouchableOpacityProps } from 'react-native';
 import { radius, spacing, typography } from '../../theme';
-import { useTheme, ThemeColors } from '@/theme';
+import { Text } from './Text';
 
 interface ButtonProps extends TouchableOpacityProps {
   title: string;
@@ -14,7 +13,7 @@ export const Button = ({ title, variant = 'primary', style, ...props }: ButtonPr
   const styles = getStyles(colors);
   return (
     <TouchableOpacity style={[styles.base, (styles as any)[variant], style]} {...props}>
-      <RNText style={[styles.text, variant === 'outline' && styles.textOutline]}>{title}</RNText>
+      <Text style={[styles.text, variant === 'outline' && styles.textOutline]}>{title}</Text>
     </TouchableOpacity>
   );
 };
@@ -27,17 +26,6 @@ const getStyles = (colors: ThemeColors) => {
       borderRadius: radius.md,
       alignItems: 'center',
       justifyContent: 'center',
-    },
-    primary: {
-      backgroundColor: colors.primary,
-    },
-    secondary: {
-      backgroundColor: colors.surfaceVariant,
-    },
-    outline: {
-      backgroundColor: 'transparent',
-      borderWidth: 1,
-      borderColor: colors.primary,
     },
     text: {
       ...typography.bodyMd,

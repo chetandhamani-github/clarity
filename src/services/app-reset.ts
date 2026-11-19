@@ -105,6 +105,7 @@ export async function resetEntireAppData(queryClient?: QueryClient): Promise<voi
   appStore.setLastCloudBackupTime(null);
   appStore.setHasSeenSmsPrompt(false);
   appStore.setHasSeenDrivePrompt(false);
+  appStore.setHasSeenNotificationPrompt(false);
   appStore.setLastDismissedClipboardHash(null);
   appStore.setHideBalances(false);
   appStore.setHasDismissedOnboardingChecklist(false);

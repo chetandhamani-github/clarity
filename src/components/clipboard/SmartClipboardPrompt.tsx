@@ -7,13 +7,13 @@ import { useAppStore } from '@/store/use-app-store';
 import { radius, ThemeColors, typography, useTheme } from '@/theme';
 import { formatCurrency } from '@/utils/format';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
     Animated,
     AppState,
     AppStateStatus,
-    Clipboard,
     StyleSheet,
     TouchableOpacity,
     View,
@@ -42,7 +42,7 @@ export function SmartClipboardPrompt() {
     isChecking.current = true;
 
     try {
-      const text = await Clipboard.getString();
+      const text = await Clipboard.getStringAsync();
       if (!text) {
         isChecking.current = false;
         return;

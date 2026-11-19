@@ -170,6 +170,10 @@ export function SmsTransactionPromptModal({ visible, onDismiss }: Props) {
                   showsVerticalScrollIndicator={true}
                   style={styles.flatList}
                   contentContainerStyle={styles.listContent}
+                  initialNumToRender={8}
+                  maxToRenderPerBatch={8}
+                  windowSize={5}
+                  extraData={selectedIds}
                   renderItem={({ item }: { item: ParsedTransaction }) => {
                     const isSelected = selectedIds.has(item.id);
                     const isCredit = item.type === 'CREDIT';

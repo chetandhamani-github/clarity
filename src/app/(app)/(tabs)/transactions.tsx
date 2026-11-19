@@ -42,9 +42,147 @@ interface TransactionsScreenProps {
   showBack?: boolean;
 }
 
+interface TransactionRowItemProps {
+  tx: any;
+  isLastInSection: boolean;
+  isVeryLast: boolean;
+  isSelected: boolean;
+  hasSelectionMode: boolean;
+  filterAccountId?: string;
+  colors: ThemeColors;
+  styles: any;
+  onPress: (id: string) => void;
+  onLongPress: (id: string) => void;
+}
+
+const TransactionRowItem = React.memo(function TransactionRowItem({
+  tx,
+  isLastInSection,
+  isVeryLast,
+  isSelected,
+  hasSelectionMode,
+  filterAccountId,
+  colors,
+  styles,
+  onPress,
+  onLongPress,
+}: TransactionRowItemProps) {
+  const isIncomingTransfer =
+    Boolean(filterAccountId) && tx.type === 'transfer' && tx.toAccountId === filterAccountId;
+  const isOutgoingTransfer =
+    Boolean(filterAccountId) && tx.type === 'transfer' && tx.accountId === filterAccountId;
+  const isCredit = tx.type === 'income' || isIncomingTransfer;
+  const sign = isCredit
+    ? '+'
+    : isOutgoingTransfer || tx.type === 'expense'
+    ? '-'
+    : getTransactionSign(tx.type);
+  const hasMerchant = hasMeaningfulMerchant(tx);
+  const title = getTransactionDisplayName(tx);
+  const subtitle =
+    tx.type === 'transfer'
+      ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}`
+      : hasMerchant
+        ? `${tx.accountName} • ${tx.category}`
+        : tx.accountName || '';
+
+  return (
+    <TouchableOpacity
+      key={tx.id}
+      style={[
+        styles.transactionItem,
+        isSelected && { backgroundColor: colors.primaryContainer + '30' },
+        isVeryLast && styles.lastTransactionItem,
+        isLastInSection && !isVeryLast && { borderBottomWidth: 0 },
+      ]}
+      onPress={() => onPress(tx.id)}
+      onLongPress={() => onLongPress(tx.id)}
+      delayLongPress={200}
+    >
+      {hasSelectionMode && (
+        <View style={styles.selectionCheckbox}>
+          <MaterialIcons
+            name={isSelected ? 'check-circle' : 'radio-button-unchecked'}
+            size={22}
+            color={isSelected ? colors.primary : colors.outline}
+          />
+        </View>
+      )}
+      <View style={styles.transactionLeft}>
+        <View
+          style={[
+            styles.transactionIconBox,
+            isCredit ? { backgroundColor: colors.primaryContainer } : undefined,
+          ]}
+        >
+          <MaterialIcons
+            name={getCategoryIcon(tx.category)}
+            size={20}
+            color={isCredit ? colors.onPrimaryContainer : colors.onSurfaceVariant}
+          />
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <Text style={styles.transactionName} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text style={styles.transactionMeta} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.transactionRight}>
+        <Text
+          style={[
+            styles.transactionAmount,
+            isCredit ? { color: colors.primary } : undefined,
+          ]}
+        >
+          {sign}
+          {formatCurrency(tx.amount)}
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {tx.splits && tx.splits.length > 0 && (
+            <View
+              style={[
+                styles.categoryBadge,
+                { backgroundColor: colors.secondaryContainer },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.categoryBadgeText,
+                  { color: colors.onSecondaryContainer },
+                ]}
+                numberOfLines={1}
+              >
+                Split ({tx.splits.length})
+              </Text>
+            </View>
+          )}
+          <View style={styles.categoryBadge}>
+            <Text style={styles.categoryBadgeText} numberOfLines={1}>{tx.category}</Text>
+          </View>
+          {tx.tags && tx.tags.length > 0 && (
+            <View style={[styles.categoryBadge, { backgroundColor: colors.secondaryContainer, paddingHorizontal: 6 }]}>
+              <Text style={[styles.categoryBadgeText, { color: colors.onSecondaryContainer }]} numberOfLines={1}>
+                #{tx.tags[0]}{tx.tags.length > 1 ? ` +${tx.tags.length - 1}` : ''}
+              </Text>
+            </View>
+          )}
+          {tx.receiptUri ? (
+            <View style={[styles.categoryBadge, { backgroundColor: colors.surfaceContainerHighest, paddingHorizontal: 5 }]}>
+              <MaterialIcons name="receipt" size={12} color={colors.primary} />
+            </View>
+          ) : null}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
 export default function TransactionsScreen({ showBack = false }: TransactionsScreenProps = {}) {
   const { colors } = useTheme();
-  const styles = getStyles(colors);
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const insets = useSafeInsets();
   const router = useRouter();
 
@@ -264,131 +402,44 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
     [styles]
   );
 
+  const handleItemPress = useCallback(
+    (id: string) => {
+      if (selectedIds.size > 0) {
+        toggleSelect(id);
+      } else {
+        router.navigate(`/(app)/add-transaction?id=${id}`);
+      }
+    },
+    [selectedIds.size, toggleSelect, router]
+  );
+
+  const handleItemLongPress = useCallback(
+    (id: string) => {
+      toggleSelect(id);
+    },
+    [toggleSelect]
+  );
+
   const renderItem = useCallback(
     ({ item: tx, index, section }: any) => {
       const isLastInSection = index === section.data.length - 1;
       const isVeryLast = section.isLast && isLastInSection;
-      const isIncomingTransfer =
-        Boolean(filters.accountId) && tx.type === 'transfer' && tx.toAccountId === filters.accountId;
-      const isOutgoingTransfer =
-        Boolean(filters.accountId) && tx.type === 'transfer' && tx.accountId === filters.accountId;
-      const isCredit = tx.type === 'income' || isIncomingTransfer;
-      const sign = isCredit
-        ? '+'
-        : isOutgoingTransfer || tx.type === 'expense'
-        ? '-'
-        : getTransactionSign(tx.type);
-      const hasMerchant = hasMeaningfulMerchant(tx);
-      const title = getTransactionDisplayName(tx);
-      const subtitle =
-        tx.type === 'transfer'
-          ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}`
-          : hasMerchant
-            ? `${tx.accountName} • ${tx.category}`
-            : tx.accountName || '';
-
-      const isSelected = selectedIds.has(tx.id);
-
       return (
-        <TouchableOpacity
-          key={tx.id}
-          style={[
-            styles.transactionItem,
-            isSelected && { backgroundColor: colors.primaryContainer + '30' },
-            isVeryLast && styles.lastTransactionItem,
-            isLastInSection && !isVeryLast && { borderBottomWidth: 0 },
-          ]}
-          onPress={() => {
-            if (selectedIds.size > 0) {
-              toggleSelect(tx.id);
-            } else {
-              router.navigate(`/(app)/add-transaction?id=${tx.id}`);
-            }
-          }}
-          onLongPress={() => toggleSelect(tx.id)}
-          delayLongPress={200}
-        >
-          {selectedIds.size > 0 && (
-            <View style={styles.selectionCheckbox}>
-              <MaterialIcons
-                name={isSelected ? 'check-circle' : 'radio-button-unchecked'}
-                size={22}
-                color={isSelected ? colors.primary : colors.outline}
-              />
-            </View>
-          )}
-          <View style={styles.transactionLeft}>
-            <View
-              style={[
-                styles.transactionIconBox,
-                isCredit ? { backgroundColor: colors.primaryContainer } : undefined,
-              ]}
-            >
-              <MaterialIcons
-                name={getCategoryIcon(tx.category)}
-                size={20}
-                color={isCredit ? colors.onPrimaryContainer : colors.onSurfaceVariant}
-              />
-            </View>
-            <View style={{ flex: 1, justifyContent: 'center' }}>
-              <Text style={styles.transactionName} numberOfLines={1}>
-                {title}
-              </Text>
-              <Text style={styles.transactionMeta} numberOfLines={1}>
-                {subtitle}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.transactionRight}>
-            <Text
-              style={[
-                styles.transactionAmount,
-                isCredit ? { color: colors.primary } : undefined,
-              ]}
-            >
-              {sign}
-              {formatCurrency(tx.amount)}
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              {tx.splits && tx.splits.length > 0 && (
-                <View
-                  style={[
-                    styles.categoryBadge,
-                    { backgroundColor: colors.secondaryContainer },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.categoryBadgeText,
-                      { color: colors.onSecondaryContainer },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    Split ({tx.splits.length})
-                  </Text>
-                </View>
-              )}
-              <View style={styles.categoryBadge}>
-                <Text style={styles.categoryBadgeText} numberOfLines={1}>{tx.category}</Text>
-              </View>
-              {tx.tags && tx.tags.length > 0 && (
-                <View style={[styles.categoryBadge, { backgroundColor: colors.secondaryContainer, paddingHorizontal: 6 }]}>
-                  <Text style={[styles.categoryBadgeText, { color: colors.onSecondaryContainer }]} numberOfLines={1}>
-                    #{tx.tags[0]}{tx.tags.length > 1 ? ` +${tx.tags.length - 1}` : ''}
-                  </Text>
-                </View>
-              )}
-              {tx.receiptUri ? (
-                <View style={[styles.categoryBadge, { backgroundColor: colors.surfaceContainerHighest, paddingHorizontal: 5 }]}>
-                  <MaterialIcons name="receipt" size={12} color={colors.primary} />
-                </View>
-              ) : null}
-            </View>
-          </View>
-        </TouchableOpacity>
+        <TransactionRowItem
+          tx={tx}
+          isLastInSection={isLastInSection}
+          isVeryLast={isVeryLast}
+          isSelected={selectedIds.has(tx.id)}
+          hasSelectionMode={selectedIds.size > 0}
+          filterAccountId={filters.accountId}
+          colors={colors}
+          styles={styles}
+          onPress={handleItemPress}
+          onLongPress={handleItemLongPress}
+        />
       );
     },
-    [colors, styles, router, selectedIds, toggleSelect]
+    [colors, styles, selectedIds, filters.accountId, handleItemPress, handleItemLongPress]
   );
 
   const activeCount =
@@ -633,10 +684,12 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
         stickySectionHeadersEnabled={false}
-        initialNumToRender={15}
-        maxToRenderPerBatch={15}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
         windowSize={5}
+        updateCellsBatchingPeriod={50}
         removeClippedSubviews={Platform.OS === 'android'}
+        extraData={selectedIds}
       />
 
       <TransactionFilterModal

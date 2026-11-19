@@ -10,6 +10,7 @@
     "@react-native-google-signin/google-signin": "^16.1.4",
     "@tanstack/react-query": "^5.102.7",
     "expo": "~57.0.14",
+    "expo-clipboard": "~57.0.2",
     "expo-constants": "~57.0.12",
     "expo-device": "~57.0.1",
     "expo-document-picker": "~57.0.3",

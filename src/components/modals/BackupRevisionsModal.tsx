@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Text } from '@/components/ui';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useTheme, typography, ThemeColors } from '@/theme';
+import { useTheme, typography, fontFamilies, ThemeColors } from '@/theme';
 import type { GoogleDriveRevisionInfo } from '@/services/cloud/google-drive-service';
 
 interface Props {
@@ -225,6 +225,9 @@ export function BackupRevisionsModal({
                       style={styles.list}
                       contentContainerStyle={styles.listContent}
                       showsVerticalScrollIndicator={false}
+                      initialNumToRender={10}
+                      maxToRenderPerBatch={10}
+                      windowSize={5}
                     />
                   )}
 
@@ -286,8 +289,8 @@ const getStyles = (colors: ThemeColors) => {
     },
     title: {
       ...typography.headlineSm,
+      fontFamily: fontFamilies.bold,
       color: colors.onSurface,
-      fontWeight: '700',
     },
     description: {
       ...typography.bodySm,
@@ -314,8 +317,8 @@ const getStyles = (colors: ThemeColors) => {
     },
     restoringTitle: {
       ...typography.headlineSm,
+      fontFamily: fontFamilies.bold,
       color: colors.onSurface,
-      fontWeight: '700',
       marginTop: 8,
     },
     restoringSubText: {
@@ -332,8 +335,8 @@ const getStyles = (colors: ThemeColors) => {
     },
     emptyTitle: {
       ...typography.headlineSm,
+      fontFamily: fontFamilies.semiBold,
       color: colors.onSurface,
-      fontWeight: '600',
       marginTop: 4,
     },
     emptySubText: {
@@ -354,8 +357,8 @@ const getStyles = (colors: ThemeColors) => {
     },
     refreshBtnText: {
       ...typography.labelMd,
+      fontFamily: fontFamilies.semiBold,
       color: colors.primary,
-      fontWeight: '600',
     },
     list: {
       width: '100%',
@@ -393,8 +396,8 @@ const getStyles = (colors: ThemeColors) => {
     },
     itemDateText: {
       ...typography.bodyMd,
+      fontFamily: fontFamilies.semiBold,
       color: colors.onSurface,
-      fontWeight: '600',
     },
     badge: {
       paddingHorizontal: 6,
@@ -406,7 +409,7 @@ const getStyles = (colors: ThemeColors) => {
     },
     badgeText: {
       ...typography.labelSm,
-      fontFamily: 'Manrope_700Bold',
+      fontFamily: fontFamilies.bold,
       fontSize: 10,
       lineHeight: 14,
       textAlignVertical: 'center',
@@ -422,8 +425,8 @@ const getStyles = (colors: ThemeColors) => {
     },
     restorePromptText: {
       ...typography.labelSm,
+      fontFamily: fontFamilies.semiBold,
       color: colors.primary,
-      fontWeight: '600',
     },
     footer: {
       marginTop: 16,
@@ -439,8 +442,8 @@ const getStyles = (colors: ThemeColors) => {
     },
     dismissButtonText: {
       ...typography.labelMd,
+      fontFamily: fontFamilies.semiBold,
       color: colors.onSurface,
-      fontWeight: '600',
     },
     // Confirmation screen styles
     confirmWrapper: {
@@ -460,8 +463,8 @@ const getStyles = (colors: ThemeColors) => {
     },
     selectedRevDateText: {
       ...typography.bodyLg,
+      fontFamily: fontFamilies.bold,
       color: colors.onSurface,
-      fontWeight: '700',
     },
     selectedRevTimeText: {
       ...typography.bodyMd,
@@ -469,8 +472,8 @@ const getStyles = (colors: ThemeColors) => {
     },
     selectedRevSizeText: {
       ...typography.labelMd,
+      fontFamily: fontFamilies.semiBold,
       color: colors.primary,
-      fontWeight: '600',
     },
     warningBox: {
       flexDirection: 'row',
@@ -501,8 +504,8 @@ const getStyles = (colors: ThemeColors) => {
     },
     cancelButtonText: {
       ...typography.labelMd,
+      fontFamily: fontFamilies.semiBold,
       color: colors.onSurface,
-      fontWeight: '600',
     },
     confirmRestoreButton: {
       flex: 1.4,
@@ -514,8 +517,8 @@ const getStyles = (colors: ThemeColors) => {
     },
     confirmRestoreButtonText: {
       ...typography.labelMd,
+      fontFamily: fontFamilies.bold,
       color: colors.onPrimary,
-      fontWeight: '700',
     },
   });
   return styles;

@@ -3,9 +3,9 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, Linking, Platform } fro
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Text, SkeletonBox, SkeletonCircle, SkeletonText, useToast, useAlert } from '@/components/ui';
-import { useTheme, typography } from '@/theme';
+import { useTheme, typography, fontFamilies } from '@/theme';
 import { useAppStore } from '@/store/use-app-store';
-import { formatCurrencyPrivacy } from '@/utils/format';
+import { formatCurrencyPrivacy, formatDate } from '@/utils/format';
 import { getBillerBranding } from '@/utils/icons';
 import { BillStatusBadge } from './BillStatusBadge';
 import { useBills } from '../hooks/useBills';
@@ -208,7 +208,7 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
                     {bill.title}
                   </Text>
                   <Text style={[styles.accountRef, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
-                    {bill.accountReference || bill.dueDate}
+                    {bill.accountReference || `Due ${formatDate(bill.dueDate, 'month-day')}`}
                   </Text>
                   <Text style={[styles.amount, { color: colors.onSurface }]}>
                     {formatCurrencyPrivacy(bill.amount, hideBalances)}
@@ -229,40 +229,58 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
                       activeOpacity={0.8}
                     >
                       <MaterialIcons name="open-in-new" size={13} color={colors.onSurface} />
-                      <Text style={[styles.actionBtnText, { color: colors.onSurface }]}>PAY</Text>
+                      <Text style={[styles.actionBtnText, { color: colors.onSurface }]}>Pay</Text>
                     </TouchableOpacity>
                   ) : null}
 
-                  <TouchableOpacity
-                    style={[
-                      styles.actionBtn,
-                      {
-                        backgroundColor: colors.surfaceContainerLowest,
-                        borderColor: colors.outlineVariant,
-                      },
-                    ]}
-                    onPress={() => handleSnooze(bill)}
-                    activeOpacity={0.8}
-                  >
-                    <MaterialIcons name="snooze" size={13} color={colors.onSurfaceVariant} />
-                    <Text style={[styles.actionBtnText, { color: colors.onSurfaceVariant }]}>
-                      SNOOZE
-                    </Text>
-                  </TouchableOpacity>
+                  {bill.paymentUrl ? (
+                    <TouchableOpacity
+                      style={[
+                        styles.iconActionBtn,
+                        {
+                          backgroundColor: colors.surfaceContainerLowest,
+                          borderColor: colors.outlineVariant,
+                        },
+                      ]}
+                      onPress={() => handleSnooze(bill)}
+                      activeOpacity={0.8}
+                      accessibilityLabel="Snooze reminder"
+                    >
+                      <MaterialIcons name="snooze" size={16} color={colors.onSurfaceVariant} />
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={[
+                        styles.actionBtn,
+                        {
+                          backgroundColor: colors.surfaceContainerLowest,
+                          borderColor: colors.outlineVariant,
+                        },
+                      ]}
+                      onPress={() => handleSnooze(bill)}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialIcons name="snooze" size={13} color={colors.onSurfaceVariant} />
+                      <Text style={[styles.actionBtnText, { color: colors.onSurfaceVariant }]}>
+                        Snooze
+                      </Text>
+                    </TouchableOpacity>
+                  )}
 
                   <TouchableOpacity
                     style={[
-                      styles.actionBtn,
+                      styles.actionBtnPrimary,
                       {
-                        backgroundColor: colors.surfaceContainerLowest,
-                        borderColor: colors.outlineVariant,
+                        backgroundColor: colors.primaryContainer,
+                        borderColor: colors.primaryContainer,
+                        ...(bill.paymentUrl ? {} : { flex: 1.2 }),
                       },
                     ]}
                     onPress={() => handleMarkPaid(bill)}
                     activeOpacity={0.8}
                   >
-                    <MaterialIcons name="check" size={13} color={colors.primary} />
-                    <Text style={[styles.actionBtnText, { color: colors.primary }]}>PAID</Text>
+                    <MaterialIcons name="check" size={13} color={colors.onPrimaryContainer} />
+                    <Text style={[styles.actionBtnText, { color: colors.onPrimaryContainer }]}>Paid</Text>
                   </TouchableOpacity>
                 </View>
               </TouchableOpacity>
@@ -300,7 +318,7 @@ const styles = StyleSheet.create({
   },
   countBadgeText: {
     ...typography.labelMd,
-    fontWeight: '700',
+    fontFamily: fontFamilies.bold,
     fontSize: 12,
     lineHeight: 16,
   },
@@ -311,7 +329,7 @@ const styles = StyleSheet.create({
   },
   viewAllText: {
     ...typography.labelMd,
-    fontFamily: 'Manrope_700Bold',
+    fontFamily: fontFamilies.bold,
     fontSize: 12,
     ...(Platform.OS === 'ios' ? { letterSpacing: 0.5 } : {}),
   },
@@ -335,7 +353,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     ...typography.bodyLg,
-    fontWeight: '700',
+    fontFamily: fontFamilies.bold,
     fontSize: 14,
   },
   emptySubtitle: {
@@ -348,7 +366,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   billCard: {
-    width: 185,
+    width: 205,
     padding: 14,
     borderRadius: 16,
     borderWidth: 1,
@@ -371,42 +389,64 @@ const styles = StyleSheet.create({
   },
   billerName: {
     ...typography.bodyMd,
-    fontFamily: 'Manrope_600SemiBold',
-    fontSize: 13,
+    fontFamily: fontFamilies.semiBold,
+    fontSize: 14,
     lineHeight: 18,
     marginBottom: 2,
   },
   accountRef: {
-    ...typography.labelMd,
+    ...typography.labelSm,
+    fontFamily: fontFamilies.regular,
     fontSize: 11,
     lineHeight: 16,
     marginBottom: 8,
   },
   amount: {
     ...typography.bodyLg,
-    fontFamily: 'Manrope_700Bold',
-    fontSize: 14,
+    fontFamily: fontFamilies.bold,
+    fontSize: 15,
     lineHeight: 20,
   },
   cardActions: {
     marginTop: 12,
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
   },
   actionBtn: {
     flex: 1,
+    height: 34,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
+    gap: 4,
     borderWidth: 1,
-    paddingVertical: 7,
+    borderRadius: 8,
+    paddingHorizontal: 4,
+  },
+  iconActionBtn: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
     borderRadius: 8,
   },
+  actionBtnPrimary: {
+    flex: 1,
+    height: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 4,
+  },
   actionBtnText: {
-    ...typography.labelMd,
-    fontFamily: 'Manrope_700Bold',
-    fontSize: 10,
+    ...typography.labelSm,
+    fontFamily: fontFamilies.semiBold,
+    fontSize: 11,
     lineHeight: 14,
   },
 });

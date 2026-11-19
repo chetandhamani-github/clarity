@@ -29,6 +29,7 @@ interface AppState {
   autoBackupOnlyWifi: boolean;
   hasSeenDrivePrompt: boolean;
   hasSeenSmsPrompt: boolean;
+  hasSeenNotificationPrompt: boolean;
   hideBalances: boolean;
   hasDismissedOnboardingChecklist: boolean;
   hasCustomBackupPassphrase: boolean;
@@ -49,6 +50,7 @@ interface AppState {
   setAutoBackupOnlyWifi: (value: boolean) => void;
   setHasSeenDrivePrompt: (seen: boolean) => void;
   setHasSeenSmsPrompt: (seen: boolean) => void;
+  setHasSeenNotificationPrompt: (seen: boolean) => void;
   setHideBalances: (value: boolean) => void;
   toggleHideBalances: () => void;
   setHasDismissedOnboardingChecklist: (dismissed: boolean) => void;
@@ -76,6 +78,7 @@ export const useAppStore = create<AppState>()(
       autoBackupOnlyWifi: true,
       hasSeenDrivePrompt: false,
       hasSeenSmsPrompt: false,
+      hasSeenNotificationPrompt: false,
       hideBalances: false,
       hasDismissedOnboardingChecklist: false,
       hasCustomBackupPassphrase: false,
@@ -101,6 +104,7 @@ export const useAppStore = create<AppState>()(
       setAutoBackupOnlyWifi: (value) => set({ autoBackupOnlyWifi: value }),
       setHasSeenDrivePrompt: (seen) => set({ hasSeenDrivePrompt: seen }),
       setHasSeenSmsPrompt: (seen) => set({ hasSeenSmsPrompt: seen }),
+      setHasSeenNotificationPrompt: (seen) => set({ hasSeenNotificationPrompt: seen }),
       setHideBalances: (value) => set({ hideBalances: value }),
       toggleHideBalances: () => set((state) => ({ hideBalances: !state.hideBalances })),
       setHasDismissedOnboardingChecklist: (dismissed) =>

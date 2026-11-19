@@ -2,7 +2,7 @@ import '@/lib/reactotron';
 import '@/lib/navigation';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { AppState, type AppStateStatus, StyleSheet, View } from 'react-native';
+import { AppState, type AppStateStatus, StyleSheet, View, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
   useFonts,
@@ -17,6 +17,7 @@ import { ToastProvider, AlertProvider, AppLockModal, Text } from '@/components/u
 import { GoogleDrivePromptModal } from '@/components/modals/GoogleDrivePromptModal';
 import { SmsPermissionPromptModal } from '@/components/modals/SmsPermissionPromptModal';
 import { SmsTransactionPromptModal } from '@/components/modals/SmsTransactionPromptModal';
+import { NotificationPermissionPromptModal } from '@/components/modals/NotificationPermissionPromptModal';
 import { useSmsStore } from '@/store/useSmsStore';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { StatusBar } from 'expo-status-bar';
@@ -53,6 +54,7 @@ export default function RootLayout() {
   const [isScreenShielded, setIsScreenShielded] = useState(false);
   const [showDrivePrompt, setShowDrivePrompt] = useState(false);
   const [showSmsPrompt, setShowSmsPrompt] = useState(false);
+  const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
   const isTransactionPromptVisible = useSmsStore((state) => state.isPromptVisible);
   const closeTransactionPrompt = useSmsStore((state) => state.closeTransactionPrompt);
   const lastBackgroundTime = useRef<number | null>(null);
@@ -62,6 +64,7 @@ export default function RootLayout() {
   const hasHydrated = useAppStore((state) => state._hasHydrated);
   const hasSeenDrivePrompt = useAppStore((state) => state.hasSeenDrivePrompt);
   const hasSeenSmsPrompt = useAppStore((state) => state.hasSeenSmsPrompt);
+  const hasSeenNotificationPrompt = useAppStore((state) => state.hasSeenNotificationPrompt);
   const googleDriveConnected = useAppStore((state) => state.googleDriveConnected);
   const { expoPushToken } = usePushNotifications();
   const { theme, colors } = useTheme();
@@ -109,6 +112,31 @@ export default function RootLayout() {
       return () => clearTimeout(timer);
     }
   }, [hasHydrated, dbReady, hasSeenSmsPrompt, showDrivePrompt]);
+
+  // First-time launch Notification tracking permission prompt (Android only)
+  useEffect(() => {
+    if (
+      Platform.OS === 'android' &&
+      hasHydrated &&
+      dbReady &&
+      !hasSeenNotificationPrompt &&
+      hasSeenSmsPrompt &&
+      !showDrivePrompt &&
+      !showSmsPrompt
+    ) {
+      const timer = setTimeout(() => {
+        setShowNotificationPrompt(true);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [
+    hasHydrated,
+    dbReady,
+    hasSeenNotificationPrompt,
+    hasSeenSmsPrompt,
+    showDrivePrompt,
+    showSmsPrompt,
+  ]);
 
   const [fontsLoaded, fontsError] = useFonts({
     ...MaterialIcons.font,
@@ -298,12 +326,22 @@ export default function RootLayout() {
                   visible={showSmsPrompt && !isAppLocked && !showDrivePrompt}
                   onDismiss={() => setShowSmsPrompt(false)}
                 />
+                <NotificationPermissionPromptModal
+                  visible={
+                    showNotificationPrompt &&
+                    !isAppLocked &&
+                    !showDrivePrompt &&
+                    !showSmsPrompt
+                  }
+                  onDismiss={() => setShowNotificationPrompt(false)}
+                />
                 <SmsTransactionPromptModal
                   visible={
                     isTransactionPromptVisible &&
                     !isAppLocked &&
                     !showDrivePrompt &&
-                    !showSmsPrompt
+                    !showSmsPrompt &&
+                    !showNotificationPrompt
                   }
                   onDismiss={closeTransactionPrompt}
                 />

@@ -888,6 +888,11 @@ export function PersonDetailsScreen() {
 
           return null;
         }}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={7}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={Platform.OS === 'android'}
         ListEmptyComponent={
           <View
             style={[

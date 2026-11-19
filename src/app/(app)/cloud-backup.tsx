@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Header, Text, useAlert, useToast } from '@/components/ui';
-import { useTheme, typography, ThemeColors } from '@/theme';
+import { useTheme, typography, fontFamilies, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useGoogleDrive } from '@/hooks/use-google-drive';
@@ -565,8 +565,8 @@ const getStyles = (colors: ThemeColors) => {
     },
     accountTitle: {
       ...typography.headlineSm,
+      fontFamily: fontFamilies.bold,
       color: colors.onSurface,
-      fontWeight: '700',
     },
     accountSubtitle: {
       ...typography.bodySm,
@@ -592,7 +592,7 @@ const getStyles = (colors: ThemeColors) => {
     badgeText: {
       ...typography.labelSm,
       color: colors.primary,
-      fontFamily: 'Manrope_700Bold',
+      fontFamily: fontFamilies.bold,
       fontSize: 10,
     },
     lastBackupRow: {
@@ -617,8 +617,8 @@ const getStyles = (colors: ThemeColors) => {
     },
     lockedBannerTitle: {
       ...typography.labelMd,
+      fontFamily: fontFamilies.bold,
       color: colors.onErrorContainer,
-      fontWeight: '700',
     },
     lockedBannerText: {
       ...typography.bodySm,
@@ -628,8 +628,8 @@ const getStyles = (colors: ThemeColors) => {
     },
     sectionTitle: {
       ...typography.labelMd,
+      fontFamily: fontFamilies.bold,
       color: colors.onSurface,
-      fontWeight: '700',
       marginBottom: 4,
     },
     settingRow: {
@@ -642,8 +642,8 @@ const getStyles = (colors: ThemeColors) => {
     },
     rowTitle: {
       ...typography.bodyLg,
+      fontFamily: fontFamilies.semiBold,
       color: colors.onSurface,
-      fontWeight: '600',
     },
     rowSub: {
       ...typography.bodySm,
@@ -670,8 +670,8 @@ const getStyles = (colors: ThemeColors) => {
     },
     btnPrimaryText: {
       ...typography.labelMd,
+      fontFamily: fontFamilies.bold,
       color: colors.onPrimary,
-      fontWeight: '700',
     },
     btnSecondary: {
       backgroundColor: colors.surfaceContainerLow,
@@ -684,8 +684,8 @@ const getStyles = (colors: ThemeColors) => {
     },
     btnSecondaryText: {
       ...typography.labelMd,
+      fontFamily: fontFamilies.semiBold,
       color: colors.onSurface,
-      fontWeight: '600',
     },
     btnOutline: {
       paddingVertical: 12,
@@ -696,7 +696,7 @@ const getStyles = (colors: ThemeColors) => {
     },
     btnOutlineText: {
       ...typography.labelMd,
-      fontWeight: '600',
+      fontFamily: fontFamilies.semiBold,
     },
     btnRow: {
       flexDirection: 'row',
@@ -719,16 +719,16 @@ const getStyles = (colors: ThemeColors) => {
     },
     infoTitle: {
       ...typography.headlineSm,
+      fontFamily: fontFamilies.bold,
       color: colors.onSurface,
-      fontWeight: '700',
     },
     infoItem: {
       gap: 2,
     },
     infoPointTitle: {
       ...typography.bodyMd,
+      fontFamily: fontFamilies.semiBold,
       color: colors.onSurface,
-      fontWeight: '600',
     },
     infoPointDesc: {
       ...typography.bodySm,

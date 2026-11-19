@@ -19,7 +19,7 @@ import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
-import { useMonthlyTotals } from '@/hooks/use-transactions';
+import { useMonthlyTotals, useRecurringTransactions } from '@/hooks/use-transactions';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useInvestments, usePortfolioSummary } from '@/hooks/use-investments';
@@ -36,6 +36,7 @@ import { getCurrencySymbol } from '@/utils/format';
 
 const SUGGESTED_PROMPTS = [
   'What is my total net worth and investment breakdown?',
+  'What are my active recurring subscriptions and payments?',
   'How are my investments and portfolio performing?',
   'Am I meeting my 50/30/20 budget targets?',
   'What are my upcoming bills and debt commitments?',
@@ -52,12 +53,81 @@ function getActionLabel(actionRoute: string): string {
   if (actionRoute.includes('bills')) return 'Manage Bills & Subscriptions →';
   if (actionRoute.includes('goals')) return 'View Savings Goals →';
   if (actionRoute.includes('accounts')) return 'View Bank Accounts →';
+  if (actionRoute.includes('analytics')) return 'View Analytics & Recurring →';
   return 'View Transactions →';
 }
 
+const ChatMessageBubble = React.memo(function ChatMessageBubble({
+  item,
+  colors,
+  styles,
+  onActionPress,
+}: {
+  item: ChatMessage;
+  colors: ThemeColors;
+  styles: any;
+  onActionPress: (action: string) => void;
+}) {
+  const isUser = item.sender === 'user';
+
+  return (
+    <View
+      style={[
+        styles.messageRow,
+        isUser ? styles.messageRowUser : styles.messageRowAssistant,
+      ]}
+    >
+      {!isUser && (
+        <View style={styles.assistantAvatar}>
+          <MaterialIcons name="auto-awesome" size={15} color={colors.onPrimary} />
+        </View>
+      )}
+
+      <View
+        style={[
+          styles.bubbleContainer,
+          isUser ? styles.bubbleUser : styles.bubbleAssistant,
+        ]}
+      >
+        <Text
+          selectable
+          style={[styles.messageText, isUser ? styles.messageTextUser : styles.messageTextAssistant]}
+        >
+          {item.text}
+        </Text>
+
+        {item.suggestedAction && (
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => onActionPress(item.suggestedAction!)}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="arrow-outward" size={14} color={colors.primary} />
+            <Text style={styles.actionBtnText}>{getActionLabel(item.suggestedAction)}</Text>
+          </TouchableOpacity>
+        )}
+
+        <View style={[styles.timestampContainer, isUser ? styles.timestampContainerUser : styles.timestampContainerAssistant]}>
+          <Text style={[styles.timestampText, isUser ? styles.timestampUser : styles.timestampAssistant]}>
+            {item.timestamp}
+          </Text>
+          {isUser && (
+            <MaterialIcons
+              name="done-all"
+              size={14}
+              color="rgba(255, 255, 255, 0.75)"
+              style={styles.readReceiptIcon}
+            />
+          )}
+        </View>
+      </View>
+    </View>
+  );
+});
+
 export default function CopilotScreen() {
   const { colors } = useTheme();
-  const styles = getStyles(colors);
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const router = useRouter();
   const insets = useSafeInsets();
   const { height: windowHeight } = useWindowDimensions();
@@ -79,6 +149,7 @@ export default function CopilotScreen() {
   const { goals } = useGoals();
   const { summary: safeToSpendSummary } = useSafeToSpend();
   const { debts } = useDebtPayoff();
+  const { transactions: recurringTransactions } = useRecurringTransactions();
 
   const isConnected = useNetworkStore((state) => state.isConnected);
   const isChecking = useNetworkStore((state) => state.isChecking);
@@ -263,7 +334,33 @@ export default function CopilotScreen() {
       );
     }
 
-    // 8. Savings Goals
+    // 8. Recurring Payments & Subscriptions (from Analytics Recurring ledger)
+    const safeRecurring = Array.isArray(recurringTransactions) ? recurringTransactions : [];
+    if (safeRecurring.length > 0) {
+      const recurringDetails = safeRecurring
+        .slice(0, 8)
+        .map(
+          (rt) =>
+            `${rt.merchant || rt.category} (${rt.type}): ${sym}${Math.round(rt.amount)} [${rt.frequency}, next: ${rt.nextProcessDate}]`
+        )
+        .join(', ');
+
+      const totalMonthlyEstimate = safeRecurring.reduce((sum, rt) => {
+        if (rt.type !== 'expense') return sum;
+        if (rt.frequency === 'daily') return sum + rt.amount * 30;
+        if (rt.frequency === 'weekly') return sum + rt.amount * 4.33;
+        if (rt.frequency === 'yearly') return sum + rt.amount / 12;
+        return sum + rt.amount; // monthly
+      }, 0);
+
+      parts.push(
+        `[RECURRING PAYMENTS & COMMITMENTS] Total Active: ${safeRecurring.length} item(s) (~${sym}${Math.round(totalMonthlyEstimate)}/mo estimated expenses). Schedules: ${recurringDetails}`
+      );
+    } else {
+      parts.push(`[RECURRING PAYMENTS & COMMITMENTS] No active recurring transactions scheduled.`);
+    }
+
+    // 9. Savings Goals
     const safeGoals = Array.isArray(goals) ? goals : [];
     if (safeGoals.length > 0) {
       const goalsSummary = safeGoals
@@ -276,7 +373,7 @@ export default function CopilotScreen() {
       parts.push(`[SAVINGS GOALS] ${goalsSummary}`);
     }
 
-    // 9. Cashflow Runway & Safe to Spend
+    // 10. Cashflow Runway & Safe to Spend
     if (safeToSpendSummary) {
       const s = safeToSpendSummary;
       parts.push(
@@ -294,7 +391,7 @@ export default function CopilotScreen() {
       );
     }
 
-    // 10. Budget Plan Targets
+    // 11. Budget Plan Targets
     if (plan) {
       parts.push(
         `[BUDGET PLAN] Income: ${sym}${plan.monthlyIncome}, Needs: ${plan.needsPercent}%, Wants: ${plan.wantsPercent}%, Savings: ${plan.savingsPercent}%`
@@ -312,6 +409,7 @@ export default function CopilotScreen() {
     holdings,
     debts,
     billSummary,
+    recurringTransactions,
     goals,
     safeToSpendSummary,
     plan,
@@ -410,63 +508,17 @@ export default function CopilotScreen() {
     }
   }, [router]);
 
-  const renderMessageItem = useCallback(({ item }: { item: ChatMessage }) => {
-    const isUser = item.sender === 'user';
-
-    return (
-      <View
-        style={[
-          styles.messageRow,
-          isUser ? styles.messageRowUser : styles.messageRowAssistant,
-        ]}
-      >
-        {!isUser && (
-          <View style={styles.assistantAvatar}>
-            <MaterialIcons name="auto-awesome" size={15} color={colors.onPrimary} />
-          </View>
-        )}
-
-        <View
-          style={[
-            styles.bubbleContainer,
-            isUser ? styles.bubbleUser : styles.bubbleAssistant,
-          ]}
-        >
-          <Text
-            selectable
-            style={[styles.messageText, isUser ? styles.messageTextUser : styles.messageTextAssistant]}
-          >
-            {item.text}
-          </Text>
-
-          {item.suggestedAction && (
-            <TouchableOpacity
-              style={styles.actionBtn}
-              onPress={() => handleActionPress(item.suggestedAction!)}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="arrow-outward" size={14} color={colors.primary} />
-              <Text style={styles.actionBtnText}>{getActionLabel(item.suggestedAction)}</Text>
-            </TouchableOpacity>
-          )}
-
-          <View style={[styles.timestampContainer, isUser ? styles.timestampContainerUser : styles.timestampContainerAssistant]}>
-            <Text style={[styles.timestampText, isUser ? styles.timestampUser : styles.timestampAssistant]}>
-              {item.timestamp}
-            </Text>
-            {isUser && (
-              <MaterialIcons
-                name="done-all"
-                size={14}
-                color="rgba(255, 255, 255, 0.75)"
-                style={styles.readReceiptIcon}
-              />
-            )}
-          </View>
-        </View>
-      </View>
-    );
-  }, [colors, styles, handleActionPress]);
+  const renderMessageItem = useCallback(
+    ({ item }: { item: ChatMessage }) => (
+      <ChatMessageBubble
+        item={item}
+        colors={colors}
+        styles={styles}
+        onActionPress={handleActionPress}
+      />
+    ),
+    [colors, styles, handleActionPress]
+  );
 
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
@@ -556,9 +608,11 @@ export default function CopilotScreen() {
             onLayout={() => scrollToEnd(false)}
             onContentSizeChange={handleContentSizeChange}
             maxToRenderPerBatch={10}
-            windowSize={15}
-            initialNumToRender={15}
+            windowSize={7}
+            initialNumToRender={10}
+            updateCellsBatchingPeriod={50}
             removeClippedSubviews={Platform.OS === 'android'}
+            extraData={messages.length}
             ListHeaderComponent={
               <View style={styles.dateSeparatorContainer}>
                 <View style={styles.dateSeparatorPill}>

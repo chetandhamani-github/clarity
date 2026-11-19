@@ -502,21 +502,6 @@ export default function SettingsScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.settingItem}
-              onPress={() => router.navigate('/(app)/notification-settings')}
-            >
-              <View style={styles.settingItemLeft}>
-                <MaterialIcons name="notifications-active" size={24} color={colors.primary} />
-                <View style={styles.settingTextContainer}>
-                  <Text style={styles.settingTitle}>Notification & Bill Tracking</Text>
-                  <Text style={styles.settingSub}>
-                    Auto-detect transactions & scheduled bill alerts
-                  </Text>
-                </View>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.settingItem}
               onPress={() => router.navigate('/(app)/splitwise')}
             >
               <View style={styles.settingItemLeft}>
