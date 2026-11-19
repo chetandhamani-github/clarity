@@ -4,12 +4,11 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   Dimensions,
   RefreshControl,
   Platform,
 } from 'react-native';
-import { Text, Header, useAlert, useToast } from '@/components/ui';
+import { Text, Header, InvestmentsSkeleton, useAlert, useToast } from '@/components/ui';
 import { typography, useTheme, radius, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
@@ -132,7 +131,7 @@ export default function InvestmentsScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => router.push('/(app)/add-investment')}
+              onPress={() => router.navigate('/(app)/add-investment')}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={[styles.headerAddBtn, { backgroundColor: colors.primary }]}
             >
@@ -156,9 +155,7 @@ export default function InvestmentsScreen() {
         }
       >
         {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
+          <InvestmentsSkeleton />
         ) : (
           <>
             {/* HERO CARD: PORTFOLIO NET WEALTH */}
@@ -450,7 +447,7 @@ export default function InvestmentsScreen() {
                 </Text>
                 <TouchableOpacity
                   style={[styles.emptyAddBtn, { backgroundColor: colors.primary }]}
-                  onPress={() => router.push('/(app)/add-investment')}
+                  onPress={() => router.navigate('/(app)/add-investment')}
                   activeOpacity={0.8}
                 >
                   <MaterialIcons name="add" size={18} color={colors.onPrimary} />
@@ -471,7 +468,7 @@ export default function InvestmentsScreen() {
                     <TouchableOpacity
                       key={h.id}
                       style={styles.holdingCard}
-                      onPress={() => router.push(`/(app)/add-investment?id=${h.id}`)}
+                      onPress={() => router.navigate(`/(app)/add-investment?id=${h.id}`)}
                       activeOpacity={0.85}
                     >
                       <View style={styles.holdingMainRow}>
@@ -624,10 +621,6 @@ function getStyles(colors: ThemeColors) {
     scrollContent: {
       paddingHorizontal: 16,
       paddingTop: 8,
-    },
-    loadingContainer: {
-      paddingTop: 60,
-      alignItems: 'center',
     },
     heroCard: {
       backgroundColor: colors.surfaceContainerLowest,
@@ -886,7 +879,7 @@ function getStyles(colors: ThemeColors) {
       gap: 8,
     },
     emptyTitle: {
-      ...typography.titleMedium,
+      ...typography.bodyMd,
       fontFamily: 'Manrope_700Bold',
       fontSize: 15,
       color: colors.onSurface,

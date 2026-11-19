@@ -522,6 +522,48 @@ export default function SettingsScreen() {
 
             <TouchableOpacity
               style={styles.settingItem}
+              onPress={() => router.navigate('/(app)/rules')}
+            >
+              <View style={styles.settingItemLeft}>
+                <MaterialIcons name="auto-fix-high" size={24} color="#8B5CF6" />
+                <View style={styles.settingTextContainer}>
+                  <Text style={styles.settingTitle}>Smart Automation Rules</Text>
+                  <Text style={styles.settingSub}>IFTTT rules to auto-categorize, tag, and organize expenses</Text>
+                </View>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => router.navigate('/(app)/debt-payoff')}
+            >
+              <View style={styles.settingItemLeft}>
+                <MaterialIcons name="trending-down" size={24} color="#EF4444" />
+                <View style={styles.settingTextContainer}>
+                  <Text style={styles.settingTitle}>Debt Elimination Strategist</Text>
+                  <Text style={styles.settingSub}>Snowball vs. Avalanche debt freedom payoff roadmap</Text>
+                </View>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => router.navigate('/financial-health')}
+            >
+              <View style={styles.settingItemLeft}>
+                <MaterialIcons name="favorite" size={24} color="#EC4899" />
+                <View style={styles.settingTextContainer}>
+                  <Text style={styles.settingTitle}>Financial Health Score</Text>
+                  <Text style={styles.settingSub}>0–100 index across savings, runway, debt & budget</Text>
+                </View>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingItem}
               onPress={() => router.navigate('/manage-categories')}
             >
               <View style={styles.settingItemLeft}>
@@ -993,37 +1035,6 @@ const getStyles = (colors: ThemeColors) => {
       fontFamily: 'Manrope_600SemiBold',
       color: colors.onSurface,
       textAlign: 'center',
-    },
-    driveStatusRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 14,
-    },
-    driveIconBox: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    driveStatusTitle: {
-      ...typography.bodyLg,
-      fontWeight: '600',
-      color: colors.onSurface,
-    },
-    driveStatusEmail: {
-      ...typography.bodyMd,
-      color: colors.onSurfaceVariant,
-      fontSize: 13,
-      lineHeight: 18,
-      marginTop: 2,
-    },
-    driveLastBackupText: {
-      ...typography.bodyMd,
-      color: colors.primary,
-      fontSize: 12,
-      lineHeight: 16,
-      marginTop: 4,
     },
     accountCard: {
       flexDirection: 'row',

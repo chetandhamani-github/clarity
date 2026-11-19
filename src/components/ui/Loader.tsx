@@ -1,26 +1,60 @@
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import React from 'react';
+import { StyleSheet, View, ViewStyle, StyleProp } from 'react-native';
+import { useTheme } from '@/theme';
+import { radius } from '@/theme/radius';
+import { SkeletonBox, SkeletonCircle, SkeletonText } from './Skeleton';
 
-import { ThemeColors, useTheme } from '@/theme';
+export interface LoaderProps {
+  style?: StyleProp<ViewStyle>;
+}
 
-export const Loader = () => {
+export const Loader = ({ style }: LoaderProps) => {
   const { colors } = useTheme();
-  const styles = getStyles(colors);
+
   return (
-    <View style={styles.container}>
-      <ActivityIndicator size="large" color={colors.primary} />
+    <View style={[styles.container, style]}>
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surfaceContainerLowest,
+            borderColor: colors.surfaceVariant,
+          },
+        ]}
+      >
+        <View style={styles.headerRow}>
+          <SkeletonCircle size={40} />
+          <View style={{ flex: 1, gap: 6 }}>
+            <SkeletonText width="60%" height={15} />
+            <SkeletonText width="40%" height={11} />
+          </View>
+          <SkeletonBox width={60} height={24} borderRadius={radius.full} />
+        </View>
+
+        <SkeletonBox height={80} borderRadius={radius.md} style={{ marginVertical: 14 }} />
+
+        <View style={{ gap: 8 }}>
+          <SkeletonText width="90%" height={13} />
+          <SkeletonText width="70%" height={13} />
+        </View>
+      </View>
     </View>
   );
 };
 
-const getStyles = (colors: ThemeColors) => {
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      minHeight: 200,
-      justifyContent: 'center',
-      alignItems: 'center',
-      paddingTop: 100,
-    },
-  });
-  return styles;
-};
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 16,
+  },
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+});

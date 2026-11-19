@@ -1,7 +1,8 @@
 import { Header, HomeSkeleton, ProgressBar, Text, useToast } from '@/components/ui';
-import { UpcomingBillsWidget } from '@/modules/bills';
+import { UpcomingBillsWidget, useBills } from '@/modules/bills';
 import { SplitwiseWidget } from '@/modules/splitwise';
 import { SafeToSpendWidget } from '@/components/dashboard/SafeToSpendWidget';
+import { HealthScoreWidget } from '@/components/dashboard/HealthScoreWidget';
 import { AnnouncementBanner } from '@/components/backend';
 import { ReorderableBankAccounts, OnboardingChecklistCard } from '@/components/common';
 import { VoiceTransactionModal } from '@/components/modals/VoiceTransactionModal';
@@ -24,7 +25,7 @@ import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
 import { usePortfolioSummary } from '@/hooks/use-investments';
-import { useInvalidateCashflow } from '@/hooks/use-cashflow';
+import { useInvalidateCashflow, useSafeToSpend } from '@/hooks/use-cashflow';
 import { useMonthlyTotals, useNetWorthHistory, useTransactions, useCreateTransaction } from '@/hooks/use-transactions';
 import { useDoubleBackToExit } from '@/hooks/use-double-back-to-exit';
 import { useSmsSync } from '@/hooks/useSmsSync';
@@ -53,14 +54,16 @@ export default function DashboardScreen() {
   const openSmsTransactionPrompt = useSmsStore((state) => state.openTransactionPrompt);
   const { showToast } = useToast();
   const { mutate: createTransaction } = useCreateTransaction();
-  const { summary: portfolioSummary } = usePortfolioSummary();
+  const { summary: portfolioSummary, isLoading: portfolioLoading, refetch: refetchPortfolio } = usePortfolioSummary();
+  const { isLoading: safeToSpendLoading } = useSafeToSpend();
+  const { isLoading: billsLoading } = useBills();
 
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
 
   const handleOpenCopilot = useCallback(() => {
-    router.push({
+    router.navigate({
       pathname: '/(app)/copilot',
       params: { month: currentMonth.toString(), year: currentYear.toString() },
     });
@@ -181,6 +184,7 @@ export default function DashboardScreen() {
         refetchPlan(),
         refetchSpending(),
         refetchNw(),
+        refetchPortfolio(),
       ]);
     } finally {
       setRefreshing(false);
@@ -193,11 +197,20 @@ export default function DashboardScreen() {
     refetchPlan,
     refetchSpending,
     refetchNw,
+    refetchPortfolio,
   ]);
 
   const hasLoadedRef = useRef(false);
   const isAnyLoading =
-    accountsLoading || txLoading || totalsLoading || planLoading || spendingLoading || nwLoading;
+    accountsLoading ||
+    txLoading ||
+    totalsLoading ||
+    planLoading ||
+    spendingLoading ||
+    nwLoading ||
+    portfolioLoading ||
+    safeToSpendLoading ||
+    billsLoading;
 
   if (!isAnyLoading && !hasLoadedRef.current) {
     hasLoadedRef.current = true;
@@ -386,72 +399,72 @@ export default function DashboardScreen() {
           />
         }
       >
-        <AnnouncementBanner />
-        {/* SMS Auto-Tracking Banner */}
-        {smsPermissionStatus !== 'granted' && (
-          <View
-            style={{
-              marginBottom: 16,
-              padding: 16,
-              borderRadius: 16,
-              backgroundColor: colors.surfaceContainerLow,
-              borderWidth: 1,
-              borderColor: colors.outlineVariant,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
-              <View
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: colors.primaryContainer,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <MaterialIcons name="sms" size={20} color={colors.onPrimaryContainer} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ ...typography.bodyLg, color: colors.onSurface, fontWeight: '700' }}>
-                  Auto-Track Bank SMS
-                </Text>
-                <Text style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, fontSize: 12 }}>
-                  Detect UPI, cards, & bills 100% offline.
-                </Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              onPress={handleEnableSms}
-              disabled={isSmsSyncing}
-              style={{
-                backgroundColor: colors.primary,
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 10,
-              }}
-            >
-              <Text
-                style={{
-                  ...typography.labelMd,
-                  color: colors.onPrimary,
-                  fontWeight: '700',
-                }}
-              >
-                {isSmsSyncing ? 'SYNCING...' : 'ENABLE'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
         <View style={{ flex: 1 }}>
           {showSkeleton ? (
             <HomeSkeleton />
           ) : (
             <>
+              <AnnouncementBanner />
+              {/* SMS Auto-Tracking Banner */}
+              {smsPermissionStatus !== 'granted' && (
+                <View
+                  style={{
+                    marginBottom: 16,
+                    padding: 16,
+                    borderRadius: 16,
+                    backgroundColor: colors.surfaceContainerLow,
+                    borderWidth: 1,
+                    borderColor: colors.outlineVariant,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                    <View
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 20,
+                        backgroundColor: colors.primaryContainer,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <MaterialIcons name="sms" size={20} color={colors.onPrimaryContainer} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ ...typography.bodyLg, color: colors.onSurface, fontWeight: '700' }}>
+                        Auto-Track Bank SMS
+                      </Text>
+                      <Text style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, fontSize: 12 }}>
+                        Detect UPI, cards, & bills 100% offline.
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    onPress={handleEnableSms}
+                    disabled={isSmsSyncing}
+                    style={{
+                      backgroundColor: colors.primary,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: 10,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        ...typography.labelMd,
+                        color: colors.onPrimary,
+                        fontWeight: '700',
+                      }}
+                    >
+                      {isSmsSyncing ? 'SYNCING...' : 'ENABLE'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
               {/* Main Card: Net Worth */}
               <View style={styles.netWorthCard}>
                 <View style={styles.netWorthHeader}>
@@ -567,7 +580,7 @@ export default function DashboardScreen() {
                       borderColor: colors.surfaceVariant,
                     },
                   ]}
-                  onPress={() => router.push('/(app)/investments')}
+                  onPress={() => router.navigate('/(app)/investments')}
                   activeOpacity={0.8}
                 >
                   <View style={styles.portfolioPillLeft}>
@@ -664,6 +677,9 @@ export default function DashboardScreen() {
 
               {/* Predictive Cash Flow & Safe to Spend Engine */}
               <SafeToSpendWidget />
+
+              {/* Holistic Financial Health Score */}
+              <HealthScoreWidget />
 
               {/* Snapshot Row */}
               <View style={styles.snapshotRow}>

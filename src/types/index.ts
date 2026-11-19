@@ -408,4 +408,54 @@ export interface SafeToSpendSummary {
   cashCrunchShortfall?: number;
 }
 
+// ---------------------------------------------------------------------------
+// Smart Automation Rules (IFTTT for Finance)
+// ---------------------------------------------------------------------------
+
+export type RuleTrigger = 'any' | 'sms' | 'statement' | 'manual';
+export type RuleConditionField = 'merchant' | 'amount' | 'category' | 'account_id' | 'note';
+export type RuleConditionOperator =
+  | 'contains'
+  | 'equals'
+  | 'starts_with'
+  | 'regex'
+  | 'greater_than'
+  | 'less_than'
+  | 'between';
+
+export interface RuleCondition {
+  field: RuleConditionField;
+  operator: RuleConditionOperator;
+  value: string | number;
+  secondaryValue?: number;
+}
+
+export type RuleActionType =
+  | 'set_category'
+  | 'add_tag'
+  | 'set_note'
+  | 'append_note'
+  | 'mark_reviewed';
+
+export interface RuleAction {
+  type: RuleActionType;
+  value: string;
+}
+
+export interface SmartRule {
+  id: string;
+  name: string;
+  isEnabled: boolean;
+  trigger: RuleTrigger;
+  matchType: 'ALL' | 'ANY';
+  conditions: RuleCondition[];
+  actions: RuleAction[];
+  priority: number;
+  matchCount: number;
+  lastMatchedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+
 

@@ -1,4 +1,4 @@
-import { DatePickerModal, Header, Text, useAlert, useToast } from '@/components/ui';
+import { DatePickerModal, Header, SkeletonBox, Text, useAlert, useToast } from '@/components/ui';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useCategories } from '@/hooks/use-budget';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
@@ -20,7 +20,7 @@ import { VoiceTransactionModal } from '@/components/modals/VoiceTransactionModal
 import type { ParsedVoiceTransaction } from '@/services/voice/voice-parser';
 import { useNetworkStore } from '@/store/use-network-store';
 import { isNetworkError } from '@/services/network/network.service';
-import { ThemeColors, typography, useTheme } from '@/theme';
+import { ThemeColors, typography, radius, useTheme } from '@/theme';
 import type { RecurringFrequency, TransactionType } from '@/types';
 import { formatLocalDate, getCurrencySymbol } from '@/utils/format';
 import { getAccountTypeIcon, getCategoryIcon } from '@/utils/icons';
@@ -829,9 +829,7 @@ export default function AddTransactionScreen() {
                 <Text style={styles.inputLabel}>To Account</Text>
 
                 {isLoadingAccounts ? (
-                  <View style={[styles.textInput, { justifyContent: 'center' }]}>
-                    <ActivityIndicator size="small" color={colors.primary} />
-                  </View>
+                  <SkeletonBox height={52} borderRadius={radius.lg} />
                 ) : accounts.length === 0 ? (
                   <View style={[styles.textInput, { justifyContent: 'center' }]}>
                     <Text style={{ color: colors.error }}>No accounts available.</Text>
@@ -1091,9 +1089,7 @@ export default function AddTransactionScreen() {
               <Text style={styles.inputLabel}>Account</Text>
 
               {isLoadingAccounts ? (
-                <View style={[styles.textInput, { justifyContent: 'center' }]}>
-                  <ActivityIndicator size="small" color={colors.primary} />
-                </View>
+                <SkeletonBox height={52} borderRadius={radius.lg} />
               ) : accounts.length === 0 ? (
                 <View style={[styles.textInput, { justifyContent: 'center' }]}>
                   <Text style={{ color: colors.error }}>

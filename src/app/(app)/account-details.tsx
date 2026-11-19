@@ -4,11 +4,10 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   Dimensions,
   Platform,
 } from 'react-native';
-import { Text, Header, DetailSkeleton } from '@/components/ui';
+import { Text, Header, DetailSkeleton, SkeletonCircle, SkeletonText } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
@@ -664,8 +663,23 @@ export default function AccountDetailsScreen() {
               <Text style={styles.sectionTitle}>Recent Activity</Text>
 
                     {isTxLoading ? (
-                      <View style={styles.emptyActivityBox}>
-                        <ActivityIndicator size="small" color={colors.primary} />
+                      <View style={styles.transactionsList}>
+                        {[1, 2, 3].map((i, index) => (
+                          <View
+                            key={i}
+                            style={[
+                              styles.transactionItem,
+                              index === 2 && { borderBottomWidth: 0 },
+                            ]}
+                          >
+                            <SkeletonCircle size={40} />
+                            <View style={{ flex: 1, gap: 6, marginLeft: 12 }}>
+                              <SkeletonText width="60%" height={14} />
+                              <SkeletonText width="40%" height={11} />
+                            </View>
+                            <SkeletonText width={70} height={15} />
+                          </View>
+                        ))}
                       </View>
                     ) : transactions.length === 0 ? (
                       <View style={styles.emptyActivityBox}>

@@ -221,13 +221,13 @@ export default function CopilotScreen() {
 
   const handleActionPress = useCallback((actionRoute: string) => {
     try {
-      // Normalize tab routes to stack screen routes so they are cleanly pushed onto the Copilot stack
+      // Normalize tab routes to stack screen routes so they are cleanly opened from the Copilot stack
       const normalizedRoute = actionRoute
         .replace('/(tabs)/', '/')
         .replace('/(app)/(tabs)/', '/(app)/');
-      router.push(normalizedRoute as any);
+      router.navigate(normalizedRoute as any);
     } catch {
-      router.push('/(app)/plan');
+      router.navigate('/(app)/plan');
     }
   }, [router]);
 

@@ -193,8 +193,42 @@ export async function insertTransaction(
   }
 
   const source: TransactionSource = data.source || 'MANUAL';
-  const status: TransactionStatus =
+  let status: TransactionStatus =
     data.status || (source === 'MANUAL' ? 'PENDING_MATCH' : 'VERIFIED');
+
+  // 1.5 Evaluate Smart Automation Rules (IFTTT for Finance)
+  let finalCategory = data.category;
+  let finalNote = data.note;
+  let tagsToApply = data.tags ? [...data.tags] : [];
+
+  try {
+    const { evaluateSmartRules } = await import('@/services/rules/rules-engine');
+    const ruleResult = await evaluateSmartRules(
+      {
+        merchant: data.merchant,
+        amount: data.amount,
+        category: data.category,
+        accountId: data.accountId,
+        note: data.note,
+        source,
+      },
+      source === 'SMS' ? 'sms' : 'manual'
+    );
+
+    if (ruleResult.category) finalCategory = ruleResult.category;
+    if (ruleResult.note) finalNote = ruleResult.note;
+    if (ruleResult.status) status = ruleResult.status as TransactionStatus;
+    if (ruleResult.tagsToAdd && ruleResult.tagsToAdd.length > 0) {
+      for (const tName of ruleResult.tagsToAdd) {
+        const cleanName = tName.trim().replace(/^#/, '');
+        if (cleanName && !tagsToApply.includes(cleanName)) {
+          tagsToApply.push(cleanName);
+        }
+      }
+    }
+  } catch {
+    // Smart rules evaluation should not block transaction creation
+  }
 
   // 2. Insert transaction and update account balance atomically
   const executeInsert = async () => {
@@ -207,10 +241,10 @@ export async function insertTransaction(
         data.amount,
         data.type,
         data.merchant,
-        data.category,
+        finalCategory,
         data.date,
         data.isRecurring ? 1 : 0,
-        data.note,
+        finalNote,
         data.toAccountId || null,
         data.splits && data.splits.length > 0 ? JSON.stringify(data.splits) : null,
         source,
@@ -267,15 +301,15 @@ export async function insertTransaction(
       .catch(() => {});
   }
 
-  if (data.tags && data.tags.length > 0) {
+  if (tagsToApply.length > 0) {
     try {
-      await setTransactionTags(id, data.tags);
+      await setTransactionTags(id, tagsToApply);
     } catch {
       // ignore
     }
   }
 
-  return { id, ...data, source, status };
+  return { id, ...data, category: finalCategory, note: finalNote, source, status };
 }
 
 export async function updateTransaction(

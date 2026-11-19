@@ -67,6 +67,7 @@ export function useCreateTransaction() {
     ) => {
       mutation.mutate(data, { onSuccess: options?.onSuccess, onError: options?.onError });
     },
+    mutateAsync: (data: Omit<Transaction, 'id'>) => mutation.mutateAsync(data),
     isPending: mutation.isPending,
   };
 }

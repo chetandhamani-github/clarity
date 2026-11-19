@@ -393,6 +393,22 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_investments_asset_class ON investment_holdings(asset_class);
     CREATE INDEX IF NOT EXISTS idx_investments_maturity ON investment_holdings(maturity_date);
+
+    CREATE TABLE IF NOT EXISTS smart_rules (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      is_enabled INTEGER NOT NULL DEFAULT 1,
+      trigger_source TEXT NOT NULL DEFAULT 'any',
+      match_type TEXT NOT NULL DEFAULT 'ALL',
+      conditions_json TEXT NOT NULL,
+      actions_json TEXT NOT NULL,
+      priority INTEGER NOT NULL DEFAULT 0,
+      match_count INTEGER NOT NULL DEFAULT 0,
+      last_matched_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_smart_rules_enabled ON smart_rules(is_enabled, priority DESC);
   `);
 
   await runSplitwiseMigrations(db);

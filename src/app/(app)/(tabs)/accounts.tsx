@@ -5,12 +5,11 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  ActivityIndicator,
   Dimensions,
   Platform,
 } from 'react-native';
-import { Text, Header, AccountsSkeleton } from '@/components/ui';
-import { spacing, typography, useTheme, ThemeColors } from '@/theme';
+import { Text, Header, AccountsSkeleton, SkeletonBox } from '@/components/ui';
+import { spacing, typography, useTheme, radius, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -179,7 +178,7 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
                         borderColor: colors.surfaceVariant,
                       },
                     ]}
-                    onPress={() => router.push('/(app)/investments')}
+                    onPress={() => router.navigate('/(app)/investments')}
                     activeOpacity={0.88}
                   >
                     <View style={styles.portfolioHeaderRow}>
@@ -293,6 +292,25 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
                         hideBalances={hideBalances}
                         onDragStateChange={setIsDraggingAccounts}
                       />
+
+                      {totalLiabilities > 0 && (
+                        <TouchableOpacity
+                          style={styles.debtStrategistBanner}
+                          onPress={() => router.push('/(app)/debt-payoff')}
+                          activeOpacity={0.8}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                            <View style={[styles.debtStrategistIcon, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
+                              <MaterialIcons name="trending-down" size={18} color="#EF4444" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.debtStrategistTitle}>Debt Payoff Strategist</Text>
+                              <Text style={styles.debtStrategistSub}>Snowball vs. Avalanche roadmap</Text>
+                            </View>
+                          </View>
+                          <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+                        </TouchableOpacity>
+                      )}
                     </View>
                   )}
 
@@ -484,8 +502,8 @@ function AccountDetailCard({
       <View style={styles.chartArea}>
         <View style={styles.chartBg} />
         {isLoading ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator size="small" color={colors.primary} />
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 }}>
+            <SkeletonBox width="100%" height={120} borderRadius={radius.md} />
           </View>
         ) : (
           <View
@@ -1066,7 +1084,7 @@ const getStyles = (colors: ThemeColors) => {
       justifyContent: 'center',
     },
     portfolioCardTitle: {
-      ...typography.titleMedium,
+      ...typography.bodyMd,
       fontFamily: 'Manrope_700Bold',
       fontSize: 14,
       lineHeight: 18,
@@ -1123,6 +1141,35 @@ const getStyles = (colors: ThemeColors) => {
     miniAllocText: {
       ...typography.labelMd,
       fontSize: 10,
+      color: colors.onSurfaceVariant,
+    },
+    debtStrategistBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.surfaceContainerLowest,
+      borderRadius: radius.xl,
+      borderWidth: 1,
+      borderColor: colors.surfaceVariant,
+      padding: 12,
+      marginTop: 10,
+    },
+    debtStrategistIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    debtStrategistTitle: {
+      ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
+      fontSize: 13,
+      color: colors.onSurface,
+    },
+    debtStrategistSub: {
+      ...typography.bodyMd,
+      fontSize: 11,
       color: colors.onSurfaceVariant,
     },
   });

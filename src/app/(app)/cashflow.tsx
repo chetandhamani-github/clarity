@@ -4,14 +4,13 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   Modal,
   TextInput,
   Dimensions,
   RefreshControl,
   Platform,
 } from 'react-native';
-import { Text, Header, useToast } from '@/components/ui';
+import { Text, Header, CashflowSkeleton, useToast } from '@/components/ui';
 import { typography, useTheme, radius, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
@@ -247,9 +246,7 @@ export default function CashFlowScreen() {
         }
       >
         {isLoading || !summary ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
+          <CashflowSkeleton />
         ) : (
           <>
             {/* HERO CARD: SAFE-TO-SPEND GAUGE */}
@@ -655,10 +652,6 @@ function getStyles(colors: ThemeColors) {
     scrollContent: {
       paddingHorizontal: 16,
       paddingTop: 8,
-    },
-    loadingContainer: {
-      paddingTop: 80,
-      alignItems: 'center',
     },
     heroCard: {
       backgroundColor: colors.surfaceContainerLowest,

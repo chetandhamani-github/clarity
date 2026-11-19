@@ -50,6 +50,7 @@ export async function clearDatabase(): Promise<void> {
     DROP TABLE IF EXISTS accounts;
     DROP TABLE IF EXISTS notifications;
     DROP TABLE IF EXISTS merchant_category_rules;
+    DROP TABLE IF EXISTS smart_rules;
   `);
   await db.execAsync('PRAGMA foreign_keys = ON;');
   // Re-run migrations and seeds

@@ -47,7 +47,7 @@ export function SafeToSpendWidget() {
         </View>
 
         <TouchableOpacity
-          onPress={() => router.push('/(app)/cashflow')}
+          onPress={() => router.navigate('/(app)/cashflow')}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={styles.moreBtn}
           activeOpacity={0.7}
@@ -60,7 +60,7 @@ export function SafeToSpendWidget() {
       {/* Main Metric Row */}
       <TouchableOpacity
         style={styles.metricBlock}
-        onPress={() => router.push('/(app)/cashflow')}
+        onPress={() => router.navigate('/(app)/cashflow')}
         activeOpacity={0.88}
       >
         <View style={styles.metricTopRow}>
@@ -165,8 +165,8 @@ export function SafeToSpendWidget() {
   );
 }
 
-function getStyles(colors: ThemeColors) {
-  return StyleSheet.create({
+const getStyles = (colors: ThemeColors) => {
+  const styles = StyleSheet.create({
     container: {
       backgroundColor: colors.surfaceContainerLowest,
       borderRadius: radius.xl,
@@ -310,4 +310,5 @@ function getStyles(colors: ThemeColors) {
       color: colors.onSurfaceVariant,
     },
   });
-}
+  return styles;
+};

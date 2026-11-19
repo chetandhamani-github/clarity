@@ -23,6 +23,7 @@ export interface ClarityBackupPayload {
     splitwise_debts?: any[];
     splitwise_settlements?: any[];
     investment_holdings?: any[];
+    smart_rules?: any[];
     sms_messages?: any[];
     parsed_transactions?: any[];
     sms_review_queue?: any[];
@@ -137,6 +138,7 @@ export async function generateDatabaseSnapshot(): Promise<ClarityBackupPayload> 
   const splitwise_debts = await safeGetAll('SELECT * FROM splitwise_debts');
   const splitwise_settlements = await safeGetAll('SELECT * FROM splitwise_settlements');
   const investment_holdings = await safeGetAll('SELECT * FROM investment_holdings');
+  const smart_rules = await safeGetAll('SELECT * FROM smart_rules');
   const sms_messages = await safeGetAll('SELECT * FROM sms_messages');
   const parsed_transactions = await safeGetAll('SELECT * FROM parsed_transactions');
   const sms_review_queue = await safeGetAll('SELECT * FROM sms_review_queue');
@@ -174,6 +176,7 @@ export async function generateDatabaseSnapshot(): Promise<ClarityBackupPayload> 
     splitwise_debts,
     splitwise_settlements,
     investment_holdings,
+    smart_rules,
     sms_messages,
     parsed_transactions,
     sms_review_queue,
@@ -253,6 +256,7 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
         DELETE FROM splitwise_debts;
         DELETE FROM splitwise_people;
         DELETE FROM investment_holdings;
+        DELETE FROM smart_rules;
       `);
     } catch {
       // Ignore if some tables do not exist in older migrations
@@ -757,6 +761,37 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
               inv.notes ?? null,
               inv.created_at ?? inv.createdAt ?? new Date().toISOString(),
               inv.updated_at ?? inv.updatedAt ?? new Date().toISOString(),
+            ]
+          );
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    // 21. Insert Smart Rules (if present)
+    if (Array.isArray(data.smart_rules)) {
+      for (const rule of data.smart_rules) {
+        try {
+          await db.runAsync(
+            `INSERT OR REPLACE INTO smart_rules (
+               id, name, is_enabled, trigger_source, match_type,
+               conditions_json, actions_json, priority, match_count,
+               last_matched_at, created_at, updated_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              rule.id,
+              rule.name,
+              rule.is_enabled ?? (rule.isEnabled ? 1 : 0),
+              rule.trigger_source ?? rule.trigger ?? 'any',
+              rule.match_type ?? rule.matchType ?? 'ALL',
+              typeof rule.conditions_json === 'string' ? rule.conditions_json : JSON.stringify(rule.conditions || []),
+              typeof rule.actions_json === 'string' ? rule.actions_json : JSON.stringify(rule.actions || []),
+              rule.priority ?? 0,
+              rule.match_count ?? rule.matchCount ?? 0,
+              rule.last_matched_at ?? rule.lastMatchedAt ?? null,
+              rule.created_at ?? rule.createdAt ?? new Date().toISOString(),
+              rule.updated_at ?? rule.updatedAt ?? new Date().toISOString(),
             ]
           );
         } catch {

@@ -1,11 +1,11 @@
-import { Text, useToast } from '@/components/ui';
+import { SkeletonBox, SkeletonText, Text, useToast } from '@/components/ui';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { ReviewQueueService } from '@/modules/sms/reviewQueue/reviewQueueService';
 import type { ExtractedTransaction, ReviewQueueItem } from '@/modules/sms/types';
 import { useSmsStore } from '@/store/useSmsStore';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
 import { ThemeColors, useTheme } from '@/theme/useTheme';
-import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
@@ -191,11 +191,27 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
           </View>
 
           {isLoading ? (
-            <View style={styles.loadingBox}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text variant="bodyMd" style={styles.loadingText}>
-                Loading transactions needing review...
-              </Text>
+            <View style={{ gap: 14, padding: 16 }}>
+              <SkeletonBox width={160} height={26} borderRadius={radius.full} />
+              <View
+                style={{
+                  borderRadius: radius.md,
+                  borderWidth: 1,
+                  borderColor: colors.outlineVariant,
+                  padding: 14,
+                  gap: 8,
+                }}
+              >
+                <SkeletonText width={120} height={12} />
+                <SkeletonText width="95%" height={14} />
+                <SkeletonText width="80%" height={14} />
+              </View>
+              <View style={{ gap: 10, marginTop: 4 }}>
+                <SkeletonText width={100} height={12} />
+                <SkeletonBox height={44} borderRadius={radius.md} />
+                <SkeletonText width={80} height={12} />
+                <SkeletonBox height={44} borderRadius={radius.md} />
+              </View>
             </View>
           ) : !currentItem ? (
             <View style={styles.emptyBox}>
@@ -380,16 +396,6 @@ const getStyles = (colors: ThemeColors) => {
     },
     closeBtn: {
       padding: spacing.xs,
-    },
-    loadingBox: {
-      paddingVertical: spacing.xxl,
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: spacing.md,
-    },
-    loadingText: {
-      fontFamily: 'Manrope_500Medium',
-      color: colors.onSurfaceVariant,
     },
     emptyBox: {
       paddingVertical: spacing.xxl,

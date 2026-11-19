@@ -55,11 +55,11 @@ export function SplitwiseWidget() {
   };
 
   const handleRecordSettlement = () => {
-    router.push('/(app)/add-splitwise-settlement');
+    router.navigate('/(app)/add-splitwise-settlement');
   };
 
   const handleAddExpense = () => {
-    router.push('/(app)/add-splitwise-expense');
+    router.navigate('/(app)/add-splitwise-expense');
   };
 
   return (
@@ -163,7 +163,7 @@ export function SplitwiseWidget() {
             </View>
             <TouchableOpacity
               style={[styles.emptyAddBtn, { backgroundColor: colors.primary }]}
-              onPress={() => router.push('/(app)/add-splitwise-expense')}
+              onPress={() => router.navigate('/(app)/add-splitwise-expense')}
               activeOpacity={0.8}
             >
               <MaterialIcons name="add" size={16} color={colors.onPrimary} />
@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   emptyTitle: {
-    ...typography.titleMedium,
+    ...typography.bodyMd,
     fontFamily: 'Manrope_700Bold',
     fontSize: 14,
     lineHeight: 20,

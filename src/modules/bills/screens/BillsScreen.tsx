@@ -1,4 +1,4 @@
-import { Header, Text } from '@/components/ui';
+import { BillsSkeleton, Header, Text } from '@/components/ui';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useAppStore } from '@/store/use-app-store';
 import { radius, typography, useTheme } from '@/theme';
@@ -85,7 +85,11 @@ export function BillsScreen() {
           />
         }
       >
-        {/* Top Summary Dashboard Cards (2x2 Grid) */}
+        {isLoading && bills.length === 0 && subscriptions.length === 0 ? (
+          <BillsSkeleton />
+        ) : (
+          <>
+            {/* Top Summary Dashboard Cards (2x2 Grid) */}
         <View style={styles.summaryGrid}>
           {/* 1. Upcoming Bills */}
           <View
@@ -441,6 +445,8 @@ export function BillsScreen() {
               ))}
             </View>
           )
+        )}
+          </>
         )}
       </ScrollView>
 

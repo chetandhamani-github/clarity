@@ -35,6 +35,8 @@ interface AppState {
   isPostResetLocked: boolean;
   paydayDayOfMonth: number;
   safetyBufferAmount: number;
+  clipboardDetectionEnabled: boolean;
+  lastDismissedClipboardHash: string | null;
   setHasHydrated: (value: boolean) => void;
   setOnboarded: (value: boolean) => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -54,6 +56,8 @@ interface AppState {
   setPostResetLocked: (locked: boolean) => void;
   setPaydayDayOfMonth: (day: number) => void;
   setSafetyBufferAmount: (amt: number) => void;
+  setClipboardDetectionEnabled: (enabled: boolean) => void;
+  setLastDismissedClipboardHash: (hash: string | null) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -78,6 +82,8 @@ export const useAppStore = create<AppState>()(
       isPostResetLocked: false,
       paydayDayOfMonth: 1,
       safetyBufferAmount: 2000,
+      clipboardDetectionEnabled: true,
+      lastDismissedClipboardHash: null,
       setHasHydrated: (value) => set({ _hasHydrated: value }),
       setOnboarded: (value) => set({ hasOnboarded: value }),
       setTheme: (theme) => set({ theme }),
@@ -103,6 +109,8 @@ export const useAppStore = create<AppState>()(
       setPostResetLocked: (locked) => set({ isPostResetLocked: locked }),
       setPaydayDayOfMonth: (day) => set({ paydayDayOfMonth: Math.min(31, Math.max(1, day)) }),
       setSafetyBufferAmount: (amt) => set({ safetyBufferAmount: Math.max(0, amt) }),
+      setClipboardDetectionEnabled: (enabled) => set({ clipboardDetectionEnabled: enabled }),
+      setLastDismissedClipboardHash: (hash) => set({ lastDismissedClipboardHash: hash }),
     }),
     {
       name: 'app-storage',

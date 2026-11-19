@@ -243,8 +243,8 @@ export function BackupRevisionsModal({
   );
 }
 
-const getStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
+const getStyles = (colors: ThemeColors) => {
+  const styles = StyleSheet.create({
     overlay: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.65)',
@@ -518,3 +518,5 @@ const getStyles = (colors: ThemeColors) =>
       fontWeight: '700',
     },
   });
+  return styles;
+};

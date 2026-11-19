@@ -13,7 +13,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter } from 'expo-router';
-import { Text, Header } from '@/components/ui';
+import { Text, Header, SplitwiseSkeleton } from '@/components/ui';
 import { typography, useTheme, radius } from '@/theme';
 import { useAppStore } from '@/store/use-app-store';
 import { formatCurrencyPrivacy, parseDateSafely } from '@/utils/format';
@@ -200,7 +200,11 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
           />
         }
       >
-        {/* HERO BANNER CARD */}
+        {isLoading && people.length === 0 && groups.length === 0 && debts.length === 0 ? (
+          <SplitwiseSkeleton />
+        ) : (
+          <>
+            {/* HERO BANNER CARD */}
         <View
           style={[
             styles.heroCard,
@@ -819,6 +823,8 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
               No recent split activities recorded yet.
             </Text>
           </View>
+        )}
+          </>
         )}
       </ScrollView>
 

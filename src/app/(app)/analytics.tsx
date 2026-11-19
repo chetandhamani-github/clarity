@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
-import { Text, Header, ListSkeleton, useAlert, useToast, NoNetworkView } from '@/components/ui';
-import { typography, useTheme, ThemeColors } from '@/theme';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { Text, Header, ListSkeleton, SkeletonBox, SkeletonText, useAlert, useToast, NoNetworkView } from '@/components/ui';
+import { typography, useTheme, radius, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
@@ -66,7 +66,7 @@ export default function AnalyticsScreen() {
   const [digestOffline, setDigestOffline] = useState(false);
 
   const handleOpenCopilot = () => {
-    router.push({
+    router.navigate({
       pathname: '/(app)/copilot',
       params: { month: selectedMonth.toString(), year: selectedYear.toString() },
     });
@@ -442,9 +442,15 @@ export default function AnalyticsScreen() {
                 </View>
 
                 {loadingDigest ? (
-                  <View style={styles.aiLoadingBox}>
-                    <ActivityIndicator size="small" color={colors.primary} />
-                    <Text style={styles.aiLoadingText}>Analyzing monthly trends & cash flow...</Text>
+                  <View style={{ gap: 12, paddingVertical: 4 }}>
+                    <SkeletonBox width={140} height={24} borderRadius={radius.full} />
+                    <SkeletonText width="85%" height={16} />
+                    <SkeletonText width="95%" height={14} />
+                    <SkeletonText width="65%" height={14} />
+                    <View style={{ gap: 8, marginTop: 4 }}>
+                      <SkeletonText width="90%" height={13} />
+                      <SkeletonText width="80%" height={13} />
+                    </View>
                   </View>
                 ) : digest ? (
                   <View style={styles.aiDigestContent}>
@@ -1070,17 +1076,6 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       color: colors.onPrimaryContainer,
       fontWeight: '600',
-    },
-    aiLoadingBox: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 10,
-      paddingVertical: 20,
-    },
-    aiLoadingText: {
-      ...typography.bodyMd,
-      color: colors.onSurfaceVariant,
     },
     aiDigestContent: {
       gap: 12,
