@@ -58,6 +58,7 @@ describe('Reconciliation Service', () => {
       statementBalance: 10000,
       statementDate: null,
       calculatedBalance: 10000,
+      currentBalance: 10000,
       discrepancy: 0,
       hasDiscrepancy: false,
     });
@@ -94,32 +95,34 @@ describe('Reconciliation Service', () => {
     expect(status).not.toBeNull();
     expect(status?.statementBalance).toBe(25000);
     expect(status?.calculatedBalance).toBe(24650);
+    expect(status?.currentBalance).toBe(24500);
     expect(status?.discrepancy).toBe(-150);
     expect(status?.hasDiscrepancy).toBe(true);
   });
 
-  it('creates an adjustment entry with source ADJUSTMENT', async () => {
+  it('creates an adjustment entry with source ADJUSTMENT and updates account balance', async () => {
     (insertTransaction as jest.Mock).mockResolvedValueOnce({
       id: 'tx-adj-1',
       accountId: 'acc-1',
       amount: 150,
-      type: 'expense',
+      type: 'income',
       source: 'ADJUSTMENT',
       status: 'VERIFIED',
     });
 
+    // When discrepancy is negative (ledger < bank), an income entry is created to reconcile
     await createBalanceAdjustmentEntry('acc-1', -150);
 
     expect(insertTransaction).toHaveBeenCalledWith(
       expect.objectContaining({
         accountId: 'acc-1',
         amount: 150,
-        type: 'expense',
+        type: 'income',
         category: 'Adjustment',
         source: 'ADJUSTMENT',
         status: 'VERIFIED',
       }),
-      { updateAccountBalance: false }
+      { updateAccountBalance: true }
     );
   });
 });

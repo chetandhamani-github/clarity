@@ -34,6 +34,44 @@ describe('TransactionExtractor', () => {
     expect(res?.bank).toBe('ICICI Bank');
   });
 
+  it('extracts available balance from varied bank statement and SMS formats', () => {
+    expect(
+      TransactionExtractor.extractAvailableBalance(
+        'Dear Customer, Bal in A/c ...1234 is Rs. 15,320.50 on 19-NOV-26'
+      )
+    ).toBe(15320.5);
+
+    expect(
+      TransactionExtractor.extractAvailableBalance(
+        'Balance for A/c ending 1234 as of 19-Nov is INR 25,400.00'
+      )
+    ).toBe(25400);
+
+    expect(
+      TransactionExtractor.extractAvailableBalance(
+        'Your A/c 1234 balance as on 19-Nov is Rs 45,000.00'
+      )
+    ).toBe(45000);
+
+    expect(
+      TransactionExtractor.extractAvailableBalance(
+        'Balance in your A/c ...1234 on 19-Nov-26 is INR 12,345.67'
+      )
+    ).toBe(12345.67);
+
+    expect(
+      TransactionExtractor.extractAvailableBalance(
+        'Statement for Account XX9012. Closing Balance: Rs 52,100.00 on 31-Oct-2026'
+      )
+    ).toBe(52100);
+
+    expect(
+      TransactionExtractor.extractAvailableBalance(
+        'Kotak Bank: Balance in your Ac ...1234 is Rs. 8,200.00'
+      )
+    ).toBe(8200);
+  });
+
   it('extracts reference number (UPI Ref / UTR / RRN)', () => {
     const msg: RawSmsMessage = {
       id: '3',

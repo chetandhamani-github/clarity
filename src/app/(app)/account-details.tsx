@@ -653,6 +653,7 @@ export default function AccountDetailsScreen() {
                 discrepancy={reconciliation.discrepancy}
                 statementBalance={reconciliation.statementBalance}
                 calculatedBalance={reconciliation.calculatedBalance}
+                currentBalance={reconciliation.currentBalance}
                 onAdjust={handleAdjustBalance}
                 isAdjusting={isAdjusting}
               />

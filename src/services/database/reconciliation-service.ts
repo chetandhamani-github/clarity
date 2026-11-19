@@ -9,6 +9,7 @@ export interface AccountReconciliationStatus {
   statementBalance: number;
   statementDate: string | null;
   calculatedBalance: number;
+  currentBalance: number;
   discrepancy: number; // account.balance - calculatedBalance
   hasDiscrepancy: boolean;
 }
@@ -30,10 +31,10 @@ export async function getAccountReconciliationStatus(
   }
 
   // 1. Get the latest available_balance parsed from an SMS text for this account
-  const latestSms = await db.getFirstAsync<{
+  let latestSms = await db.getFirstAsync<{
     available_balance: number;
     transaction_date: string;
-    transaction_id: string;
+    transaction_id: string | null;
   }>(
     `SELECT p.available_balance, p.transaction_date, p.transaction_id
      FROM parsed_transactions p
@@ -44,6 +45,22 @@ export async function getAccountReconciliationStatus(
     [accountId]
   );
 
+  // Fallback to match by account mask if transaction was unlinked (e.g. historical scan)
+  if (!latestSms && account.lastFour) {
+    latestSms = await db.getFirstAsync<{
+      available_balance: number;
+      transaction_date: string;
+      transaction_id: string | null;
+    }>(
+      `SELECT available_balance, transaction_date, transaction_id
+       FROM parsed_transactions
+       WHERE account_mask LIKE ? AND available_balance IS NOT NULL
+       ORDER BY transaction_date DESC, created_at DESC
+       LIMIT 1`,
+      [`%${account.lastFour}`]
+    );
+  }
+
   if (!latestSms || latestSms.available_balance === null || latestSms.available_balance === undefined) {
     return {
       accountId: account.id,
@@ -51,6 +68,7 @@ export async function getAccountReconciliationStatus(
       statementBalance: account.balance,
       statementDate: null,
       calculatedBalance: account.balance,
+      currentBalance: account.balance,
       discrepancy: 0,
       hasDiscrepancy: false,
     };
@@ -68,8 +86,8 @@ export async function getAccountReconciliationStatus(
      FROM transactions
      WHERE (account_id = ? OR to_account_id = ?)
        AND date > ?
-       AND id != ?`,
-    [accountId, accountId, latestSms.transaction_date, latestSms.transaction_id]
+       AND (id != ? OR ? IS NULL)`,
+    [accountId, accountId, latestSms.transaction_date, latestSms.transaction_id, latestSms.transaction_id]
   );
 
   let deltaSinceStatement = 0;
@@ -97,6 +115,7 @@ export async function getAccountReconciliationStatus(
     statementBalance: latestSms.available_balance,
     statementDate: latestSms.transaction_date,
     calculatedBalance,
+    currentBalance,
     discrepancy,
     hasDiscrepancy: Math.abs(discrepancy) >= 1.0, // Ignore floating point cent precision differences
   };
@@ -110,7 +129,9 @@ export async function createBalanceAdjustmentEntry(
   accountId: string,
   discrepancyAmount: number
 ): Promise<Transaction> {
-  const isIncome = discrepancyAmount > 0;
+  // If discrepancy < 0 (ledger < statement), income is required to bring ledger up.
+  // If discrepancy > 0 (ledger > statement), expense is required to bring ledger down.
+  const isIncome = discrepancyAmount < 0;
   const absAmount = Math.abs(discrepancyAmount);
 
   return insertTransaction(
@@ -126,6 +147,6 @@ export async function createBalanceAdjustmentEntry(
       source: 'ADJUSTMENT',
       status: 'VERIFIED',
     },
-    { updateAccountBalance: false }
+    { updateAccountBalance: true }
   );
 }

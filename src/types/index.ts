@@ -43,7 +43,7 @@ export interface TransactionSplit {
   note?: string;
 }
 
-export type TransactionSource = 'SMS' | 'MANUAL' | 'ADJUSTMENT';
+export type TransactionSource = 'SMS' | 'MANUAL' | 'ADJUSTMENT' | 'STATEMENT';
 export type TransactionStatus = 'VERIFIED' | 'PENDING_MATCH';
 
 export interface Transaction {

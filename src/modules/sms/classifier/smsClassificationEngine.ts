@@ -133,7 +133,9 @@ export class SmsClassificationEngine {
     const hasVerb =
       this.DEBIT_VERBS.some((p) => p.test(body)) ||
       this.CREDIT_VERBS.some((p) => p.test(body)) ||
-      /\b(?:transferred?|remitted)\s+to\s+your\s+(?:a\/?c|account)\b/i.test(body);
+      /\b(?:transferred?|remitted)\s+to\s+your\s+(?:a\/?c|account)\b/i.test(body) ||
+      (/\b(?:bal(?:ance)?|available\s+bal(?:ance)?|closing\s+bal(?:ance)?)\b/i.test(body) &&
+        /(?:a\/?c(?:count)?|acct?\.?|account|card)\b/i.test(body));
 
     return hasVerb;
   }
@@ -207,13 +209,26 @@ export class SmsClassificationEngine {
       /\b(?:transferred?|remitted)\s+to\s+your\s+(?:a\/?c|account)\b/i.test(body);
     const isDebit = !isTransferToOwnAccount && this.DEBIT_VERBS.some((p) => p.test(body));
     const isCredit = isTransferToOwnAccount || this.CREDIT_VERBS.some((p) => p.test(body));
+    const isBalanceAlert =
+      /\b(?:bal(?:ance)?|available\s+bal(?:ance)?|closing\s+bal(?:ance)?|clear\s+bal(?:ance)?)\b/i.test(body) &&
+      /(?:a\/?c(?:count)?|acct?\.?|account|card)\b/i.test(body);
 
-    if (!hasAmount || (!isDebit && !isCredit)) {
+    if (!hasAmount || (!isDebit && !isCredit && !isBalanceAlert)) {
       reasons.push('Missing transaction amount or financial debit/credit verb');
       return {
         classification: 'UNKNOWN',
         confidence: 0.2,
         isFinancial: false,
+        reasons,
+      };
+    }
+
+    if (isBalanceAlert && !isDebit && !isCredit) {
+      reasons.push('Account balance snapshot or statement alert');
+      return {
+        classification: 'TRANSACTION_CREDIT',
+        confidence: 0.85,
+        isFinancial: true,
         reasons,
       };
     }

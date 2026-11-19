@@ -6,9 +6,10 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { formatCurrency } from '@/utils/format';
 
 export interface DiscrepancyBannerProps {
-  discrepancy: number; // positive = ledger is lower than statement, negative = ledger is higher than statement
+  discrepancy: number; // positive = ledger is higher than statement, negative = ledger is lower than statement
   statementBalance: number;
   calculatedBalance: number;
+  currentBalance?: number;
   onAdjust: () => void;
   isAdjusting?: boolean;
 }
@@ -17,12 +18,14 @@ export function DiscrepancyBanner({
   discrepancy,
   statementBalance,
   calculatedBalance,
+  currentBalance,
   onAdjust,
   isAdjusting = false,
 }: DiscrepancyBannerProps) {
   const { colors } = useTheme();
 
   const diffAbs = Math.abs(discrepancy);
+  const ledgerBalance = currentBalance !== undefined ? currentBalance : calculatedBalance + discrepancy;
 
   return (
     <View
@@ -41,7 +44,7 @@ export function DiscrepancyBanner({
         <View style={{ flex: 1 }}>
           <Text style={[styles.title, { color: colors.onSurface }]}>Discrepancy Detected</Text>
           <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
-            Mismatch of {formatCurrency(diffAbs)} between your bank SMS ({formatCurrency(statementBalance)}) and ledger ({formatCurrency(calculatedBalance)}).
+            Mismatch of {formatCurrency(diffAbs)} between your bank statement ({formatCurrency(calculatedBalance)}) and account balance ({formatCurrency(ledgerBalance)}).
           </Text>
         </View>
       </View>

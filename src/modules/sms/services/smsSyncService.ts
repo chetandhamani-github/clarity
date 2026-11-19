@@ -224,6 +224,9 @@ export class SmsSyncService {
           this.setLastSyncTimestamp(Date.now());
         }
 
+        // Reconcile and apply latest statement / available balances across accounts
+        await this.reconcileAvailableBalances();
+
         // Evaluate bill reminders for proactive notifications
         BillAlertEngine.evaluateUpcomingBillAlerts().catch(() => {});
         BillsRepository.deduplicateExistingBills().catch(() => {});
@@ -323,6 +326,9 @@ export class SmsSyncService {
         if (maxSeenTimestamp > lastSync) {
           this.setLastSyncTimestamp(maxSeenTimestamp);
         }
+
+        // Reconcile and apply latest statement / available balances across accounts
+        await this.reconcileAvailableBalances();
 
         // Evaluate bill reminders for proactive notifications
         BillAlertEngine.evaluateUpcomingBillAlerts().catch(() => {});
@@ -549,7 +555,10 @@ export class SmsSyncService {
     const database = getDatabase();
     let accounts = await getAllAccounts();
 
-    for (const transaction of parsedBatch) {
+    // Sort chronologically (oldest to newest) within batch so the latest balance snapshot wins
+    const sortedBatch = [...parsedBatch].sort((a, b) => a.timestamp - b.timestamp);
+
+    for (const transaction of sortedBatch) {
       if (transaction.isDuplicate && transaction.duplicateOf !== 'HISTORICAL_SKIPPED') continue;
 
       try {
@@ -942,15 +951,6 @@ export class SmsSyncService {
         }
 
         if (latestBalance?.available_balance !== null && latestBalance?.available_balance !== undefined) {
-          // If the account was updated after this SMS was received, do NOT overwrite it
-          if (account.updatedAt && latestBalance.transaction_date) {
-            const updatedAtMs = new Date(account.updatedAt).getTime();
-            const txDateMs = new Date(latestBalance.transaction_date).getTime();
-            if (updatedAtMs > txDateMs) {
-              continue;
-            }
-          }
-
           await updateAccountBalance(account.id, latestBalance.available_balance);
           evaluateAccountBalanceAlerts({
             id: account.id,

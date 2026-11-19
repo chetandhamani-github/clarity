@@ -9,6 +9,7 @@ export interface ParsedPdfTransaction {
   category: string;
   referenceNumber?: string;
   note?: string;
+  balance?: number;
 }
 
 export interface BankProfile {
@@ -59,7 +60,20 @@ export const SUPPORTED_BANK_PROFILES: BankProfile[] = [
  * Checks if a PDF buffer/content contains an /Encrypt dictionary.
  */
 export function checkIsPdfEncrypted(rawContent: string): boolean {
-  return rawContent.includes('/Encrypt') || rawContent.includes('/Standard');
+  if (!rawContent) return false;
+  const encryptionPatterns = [
+    /\/encrypt\b/i,
+    /\/filter\s*\/\s*(?:standard|adobe\.pubsec|stdcf)/i,
+    /\/type\s*\/encrypt\b/i,
+    /\/stdcf\b/i,
+    /\/aesv[23]\b/i,
+    /\/o\s*(?:<|\()/i,
+    /\/u\s*(?:<|\()/i,
+    /\/p\s+-[0-9]+/i,
+    /\/perms\b/i,
+    /\/standard\b/i,
+  ];
+  return encryptionPatterns.some((pattern) => pattern.test(rawContent));
 }
 
 /**
@@ -139,6 +153,8 @@ export interface PdfParseResult {
   isEncrypted: boolean;
   transactions: ParsedPdfTransaction[];
   errors: string[];
+  closingBalance?: number;
+  statementDate?: string;
 }
 
 /**
@@ -192,8 +208,10 @@ export function parseBankStatementPdfText(text: string): PdfParseResult {
       type = 'income';
     }
 
-    // In most statements, the transaction amount is the first or second valid monetary amount
+    // In most statements, the transaction amount is the first valid monetary amount
     const amount = validAmounts[0];
+    // If a second valid amount is present on the transaction line, it represents the running balance
+    const rowBalance = validAmounts.length >= 2 ? validAmounts[1] : undefined;
 
     // Narration: strip out the amount numbers
     let narration = remaining;
@@ -219,7 +237,36 @@ export function parseBankStatementPdfText(text: string): PdfParseResult {
       type,
       category: inferCategory(narration),
       note: narration,
+      ...(rowBalance !== undefined ? { balance: rowBalance } : {}),
     });
+  }
+
+  // Extract closing balance: check for summary pattern in document text
+  let closingBalance: number | undefined;
+  let statementDate: string | undefined;
+
+  const summaryBalanceMatch = text.match(
+    /(?:closing\s*bal(?:ance)?|available\s*bal(?:ance)?|clear\s*bal(?:ance)?|total\s*bal(?:ance)?|net\s*bal(?:ance)?)\s*(?:is|was|:|-)?\s*(?:rs\.?|inr|usd|eur|gbp|₹|\$|€|£)?\s*([\d,]+(?:\.\d{1,2})?)/i
+  );
+  if (summaryBalanceMatch && summaryBalanceMatch[1]) {
+    const parsed = parseFloat(summaryBalanceMatch[1].replace(/,/g, ''));
+    if (!isNaN(parsed)) closingBalance = parsed;
+  }
+
+  if (closingBalance === undefined) {
+    const txsWithBalance = transactions.filter((t) => t.balance !== undefined);
+    if (txsWithBalance.length > 0) {
+      const sortedByDateDesc = [...txsWithBalance].sort((a, b) => b.date.localeCompare(a.date));
+      closingBalance = sortedByDateDesc[0].balance;
+      statementDate = sortedByDateDesc[0].date;
+    }
+  }
+
+  const summaryDateMatch = text.match(
+    /(?:statement\s*(?:date|as\s*on|period)|as\s*on\s*date)\s*(?:is|:|-)?\s*(\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b|\b\d{1,2}[ -][a-zA-Z]{3}[ -]\d{2,4}\b)/i
+  );
+  if (summaryDateMatch && summaryDateMatch[1]) {
+    statementDate = normalizeDate(summaryDateMatch[1]) || statementDate;
   }
 
   return {
@@ -227,6 +274,8 @@ export function parseBankStatementPdfText(text: string): PdfParseResult {
     isEncrypted: false,
     transactions,
     errors,
+    closingBalance,
+    statementDate,
   };
 }
 
@@ -238,10 +287,22 @@ export async function parseBankStatementPdf(
   options?: { password?: string }
 ): Promise<PdfParseResult> {
   try {
-    // Read the file header and content
-    const rawContent = await FileSystem.readAsStringAsync(fileUri, {
-      encoding: FileSystem.EncodingType.UTF8,
-    });
+    // Read the file header and content (fallback to Base64 decode if binary)
+    let rawContent = '';
+    try {
+      rawContent = await FileSystem.readAsStringAsync(fileUri, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+    } catch {
+      try {
+        const base64Content = await FileSystem.readAsStringAsync(fileUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        rawContent = typeof atob !== 'undefined' ? atob(base64Content) : base64Content;
+      } catch {
+        rawContent = '';
+      }
+    }
 
     const isEncrypted = checkIsPdfEncrypted(rawContent);
 
@@ -250,7 +311,7 @@ export async function parseBankStatementPdf(
         success: false,
         isEncrypted: true,
         transactions: [],
-        errors: ['Password required: This PDF statement is encrypted.'],
+        errors: ['Password required: This PDF statement is encrypted with a password.'],
       };
     }
 
@@ -276,15 +337,35 @@ export async function parseBankStatementPdf(
       }
     }
 
-    const combinedText = textChunks.length > 0 ? textChunks.join('\n') : rawContent;
-    const parsed = parseBankStatementPdfText(combinedText);
+    // If PDF header exists but no text operators found, check if it is an encrypted stream
+    const isEncryptedStream =
+      !isEncrypted &&
+      rawContent.includes('%PDF-') &&
+      textChunks.length === 0 &&
+      (rawContent.includes('/Filter') || rawContent.includes('/ObjStm') || rawContent.includes('/XRef'));
 
-    if (parsed.transactions.length === 0 && isEncrypted) {
+    if (isEncryptedStream && !options?.password) {
       return {
         success: false,
         isEncrypted: true,
         transactions: [],
-        errors: ['Incorrect password or unable to decrypt this bank statement format.'],
+        errors: ['Password required: This PDF statement is encrypted or protected.'],
+      };
+    }
+
+    const combinedText = textChunks.length > 0 ? textChunks.join('\n') : rawContent;
+    const parsed = parseBankStatementPdfText(combinedText);
+
+    if (parsed.transactions.length === 0 && (isEncrypted || isEncryptedStream)) {
+      return {
+        success: false,
+        isEncrypted: true,
+        transactions: [],
+        errors: [
+          options?.password
+            ? 'Incorrect password or unsupported encrypted PDF format. Please export an unlocked PDF or CSV from your bank portal.'
+            : 'Password required: This bank statement is encrypted with a password.',
+        ],
       };
     }
 

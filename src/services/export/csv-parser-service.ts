@@ -8,6 +8,7 @@ export interface ParsedCsvTransaction {
   merchant: string;
   category: string;
   note: string;
+  balance?: number;
 }
 
 export interface CsvParseResult {
@@ -15,6 +16,8 @@ export interface CsvParseResult {
   totalRows: number;
   ignoredRows: number;
   errors: string[];
+  closingBalance?: number;
+  statementDate?: string;
 }
 
 /**
@@ -126,6 +129,20 @@ function cleanAmount(raw: string): number {
 }
 
 /**
+ * Cleans balance amounts, supporting negative signs and Dr/Cr indicators.
+ */
+function cleanBalance(raw: string): number | undefined {
+  if (!raw) return undefined;
+  const clean = raw.trim();
+  if (!clean) return undefined;
+  const isDr = /\b(?:dr|debit)\b/i.test(clean) || clean.includes('-');
+  const numStr = clean.replace(/[^0-9.]/g, '');
+  const parsed = parseFloat(numStr);
+  if (isNaN(parsed)) return undefined;
+  return isDr ? -parsed : parsed;
+}
+
+/**
  * Extracts a clean merchant name from raw bank narration/remarks.
  */
 function cleanMerchantName(narration: string): string {
@@ -175,6 +192,7 @@ export function parseBankStatementCsv(csvText: string): CsvParseResult {
   let colCredit = -1;
   let colAmount = -1;
   let colType = -1;
+  let colBalance = -1;
 
   for (let r = 0; r < Math.min(rows.length, 10); r++) {
     const headers = rows[r].map((h) => h.toLowerCase().trim());
@@ -187,6 +205,9 @@ export function parseBankStatementCsv(csvText: string): CsvParseResult {
       if (/deposit|credit|cr(\.|\b)|cr\s*amount/.test(h) && colCredit === -1) colCredit = c;
       if (/^amount$|^txn\s*amount$/.test(h) && colAmount === -1) colAmount = c;
       if (/^type$|cr\/dr|d\/c/.test(h) && colType === -1) colType = c;
+      if (/(?:closing\s*bal(?:ance)?|available\s*bal(?:ance)?|clear\s*bal(?:ance)?|net\s*bal(?:ance)?|^balance$|^bal\.?$)/.test(h) && colBalance === -1) {
+        colBalance = c;
+      }
     }
 
     if (colDate !== -1 && (colDesc !== -1 || colDebit !== -1 || colAmount !== -1)) {
@@ -275,6 +296,8 @@ export function parseBankStatementCsv(csvText: string): CsvParseResult {
       type: type === 'income' ? 'CREDIT' : 'DEBIT',
     });
 
+    const rowBalance = colBalance !== -1 ? cleanBalance(row[colBalance]) : undefined;
+
     transactions.push({
       date: normalizedDate,
       amount,
@@ -282,7 +305,22 @@ export function parseBankStatementCsv(csvText: string): CsvParseResult {
       merchant,
       category,
       note: rawDesc,
+      ...(rowBalance !== undefined ? { balance: rowBalance } : {}),
     });
+  }
+
+  // Determine closing balance from transactions:
+  // Sort candidates by date descending to find the balance corresponding to the newest entry
+  let closingBalance: number | undefined;
+  let statementDate: string | undefined;
+
+  const txsWithBalance = transactions.filter((t) => t.balance !== undefined);
+  if (txsWithBalance.length > 0) {
+    // If chronological (typical), last row is latest; if reverse chronological, first row is latest.
+    // Explicitly pick the transaction with the most recent date.
+    const sortedByDateDesc = [...txsWithBalance].sort((a, b) => b.date.localeCompare(a.date));
+    closingBalance = sortedByDateDesc[0].balance;
+    statementDate = sortedByDateDesc[0].date;
   }
 
   return {
@@ -290,5 +328,7 @@ export function parseBankStatementCsv(csvText: string): CsvParseResult {
     totalRows: rows.length - (headerIndex + 1),
     ignoredRows,
     errors,
+    closingBalance,
+    statementDate,
   };
 }

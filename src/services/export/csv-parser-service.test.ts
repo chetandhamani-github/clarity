@@ -50,6 +50,8 @@ Date,Narration,Withdrawal,Deposit,Balance
 
       const result = parseBankStatementCsv(hdfcCsv);
       expect(result.transactions).toHaveLength(3);
+      expect(result.closingBalance).toBe(95000);
+      expect(result.statementDate).toBe('2026-11-17');
 
       expect(result.transactions[0]).toMatchObject({
         date: '2026-11-15',
@@ -57,18 +59,21 @@ Date,Narration,Withdrawal,Deposit,Balance
         type: 'expense',
         merchant: 'SWIGGY',
         category: 'Food & Dining',
+        balance: 12000,
       });
 
       expect(result.transactions[1]).toMatchObject({
         date: '2026-11-16',
         amount: 85000,
         type: 'income',
+        balance: 97000,
       });
 
       expect(result.transactions[2]).toMatchObject({
         date: '2026-11-17',
         amount: 2000,
         type: 'expense',
+        balance: 95000,
       });
     });
 

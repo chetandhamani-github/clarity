@@ -54,6 +54,9 @@ export default function ImportStatementScreen() {
   const [fileName, setFileName] = useState<string>('');
   const [parsedTransactions, setParsedTransactions] = useState<StatementItem[]>([]);
   const [newTransactions, setNewTransactions] = useState<StatementItem[]>([]);
+  const [statementBalance, setStatementBalance] = useState<number | null>(null);
+  const [statementDate, setStatementDate] = useState<string | null>(null);
+  const [applyStatementBalance, setApplyStatementBalance] = useState<boolean>(true);
   const [duplicateCount, setDuplicateCount] = useState<number>(0);
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -81,8 +84,18 @@ export default function ImportStatementScreen() {
   );
 
   const processTransactionsDeduplication = async (
-    rawTransactions: (ParsedCsvTransaction | ParsedPdfTransaction)[]
+    rawTransactions: (ParsedCsvTransaction | ParsedPdfTransaction)[],
+    extractedBalance?: number,
+    extractedDate?: string
   ) => {
+    if (extractedBalance !== undefined && extractedBalance !== null) {
+      setStatementBalance(extractedBalance);
+      setStatementDate(extractedDate || null);
+    } else {
+      setStatementBalance(null);
+      setStatementDate(null);
+    }
+
     const transactionsToProcess: StatementItem[] = rawTransactions.map((tx) => ({
       date: tx.date,
       merchant: tx.merchant,
@@ -160,6 +173,10 @@ export default function ImportStatementScreen() {
           setPendingPdfUri(asset.uri);
           setPdfPasswordModalVisible(true);
           setIsParsing(false);
+          showToast(
+            pdfResult.errors[0] || 'Password required: This PDF statement is encrypted.',
+            'info'
+          );
           return;
         }
 
@@ -172,7 +189,11 @@ export default function ImportStatementScreen() {
           return;
         }
 
-        await processTransactionsDeduplication(pdfResult.transactions);
+        await processTransactionsDeduplication(
+          pdfResult.transactions,
+          pdfResult.closingBalance,
+          pdfResult.statementDate
+        );
       } else {
         const fileContent = await FileSystem.readAsStringAsync(asset.uri);
         const parseResult = parseBankStatementCsv(fileContent);
@@ -186,7 +207,11 @@ export default function ImportStatementScreen() {
           return;
         }
 
-        await processTransactionsDeduplication(parseResult.transactions);
+        await processTransactionsDeduplication(
+          parseResult.transactions,
+          parseResult.closingBalance,
+          parseResult.statementDate
+        );
       }
     } catch (err: unknown) {
       setIsParsing(false);
@@ -200,7 +225,10 @@ export default function ImportStatementScreen() {
     try {
       const pdfResult = await parseBankStatementPdf(pendingPdfUri, { password: pdfPassword });
       if (pdfResult.isEncrypted && pdfResult.transactions.length === 0) {
-        showToast('Incorrect password. Please try again.', 'error');
+        showToast(
+          pdfResult.errors[0] || 'Incorrect password or unable to decrypt this bank statement format.',
+          'error'
+        );
         setIsParsing(false);
         return;
       }
@@ -212,7 +240,11 @@ export default function ImportStatementScreen() {
 
       setPdfPasswordModalVisible(false);
       setPdfPassword('');
-      await processTransactionsDeduplication(pdfResult.transactions);
+      await processTransactionsDeduplication(
+        pdfResult.transactions,
+        pdfResult.closingBalance,
+        pdfResult.statementDate
+      );
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Failed to unlock PDF', 'error');
     } finally {
@@ -243,19 +275,33 @@ export default function ImportStatementScreen() {
 
     setIsImporting(true);
     try {
+      // If user chooses to set the account balance directly to the statement's balance,
+      // do not let historical transaction inserts sequentially mutate account.balance.
+      const shouldUpdateBalancePerTx =
+        statementBalance === null || !applyStatementBalance;
+
       for (const tx of txsToImport) {
-        await insertTransaction({
-          accountId: selectedAccountId,
-          amount: tx.amount,
-          type: tx.type,
-          merchant: tx.merchant,
-          category: tx.category,
-          date: tx.date,
-          isRecurring: false,
-          note: tx.note,
-          source: 'MANUAL',
-          status: 'VERIFIED',
-        });
+        await insertTransaction(
+          {
+            accountId: selectedAccountId,
+            amount: tx.amount,
+            type: tx.type,
+            merchant: tx.merchant,
+            category: tx.category,
+            date: tx.date,
+            isRecurring: false,
+            note: tx.note,
+            source: 'STATEMENT',
+            status: 'VERIFIED',
+          },
+          { updateAccountBalance: shouldUpdateBalancePerTx }
+        );
+      }
+
+      // Explicitly update account balance to the statement's closing balance if available and selected
+      if (statementBalance !== null && applyStatementBalance) {
+        const { updateAccountBalance } = await import('@/services/database/account-dao');
+        await updateAccountBalance(selectedAccountId, statementBalance);
       }
 
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
@@ -367,6 +413,47 @@ export default function ImportStatementScreen() {
                 </Text>
               </View>
             </View>
+
+            {/* Statement Balance Card */}
+            {statementBalance !== null && (
+              <View
+                style={[
+                  styles.balanceCard,
+                  {
+                    backgroundColor: colors.surfaceContainerLow,
+                    borderColor: colors.outlineVariant,
+                  },
+                ]}
+              >
+                <View style={styles.balanceInfo}>
+                  <View style={styles.balanceHeaderRow}>
+                    <MaterialIcons name="account-balance" size={18} color={colors.primary} />
+                    <Text style={[styles.balanceCardTitle, { color: colors.onSurface }]}>
+                      Statement Closing Balance
+                    </Text>
+                  </View>
+                  <Text style={[styles.balanceCardAmount, { color: colors.onSurface }]}>
+                    {formatCurrency(statementBalance)}
+                    {statementDate ? ` (as of ${formatDate(statementDate)})` : ''}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.balanceToggleRow}
+                  onPress={() => setApplyStatementBalance((prev) => !prev)}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons
+                    name={applyStatementBalance ? 'check-box' : 'check-box-outline-blank'}
+                    size={20}
+                    color={applyStatementBalance ? colors.primary : colors.outline}
+                  />
+                  <Text style={[styles.balanceToggleText, { color: colors.onSurfaceVariant }]}>
+                    Update {selectedAccount?.name || 'account'} balance to {formatCurrency(statementBalance)}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Preview list with toggle selection */}
             <View style={styles.previewCard}>
@@ -687,6 +774,41 @@ const getStyles = (colors: ThemeColors) => {
       fontSize: 18,
       fontWeight: '700',
       color: colors.onSurface,
+    },
+    balanceCard: {
+      borderRadius: 16,
+      borderWidth: 1,
+      padding: 16,
+      gap: 12,
+    },
+    balanceInfo: {
+      gap: 4,
+    },
+    balanceHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    balanceCardTitle: {
+      ...typography.labelMd,
+      fontWeight: '700',
+      fontSize: 13,
+    },
+    balanceCardAmount: {
+      ...typography.headlineSm,
+      fontWeight: '700',
+      fontSize: 20,
+    },
+    balanceToggleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingTop: 4,
+    },
+    balanceToggleText: {
+      ...typography.bodyMd,
+      fontSize: 13,
+      flex: 1,
     },
     previewCard: {
       backgroundColor: colors.surfaceContainerLowest,

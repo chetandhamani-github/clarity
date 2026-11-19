@@ -42,7 +42,13 @@ export class TransactionExtractor {
   ];
 
   private static readonly AVAIL_BAL_REGEXES = [
+    // 1. Intervening account/date patterns: "Bal in A/c 1234 is Rs. 100", "Balance for account XX1234 as of 15-Nov is INR 500", "Balance in your A/c on 19-Nov is Rs 100"
+    /(?:(?:total\s+)?(?:avl\.?|avail(?:able)?)\s+bal(?:ance)?|bal(?:ance)?)\s+(?:in|for|of|on)\s+[\s\S]{0,50}?\b(?:is|was|:|-)?\s*(?:rs\.?|inr|usd|eur|gbp|₹|\$|€|£)\.?\s*([\d][\d,]*(?:\.\d{1,2})?)/i,
+    // 2. Account before balance: "Your A/c 1234 balance as on 19-Nov is Rs 45,000.00"
+    /(?:a\/?c(?:count)?|acct?\.?)\s*[\s\S]{0,30}?\b(?:bal(?:ance)?)\s*(?:as\s*on|as\s*of|on)?\s*[\s\S]{0,30}?\b(?:is|was|:|-)?\s*(?:rs\.?|inr|usd|eur|gbp|₹|\$|€|£)\.?\s*([\d][\d,]*(?:\.\d{1,2})?)/i,
+    // 3. Standard keywords immediately before amount: "Avl Bal Rs 10,250", "Closing Balance: Rs 52,100"
     /(?:(?:total\s+)?(?:avl\.?|avail(?:able)?)\s*(?:bal(?:ance)?(?:\s*\/\s*(?:lmt|limit))?|lmt|limit|credit\s*limit)|(?:current|clear|closing|account|acct)?\s*bal(?:ance)?|bal\s*(?:lmt|limit)|remaining\s*(?:limit|credit\s*limit)|limit\s*(?:available|avl)|card\s*limit\s*available)\s*(?:is|was|:|-)?\s*(?:rs\.?|inr|usd|eur|gbp|₹|\$|€|£)?\s*([\d][\d,]*(?:\.\d{1,2})?)/i,
+    // 4. Currency amount before balance keyword: "Rs 10,250 is your available balance"
     /(?:rs\.?|inr|usd|eur|gbp|₹|\$|€|£)\s*([\d][\d,]*(?:\.\d{1,2})?)\s*(?:is|was)?\s*(?:your\s*)?(?:(?:total\s+)?(?:avl\.?|avail(?:able)?)\s*(?:bal(?:ance)?|lmt|limit|credit\s*limit)|(?:current|clear|closing)?\s*bal(?:ance)?|bal\s*limit|remaining\s*limit|limit\s*available)/i,
   ];
 
