@@ -15,7 +15,7 @@ import type { HealthPillar } from '@/services/analytics/financial-health-engine'
 
 export default function FinancialHealthScreen() {
   const { colors } = useTheme();
-  const styles = createStyles(colors);
+  const styles = getStyles(colors);
   const insets = useSafeInsets();
   const { report, isLoading, refetch } = useFinancialHealth();
   const [refreshing, setRefreshing] = useState(false);
@@ -168,8 +168,8 @@ export default function FinancialHealthScreen() {
   );
 }
 
-function createStyles(colors: ThemeColors) {
-  return StyleSheet.create({
+const getStyles = (colors: ThemeColors) => {
+  const styles = StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
@@ -365,4 +365,5 @@ function createStyles(colors: ThemeColors) {
       lineHeight: 14,
     },
   });
-}
+  return styles;
+};

@@ -21,7 +21,7 @@ const EXTRA_PAYMENT_PRESETS = [0, 1000, 2500, 5000, 10000];
 
 export default function DebtPayoffScreen() {
   const { colors } = useTheme();
-  const styles = createStyles(colors);
+  const styles = getStyles(colors);
   const insets = useSafeInsets();
   const router = useRouter();
   const { showToast } = useToast();
@@ -380,8 +380,8 @@ export default function DebtPayoffScreen() {
   );
 }
 
-function createStyles(colors: ThemeColors) {
-  return StyleSheet.create({
+const getStyles = (colors: ThemeColors) => {
+  const styles = StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
@@ -752,4 +752,5 @@ function createStyles(colors: ThemeColors) {
       fontSize: 12,
     },
   });
-}
+  return styles;
+};

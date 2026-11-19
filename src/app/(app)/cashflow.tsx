@@ -639,8 +639,8 @@ export default function CashFlowScreen() {
   );
 }
 
-function getStyles(colors: ThemeColors) {
-  return StyleSheet.create({
+const getStyles = (colors: ThemeColors) => {
+  const styles = StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
@@ -784,12 +784,6 @@ function getStyles(colors: ThemeColors) {
       fontFamily: 'Manrope_700Bold',
       fontSize: 13,
       color: colors.onSurface,
-    },
-    chartMeta: {
-      ...typography.bodyMd,
-      fontSize: 11,
-      fontFamily: 'Manrope_600SemiBold',
-      color: colors.primary,
     },
     modeToggleRow: {
       flexDirection: 'row',
@@ -1034,4 +1028,5 @@ function getStyles(colors: ThemeColors) {
       fontSize: 12,
     },
   });
-}
+  return styles;
+};

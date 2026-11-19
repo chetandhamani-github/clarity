@@ -199,7 +199,7 @@ export async function insertTransaction(
   // 1.5 Evaluate Smart Automation Rules (IFTTT for Finance)
   let finalCategory = data.category;
   let finalNote = data.note;
-  let tagsToApply = data.tags ? [...data.tags] : [];
+  const tagsToApply = data.tags ? [...data.tags] : [];
 
   try {
     const { evaluateSmartRules } = await import('@/services/rules/rules-engine');
@@ -677,7 +677,7 @@ export async function getNetWorthHistory(days: number = 30): Promise<HistoryPoin
   const currentResult = await db.getFirstAsync<{ total: number }>(
     'SELECT COALESCE(SUM(balance), 0) as total FROM accounts'
   );
-  let currentBalance = currentResult?.total ?? 0;
+  const currentBalance = currentResult?.total ?? 0;
 
   // 2. Get all transactions from the last `days` days
   const startDate = new Date();
@@ -737,7 +737,7 @@ export async function getAccountHistory(
 
   // 1. Get current account balance
   const account = await getAccountById(accountId);
-  let currentBalance = account?.balance ?? 0;
+  const currentBalance = account?.balance ?? 0;
 
   // 2. Get transactions for this account in the last `days` days
   const startDate = new Date();

@@ -23,7 +23,7 @@ import type { SmartRule } from '@/types';
 
 export default function RulesScreen() {
   const { colors } = useTheme();
-  const styles = createStyles(colors);
+  const styles = getStyles(colors);
   const insets = useSafeInsets();
   const router = useRouter();
   const { showToast } = useToast();
@@ -386,8 +386,8 @@ export default function RulesScreen() {
   );
 }
 
-function createStyles(colors: ThemeColors) {
-  return StyleSheet.create({
+const getStyles = (colors: ThemeColors) => {
+  const styles = StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
@@ -624,4 +624,5 @@ function createStyles(colors: ThemeColors) {
       fontSize: 11,
     },
   });
-}
+  return styles;
+};

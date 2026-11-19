@@ -80,7 +80,7 @@ const COMMON_CATEGORIES = [
 
 export default function AddRuleScreen() {
   const { colors } = useTheme();
-  const styles = createStyles(colors);
+  const styles = getStyles(colors);
   const insets = useSafeInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
@@ -599,8 +599,8 @@ export default function AddRuleScreen() {
   );
 }
 
-function createStyles(colors: ThemeColors) {
-  return StyleSheet.create({
+const getStyles = (colors: ThemeColors) => {
+  const styles = StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
@@ -791,4 +791,5 @@ function createStyles(colors: ThemeColors) {
       color: '#EF4444',
     },
   });
-}
+  return styles;
+};

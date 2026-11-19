@@ -602,8 +602,8 @@ export default function InvestmentsScreen() {
   );
 }
 
-function getStyles(colors: ThemeColors) {
-  return StyleSheet.create({
+const getStyles = (colors: ThemeColors) => {
+  const styles = StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
@@ -1024,4 +1024,5 @@ function getStyles(colors: ThemeColors) {
       padding: 4,
     },
   });
-}
+  return styles;
+};

@@ -326,7 +326,7 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
 
       // 2. Apply server delta updates to local SQLite
       const db = getDatabase();
-      let serverAppliedCount = { people: 0, debts: 0, settlements: 0 };
+      const serverAppliedCount = { people: 0, debts: 0, settlements: 0 };
 
       if (response && response.success) {
         await db.withTransactionAsync(async () => {

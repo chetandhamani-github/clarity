@@ -169,7 +169,7 @@ export async function calculateSafeToSpend(
   for (const h of investmentHoldings) {
     if (h.sipAmount && h.sipAmount > 0 && h.sipDayOfMonth && h.sipDayOfMonth >= 1 && h.sipDayOfMonth <= 31) {
       const sipDay = h.sipDayOfMonth;
-      let checkDate = new Date(today);
+      const checkDate = new Date(today);
       while (formatDateString(checkDate) <= nextPaydayDate) {
         if (checkDate.getDate() === sipDay) {
           committedSipTotal += h.sipAmount;

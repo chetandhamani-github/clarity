@@ -131,8 +131,8 @@ export async function computeFinancialHealthScore(): Promise<FinancialHealthRepo
 
   // 3. Credit Utilization (20 points)
   const creditCards = accounts.filter((a) => a.type === 'credit');
-  let totalCreditLimit = creditCards.reduce((sum, c) => sum + (c.creditLimit || 0), 0);
-  let totalCreditBalance = creditCards.reduce((sum, c) => sum + Math.max(0, Math.abs(c.balance)), 0);
+  const totalCreditLimit = creditCards.reduce((sum, c) => sum + (c.creditLimit || 0), 0);
+  const totalCreditBalance = creditCards.reduce((sum, c) => sum + Math.max(0, Math.abs(c.balance)), 0);
 
   let creditUtilPercent = 0;
   if (totalCreditLimit > 0) {
