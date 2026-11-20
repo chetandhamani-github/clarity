@@ -226,11 +226,113 @@ function decodePdfLiteral(str: string): string {
 }
 
 /**
- * Decodes PDF hex string `<48656c6c6f>`, with UTF-16BE support.
+ * Parses a /ToUnicode CMap stream and returns a mapping from CID/glyph code to Unicode character string.
  */
-function decodePdfHex(hex: string): string {
+function parseCMap(cmapStr: string): Map<number, string> {
+  const map = new Map<number, string>();
+
+  // Parse beginbfchar ... endbfchar
+  const bfCharRegex = /beginbfchar([\s\S]*?)endbfchar/g;
+  let charMatch: RegExpExecArray | null;
+  while ((charMatch = bfCharRegex.exec(cmapStr)) !== null) {
+    const tokens = charMatch[1].trim().match(/<[0-9a-fA-F]+>/g) || [];
+    for (let i = 0; i < tokens.length - 1; i += 2) {
+      const srcCode = parseInt(tokens[i].replace(/[<>]/g, ''), 16);
+      const dstHex = tokens[i + 1].replace(/[<>]/g, '');
+      let dstStr = '';
+      for (let k = 0; k < dstHex.length; k += 4) {
+        const charCode = parseInt(dstHex.substring(k, Math.min(k + 4, dstHex.length)), 16);
+        if (!isNaN(charCode) && charCode > 0) dstStr += String.fromCharCode(charCode);
+      }
+      if (dstStr) map.set(srcCode, dstStr);
+    }
+  }
+
+  // Parse beginbfrange ... endbfrange
+  const bfRangeRegex = /beginbfrange([\s\S]*?)endbfrange/g;
+  let rangeMatch: RegExpExecArray | null;
+  while ((rangeMatch = bfRangeRegex.exec(cmapStr)) !== null) {
+    const tokens = rangeMatch[1].trim().match(/(?:<[0-9a-fA-F]+>|\[[\s\S]*?\])/g) || [];
+    let i = 0;
+    while (i < tokens.length) {
+      const startTok = tokens[i++];
+      const endTok = tokens[i++];
+      const dstTok = tokens[i++];
+      if (!startTok || !endTok || !dstTok) break;
+
+      const startCode = parseInt(startTok.replace(/[<>]/g, ''), 16);
+      const endCode = parseInt(endTok.replace(/[<>]/g, ''), 16);
+
+      if (dstTok.startsWith('[')) {
+        const destHexes = dstTok.replace(/[\[\]]/g, '').trim().match(/<[0-9a-fA-F]+>/g) || [];
+        for (let code = startCode; code <= endCode && code - startCode < destHexes.length; code++) {
+          const dHex = destHexes[code - startCode].replace(/[<>]/g, '');
+          let dstStr = '';
+          for (let k = 0; k < dHex.length; k += 4) {
+            const charCode = parseInt(dHex.substring(k, Math.min(k + 4, dHex.length)), 16);
+            if (!isNaN(charCode) && charCode > 0) dstStr += String.fromCharCode(charCode);
+          }
+          if (dstStr) map.set(code, dstStr);
+        }
+      } else {
+        const dstStart = parseInt(dstTok.replace(/[<>]/g, ''), 16);
+        for (let code = startCode; code <= endCode; code++) {
+          const charCode = dstStart + (code - startCode);
+          map.set(code, String.fromCharCode(charCode));
+        }
+      }
+    }
+  }
+
+  return map;
+}
+
+/**
+ * Decodes PDF hex string `<48656c6c6f>`, with /ToUnicode CMap translation and UTF-16BE support.
+ */
+function decodePdfHex(hex: string, cmap?: Map<number, string>): string {
   let clean = hex.replace(/[^0-9a-fA-F]/g, '');
   if (clean.length % 2 !== 0) clean += '0';
+
+  // If a CMap is available, translate CIDs
+  if (cmap && cmap.size > 0) {
+    // Try 2-byte (4 hex chars) CID lookup
+    if (clean.length >= 4 && clean.length % 4 === 0) {
+      let out = '';
+      let mappedCount = 0;
+      for (let i = 0; i < clean.length; i += 4) {
+        const cid = parseInt(clean.substring(i, i + 4), 16);
+        if (cmap.has(cid)) {
+          out += cmap.get(cid);
+          mappedCount++;
+        } else {
+          out += String.fromCharCode(cid);
+        }
+      }
+      if (mappedCount > 0) {
+        return out.replace(/\0/g, '');
+      }
+    }
+
+    // Try 1-byte (2 hex chars) CID lookup
+    if (clean.length >= 2 && clean.length % 2 === 0) {
+      let out = '';
+      let mappedCount = 0;
+      for (let i = 0; i < clean.length; i += 2) {
+        const cid = parseInt(clean.substring(i, i + 2), 16);
+        if (cmap.has(cid)) {
+          out += cmap.get(cid);
+          mappedCount++;
+        } else {
+          out += String.fromCharCode(cid);
+        }
+      }
+      if (mappedCount > 0) {
+        return out.replace(/\0/g, '');
+      }
+    }
+  }
+
   let out = '';
   if (clean.toUpperCase().startsWith('FEFF')) {
     for (let i = 4; i < clean.length; i += 4) {
@@ -281,9 +383,13 @@ function parsePdfLiteralString(str: string, startIdx: number): { text: string; n
 }
 
 /**
- * Parses a `[...] TJ` array operator, preserving word spacing from kerning offsets.
+ * Parses a `[...] TJ` array operator, preserving word spacing from kerning offsets and decoding with CMap.
  */
-function parseTjArray(str: string, startIdx: number): { text: string; nextIdx: number } {
+function parseTjArray(
+  str: string,
+  startIdx: number,
+  cmap?: Map<number, string>
+): { text: string; nextIdx: number } {
   let i = startIdx + 1;
   let result = '';
   while (i < str.length) {
@@ -299,7 +405,7 @@ function parseTjArray(str: string, startIdx: number): { text: string; nextIdx: n
     } else if (str[i] === '<') {
       const end = str.indexOf('>', i);
       if (end !== -1) {
-        result += decodePdfHex(str.substring(i + 1, end));
+        result += decodePdfHex(str.substring(i + 1, end), cmap);
         i = end + 1;
       } else {
         break;
@@ -798,7 +904,10 @@ export interface ExtractedStreamContent {
  * - coordRows: Text fragments reconstructed into complete horizontal rows by matching Y coordinates (tolerance ±3.5pt) and sorting by X.
  * - seqLines: Sequential text lines emitted upon line break operators (T*, Td, TD, Tm, ', ").
  */
-function extractTextFromStream(streamStr: string): ExtractedStreamContent {
+function extractTextFromStream(
+  streamStr: string,
+  cmap?: Map<number, string>
+): ExtractedStreamContent {
   const coordFragments: Array<{ x: number; y: number; text: string }> = [];
   const seqLines: string[] = [];
   let currentSeqLine = '';
@@ -851,7 +960,7 @@ function extractTextFromStream(streamStr: string): ExtractedStreamContent {
         }
       } else if (opMatch[1] !== undefined) {
         // [...] TJ array
-        const parsedTj = parseTjArray(block, opMatch.index);
+        const parsedTj = parseTjArray(block, opMatch.index, cmap);
         const text = parsedTj.text.trim();
         if (text) {
           coordFragments.push({ x: curX, y: curY, text });
@@ -872,7 +981,7 @@ function extractTextFromStream(streamStr: string): ExtractedStreamContent {
         }
       } else if (opMatch[3] !== undefined) {
         // <hex> Tj or <hex> ' or <hex> "
-        const text = decodePdfHex(opMatch[3]).trim();
+        const text = decodePdfHex(opMatch[3], cmap).trim();
         if (text) {
           coordFragments.push({ x: curX, y: curY, text });
           currentSeqLine += (currentSeqLine ? ' ' : '') + text;
@@ -1416,6 +1525,10 @@ export async function parseBankStatementPdf(
     const coordRowsCombined: string[] = [];
     const seqLinesCombined: string[] = [];
 
+    const documentCMap = new Map<number, string>();
+    const decompressedStreams: Array<{ stream: StreamObject; text: string }> = [];
+
+    // Pass 1: Decrypt and decompress all streams; harvest all /ToUnicode CMaps
     for (const stream of streamObjects) {
       let streamPayload = stream.streamBytes;
       if (encryptionKey) {
@@ -1432,7 +1545,7 @@ export async function parseBankStatementPdf(
         isFlate &&
         (!decompressedText ||
           decompressedBytes === streamPayload ||
-          !decompressedText.includes('BT'))
+          (!decompressedText.includes('BT') && !decompressedText.includes('begincmap')))
       ) {
         const unencBytes = decompressStreamBytes(stream.streamBytes, true);
         if (unencBytes !== stream.streamBytes) {
@@ -1444,7 +1557,24 @@ export async function parseBankStatementPdf(
         decompressedText = uint8ToBinary(streamPayload);
       }
 
-      const extracted = extractTextFromStream(decompressedText);
+      // If stream contains a /ToUnicode CMap, harvest CID mappings
+      if (
+        stream.dictContent.includes('/CMap') ||
+        decompressedText.includes('begincmap') ||
+        decompressedText.includes('beginbfrange')
+      ) {
+        const parsedMap = parseCMap(decompressedText);
+        for (const [code, char] of parsedMap.entries()) {
+          documentCMap.set(code, char);
+        }
+      }
+
+      decompressedStreams.push({ stream, text: decompressedText });
+    }
+
+    // Pass 2: Extract text from content streams using the harvested document CMap
+    for (const { text } of decompressedStreams) {
+      const extracted = extractTextFromStream(text, documentCMap);
       if (extracted.coordRows.length > 0) {
         coordRowsCombined.push(...extracted.coordRows);
       }
@@ -1455,7 +1585,7 @@ export async function parseBankStatementPdf(
 
     // Fallback: Also check raw document for uncompressed text blocks
     if (coordRowsCombined.length === 0 && seqLinesCombined.length === 0) {
-      const rawExtracted = extractTextFromStream(rawLatin1);
+      const rawExtracted = extractTextFromStream(rawLatin1, documentCMap);
       coordRowsCombined.push(...rawExtracted.coordRows);
       seqLinesCombined.push(...rawExtracted.seqLines);
     }

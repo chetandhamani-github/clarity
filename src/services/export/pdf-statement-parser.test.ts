@@ -243,6 +243,55 @@ ET
       expect(result.transactions[1].type).toBe('income');
       expect(result.transactions[1].balance).toBe(100420);
     });
+
+    it('decodes Identity-H CIDFont hex streams using embedded /ToUnicode CMap', async () => {
+      const cmapContent = `
+/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+1 beginbfrange
+<0001> <000A> <0030>
+endbfrange
+6 beginbfchar
+<000B> <002F>
+<000C> <0020>
+<000D> <0053>
+<000E> <0057>
+<000F> <0049>
+<0010> <002E>
+endbfchar
+endcmap
+`;
+      const compressedCmap = pako.deflate(Buffer.from(cmapContent, 'latin1'));
+
+      // 01/05/2024 SW 500.00
+      const content = 'BT <00010002000B00010006000B0003000100030005000C000D000E000C000600010001001000010001> Tj ET';
+      const compressedContent = pako.deflate(Buffer.from(content, 'latin1'));
+
+      const mockPdf = `%PDF-1.4
+1 0 obj
+<< /Type /CMap /Length ${compressedCmap.length} /Filter /FlateDecode >>
+stream
+${Buffer.from(compressedCmap).toString('binary')}
+endstream
+endobj
+2 0 obj
+<< /Length ${compressedContent.length} /Filter /FlateDecode >>
+stream
+${Buffer.from(compressedContent).toString('binary')}
+endstream
+endobj
+`;
+      const base64 = Buffer.from(mockPdf, 'binary').toString('base64');
+      (FileSystem.readAsStringAsync as jest.Mock).mockResolvedValueOnce(base64);
+
+      const result = await parseBankStatementPdf('file:///cmap_test.pdf');
+      expect(result.success).toBe(true);
+      expect(result.transactions).toHaveLength(1);
+      expect(result.transactions[0].date).toBe('2024-05-01');
+      expect(result.transactions[0].amount).toBe(500);
+      expect(result.transactions[0].merchant).toBe('SW');
+    });
   });
 
   describe('SUPPORTED_BANK_PROFILES', () => {

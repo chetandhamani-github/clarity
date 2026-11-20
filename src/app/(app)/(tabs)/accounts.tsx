@@ -90,10 +90,54 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
           <View style={[styles.emptyIconCircle, { backgroundColor: colors.surfaceContainerLow }]}>
             <MaterialIcons name="account-balance" size={48} color={colors.primary} />
           </View>
-          <Text style={styles.emptyTitle}>No accounts yet</Text>
+          <Text style={styles.emptyTitle}>No Accounts Added</Text>
           <Text style={styles.emptyDescription}>
-            Add your first account to start tracking your finances.
+            Add your bank, credit card, or cash wallet to calculate your net worth and track your balances.
           </Text>
+
+          {/* Quick Starter Chips */}
+          <View style={styles.quickStartSection}>
+            <Text style={styles.quickStartLabel}>CHOOSE ACCOUNT TYPE</Text>
+            <View style={styles.quickStartGrid}>
+              <TouchableOpacity
+                style={styles.quickStartChip}
+                onPress={() =>
+                  router.navigate({
+                    pathname: '/add-account',
+                    params: { initialType: 'savings' },
+                  })
+                }
+              >
+                <MaterialIcons name="account-balance" size={18} color={colors.primary} />
+                <Text style={styles.quickStartChipText}>Bank Account</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickStartChip}
+                onPress={() =>
+                  router.navigate({
+                    pathname: '/add-account',
+                    params: { initialType: 'credit' },
+                  })
+                }
+              >
+                <MaterialIcons name="credit-card" size={18} color={colors.primary} />
+                <Text style={styles.quickStartChipText}>Credit Card</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickStartChip}
+                onPress={() =>
+                  router.navigate({
+                    pathname: '/add-account',
+                    params: { initialType: 'cash' },
+                  })
+                }
+              >
+                <MaterialIcons name="payments" size={18} color={colors.primary} />
+                <Text style={styles.quickStartChipText}>Cash Wallet</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           <TouchableOpacity
             style={[styles.emptyButton, { backgroundColor: colors.primary }]}
             onPress={() => router.navigate('/add-account')}
@@ -827,6 +871,40 @@ const getStyles = (colors: ThemeColors) => {
       fontFamily: 'Manrope_700Bold',
       fontSize: 14,
       lineHeight: 20,
+    },
+    quickStartSection: {
+      width: '100%',
+      marginBottom: 24,
+      alignItems: 'center',
+      gap: 10,
+    },
+    quickStartLabel: {
+      ...typography.labelMd,
+      fontSize: 11,
+      color: colors.onSurfaceVariant,
+      letterSpacing: Platform.OS === 'ios' ? 0.8 : 0,
+    },
+    quickStartGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+      gap: 8,
+    },
+    quickStartChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 12,
+      backgroundColor: colors.surfaceContainerLow,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+    },
+    quickStartChipText: {
+      ...typography.labelMd,
+      color: colors.onSurface,
+      fontFamily: 'Manrope_600SemiBold',
     },
     scrollContent: {},
     contentPadding: {

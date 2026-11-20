@@ -17,14 +17,18 @@ export default function AddAccountScreen() {
   const insets = useSafeInsets();
   const router = useRouter();
 
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, initialType } = useLocalSearchParams<{ id?: string; initialType?: string }>();
   const isEditing = !!id;
   const { account, isLoading: isFetching } = useAccount(id);
   const { showToast } = useToast();
   const { showAlert } = useAlert();
 
   const [name, setName] = useState('');
-  const [type, setType] = useState<AccountType>('savings');
+  const [type, setType] = useState<AccountType>(
+    initialType && ACCOUNT_TYPES.some((t) => t.value === initialType)
+      ? (initialType as AccountType)
+      : 'savings'
+  );
   const [balanceStr, setBalanceStr] = useState('');
   const [institution, setInstitution] = useState('');
   const [lastFour, setLastFour] = useState('');

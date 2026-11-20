@@ -93,25 +93,37 @@ export default function RootLayout() {
     }
   }, [hasHydrated, biometricEnabled, timeoutSetting]);
 
-  // First-time launch Google Drive backup prompt
+  // First-time launch SMS permission prompt (Android only, first priority)
   useEffect(() => {
-    if (hasHydrated && dbReady && !hasSeenDrivePrompt && !googleDriveConnected) {
-      const timer = setTimeout(() => {
-        setShowDrivePrompt(true);
-      }, 1200);
-      return () => clearTimeout(timer);
-    }
-  }, [hasHydrated, dbReady, hasSeenDrivePrompt, googleDriveConnected]);
-
-  // First-time launch SMS permission prompt
-  useEffect(() => {
-    if (hasHydrated && dbReady && !hasSeenSmsPrompt && !showDrivePrompt) {
+    if (
+      Platform.OS === 'android' &&
+      hasHydrated &&
+      dbReady &&
+      !hasSeenSmsPrompt
+    ) {
       const timer = setTimeout(() => {
         setShowSmsPrompt(true);
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [hasHydrated, dbReady, hasSeenSmsPrompt, showDrivePrompt]);
+  }, [hasHydrated, dbReady, hasSeenSmsPrompt]);
+
+  // First-time launch Google Drive backup prompt (staggered after initial permissions)
+  useEffect(() => {
+    if (
+      hasHydrated &&
+      dbReady &&
+      !hasSeenDrivePrompt &&
+      !googleDriveConnected &&
+      hasSeenSmsPrompt &&
+      !showSmsPrompt
+    ) {
+      const timer = setTimeout(() => {
+        setShowDrivePrompt(true);
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [hasHydrated, dbReady, hasSeenDrivePrompt, googleDriveConnected, hasSeenSmsPrompt, showSmsPrompt]);
 
   // First-time launch Notification tracking permission prompt (Android only)
   useEffect(() => {

@@ -23,6 +23,7 @@ import { LineChart, PieChart } from 'react-native-gifted-charts';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 
 import { useAccounts } from '@/hooks/use-accounts';
+import { useGoals } from '@/hooks/use-goals';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
 import { usePortfolioSummary } from '@/hooks/use-investments';
 import { useInvalidateCashflow, useSafeToSpend } from '@/hooks/use-cashflow';
@@ -106,6 +107,7 @@ export default function DashboardScreen() {
     refetch: refetchSpending,
   } = useCategorySpending(currentMonth, currentYear);
   const { history: nwHistory, isLoading: nwLoading, refetch: refetchNw } = useNetWorthHistory(30);
+  const { goals } = useGoals();
 
   const handleDirectSaveVoice = useCallback(
     (parsed: ParsedVoiceTransaction) => {
@@ -410,66 +412,102 @@ export default function DashboardScreen() {
           ) : (
             <>
               <AnnouncementBanner />
-              {/* SMS Auto-Tracking Banner */}
-              {smsPermissionStatus !== 'granted' && (
-                <View
-                  style={{
-                    marginBottom: 16,
-                    padding: 16,
-                    borderRadius: 16,
-                    backgroundColor: colors.surfaceContainerLow,
-                    borderWidth: 1,
-                    borderColor: colors.outlineVariant,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
-                    <View
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 20,
-                        backgroundColor: colors.primaryContainer,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <MaterialIcons name="sms" size={20} color={colors.onPrimaryContainer} />
+
+              {/* Onboarding Checklist for New Users - Top Priority Hero */}
+              <OnboardingChecklistCard
+                hasAccounts={accounts.length > 0}
+                hasTransactions={transactions.length > 0}
+                hasBudgetPlan={Boolean(plan && plan.monthlyIncome > 0)}
+                hasGoals={Boolean(goals && goals.length > 0)}
+                googleDriveConnected={googleDriveConnected}
+                onEnableSms={handleEnableSms}
+                smsGranted={smsPermissionStatus === 'granted'}
+              />
+
+              {accounts.length === 0 ? (
+                /* Cold Start Welcome Hero for Brand New User */
+                <View style={styles.welcomeHeroCard}>
+                  <View style={styles.welcomeHeroHeader}>
+                    <View style={styles.welcomeHeroIcon}>
+                      <MaterialIcons name="account-balance" size={26} color={colors.primary} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ ...typography.bodyLg, color: colors.onSurface, fontWeight: '700' }}>
-                        Auto-Track Bank SMS
-                      </Text>
-                      <Text style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, fontSize: 12 }}>
-                        Detect UPI, cards, & bills 100% offline.
+                      <Text style={styles.welcomeHeroTitle}>Welcome to Clarity</Text>
+                      <Text style={styles.welcomeHeroSubtitle}>
+                        Your private, local-first finance manager. Follow the getting started guide above to add your accounts and configure your budget.
                       </Text>
                     </View>
                   </View>
                   <TouchableOpacity
-                    onPress={handleEnableSms}
-                    disabled={isSmsSyncing}
-                    style={{
-                      backgroundColor: colors.primary,
-                      paddingHorizontal: 12,
-                      paddingVertical: 8,
-                      borderRadius: 10,
-                    }}
+                    style={styles.welcomeHeroButton}
+                    onPress={() => router.navigate('/add-account')}
                   >
-                    <Text
-                      style={{
-                        ...typography.labelMd,
-                        color: colors.onPrimary,
-                        fontWeight: '700',
-                      }}
-                    >
-                      {isSmsSyncing ? 'SYNCING...' : 'ENABLE'}
-                    </Text>
+                    <MaterialIcons name="add" size={18} color={colors.onPrimary} />
+                    <Text style={styles.welcomeHeroButtonText}>Add First Account</Text>
                   </TouchableOpacity>
                 </View>
-              )}
+              ) : (
+                <>
+                  {/* SMS Auto-Tracking Banner */}
+                  {smsPermissionStatus !== 'granted' && (
+                    <View
+                      style={{
+                        marginBottom: 16,
+                        padding: 16,
+                        borderRadius: 16,
+                        backgroundColor: colors.surfaceContainerLow,
+                        borderWidth: 1,
+                        borderColor: colors.outlineVariant,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                        <View
+                          style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: 20,
+                            backgroundColor: colors.primaryContainer,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <MaterialIcons name="sms" size={20} color={colors.onPrimaryContainer} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ ...typography.bodyLg, color: colors.onSurface, fontWeight: '700' }}>
+                            Auto-Track Bank SMS
+                          </Text>
+                          <Text style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, fontSize: 12 }}>
+                            Detect UPI, cards, & bills 100% offline.
+                          </Text>
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        onPress={handleEnableSms}
+                        disabled={isSmsSyncing}
+                        style={{
+                          backgroundColor: colors.primary,
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          borderRadius: 10,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            ...typography.labelMd,
+                            color: colors.onPrimary,
+                            fontWeight: '700',
+                          }}
+                        >
+                          {isSmsSyncing ? 'SYNCING...' : 'ENABLE'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
               {/* Main Card: Net Worth */}
               <View style={styles.netWorthCard}>
                 <View style={styles.netWorthHeader}>
@@ -672,13 +710,6 @@ export default function DashboardScreen() {
                 </TouchableOpacity>
               )}
 
-              {/* Onboarding Checklist for New Users */}
-              <OnboardingChecklistCard
-                hasAccounts={accounts.length > 0}
-                hasTransactions={transactions.length > 0}
-                hasBudgetPlan={Boolean(plan && plan.monthlyIncome > 0)}
-                googleDriveConnected={googleDriveConnected}
-              />
 
               {/* Predictive Cash Flow & Safe to Spend Engine */}
               <SafeToSpendWidget />
@@ -944,6 +975,8 @@ export default function DashboardScreen() {
               </View>
             </>
           )}
+        </>
+      )}
         </View>
       </ScrollView>
 
@@ -1017,6 +1050,54 @@ const getStyles = (colors: ThemeColors) => {
       borderColor: colors.surfaceVariant,
       padding: 20,
       marginBottom: 16,
+    },
+    welcomeHeroCard: {
+      backgroundColor: colors.surfaceContainerLowest,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      padding: 20,
+      marginBottom: 16,
+      gap: 16,
+    },
+    welcomeHeroHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 14,
+    },
+    welcomeHeroIcon: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: colors.primaryContainer,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    welcomeHeroTitle: {
+      ...typography.headlineSm,
+      color: colors.onSurface,
+      fontSize: 18,
+      marginBottom: 4,
+    },
+    welcomeHeroSubtitle: {
+      ...typography.bodyMd,
+      color: colors.onSurfaceVariant,
+      lineHeight: 20,
+    },
+    welcomeHeroButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: colors.primary,
+      paddingVertical: 14,
+      borderRadius: 12,
+    },
+    welcomeHeroButtonText: {
+      ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
+      color: colors.onPrimary,
+      fontSize: 14,
     },
     quickActionsRow: {
       flexDirection: 'row',

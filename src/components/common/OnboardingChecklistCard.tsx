@@ -10,14 +10,20 @@ interface Props {
   hasAccounts: boolean;
   hasTransactions: boolean;
   hasBudgetPlan: boolean;
+  hasGoals?: boolean;
   googleDriveConnected: boolean;
+  onEnableSms?: () => void;
+  smsGranted?: boolean;
 }
 
 export function OnboardingChecklistCard({
   hasAccounts,
   hasTransactions,
   hasBudgetPlan,
+  hasGoals = false,
   googleDriveConnected,
+  onEnableSms,
+  smsGranted = false,
 }: Props) {
   const { colors } = useTheme();
   const styles = getStyles(colors);
@@ -28,29 +34,42 @@ export function OnboardingChecklistCard({
   const tasks = [
     {
       id: 'accounts',
-      title: 'Set up Bank Accounts',
-      desc: 'Savings, credit cards, or cash wallets',
+      title: 'Set up Bank Account',
+      desc: 'Savings, credit card, or cash wallet',
+      icon: 'account-balance' as const,
       isCompleted: hasAccounts,
       route: '/(app)/(tabs)/accounts',
     },
     {
       id: 'transactions',
-      title: 'Scan SMS or Log Transaction',
-      desc: 'Import bank SMS or record cash spends',
-      isCompleted: hasTransactions,
+      title: 'Auto-Track SMS or Log Spend',
+      desc: 'Detect bank SMS or record cash expenses',
+      icon: 'receipt-long' as const,
+      isCompleted: hasTransactions || smsGranted,
       route: '/(app)/add-transaction',
+      action: !smsGranted && onEnableSms ? onEnableSms : undefined,
     },
     {
       id: 'budget',
       title: 'Set Up Monthly Budget',
-      desc: 'Needs, wants, & savings allocations',
+      desc: '50/30/20 needs, wants, & savings allocations',
+      icon: 'pie-chart' as const,
       isCompleted: hasBudgetPlan,
       route: '/(app)/budget-setup',
     },
     {
+      id: 'goals',
+      title: 'Create a Savings Goal',
+      desc: 'Emergency fund, travel, or big purchase',
+      icon: 'flag' as const,
+      isCompleted: hasGoals,
+      route: '/(app)/(tabs)/goals',
+    },
+    {
       id: 'backup',
-      title: 'Connect Google Drive Backup',
-      desc: 'Automatic encrypted cloud backups',
+      title: 'Connect Cloud Backup',
+      desc: 'Automatic encrypted Google Drive backups',
+      icon: 'cloud-done' as const,
       isCompleted: googleDriveConnected,
       route: '/(app)/settings',
     },
@@ -63,6 +82,14 @@ export function OnboardingChecklistCard({
   if (hasDismissed || completedCount === tasks.length) {
     return null;
   }
+
+  const handleTaskPress = (task: (typeof tasks)[number]) => {
+    if (task.action && !task.isCompleted) {
+      task.action();
+    } else {
+      router.navigate(task.route as any);
+    }
+  };
 
   return (
     <View style={styles.card}>
@@ -100,7 +127,7 @@ export function OnboardingChecklistCard({
           <TouchableOpacity
             key={task.id}
             style={styles.taskItem}
-            onPress={() => router.navigate(task.route as any)}
+            onPress={() => handleTaskPress(task)}
             activeOpacity={0.7}
           >
             <MaterialIcons
@@ -109,15 +136,17 @@ export function OnboardingChecklistCard({
               color={task.isCompleted ? colors.primary : colors.outline}
             />
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text
-                style={[
-                  styles.taskTitle,
-                  task.isCompleted && { textDecorationLine: 'line-through', opacity: 0.7 },
-                ]}
-                numberOfLines={1}
-              >
-                {task.title}
-              </Text>
+              <View style={styles.taskTitleRow}>
+                <Text
+                  style={[
+                    styles.taskTitle,
+                    task.isCompleted && { textDecorationLine: 'line-through', opacity: 0.7 },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {task.title}
+                </Text>
+              </View>
               <Text style={styles.taskDesc} numberOfLines={1}>
                 {task.desc}
               </Text>
@@ -136,9 +165,9 @@ const getStyles = (colors: ThemeColors) => {
       backgroundColor: colors.surfaceContainerLowest,
       borderRadius: 16,
       borderWidth: 1,
-      borderColor: colors.surfaceVariant,
+      borderColor: colors.outlineVariant,
       padding: 16,
-      marginBottom: 24,
+      marginBottom: 20,
       gap: 16,
     },
     header: {
@@ -204,6 +233,11 @@ const getStyles = (colors: ThemeColors) => {
       gap: 12,
       paddingVertical: 6,
     },
+    taskTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
     taskTitle: {
       ...typography.bodyMd,
       color: colors.onSurface,
@@ -218,4 +252,3 @@ const getStyles = (colors: ThemeColors) => {
   });
   return styles;
 };
-

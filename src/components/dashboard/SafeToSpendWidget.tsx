@@ -2,20 +2,18 @@ import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Text, useToast } from '@/components/ui';
+import { Text } from '@/components/ui';
 import { typography, useTheme, radius, ThemeColors } from '@/theme';
 import { useAppStore } from '@/store/use-app-store';
 import { formatCurrency, formatCurrencyPrivacy } from '@/utils/format';
 import { useSafeToSpend } from '@/hooks/use-cashflow';
 import { useStreaks } from '@/hooks/use-streaks';
-import { triggerDailyPulseNotification } from '@/services/notifications/system-notification';
 
 export function SafeToSpendWidget() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const router = useRouter();
   const { hideBalances } = useAppStore();
-  const { showToast } = useToast();
 
   const { summary, isLoading } = useSafeToSpend();
   const { streaks } = useStreaks(summary?.safeToSpendDaily);
@@ -173,7 +171,7 @@ export function SafeToSpendWidget() {
           </View>
         </View>
 
-        {/* Pulse & Lock Screen Footer Row */}
+        {/* Spending Pace & Streak Footer Row */}
         <View style={styles.pulseFooterRow}>
           <View style={styles.pulseInfoLeft}>
             {streaks && streaks.yesterdaySpend > 0 ? (
@@ -199,22 +197,6 @@ export function SafeToSpendWidget() {
               </>
             )}
           </View>
-
-          <TouchableOpacity
-            style={styles.pulseButton}
-            onPress={async () => {
-              await triggerDailyPulseNotification({
-                safeToSpend: summary.safeToSpendDaily,
-                streakDays: streaks?.currentStreak,
-                yesterdaySpend: streaks?.yesterdaySpend,
-              });
-              showToast('Lock screen pulse updated', 'success');
-            }}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="notifications-active" size={12} color={colors.primary} />
-            <Text style={[styles.pulseButtonText, { color: colors.primary }]}>Lock Screen</Text>
-          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     </View>
@@ -394,29 +376,12 @@ const getStyles = (colors: ThemeColors) => {
       alignItems: 'center',
       gap: 5,
       flex: 1,
-      marginRight: 8,
     },
     pulseInfoText: {
       ...typography.bodyMd,
       fontSize: 11,
       color: colors.onSurfaceVariant,
       flex: 1,
-    },
-    pulseButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: radius.full,
-      backgroundColor: colors.surfaceContainerLow,
-      borderWidth: 1,
-      borderColor: colors.surfaceVariant,
-    },
-    pulseButtonText: {
-      ...typography.labelMd,
-      fontFamily: 'Manrope_700Bold',
-      fontSize: 10,
     },
   });
   return styles;

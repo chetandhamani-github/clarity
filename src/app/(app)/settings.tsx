@@ -21,7 +21,6 @@ import { useGoogleDrive } from '@/hooks/use-google-drive';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useSmsSync } from '@/hooks/useSmsSync';
 import { resetEntireAppData } from '@/services/app-reset';
-import { triggerDailyPulseNotification } from '@/services/notifications/system-notification';
 import { useAppStore } from '@/store/use-app-store';
 import { useAuthStore } from '@/store/use-auth-store';
 import { ThemeColors, fontFamilies, radius, typography, useTheme } from '@/theme';
@@ -464,20 +463,6 @@ export default function SettingsScreen() {
               title="Manage Categories"
               subtitle="Customize spending buckets & limits"
               onPress={() => router.navigate('/manage-categories')}
-            />
-            <SettingRow
-              icon="notifications-active"
-              title="Lock Screen Pulse"
-              subtitle="Send Uber-style live lock screen notification"
-              onPress={async () => {
-                await triggerDailyPulseNotification({
-                  safeToSpend: 1850,
-                  streakDays: 4,
-                  yesterdaySpend: 420,
-                  upcomingBillsCount: 2,
-                });
-                showToast('Lock screen pulse alert sent! Check your notification tray.', 'success');
-              }}
               showDivider={false}
             />
           </View>

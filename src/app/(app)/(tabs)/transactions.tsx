@@ -627,12 +627,48 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
     if (isLoading) {
       return <TransactionsSkeleton />;
     }
+    const hasActiveFilters = activeCount > 0;
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>No transactions found</Text>
+        <View style={styles.emptyIconCircle}>
+          <MaterialIcons
+            name={hasActiveFilters ? 'filter-list-off' : 'receipt-long'}
+            size={40}
+            color={colors.primary}
+          />
+        </View>
+        <Text style={styles.emptyTitle}>
+          {hasActiveFilters ? 'No Matching Transactions' : 'No Transactions Yet'}
+        </Text>
+        <Text style={styles.emptyDescription}>
+          {hasActiveFilters
+            ? 'Try resetting your search or filter criteria to see all activity.'
+            : 'Track expenses automatically via bank SMS or record your first cash spend manually.'}
+        </Text>
+        {hasActiveFilters ? (
+          <TouchableOpacity
+            style={styles.emptyActionBtn}
+            onPress={() =>
+              setFilters({
+                datePreset: 'all',
+                type: 'all',
+              })
+            }
+          >
+            <Text style={styles.emptyActionBtnText}>Clear Filters</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.emptyActionBtn}
+            onPress={() => router.navigate('/add-transaction')}
+          >
+            <MaterialIcons name="add" size={18} color={colors.onPrimary} />
+            <Text style={styles.emptyActionBtnText}>Add First Transaction</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
-  }, [isLoading, styles]);
+  }, [isLoading, activeCount, styles, colors, router]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: showBack ? insets.bottom : 0 }]}>
@@ -1037,14 +1073,47 @@ const getStyles = (colors: ThemeColors) => {
       color: colors.onSurfaceVariant,
     },
     emptyContainer: {
-      paddingVertical: 60,
+      paddingVertical: 48,
+      paddingHorizontal: 24,
       alignItems: 'center',
       justifyContent: 'center',
       gap: 12,
     },
-    emptyText: {
-      ...typography.bodyLg,
+    emptyIconCircle: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: colors.surfaceContainerLow,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 8,
+    },
+    emptyTitle: {
+      ...typography.headlineSm,
+      color: colors.onSurface,
+      textAlign: 'center',
+    },
+    emptyDescription: {
+      ...typography.bodyMd,
       color: colors.onSurfaceVariant,
+      textAlign: 'center',
+      lineHeight: 20,
+      maxWidth: 280,
+    },
+    emptyActionBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: colors.primary,
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderRadius: 12,
+      marginTop: 8,
+    },
+    emptyActionBtnText: {
+      ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
+      color: colors.onPrimary,
     },
     dateGroupHeader: {
       backgroundColor: colors.surfaceContainerLow + '80',
