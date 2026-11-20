@@ -36,18 +36,46 @@ export const NotificationCard = ({
   let indicatorColor = 'transparent';
 
   if (type === 'alert') {
-    iconName = 'account-balance-wallet'; // closest match to design
+    iconName = 'warning';
     if (!isRead) {
       iconColor = colors.onErrorContainer;
       iconBg = colors.errorContainer;
       indicatorColor = colors.error;
     }
   } else if (type === 'milestone') {
-    iconName = 'flag';
+    iconName = 'emoji-events';
     if (!isRead) {
       iconColor = colors.onPrimaryContainer;
       iconBg = colors.primaryContainer;
-      indicatorColor = colors.primary; // using exact gold-bg from design
+      indicatorColor = colors.primary;
+    }
+  } else if (type === 'bill') {
+    iconName = 'receipt-long';
+    if (!isRead) {
+      iconColor = colors.onPrimaryContainer;
+      iconBg = colors.primaryContainer;
+      indicatorColor = colors.primary;
+    }
+  } else if (type === 'budget') {
+    iconName = 'pie-chart';
+    if (!isRead) {
+      iconColor = colors.onSecondaryContainer;
+      iconBg = colors.secondaryContainer;
+      indicatorColor = colors.secondary;
+    }
+  } else if (type === 'account') {
+    iconName = 'account-balance';
+    if (!isRead) {
+      iconColor = colors.onTertiaryContainer;
+      iconBg = colors.tertiaryContainer;
+      indicatorColor = colors.tertiary;
+    }
+  } else if (type === 'system') {
+    iconName = 'info-outline';
+    if (!isRead) {
+      iconColor = colors.onSurface;
+      iconBg = colors.surfaceContainerHighest;
+      indicatorColor = colors.outline;
     }
   }
 

@@ -43,6 +43,7 @@ interface TransactionRow {
   receipt_uri?: string;
   account_name?: string; // from JOIN
   to_account_name?: string; // from JOIN
+  created_at?: string;
 }
 
 function mapRow(row: TransactionRow): TransactionWithAccount {
@@ -74,13 +75,95 @@ function mapRow(row: TransactionRow): TransactionWithAccount {
     receiptUri: row.receipt_uri || undefined,
     accountName: row.account_name ?? 'Unknown Account',
     toAccountName: row.to_account_name,
+    createdAt: row.created_at,
   };
+}
+
+let schemaEnsured = false;
+export async function ensureTransactionsSchema(db: any) {
+  if (schemaEnsured) return;
+  try {
+    const tableInfo = (await db.getAllAsync?.('PRAGMA table_info(transactions)')) as { name: string }[] | undefined;
+    const hasCreatedAt = tableInfo?.some((col) => col.name === 'created_at');
+    if (tableInfo && !hasCreatedAt) {
+      await db.execAsync?.('ALTER TABLE transactions ADD COLUMN created_at TEXT;');
+    }
+  } catch {
+    // Column may already exist or table_info failed
+  }
+
+  try {
+    // 1. Backfill created_at and date from parsed_transactions for SMS transactions
+    await db.execAsync(`
+      UPDATE transactions
+      SET created_at = (
+        SELECT pt.transaction_date
+        FROM parsed_transactions pt
+        WHERE pt.id = transactions.parsed_tx_id OR pt.transaction_id = transactions.id
+        LIMIT 1
+      )
+      WHERE (created_at IS NULL OR created_at = '')
+        AND (parsed_tx_id IS NOT NULL OR id IN (SELECT transaction_id FROM parsed_transactions WHERE transaction_id IS NOT NULL));
+
+      UPDATE transactions
+      SET date = (
+        SELECT pt.transaction_date
+        FROM parsed_transactions pt
+        WHERE pt.id = transactions.parsed_tx_id OR pt.transaction_id = transactions.id
+        LIMIT 1
+      )
+      WHERE (date NOT LIKE '%T%' AND date NOT LIKE '% %')
+        AND (parsed_tx_id IS NOT NULL OR id IN (SELECT transaction_id FROM parsed_transactions WHERE transaction_id IS NOT NULL))
+        AND EXISTS (
+          SELECT 1 FROM parsed_transactions pt
+          WHERE (pt.id = transactions.parsed_tx_id OR pt.transaction_id = transactions.id)
+            AND pt.transaction_date IS NOT NULL
+        );
+    `);
+  } catch {
+    // parsed_transactions might not exist in some environments
+  }
+
+  try {
+    // 2. For transactions where date already has time, copy date to created_at
+    await db.execAsync(`
+      UPDATE transactions
+      SET created_at = date
+      WHERE (created_at IS NULL OR created_at = '') AND (date LIKE '%T%' OR date LIKE '% %');
+    `);
+  } catch {
+    // ignore
+  }
+
+  try {
+    // 3. For any remaining transactions where created_at is still missing:
+    // Backfill with date at 12:00:00 + rowid seconds so each has a distinct time and sorts by rowid
+    await db.execAsync(`
+      UPDATE transactions
+      SET created_at = COALESCE(
+        datetime(date || ' 12:00:00', '+' || (rowid % 3600) || ' seconds'),
+        datetime('now')
+      )
+      WHERE created_at IS NULL OR created_at = '';
+    `);
+  } catch {
+    // ignore
+  }
+
+  try {
+    await db.execAsync?.('CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at DESC);');
+  } catch {
+    // ignore
+  }
+
+  schemaEnsured = true;
 }
 
 export async function getTransactions(
   filters?: TransactionFilters
 ): Promise<TransactionWithAccount[]> {
   const db = getDatabase();
+  await ensureTransactionsSchema(db);
 
   let query = `
     SELECT t.*, a.name as account_name, ta.name as to_account_name 
@@ -118,15 +201,17 @@ export async function getTransactions(
     params.push(`%${filters.search}%`, `%${filters.search}%`);
   }
   if (filters?.dateFrom) {
-    query += ` AND t.date >= ?`;
-    params.push(filters.dateFrom);
+    const fromStr = filters.dateFrom.includes('T') ? filters.dateFrom.split('T')[0] : filters.dateFrom;
+    query += ` AND substr(t.date, 1, 10) >= ?`;
+    params.push(fromStr);
   }
   if (filters?.dateTo) {
-    query += ` AND t.date <= ?`;
-    params.push(filters.dateTo);
+    const toStr = filters.dateTo.includes('T') ? filters.dateTo.split('T')[0] : filters.dateTo;
+    query += ` AND substr(t.date, 1, 10) <= ?`;
+    params.push(toStr);
   }
 
-  query += ` ORDER BY t.date DESC`;
+  query += ` ORDER BY t.date DESC, t.rowid DESC`;
 
   if (filters?.limit) {
     query += ` LIMIT ?`;
@@ -147,6 +232,7 @@ export async function getTransactions(
 
 export async function getTransactionById(id: string): Promise<TransactionWithAccount | null> {
   const db = getDatabase();
+  await ensureTransactionsSchema(db);
   const row = await db.getFirstAsync<TransactionRow>(
     `SELECT t.*, a.name as account_name, ta.name as to_account_name 
      FROM transactions t
@@ -172,6 +258,7 @@ export async function insertTransaction(
   options: InsertTransactionOptions = {}
 ): Promise<Transaction> {
   const db = getDatabase();
+  await ensureTransactionsSchema(db);
   const id = generateId();
 
   // 1. Get current account to calculate new balance
@@ -231,29 +318,56 @@ export async function insertTransaction(
   }
 
   // 2. Insert transaction and update account balance atomically
+  const createdAt = data.createdAt || new Date().toISOString();
   const executeInsert = async () => {
-    await db.runAsync(
-      `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, to_account_id, splits_json, source, status, sms_id, parsed_tx_id, receipt_uri)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        id,
-        data.accountId,
-        data.amount,
-        data.type,
-        data.merchant,
-        finalCategory,
-        data.date,
-        data.isRecurring ? 1 : 0,
-        finalNote,
-        data.toAccountId || null,
-        data.splits && data.splits.length > 0 ? JSON.stringify(data.splits) : null,
-        source,
-        status,
-        data.smsId || null,
-        data.parsedTxId || null,
-        data.receiptUri || null,
-      ]
-    );
+    try {
+      await db.runAsync(
+        `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, to_account_id, splits_json, source, status, sms_id, parsed_tx_id, receipt_uri, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          data.accountId,
+          data.amount,
+          data.type,
+          data.merchant,
+          finalCategory,
+          data.date,
+          data.isRecurring ? 1 : 0,
+          finalNote,
+          data.toAccountId || null,
+          data.splits && data.splits.length > 0 ? JSON.stringify(data.splits) : null,
+          source,
+          status,
+          data.smsId || null,
+          data.parsedTxId || null,
+          data.receiptUri || null,
+          createdAt,
+        ]
+      );
+    } catch {
+      await db.runAsync(
+        `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, to_account_id, splits_json, source, status, sms_id, parsed_tx_id, receipt_uri)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          data.accountId,
+          data.amount,
+          data.type,
+          data.merchant,
+          finalCategory,
+          data.date,
+          data.isRecurring ? 1 : 0,
+          finalNote,
+          data.toAccountId || null,
+          data.splits && data.splits.length > 0 ? JSON.stringify(data.splits) : null,
+          source,
+          status,
+          data.smsId || null,
+          data.parsedTxId || null,
+          data.receiptUri || null,
+        ]
+      );
+    }
 
     if (shouldUpdateAccountBalance && balanceChange !== 0) {
       await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
@@ -309,7 +423,7 @@ export async function insertTransaction(
     }
   }
 
-  return { id, ...data, category: finalCategory, note: finalNote, source, status };
+  return { id, ...data, category: finalCategory, note: finalNote, source, status, createdAt };
 }
 
 export async function updateTransaction(
@@ -317,6 +431,7 @@ export async function updateTransaction(
   data: Partial<Omit<Transaction, 'id'>>
 ): Promise<void> {
   const db = getDatabase();
+  await ensureTransactionsSchema(db);
 
   // 1. Fetch the existing transaction
   const oldTx = await db.getFirstAsync<TransactionRow>('SELECT * FROM transactions WHERE id = ?', [
@@ -447,6 +562,10 @@ export async function updateTransaction(
     if (data.receiptUri !== undefined) {
       sets.push('receipt_uri = ?');
       params.push(data.receiptUri);
+    }
+    if (data.createdAt !== undefined) {
+      sets.push('created_at = ?');
+      params.push(data.createdAt);
     }
 
     if (sets.length > 0) {
@@ -869,6 +988,17 @@ export async function mergeManualWithSmsTransaction(
 
   const sets = ["source = 'SMS'", "status = 'VERIFIED'", 'sms_id = ?', 'parsed_tx_id = ?'];
   const params: any[] = [smsData.smsId, smsData.parsedTxId];
+
+  if (smsData.date) {
+    if (!existingTx.date.includes('T')) {
+      sets.push('date = ?');
+      params.push(smsData.date);
+    }
+    if (!existingTx.createdAt || !existingTx.createdAt.includes('T')) {
+      sets.push('created_at = ?');
+      params.push(smsData.date);
+    }
+  }
 
   if (shouldEnrichMerchant) {
     sets.push('merchant = ?');

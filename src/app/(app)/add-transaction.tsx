@@ -332,6 +332,19 @@ export default function AddTransactionScreen() {
       }));
     }
 
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+    let finalDate = normalizedDate;
+    if (id && transaction?.date && transaction.date.startsWith(normalizedDate) && transaction.date.includes('T')) {
+      finalDate = transaction.date;
+    } else {
+      const [y, m, d] = normalizedDate.split('-').map(Number);
+      const dateWithTime = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds());
+      finalDate = !isNaN(dateWithTime.getTime()) ? dateWithTime.toISOString() : new Date().toISOString();
+    }
+
     const txData = {
       accountId,
       toAccountId: type === 'transfer' ? toAccountId || undefined : undefined,
@@ -339,17 +352,14 @@ export default function AddTransactionScreen() {
       type,
       merchant: type === 'transfer' ? 'Transfer' : (merchant.trim() || category),
       category: type === 'transfer' ? 'Transfer' : category,
-      date: normalizedDate,
+      date: finalDate,
       isRecurring,
       splits: splitsToSave,
       note: note.trim(),
       receiptUri: receiptUri || undefined,
       tags: tags.length > 0 ? tags : undefined,
+      createdAt: transaction?.createdAt || new Date().toISOString(),
     };
-
-    const now = new Date();
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
     if (isEditing && id) {
       updateTransaction(id, txData, {
@@ -508,7 +518,8 @@ export default function AddTransactionScreen() {
               type,
               merchant: merchant.trim(),
               category: type === 'transfer' ? 'Transfer' : category,
-              date: formatLocalDate(new Date()),
+              date: new Date().toISOString(),
+              createdAt: new Date().toISOString(),
               isRecurring: false,
               splits: splitsToSave,
               note: note.trim(),
@@ -682,7 +693,10 @@ export default function AddTransactionScreen() {
           ) : (
             <View style={styles.headerActionsRow}>
               <TouchableOpacity
-                onPress={() => setShowVoiceModal(true)}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setShowVoiceModal(true);
+                }}
                 style={styles.headerIconButton}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityLabel="Voice Add"
@@ -690,7 +704,10 @@ export default function AddTransactionScreen() {
                 <MaterialIcons name="mic" size={20} color={colors.primary} />
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={handleScanReceipt}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  handleScanReceipt();
+                }}
                 disabled={isScanningReceipt}
                 style={styles.headerIconButton}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -711,12 +728,13 @@ export default function AddTransactionScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={StyleSheet.flatten([
           styles.scrollContent,
-          { paddingBottom: 32 },
+          { paddingBottom: Math.max(insets.bottom, 24) + 40 },
         ])}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         enableOnAndroid={true}
-        enableAutomaticScroll={Platform.OS === 'ios'}
+        enableAutomaticScroll={true}
         enableResetScrollToCoords={false}
         extraScrollHeight={Platform.OS === 'ios' ? 140 : 160}
         extraHeight={Platform.OS === 'ios' ? 75 : 140}
@@ -728,7 +746,10 @@ export default function AddTransactionScreen() {
             <View style={styles.smartActionsRow}>
               <TouchableOpacity
                 style={styles.smartActionCard}
-                onPress={() => setShowVoiceModal(true)}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setShowVoiceModal(true);
+                }}
                 activeOpacity={0.7}
               >
                 <View style={styles.smartActionIconBox}>
@@ -743,13 +764,24 @@ export default function AddTransactionScreen() {
 
               <TouchableOpacity
                 style={styles.smartActionCard}
-                onPress={handleScanReceipt}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  handleScanReceipt();
+                }}
                 disabled={isScanningReceipt}
                 activeOpacity={0.7}
               >
-                <View style={styles.smartActionIconBox}>
+                <View
+                  style={[
+                    styles.smartActionIconBox,
+                    !isConnected && { backgroundColor: colors.surfaceContainerHighest },
+                  ]}
+                >
                   {isScanningReceipt ? (
-                    <ActivityIndicator size="small" color={colors.primary} />
+                    <ActivityIndicator
+                      size="small"
+                      color={!isConnected ? colors.onSurfaceVariant : colors.onPrimaryContainer}
+                    />
                   ) : (
                     <MaterialIcons
                       name={!isConnected ? 'wifi-off' : 'auto-awesome'}
@@ -837,7 +869,10 @@ export default function AddTransactionScreen() {
                 ) : (
                   <TouchableOpacity
                     style={styles.textInputWrapper}
-                    onPress={() => setShowToAccountMenu(true)}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setShowToAccountMenu(true);
+                    }}
                     activeOpacity={0.7}
                   >
                     <MaterialIcons
@@ -925,6 +960,7 @@ export default function AddTransactionScreen() {
                     <TouchableOpacity
                       style={styles.textInputWrapper}
                       onPress={() => {
+                        Keyboard.dismiss();
                         setActiveSplitCategoryIndex(null);
                         setShowCategoryMenu(true);
                       }}
@@ -981,6 +1017,7 @@ export default function AddTransactionScreen() {
                         <TouchableOpacity
                           style={styles.splitCategoryBtn}
                           onPress={() => {
+                            Keyboard.dismiss();
                             setActiveSplitCategoryIndex(idx);
                             setShowCategoryMenu(true);
                           }}
@@ -1054,7 +1091,10 @@ export default function AddTransactionScreen() {
               <Text style={styles.inputLabel}>Date</Text>
               <TouchableOpacity
                 style={styles.textInputWrapper}
-                onPress={() => setShowDatePicker(true)}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setShowDatePicker(true);
+                }}
                 activeOpacity={0.7}
               >
                 <MaterialIcons
@@ -1099,7 +1139,10 @@ export default function AddTransactionScreen() {
               ) : (
                 <TouchableOpacity
                   style={styles.textInputWrapper}
-                  onPress={() => setShowAccountMenu(true)}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setShowAccountMenu(true);
+                  }}
                   activeOpacity={0.7}
                 >
                   <MaterialIcons
@@ -1302,7 +1345,7 @@ export default function AddTransactionScreen() {
                         onPress={() => handleRemoveTag(t)}
                         hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                       >
-                        <MaterialIcons name="close" size={14} color={colors.primary} />
+                        <MaterialIcons name="close" size={14} color={colors.onPrimaryContainer} />
                       </TouchableOpacity>
                     </View>
                   ))}

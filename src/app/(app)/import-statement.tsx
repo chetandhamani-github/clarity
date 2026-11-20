@@ -8,6 +8,7 @@ import {
   Modal,
   TextInput,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Text, Header, useToast } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
@@ -545,11 +546,22 @@ export default function ImportStatementScreen() {
         animationType="fade"
         onRequestClose={() => setPdfPasswordModalVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          style={styles.modalBackdrop}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdropTouch}
+            activeOpacity={1}
+            onPress={() => {
+              setPdfPasswordModalVisible(false);
+              setPdfPassword('');
+            }}
+          />
           <View style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 24) + 16 }]}>
             <View style={styles.modalHeader}>
               <View style={styles.modalIconBox}>
-                <MaterialIcons name="lock-outline" size={24} color={colors.primary} />
+                <MaterialIcons name="lock-outline" size={24} color={colors.onPrimaryContainer} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>Password Protected PDF</Text>
@@ -654,7 +666,7 @@ export default function ImportStatementScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -882,6 +894,9 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       justifyContent: 'flex-end',
+    },
+    modalBackdropTouch: {
+      flex: 1,
     },
     modalSheet: {
       backgroundColor: colors.surfaceContainerLowest,

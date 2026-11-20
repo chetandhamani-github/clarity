@@ -194,7 +194,7 @@ public class AiServiceImpl implements AiService {
 
     @Override
     public AiChatResponse chat(AiChatRequest request) {
-        String msg = request.getMessage();
+        String msg = request.getMessage() != null ? request.getMessage() : "";
         String context = request.getFinancialContextSummary() != null ? request.getFinancialContextSummary() : "";
 
         if (hasGeminiKey()) {
@@ -212,10 +212,114 @@ public class AiServiceImpl implements AiService {
             }
         }
 
+        // Resilient deterministic fallback using real on-device context when Gemini is unavailable
+        String fallbackReply = buildContextualFallbackReply(msg, context);
         return AiChatResponse.builder()
-                .reply("I am unable to process your request at the moment. Please try again later.")
+                .reply(fallbackReply)
                 .suggestedAction(deriveSuggestedAction(msg))
                 .build();
+    }
+
+    private String buildContextualFallbackReply(String msg, String context) {
+        if (context == null || context.trim().isEmpty()) {
+            return "I am currently unable to reach the AI cloud service. Please check that your network connection is active and try again.";
+        }
+
+        String lower = (msg != null ? msg : "").toLowerCase();
+        Map<String, String> sections = extractContextSections(context);
+
+        if (lower.contains("invest") || lower.contains("portfolio") || lower.contains("stock")
+                || lower.contains("mutual fund") || lower.contains("sip") || lower.contains("net worth")
+                || lower.contains("asset") || lower.contains("wealth")) {
+            String netWorthSec = sections.get("NET WORTH & INVESTMENTS");
+            if (netWorthSec != null && !netWorthSec.isEmpty()) {
+                return "Based on your financial records: " + netWorthSec + ". You can track your complete asset allocation in the Investments screen.";
+            }
+        }
+
+        if (lower.contains("spend") || lower.contains("expense") || lower.contains("food")
+                || lower.contains("dining") || lower.contains("shopping") || lower.contains("groceries")
+                || lower.contains("category")) {
+            String topCat = sections.get("TOP SPENDING CATEGORIES");
+            String cashflow = sections.get("MONTHLY CASHFLOW");
+            if (topCat != null || cashflow != null) {
+                StringBuilder sb = new StringBuilder();
+                if (cashflow != null) sb.append(cashflow).append(". ");
+                if (topCat != null) sb.append("Top spending: ").append(topCat).append(".");
+                sb.append(" Check the Plan tab to adjust your category budgets.");
+                return sb.toString();
+            }
+        }
+
+        if (lower.contains("debt") || lower.contains("loan") || lower.contains("borrow")
+                || lower.contains("payoff") || lower.contains("credit card")) {
+            String debts = sections.get("DEBTS & LIABILITIES");
+            if (debts != null && !debts.isEmpty()) {
+                return "Here is your debt status: " + debts + ". Use the Debt Payoff Planner to simulate payoff strategies.";
+            }
+        }
+
+        if (lower.contains("bill") || lower.contains("subscription") || lower.contains("due")
+                || lower.contains("recurring")) {
+            String bills = sections.get("BILLS & OBLIGATIONS");
+            String recurring = sections.get("RECURRING PAYMENTS & COMMITMENTS");
+            if (bills != null || recurring != null) {
+                StringBuilder sb = new StringBuilder();
+                if (bills != null) sb.append(bills).append(". ");
+                if (recurring != null) sb.append(recurring).append(".");
+                return sb.toString();
+            }
+        }
+
+        if (lower.contains("safe to spend") || lower.contains("runway") || lower.contains("cashflow")
+                || lower.contains("crunch") || lower.contains("payday") || lower.contains("balance")
+                || lower.contains("liquid") || lower.contains("cash")) {
+            String safeToSpend = sections.get("SAFE TO SPEND & RUNWAY");
+            String liquidCash = sections.get("LIQUID CASH & ACCOUNTS");
+            if (safeToSpend != null || liquidCash != null) {
+                StringBuilder sb = new StringBuilder();
+                if (safeToSpend != null) sb.append(safeToSpend).append(". ");
+                if (liquidCash != null) sb.append(liquidCash).append(".");
+                return sb.toString();
+            }
+        }
+
+        if (lower.contains("goal") || lower.contains("save") || lower.contains("saving")
+                || lower.contains("budget") || lower.contains("50/30/20")) {
+            String cashflow = sections.get("MONTHLY CASHFLOW");
+            String goals = sections.get("SAVINGS GOALS");
+            String plan = sections.get("BUDGET PLAN");
+            if (cashflow != null || goals != null || plan != null) {
+                StringBuilder sb = new StringBuilder();
+                if (cashflow != null) sb.append(cashflow).append(". ");
+                if (goals != null) sb.append("Savings goals: ").append(goals).append(". ");
+                if (plan != null) sb.append("Budget target: ").append(plan).append(".");
+                return sb.toString();
+            }
+        }
+
+        String cashflow = sections.get("MONTHLY CASHFLOW");
+        if (cashflow != null) {
+            return "Here is your monthly summary: " + cashflow + ". Feel free to ask about your investments, category spending, upcoming bills, or runway.";
+        }
+
+        return "I am currently unable to reach the AI cloud service, but your financial accounts and transactions remain safely accessible on your device.";
+    }
+
+    private Map<String, String> extractContextSections(String context) {
+        Map<String, String> map = new HashMap<>();
+        if (context == null) return map;
+        String[] lines = context.split("\\r?\\n");
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("[") && trimmed.contains("]")) {
+                int endBracket = trimmed.indexOf(']');
+                String key = trimmed.substring(1, endBracket).trim();
+                String value = trimmed.substring(endBracket + 1).trim();
+                map.put(key, value);
+            }
+        }
+        return map;
     }
 
     @Override
@@ -335,79 +439,125 @@ public class AiServiceImpl implements AiService {
             return null;
         }
 
-        try {
-            String activeModel = geminiModel != null && !geminiModel.isBlank() ? geminiModel.trim() : "gemini-flash-lite-latest";
-            if (activeModel.contains("1.5") || activeModel.contains("2.5") || activeModel.equals("gemini-flash-latest")) {
-                activeModel = "gemini-flash-lite-latest";
+        String primaryModel = geminiModel != null && !geminiModel.isBlank() ? geminiModel.trim() : "gemini-flash-lite-latest";
+        List<String> modelsToTry = new ArrayList<>();
+        modelsToTry.add(primaryModel);
+        for (String candidate : Arrays.asList("gemini-flash-lite-latest", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash")) {
+            if (!modelsToTry.contains(candidate)) {
+                modelsToTry.add(candidate);
             }
-            String url = "https://generativelanguage.googleapis.com/v1beta/models/"
-                    + activeModel
-                    + ":generateContent?key=" + geminiApiKey.trim();
+        }
 
-            Map<String, Object> requestBody = new HashMap<>();
-            List<Map<String, Object>> contents = new ArrayList<>();
-            Map<String, Object> contentMap = new HashMap<>();
-            List<Map<String, Object>> parts = new ArrayList<>();
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(15))
+                .build();
 
-            Map<String, Object> textPart = new HashMap<>();
-            textPart.put("text", prompt);
-            parts.add(textPart);
+        for (String activeModel : modelsToTry) {
+            try {
+                String url = "https://generativelanguage.googleapis.com/v1beta/models/"
+                        + activeModel
+                        + ":generateContent?key=" + geminiApiKey.trim();
 
-            if (imageBase64 != null && !imageBase64.isEmpty()) {
-                String cleanBase64 = imageBase64;
-                if (cleanBase64.contains(",")) {
-                    cleanBase64 = cleanBase64.split(",")[1];
+                Map<String, Object> requestBody = new HashMap<>();
+                List<Map<String, Object>> contents = new ArrayList<>();
+                Map<String, Object> contentMap = new HashMap<>();
+                List<Map<String, Object>> parts = new ArrayList<>();
+
+                Map<String, Object> textPart = new HashMap<>();
+                textPart.put("text", prompt);
+                parts.add(textPart);
+
+                if (imageBase64 != null && !imageBase64.isEmpty()) {
+                    String cleanBase64 = imageBase64;
+                    if (cleanBase64.contains(",")) {
+                        cleanBase64 = cleanBase64.split(",")[1];
+                    }
+                    cleanBase64 = cleanBase64.replaceAll("\\s+", "");
+
+                    Map<String, Object> inlineData = new HashMap<>();
+                    inlineData.put("mimeType", mimeType != null && !mimeType.isEmpty() ? mimeType : "image/jpeg");
+                    inlineData.put("data", cleanBase64);
+
+                    Map<String, Object> imagePart = new HashMap<>();
+                    imagePart.put("inlineData", inlineData);
+                    parts.add(imagePart);
                 }
-                cleanBase64 = cleanBase64.replaceAll("\\s+", "");
 
-                Map<String, Object> inlineData = new HashMap<>();
-                inlineData.put("mimeType", mimeType != null && !mimeType.isEmpty() ? mimeType : "image/jpeg");
-                inlineData.put("data", cleanBase64);
+                contentMap.put("parts", parts);
+                contents.add(contentMap);
+                requestBody.put("contents", contents);
 
-                Map<String, Object> imagePart = new HashMap<>();
-                imagePart.put("inlineData", inlineData);
-                parts.add(imagePart);
-            }
+                Map<String, Object> generationConfig = new HashMap<>();
+                generationConfig.put("temperature", 0.1);
+                requestBody.put("generationConfig", generationConfig);
 
-            contentMap.put("parts", parts);
-            contents.add(contentMap);
-            requestBody.put("contents", contents);
+                String jsonPayload = objectMapper.writeValueAsString(requestBody);
 
-            Map<String, Object> generationConfig = new HashMap<>();
-            generationConfig.put("temperature", 0.1);
-            requestBody.put("generationConfig", generationConfig);
+                HttpRequest httpRequest = HttpRequest.newBuilder()
+                        .uri(URI.create(url))
+                        .header("Content-Type", "application/json")
+                        .header("x-goog-api-key", geminiApiKey.trim())
+                        .timeout(Duration.ofSeconds(45))
+                        .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
+                        .build();
 
-            String jsonPayload = objectMapper.writeValueAsString(requestBody);
+                HttpResponse<String> response = client.send(httpRequest, HttpResponse.BodyHandlers.ofString());
 
-            HttpClient client = HttpClient.newBuilder()
-                    .connectTimeout(Duration.ofSeconds(15))
-                    .build();
+                if (response.statusCode() == 200) {
+                    JsonNode root = objectMapper.readTree(response.body());
 
-            HttpRequest httpRequest = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .header("Content-Type", "application/json")
-                    .header("x-goog-api-key", geminiApiKey.trim())
-                    .timeout(Duration.ofSeconds(45))
-                    .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
-                    .build();
+                    JsonNode promptFeedback = root.path("promptFeedback");
+                    if (promptFeedback.hasNonNull("blockReason")) {
+                        log.warn("[AiService] Gemini model '{}' prompt blocked: {}", activeModel, promptFeedback.get("blockReason").asText());
+                        continue;
+                    }
 
-            HttpResponse<String> response = client.send(httpRequest, HttpResponse.BodyHandlers.ofString());
-
-            if (response.statusCode() == 200) {
-                JsonNode root = objectMapper.readTree(response.body());
-                JsonNode candidates = root.path("candidates");
-                if (candidates.isArray() && !candidates.isEmpty()) {
-                    JsonNode textNode = candidates.get(0).path("content").path("parts").get(0).path("text");
-                    return textNode.asText();
+                    JsonNode candidates = root.path("candidates");
+                    if (candidates.isArray() && !candidates.isEmpty()) {
+                        JsonNode candidate = candidates.get(0);
+                        JsonNode responseParts = candidate.path("content").path("parts");
+                        if (responseParts.isArray() && !responseParts.isEmpty()) {
+                            StringBuilder answerBuilder = new StringBuilder();
+                            for (JsonNode part : responseParts) {
+                                boolean isThought = part.has("thought") && part.get("thought").asBoolean(false);
+                                if (!isThought && part.hasNonNull("text")) {
+                                    answerBuilder.append(part.get("text").asText());
+                                }
+                            }
+                            if (answerBuilder.length() == 0) {
+                                for (JsonNode part : responseParts) {
+                                    if (part.hasNonNull("text")) {
+                                        answerBuilder.append(part.get("text").asText());
+                                    }
+                                }
+                            }
+                            String extracted = answerBuilder.toString().trim();
+                            if (!extracted.isEmpty()) {
+                                return extracted;
+                            }
+                        }
+                    }
+                } else if (response.statusCode() == 429 || response.statusCode() >= 500) {
+                    log.warn("[AiService] Gemini model '{}' returned HTTP {}. Attempting fallback model...",
+                            activeModel, response.statusCode());
+                    try {
+                        Thread.sleep(300);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                } else {
+                    log.error("[AiService] Gemini model '{}' returned HTTP {}: {}",
+                            activeModel, response.statusCode(), response.body());
                 }
+            } catch (Exception e) {
+                log.error("[AiService] Failed to invoke Gemini model '{}': {}", activeModel, e.getMessage());
             }
-        } catch (Exception e) {
-            log.error("[AiService] Failed to invoke Gemini API: {}", e.getMessage());
         }
         return null;
     }
 
     private String deriveSuggestedAction(String msg) {
+        if (msg == null) return "/(app)/(tabs)/transactions";
         String lower = msg.toLowerCase();
         if (lower.contains("invest") || lower.contains("portfolio") || lower.contains("stock") ||
                 lower.contains("mutual fund") || lower.contains("sip") || lower.contains("gold") ||

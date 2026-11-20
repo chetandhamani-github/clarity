@@ -243,13 +243,43 @@ export function getTransactionSign(type: 'expense' | 'income' | 'transfer'): str
   }
 }
 
-export function groupTransactionsByDate<T extends { date: string }>(
+export function formatTransactionTime(
+  dateString?: string,
+  createdAtString?: string
+): string | null {
+  if (dateString) {
+    const hasTime =
+      dateString.includes('T') ||
+      /\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(dateString) ||
+      /^\d{10,}$/.test(dateString.trim());
+    if (hasTime) {
+      return formatTime(dateString);
+    }
+  }
+
+  if (createdAtString) {
+    const hasTime =
+      createdAtString.includes('T') ||
+      /\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(createdAtString) ||
+      /^\d{10,}$/.test(createdAtString.trim());
+    if (hasTime) {
+      return formatTime(createdAtString);
+    }
+  }
+
+  return null;
+}
+
+export function groupTransactionsByDate<T extends { date: string; createdAt?: string }>(
   transactions: T[]
 ): { date: string; label: string; items: T[] }[] {
   const groups = new Map<string, T[]>();
 
   for (const tx of transactions) {
-    const dateKey = tx.date.split('T')[0];
+    if (!tx || !tx.date) continue;
+    const dateKey = tx.date.includes('T')
+      ? formatLocalDate(parseDateSafely(tx.date))
+      : tx.date.trim();
     const existing = groups.get(dateKey);
     if (existing) {
       existing.push(tx);
@@ -258,9 +288,44 @@ export function groupTransactionsByDate<T extends { date: string }>(
     }
   }
 
-  return Array.from(groups.entries()).map(([dateKey, items]) => ({
-    date: dateKey,
-    label: formatDateGroup(dateKey),
-    items,
-  }));
+  const getEffectiveTimeMs = (tx: T): number | null => {
+    if (!tx || !tx.date) return null;
+    const hasTime =
+      tx.date.includes('T') ||
+      /\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(tx.date) ||
+      /^\d{10,}$/.test(tx.date.trim());
+    if (hasTime) {
+      const t = parseDateSafely(tx.date).getTime();
+      if (!isNaN(t)) return t;
+    }
+    if (tx.createdAt) {
+      const t = parseDateSafely(tx.createdAt).getTime();
+      if (!isNaN(t)) return t;
+    }
+    return null;
+  };
+
+  return Array.from(groups.entries()).map(([dateKey, items]) => {
+    const sorted = [...items].sort((a, b) => {
+      const timeA = getEffectiveTimeMs(a);
+      const timeB = getEffectiveTimeMs(b);
+
+      if (timeA !== null && timeB !== null && timeA !== timeB) {
+        return timeB - timeA;
+      }
+      if (timeA !== null && timeB === null) {
+        return -1;
+      }
+      if (timeA === null && timeB !== null) {
+        return 1;
+      }
+      return 0;
+    });
+
+    return {
+      date: dateKey,
+      label: formatDateGroup(dateKey),
+      items: sorted,
+    };
+  });
 }

@@ -15,7 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useTransactions } from '@/hooks/use-transactions';
-import { formatCurrency, getTransactionSign, groupTransactionsByDate } from '@/utils/format';
+import { formatCurrency, formatTransactionTime, getTransactionSign, groupTransactionsByDate } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
 import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
 
@@ -186,13 +186,24 @@ export default function SearchScreen() {
                                     ? 'Transfer'
                                     : getTransactionDisplayName(tx)}
                                 </Text>
-                                <Text style={styles.txSubtitle} numberOfLines={1}>
-                                  {tx.type === 'transfer'
-                                    ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}`
-                                    : (hasMeaningfulMerchant(tx)
-                                        ? `${tx.accountName} • ${tx.category}`
-                                        : tx.accountName)}
-                                </Text>
+                                {(() => {
+                                  const timeStr = formatTransactionTime(tx.date, tx.createdAt);
+                                  const metaParts: string[] = [];
+                                  if (timeStr) metaParts.push(timeStr);
+                                  if (tx.type === 'transfer') {
+                                    metaParts.push(`${tx.accountName} → ${tx.toAccountName || 'Unknown'}`);
+                                  } else if (hasMeaningfulMerchant(tx)) {
+                                    if (tx.accountName) metaParts.push(tx.accountName);
+                                    metaParts.push(tx.category);
+                                  } else {
+                                    if (tx.accountName) metaParts.push(tx.accountName);
+                                  }
+                                  return (
+                                    <Text style={styles.txSubtitle} numberOfLines={1}>
+                                      {metaParts.join(' • ')}
+                                    </Text>
+                                  );
+                                })()}
                               </View>
                             </View>
                             <View style={styles.txRight}>

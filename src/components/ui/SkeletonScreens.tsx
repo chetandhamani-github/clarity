@@ -211,6 +211,47 @@ export function HomeSkeleton() {
 }
 
 /**
+ * Pixel-perfect Skeleton for Wealth & Portfolio Card
+ */
+export function WealthCardSkeleton() {
+  const { colors } = useTheme();
+
+  return (
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.surfaceContainerLowest,
+          borderColor: colors.surfaceVariant,
+          gap: 14,
+        },
+      ]}
+    >
+      <View style={styles.portfolioSkeletonHeader}>
+        <SkeletonCircle size={40} />
+        <View style={{ flex: 1, gap: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <SkeletonText width={130} height={16} />
+            <SkeletonBox width={46} height={18} borderRadius={radius.full} />
+          </View>
+          <SkeletonText width={170} height={12} />
+        </View>
+        <SkeletonBox width={16} height={16} borderRadius={4} />
+      </View>
+
+      <View style={{ gap: 8 }}>
+        <SkeletonBox width="100%" height={6} borderRadius={3} />
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <SkeletonBox width={64} height={14} borderRadius={4} />
+          <SkeletonBox width={72} height={14} borderRadius={4} />
+          <SkeletonBox width={56} height={14} borderRadius={4} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+/**
  * Pixel-perfect Skeleton for Accounts Screen (`accounts.tsx`)
  */
 export function AccountsSkeleton() {
@@ -234,6 +275,9 @@ export function AccountsSkeleton() {
         <SkeletonText width={190} height={32} />
         <SkeletonText width={70} height={12} />
       </View>
+
+      {/* Wealth & Portfolio Card Skeleton */}
+      <WealthCardSkeleton />
 
       {/* Active Accounts Section */}
       <View
@@ -1222,6 +1266,168 @@ export function SplitwiseSkeleton() {
   );
 }
 
+/**
+ * Pixel-perfect Skeleton for Debt Freedom Strategist Screen (`debt-payoff.tsx`)
+ */
+export function DebtPayoffSkeleton() {
+  const { colors } = useTheme();
+
+  return (
+    <View style={styles.container}>
+      {/* 1. Strategy Toggle Card */}
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surfaceContainerLow,
+            borderColor: colors.surfaceVariant,
+            borderRadius: radius.full,
+            padding: 4,
+            flexDirection: 'row',
+            gap: 6,
+          },
+        ]}
+      >
+        <SkeletonBox width="49%" height={36} borderRadius={radius.full} />
+        <SkeletonBox width="49%" height={36} borderRadius={radius.full} />
+      </View>
+
+      {/* Strategy Explainer Placeholder */}
+      <View style={{ gap: 4, paddingHorizontal: 4, marginTop: -4 }}>
+        <SkeletonText width="95%" height={11} />
+        <SkeletonText width="60%" height={11} />
+      </View>
+
+      {/* 2. Hero Outcome Card */}
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surfaceContainerLowest,
+            borderColor: colors.surfaceVariant,
+            borderRadius: radius.xl,
+            padding: 16,
+          },
+        ]}
+      >
+        <View style={styles.rowBetween}>
+          <View style={{ gap: 6 }}>
+            <SkeletonText width={140} height={10} />
+            <SkeletonText width={120} height={24} />
+          </View>
+          <SkeletonBox width={85} height={24} borderRadius={radius.full} />
+        </View>
+
+        <View
+          style={[
+            styles.rowBetween,
+            {
+              paddingTop: 14,
+              marginTop: 14,
+              borderTopWidth: 1,
+              borderTopColor: colors.surfaceContainerHigh,
+            },
+          ]}
+        >
+          <View style={{ flex: 1, alignItems: 'center', gap: 4 }}>
+            <SkeletonText width={60} height={10} />
+            <SkeletonText width={75} height={14} />
+          </View>
+          <View style={{ width: 1, height: 24, backgroundColor: colors.surfaceContainerHigh }} />
+          <View style={{ flex: 1, alignItems: 'center', gap: 4 }}>
+            <SkeletonText width={65} height={10} />
+            <SkeletonText width={70} height={14} />
+          </View>
+          <View style={{ width: 1, height: 24, backgroundColor: colors.surfaceContainerHigh }} />
+          <View style={{ flex: 1, alignItems: 'center', gap: 4 }}>
+            <SkeletonText width={70} height={10} />
+            <SkeletonText width={75} height={14} />
+          </View>
+        </View>
+      </View>
+
+      {/* 3. Interactive Extra Payment Simulator Card */}
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surfaceContainerLowest,
+            borderColor: colors.surfaceVariant,
+            borderRadius: radius.xl,
+            padding: 14,
+            gap: 10,
+          },
+        ]}
+      >
+        <View style={styles.rowBetween}>
+          <SkeletonText width={150} height={13} />
+          <SkeletonText width={80} height={13} />
+        </View>
+        <SkeletonText width="85%" height={11} />
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
+          {[95, 75, 75, 80, 85].map((w, i) => (
+            <SkeletonBox key={i} width={w} height={28} borderRadius={radius.full} />
+          ))}
+        </View>
+      </View>
+
+      {/* 4. Payoff Order & Timeline Section */}
+      <View style={{ gap: 10 }}>
+        <View style={styles.rowBetween}>
+          <SkeletonText width={160} height={14} />
+          <SkeletonText width={50} height={12} />
+        </View>
+
+        {[1, 2, 3].map((i) => (
+          <View
+            key={i}
+            style={[
+              styles.card,
+              {
+                backgroundColor: colors.surfaceContainerLowest,
+                borderColor: colors.surfaceVariant,
+                borderRadius: radius.xl,
+                padding: 14,
+              },
+            ]}
+          >
+            <View style={[styles.rowBetween, { marginBottom: 10 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                <SkeletonCircle size={28} />
+                <View style={{ flex: 1, gap: 5 }}>
+                  <SkeletonText width="55%" height={14} />
+                  <SkeletonText width="40%" height={10} />
+                </View>
+              </View>
+              <SkeletonBox width={20} height={20} borderRadius={radius.sm} />
+            </View>
+
+            <View
+              style={[
+                styles.rowBetween,
+                {
+                  paddingTop: 10,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.surfaceContainerHigh,
+                },
+              ]}
+            >
+              <View style={{ gap: 4 }}>
+                <SkeletonText width={90} height={10} />
+                <SkeletonText width={70} height={14} />
+              </View>
+              <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                <SkeletonText width={95} height={10} />
+                <SkeletonText width={80} height={14} />
+              </View>
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1329,5 +1535,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 1,
     padding: 12,
+  },
+  portfolioSkeletonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
 });

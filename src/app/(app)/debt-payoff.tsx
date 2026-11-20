@@ -5,10 +5,9 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
-  ActivityIndicator,
   Modal,
 } from 'react-native';
-import { Text, Header, useToast } from '@/components/ui';
+import { Text, Header, useToast, DebtPayoffSkeleton } from '@/components/ui';
 import { typography, useTheme, radius, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
@@ -85,9 +84,7 @@ export default function DebtPayoffScreen() {
         showsVerticalScrollIndicator={false}
       >
         {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
+          <DebtPayoffSkeleton />
         ) : !comparison || debts.length === 0 ? (
           /* DEBT FREE EMPTY STATE */
           <View style={styles.emptyCard}>
@@ -161,8 +158,8 @@ export default function DebtPayoffScreen() {
 
             <Text style={styles.strategyExplainer}>
               {strategy === 'avalanche'
-                ? '⚡ Avalanche prioritizes highest interest rates (APR) first. Mathematically optimal — saves the maximum amount of money in interest.'
-                : '❄️ Snowball prioritizes lowest balances first. Delivers rapid psychological wins as accounts are permanently wiped out.'}
+                ? 'Avalanche prioritizes highest interest rates (APR) first. Mathematically optimal — saves the maximum amount of money in interest.'
+                : 'Snowball prioritizes lowest balances first. Delivers rapid psychological wins as accounts are permanently wiped out.'}
             </Text>
 
             {/* HERO OUTCOME CARD */}
@@ -385,11 +382,6 @@ const getStyles = (colors: ThemeColors) => {
     container: {
       flex: 1,
       backgroundColor: colors.background,
-    },
-    loadingContainer: {
-      paddingVertical: 50,
-      alignItems: 'center',
-      justifyContent: 'center',
     },
     scrollContent: {
       paddingHorizontal: 16,

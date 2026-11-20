@@ -29,6 +29,7 @@ import { useSafeToSpend } from '@/hooks/use-cashflow';
 import { useDebtPayoff } from '@/hooks/use-debt-payoff';
 import { chatWithFinancialCopilot } from '@/services/api/ai.api';
 import { fetchRemoteConfig } from '@/services/api/config.api';
+import { apiClient } from '@/services/api/client';
 import { useNetworkStore } from '@/store/use-network-store';
 import { isNetworkError } from '@/services/network/network.service';
 import { ChatMessage, useCopilotStore } from '@/store/use-copilot-store';
@@ -62,11 +63,13 @@ const ChatMessageBubble = React.memo(function ChatMessageBubble({
   colors,
   styles,
   onActionPress,
+  onRetryPress,
 }: {
   item: ChatMessage;
   colors: ThemeColors;
   styles: any;
   onActionPress: (action: string) => void;
+  onRetryPress?: (failedQuery: string) => void;
 }) {
   const isUser = item.sender === 'user';
 
@@ -104,6 +107,17 @@ const ChatMessageBubble = React.memo(function ChatMessageBubble({
           >
             <MaterialIcons name="arrow-outward" size={14} color={colors.primary} />
             <Text style={styles.actionBtnText}>{getActionLabel(item.suggestedAction)}</Text>
+          </TouchableOpacity>
+        )}
+
+        {item.isError && item.failedQuery && onRetryPress && (
+          <TouchableOpacity
+            style={styles.retryBtn}
+            onPress={() => onRetryPress(item.failedQuery!)}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="refresh" size={14} color={colors.error} />
+            <Text style={styles.retryBtnText}>Tap to retry</Text>
           </TouchableOpacity>
         )}
 
@@ -202,6 +216,7 @@ export default function CopilotScreen() {
 
   // Warm up backend silently so Render is active when user sends a query
   useEffect(() => {
+    apiClient.get('/actuator/health', { timeoutMs: 30000 }).catch(() => {});
     fetchRemoteConfig().catch(() => {});
   }, []);
 
@@ -290,7 +305,7 @@ export default function CopilotScreen() {
           p.totalInvestedAmount
         )}, Unrealized Gain/Loss: ${gainSign}${sym}${Math.round(
           p.unrealizedGainLoss
-        )} (${gainSign}${p.gainLossPercentage.toFixed(1)}%), Holdings Count: ${p.holdingsCount}${
+        )} (${gainSign}${(p.gainLossPercentage ?? 0).toFixed(1)}%), Holdings Count: ${p.holdingsCount}${
           allocSummary ? `, Asset Allocation: [${allocSummary}]` : ''
         }${totalSipCommitment > 0 ? `, Active Monthly SIP Total: ${sym}${Math.round(totalSipCommitment)}` : ''}${
           topHoldings ? `, Top Holdings: [${topHoldings}]` : ''
@@ -346,11 +361,12 @@ export default function CopilotScreen() {
         .join(', ');
 
       const totalMonthlyEstimate = safeRecurring.reduce((sum, rt) => {
+        const amt = rt.amount || 0;
         if (rt.type !== 'expense') return sum;
-        if (rt.frequency === 'daily') return sum + rt.amount * 30;
-        if (rt.frequency === 'weekly') return sum + rt.amount * 4.33;
-        if (rt.frequency === 'yearly') return sum + rt.amount / 12;
-        return sum + rt.amount; // monthly
+        if (rt.frequency === 'daily') return sum + amt * 30;
+        if (rt.frequency === 'weekly') return sum + amt * 4.33;
+        if (rt.frequency === 'yearly') return sum + amt / 12;
+        return sum + amt; // monthly
       }, 0);
 
       parts.push(
@@ -366,8 +382,10 @@ export default function CopilotScreen() {
       const goalsSummary = safeGoals
         .slice(0, 4)
         .map((g) => {
-          const pct = g.targetAmount > 0 ? Math.round((g.currentAmount / g.targetAmount) * 100) : 0;
-          return `${g.name}: ${sym}${Math.round(g.currentAmount)}/${sym}${Math.round(g.targetAmount)} (${pct}%)`;
+          const target = g.targetAmount || 0;
+          const current = g.currentAmount || 0;
+          const pct = target > 0 ? Math.round((current / target) * 100) : 0;
+          return `${g.name}: ${sym}${Math.round(current)}/${sym}${Math.round(target)} (${pct}%)`;
         })
         .join(', ');
       parts.push(`[SAVINGS GOALS] ${goalsSummary}`);
@@ -378,9 +396,9 @@ export default function CopilotScreen() {
       const s = safeToSpendSummary;
       parts.push(
         `[SAFE TO SPEND & RUNWAY] Safe to Spend: ${sym}${Math.round(
-          s.safeToSpendTotal
-        )} total (${sym}${Math.round(s.safeToSpendDaily)}/day), Runway: ${s.runwayDays} days, Days to Payday: ${
-          s.daysToNextPayday
+          s.safeToSpendTotal || 0
+        )} total (${sym}${Math.round(s.safeToSpendDaily || 0)}/day), Runway: ${s.runwayDays || 0} days, Days to Payday: ${
+          s.daysToNextPayday || 0
         }${
           s.hasCashCrunch
             ? `, WARNING: Cash Crunch projected on ${s.cashCrunchDate} with shortfall of ${sym}${Math.round(
@@ -420,8 +438,11 @@ export default function CopilotScreen() {
     if (!query || isSending) return;
 
     if (!isConnected) {
-      showToast('Cannot send message while offline. Please check your connection.', 'error');
-      return;
+      const isOnline = await checkConnection();
+      if (!isOnline) {
+        showToast('Cannot send message while offline. Please check your connection.', 'error');
+        return;
+      }
     }
 
     const userMsg: ChatMessage = {
@@ -456,27 +477,34 @@ export default function CopilotScreen() {
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
-      setTimeout(() => scrollToEnd(true), 80);
+      scrollToEnd(true);
+      setTimeout(() => scrollToEnd(true), 150);
     } catch (err: unknown) {
       if (isNetworkError(err)) {
         void useNetworkStore.getState().verifyConnection();
       }
       showToast('Could not reach assistant. Please try again.', 'error');
+      const isNet = isNetworkError(err);
       const errorMsg: ChatMessage = {
         id: `assistant-${Date.now()}`,
         sender: 'assistant',
-        text: "I couldn't process that query right now. Please check your connection and try again.",
+        text: isNet
+          ? "I'm having trouble reaching the Clarity AI server. The cloud service may be waking up or your connection was interrupted."
+          : "I couldn't process that query right now. Please check your connection and try again.",
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        isError: true,
+        failedQuery: query,
       };
       setMessages((prev) => [...prev, errorMsg]);
-      setTimeout(() => scrollToEnd(true), 80);
+      scrollToEnd(true);
+      setTimeout(() => scrollToEnd(true), 150);
     } finally {
       setIsSending(false);
       requestAnimationFrame(() => {
         textInputRef.current?.focus();
       });
     }
-  }, [inputText, isSending, isConnected, financialContext, scrollToEnd, showToast]);
+  }, [inputText, isSending, isConnected, checkConnection, financialContext, scrollToEnd, showToast]);
 
   const handleClearHistory = () => {
     showAlert(
@@ -508,6 +536,13 @@ export default function CopilotScreen() {
     }
   }, [router]);
 
+  const handleRetry = useCallback(
+    (failedQuery: string) => {
+      handleSendMessage(failedQuery);
+    },
+    [handleSendMessage]
+  );
+
   const renderMessageItem = useCallback(
     ({ item }: { item: ChatMessage }) => (
       <ChatMessageBubble
@@ -515,9 +550,10 @@ export default function CopilotScreen() {
         colors={colors}
         styles={styles}
         onActionPress={handleActionPress}
+        onRetryPress={handleRetry}
       />
     ),
-    [colors, styles, handleActionPress]
+    [colors, styles, handleActionPress, handleRetry]
   );
 
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -701,7 +737,7 @@ export default function CopilotScreen() {
                 placeholderTextColor={colors.onSurfaceVariant}
                 value={inputText}
                 onChangeText={setInputText}
-                editable={isConnected}
+                editable={!isSending}
                 multiline
                 maxLength={500}
                 returnKeyType="send"
@@ -716,13 +752,13 @@ export default function CopilotScreen() {
               <TouchableOpacity
                 style={[
                   styles.sendButton,
-                  (!inputText.trim() || isSending || !isConnected) && styles.sendButtonDisabled,
+                  (!inputText.trim() || isSending) && styles.sendButtonDisabled,
                 ]}
                 onPress={() => {
                   handleSendMessage();
                   textInputRef.current?.focus();
                 }}
-                disabled={!inputText.trim() || isSending || !isConnected}
+                disabled={!inputText.trim() || isSending}
                 activeOpacity={0.8}
               >
                 {isSending ? (
@@ -842,6 +878,22 @@ const getStyles = (colors: ThemeColors) => {
     actionBtnText: {
       ...typography.labelMd,
       color: colors.primary,
+      fontWeight: '700',
+    },
+    retryBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: colors.errorContainer,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 12,
+      marginTop: 8,
+      alignSelf: 'flex-start',
+    },
+    retryBtnText: {
+      ...typography.labelMd,
+      color: colors.onErrorContainer,
       fontWeight: '700',
     },
     timestampContainer: {

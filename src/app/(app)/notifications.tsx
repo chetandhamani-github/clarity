@@ -133,7 +133,7 @@ export default function NotificationsScreen() {
       case 'budget':
         return {
           iconName: 'pie-chart' as const,
-          iconColor: isRead ? colors.onSurfaceVariant : colors.secondary,
+          iconColor: isRead ? colors.onSurfaceVariant : colors.onSecondaryContainer,
           iconBg: isRead ? colors.surfaceContainerHighest : colors.secondaryContainer,
           indicatorColor: colors.secondary,
         };
@@ -147,7 +147,7 @@ export default function NotificationsScreen() {
       case 'account':
         return {
           iconName: 'account-balance' as const,
-          iconColor: isRead ? colors.onSurfaceVariant : colors.tertiary,
+          iconColor: isRead ? colors.onSurfaceVariant : colors.onTertiaryContainer,
           iconBg: isRead ? colors.surfaceContainerHighest : colors.tertiaryContainer,
           indicatorColor: colors.tertiary,
         };
@@ -324,7 +324,7 @@ export default function NotificationsScreen() {
                 <MaterialIcons
                   name="notifications-none"
                   size={64}
-                  color={colors.surfaceVariant}
+                  color={colors.onSurfaceVariant}
                 />
                 <Text style={styles.emptyTitle}>
                   {activeTab === 'all'

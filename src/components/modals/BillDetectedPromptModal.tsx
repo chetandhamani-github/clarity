@@ -124,7 +124,7 @@ export function BillDetectedPromptModal() {
               {/* Header Icon & Title */}
               <View style={styles.headerRow}>
                 <View style={[styles.headerIconBox, { backgroundColor: colors.primaryContainer }]}>
-                  <MaterialIcons name="notifications-active" size={24} color={colors.primary} />
+                  <MaterialIcons name="notifications-active" size={24} color={colors.onPrimaryContainer} />
                 </View>
                 <View style={styles.headerTextContainer}>
                   <Text style={[styles.modalTitle, { color: colors.onSurface }]}>

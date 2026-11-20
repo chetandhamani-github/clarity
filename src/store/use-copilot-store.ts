@@ -6,6 +6,8 @@ export interface ChatMessage {
   text: string;
   timestamp: string;
   suggestedAction?: string;
+  isError?: boolean;
+  failedQuery?: string;
 }
 
 const getInitialWelcomeMessage = (): ChatMessage => ({

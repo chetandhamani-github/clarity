@@ -1,14 +1,15 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { InvestmentHolding, PortfolioSummary, InvestmentMaturityItem } from '@/types';
 import {
+  deleteInvestmentHolding,
   getAllInvestmentHoldings,
   getInvestmentHoldingById,
+  getInvestmentMaturityCalendar,
+  getPortfolioSummary,
   insertInvestmentHolding,
   updateInvestmentHolding,
-  deleteInvestmentHolding,
-  getPortfolioSummary,
-  getInvestmentMaturityCalendar,
 } from '@/services/database/investment-dao';
+import type { InvestmentHolding, InvestmentMaturityItem, PortfolioSummary } from '@/types';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { useAccounts } from './use-accounts';
 
 export function useInvestments() {
@@ -32,10 +33,21 @@ export function useInvestment(id: string | undefined) {
 
 export function usePortfolioSummary() {
   const { accounts } = useAccounts();
+
+  // Create an order-independent fingerprint of account balances
+  const accountsBalanceKey = useMemo(() => {
+    if (!accounts || accounts.length === 0) return 'empty';
+    return accounts
+      .map((a) => `${a.id}:${a.balance}`)
+      .sort()
+      .join('|');
+  }, [accounts]);
+
   const { data, isLoading, refetch } = useQuery<PortfolioSummary>({
-    queryKey: ['portfolioSummary', accounts],
+    queryKey: ['portfolioSummary', accountsBalanceKey],
     queryFn: () => getPortfolioSummary(accounts),
     enabled: !!accounts,
+    placeholderData: (previousData) => previousData,
   });
 
   return { summary: data || null, isLoading, refetch };

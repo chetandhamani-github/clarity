@@ -1,71 +1,176 @@
-import { Header, Text, useAlert, useToast } from '@/components/ui';
-import { LegalModal } from '@/components/modals/LegalModal';
-import { PassphraseModal } from '@/components/modals/PassphraseModal';
-import { useCategorySpending } from '@/hooks/use-budget';
-import { useGoals } from '@/hooks/use-goals';
-import { useGoogleDrive } from '@/hooks/use-google-drive';
-import { useNotifications } from '@/hooks/use-notifications';
-import { useSmsSync } from '@/hooks/useSmsSync';
-import { resetEntireAppData } from '@/services/app-reset';
-import { useAppStore } from '@/store/use-app-store';
-import { useAuthStore } from '@/store/use-auth-store';
-import { ThemeColors, typography, useTheme } from '@/theme';
-import { formatCurrency } from '@/utils/format';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
-import Constants from 'expo-constants';
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
+import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
+
+import { Header, Text, useAlert, useToast } from '@/components/ui';
+import { LegalModal } from '@/components/modals/LegalModal';
+import { useGoogleDrive } from '@/hooks/use-google-drive';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
+import { useSmsSync } from '@/hooks/useSmsSync';
+import { resetEntireAppData } from '@/services/app-reset';
+import { triggerDailyPulseNotification } from '@/services/notifications/system-notification';
+import { useAppStore } from '@/store/use-app-store';
+import { useAuthStore } from '@/store/use-auth-store';
+import { ThemeColors, fontFamilies, radius, typography, useTheme } from '@/theme';
+
+interface CurrencyOption {
+  code: string;
+  symbol: string;
+  name: string;
+}
+
+const CURRENCY_OPTIONS: CurrencyOption[] = [
+  { code: 'INR', symbol: '₹', name: 'Indian Rupee' },
+  { code: 'USD', symbol: '$', name: 'US Dollar' },
+  { code: 'EUR', symbol: '€', name: 'Euro' },
+  { code: 'GBP', symbol: '£', name: 'British Pound' },
+  { code: 'AED', symbol: 'د.إ', name: 'UAE Dirham' },
+  { code: 'CAD', symbol: 'CA$', name: 'Canadian Dollar' },
+  { code: 'AUD', symbol: 'A$', name: 'Australian Dollar' },
+  { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar' },
+  { code: 'JPY', symbol: '¥', name: 'Japanese Yen' },
+];
+
+interface ThemeOption {
+  id: 'system' | 'light' | 'dark';
+  label: string;
+  icon: keyof typeof MaterialIcons.glyphMap;
+  description: string;
+}
+
+const THEME_OPTIONS: ThemeOption[] = [
+  {
+    id: 'system',
+    label: 'System Default',
+    icon: 'settings-brightness',
+    description: 'Matches your device display settings',
+  },
+  {
+    id: 'light',
+    label: 'Light',
+    icon: 'light-mode',
+    description: 'Crisp light background with dark text',
+  },
+  {
+    id: 'dark',
+    label: 'Dark',
+    icon: 'dark-mode',
+    description: 'Easy on the eyes in low-light environments',
+  },
+];
+
+interface SettingRowProps {
+  icon: keyof typeof MaterialIcons.glyphMap;
+  title: string;
+  subtitle?: string;
+  value?: string;
+  onPress: () => void;
+  showDivider?: boolean;
+  destructive?: boolean;
+  iconBgColor?: string;
+  iconColor?: string;
+}
+
+function SettingRow({
+  icon,
+  title,
+  subtitle,
+  value,
+  onPress,
+  showDivider = true,
+  destructive = false,
+  iconBgColor,
+  iconColor,
+}: SettingRowProps) {
+  const { colors } = useTheme();
+  const styles = getStyles(colors);
+
+  return (
+    <>
+      <TouchableOpacity
+        style={styles.settingItem}
+        onPress={onPress}
+        activeOpacity={0.7}
+      >
+        <View style={styles.settingItemLeft}>
+          <View
+            style={[
+              styles.iconBox,
+              { backgroundColor: iconBgColor || colors.surfaceContainerHighest },
+            ]}
+          >
+            <MaterialIcons
+              name={icon}
+              size={20}
+              color={iconColor || (destructive ? colors.error : colors.primary)}
+            />
+          </View>
+          <View style={styles.settingTextContainer}>
+            <Text
+              style={[
+                styles.settingTitle,
+                destructive && { color: colors.error, fontFamily: fontFamilies.semiBold },
+              ]}
+              numberOfLines={1}
+            >
+              {title}
+            </Text>
+            {subtitle ? (
+              <Text style={styles.settingSub} numberOfLines={2}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={styles.settingItemRight}>
+          {value ? <Text style={styles.settingValueText}>{value}</Text> : null}
+          <MaterialIcons
+            name="chevron-right"
+            size={20}
+            color={destructive ? colors.error : colors.outline}
+          />
+        </View>
+      </TouchableOpacity>
+      {showDivider && <View style={styles.itemDivider} />}
+    </>
+  );
+}
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const insets = useSafeInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { showAlert } = useAlert();
+  const { showToast } = useToast();
+
   const themeSetting = useAppStore((state) => state.theme);
   const setTheme = useAppStore((state) => state.setTheme);
   const currencySetting = useAppStore((state) => state.currency);
   const setCurrency = useAppStore((state) => state.setCurrency);
   const biometricsEnabled = useAppStore((state) => state.biometricEnabled);
-  const [isResetting, setIsResetting] = useState(false);
-  const [legalModalType, setLegalModalType] = useState<'privacy' | 'terms' | null>(null);
-  const [passphraseModalVisible, setPassphraseModalVisible] = useState(false);
-  const [passphraseMode, setPassphraseMode] = useState<'encrypt' | 'decrypt'>('decrypt');
-  const { showAlert } = useAlert();
-  const { showToast } = useToast();
-  const queryClient = useQueryClient();
 
   const {
     isConnected: isDriveConnected,
     userEmail: driveUserEmail,
-    lastBackupTime: driveLastBackupTime,
-    hasCustomBackupPassphrase,
-    isConnecting: isConnectingDrive,
-    isBackingUp: isBackingUpDrive,
-    isRestoring: isRestoringDrive,
-    isDeletingBackups: isDeletingDriveBackups,
-    isAutoSyncing,
-    autoBackupEnabled,
-    setAutoBackupEnabled,
-    autoBackupOnlyWifi,
-    setAutoBackupOnlyWifi,
-    connect: connectDrive,
-    disconnect: disconnectDrive,
-    backupNow: backupDriveNow,
-    restoreFromDrive,
-    deleteBackupsFromDrive,
+    lastBackupTime,
   } = useGoogleDrive();
+  const { user, isAuthenticated, signOut, isLoading: isAuthLoading } = useAuthStore();
 
   const {
     permissionStatus,
@@ -73,9 +178,22 @@ export default function SettingsScreen() {
     progress: smsProgress,
     lastSyncTimestamp,
     startInitialSync,
-    sync: syncSms,
     requestPermission: requestSmsPermission,
   } = useSmsSync();
+
+  const [isResetting, setIsResetting] = useState(false);
+  const [legalModalType, setLegalModalType] = useState<'privacy' | 'terms' | null>(null);
+  const [themeModalVisible, setThemeModalVisible] = useState(false);
+  const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
+
+  const currentThemeLabel =
+    THEME_OPTIONS.find((t) => t.id === themeSetting)?.label || 'System Default';
+  const currentCurrency =
+    CURRENCY_OPTIONS.find((c) => c.code === currencySetting) || {
+      code: currencySetting,
+      symbol: currencySetting,
+      name: currencySetting,
+    };
 
   const handleSmsScan = async () => {
     try {
@@ -107,146 +225,20 @@ export default function SettingsScreen() {
     }
   };
 
-  const now = new Date();
-  const { notifications } = useNotifications();
-  const unreadNotificationCount = notifications.filter((n) => !n.isRead).length;
-  const { goals } = useGoals();
-  const { spending } = useCategorySpending(now.getMonth() + 1, now.getFullYear());
-
-  const topGoal = goals?.[0];
-  const topSpending = spending?.filter((s) => s.spent > 0).sort((a, b) => b.spent - a.spent)[0];
-  const recentAlerts = notifications.filter((n) => n.type === 'alert').slice(0, 2);
-
-  const cycleTheme = () => {
-    if (themeSetting === 'system') setTheme('light');
-    else if (themeSetting === 'light') setTheme('dark');
-    else setTheme('system');
-  };
-
-  const cycleCurrency = () => {
-    if (currencySetting === 'INR') setCurrency('USD');
-    else if (currencySetting === 'USD') setCurrency('EUR');
-    else if (currencySetting === 'EUR') setCurrency('GBP');
-    else setCurrency('INR');
-  };
-
-  const handleRestoreFromDrive = async (passphrase?: string) => {
-    let newerTxCount = 0;
-    if (driveLastBackupTime) {
-      try {
-        const { getLocalTransactionsCountAfter } = await import(
-          '@/services/database/backup-restore-service'
-        );
-        newerTxCount = await getLocalTransactionsCountAfter(driveLastBackupTime);
-      } catch {
-        // Ignore
-      }
-    }
-
-    const backupDateMsg = driveLastBackupTime
-      ? ` (Backup from: ${new Date(driveLastBackupTime).toLocaleString()})`
-      : '';
-    const conflictWarning =
-      newerTxCount > 0
-        ? `\n\n⚠️ Warning: You have ${newerTxCount} local transaction${newerTxCount > 1 ? 's' : ''} logged since this backup was made. Restoring will replace them with the backup version.`
-        : '';
-
-    showAlert(
-      'Restore from Google Drive',
-      `This will restore accounts, transactions, and goals from Google Drive and replace local data${backupDateMsg}.${conflictWarning}\n\nWould you like to proceed?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Restore',
-          style: newerTxCount > 0 ? 'destructive' : 'default',
-          onPress: async () => {
-            const res = await restoreFromDrive(passphrase);
-            if (!res.success && res.isEncrypted) {
-              setPassphraseMode('decrypt');
-              setPassphraseModalVisible(true);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handlePassphraseSubmit = async (passphrase: string) => {
-    if (passphraseMode === 'decrypt') {
-      const res = await restoreFromDrive(passphrase);
-      if (res.success) {
-        setPassphraseModalVisible(false);
-      } else {
-        showToast(res.error || 'Incorrect passphrase', 'error');
-      }
-    } else {
-      setPassphraseModalVisible(false);
-      const success = await backupDriveNow(passphrase);
-      if (success) {
-        showToast('Recovery passphrase updated & encrypted backup saved!', 'success');
-      }
-    }
-  };
-
-  const handleConnectDrive = async () => {
-    const res = await connectDrive();
-    if (!res || !res.success) return;
-
-    if (res.needsPassphraseToRestore) {
-      setPassphraseMode('decrypt');
-      setPassphraseModalVisible(true);
-    } else if (!res.hasExistingBackup && !hasCustomBackupPassphrase) {
-      setPassphraseMode('encrypt');
-      setPassphraseModalVisible(true);
-    }
-  };
-
-  const handleDisconnectDrive = () => {
-    showAlert(
-      'Disconnect Google Drive',
-      'Are you sure you want to disconnect your Google Drive account? Local data will not be affected.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Disconnect',
-          style: 'destructive',
-          onPress: disconnectDrive,
-        },
-      ]
-    );
-  };
-
-  const handleDeleteDriveBackups = () => {
-    showAlert(
-      'Delete Cloud Backups?',
-      'Are you sure you want to delete all Clarity backup snapshots from your Google Drive? This will permanently delete your cloud backup file. Your local device data will not be affected.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete All',
-          style: 'destructive',
-          onPress: async () => {
-            await deleteBackupsFromDrive();
-          },
-        },
-      ]
-    );
-  };
-
   const handleResetData = () => {
     showAlert(
-      'Reset App Data',
-      'Are you sure you want to delete all data and reset the app? This cannot be undone.',
+      'Reset All App Data?',
+      'This will permanently delete all local transactions, accounts, categories, and cached rules from this device. Cloud backups will not be deleted.\n\nThis action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Reset',
+          text: 'Erase Everything',
           style: 'destructive',
           onPress: async () => {
             try {
               setIsResetting(true);
               await resetEntireAppData(queryClient);
-              showToast('App data has been reset to defaults', 'success');
+              showToast('App data reset to factory defaults', 'success');
               router.navigate('/(app)/(tabs)');
             } catch {
               showToast('Failed to reset app data', 'error');
@@ -258,14 +250,6 @@ export default function SettingsScreen() {
       ]
     );
   };
-
-  const handleContactSupport = () => {
-    Linking.openURL('mailto:support@clarityapp.dev?subject=Clarity%20Feedback%20v1.0.0').catch(() => {
-      showToast('Could not open email client. Contact support@clarityapp.dev', 'info');
-    });
-  };
-
-  const { user, isAuthenticated, signOut, isLoading: isAuthLoading } = useAuthStore();
 
   const handleSignOut = () => {
     showAlert('Sign Out', 'Are you sure you want to sign out of your account?', [
@@ -281,30 +265,26 @@ export default function SettingsScreen() {
     ]);
   };
 
+  const handleContactSupport = () => {
+    Linking.openURL(
+      `mailto:support@clarityapp.dev?subject=Clarity%20Feedback%20v${Constants.expoConfig?.version || '1.0.0'}`
+    ).catch(() => {
+      showToast('Could not open email client. Contact support@clarityapp.dev', 'info');
+    });
+  };
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      <Header
-        showBack
-        title="Intelligence & System"
-        rightNode={
-          <TouchableOpacity style={styles.iconButton} onPress={() => router.navigate('/notifications')}>
-            <MaterialIcons name="notifications" size={24} color={colors.onSurface} />
-            {unreadNotificationCount > 0 && (
-              <View style={styles.unreadBadgeDot}>
-                <Text style={styles.unreadBadgeText}>
-                  {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        }
-      />
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <Header title="Settings" showBack />
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 16) + 40 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Account Section */}
+        {/* 1. Account Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
           <View style={styles.listCard}>
@@ -316,33 +296,39 @@ export default function SettingsScreen() {
                   </Text>
                 </View>
                 <View style={styles.accountInfo}>
-                  <Text style={styles.accountName}>{user.name}</Text>
-                  <Text style={styles.accountEmail}>{user.email}</Text>
+                  <Text style={styles.accountName} numberOfLines={1}>
+                    {user.name || 'User'}
+                  </Text>
+                  <Text style={styles.accountEmail} numberOfLines={1}>
+                    {user.email || 'Signed in'}
+                  </Text>
                   <View style={styles.badgeRow}>
-                    <MaterialIcons name="check-circle" size={14} color={colors.primary} />
-                    <Text style={[styles.badgeText, { color: colors.primary }]} numberOfLines={1}>Google Account</Text>
+                    <MaterialIcons name="check-circle" size={13} color={colors.primary} />
+                    <Text style={[styles.badgeText, { color: colors.primary }]}>Active Account</Text>
                   </View>
                 </View>
                 <TouchableOpacity
                   style={[styles.signOutBtn, { borderColor: colors.outlineVariant }]}
                   onPress={handleSignOut}
                   disabled={isAuthLoading}
+                  activeOpacity={0.7}
                 >
                   <Text style={[styles.signOutText, { color: colors.error }]}>Sign Out</Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              <View style={styles.guestCard}>
+              <View style={styles.accountCard}>
                 <View style={[styles.avatarCircle, { backgroundColor: colors.surfaceContainerHigh }]}>
                   <MaterialIcons name="person-outline" size={24} color={colors.onSurfaceVariant} />
                 </View>
                 <View style={styles.accountInfo}>
                   <Text style={styles.accountName}>Guest Mode</Text>
-                  <Text style={styles.accountEmail}>Offline-only storage</Text>
+                  <Text style={styles.accountEmail}>Data saved locally on device</Text>
                 </View>
                 <TouchableOpacity
                   style={[styles.signInBtn, { backgroundColor: colors.primary }]}
                   onPress={() => router.navigate('/(auth)/login')}
+                  activeOpacity={0.8}
                 >
                   <Text style={[styles.signInText, { color: colors.onPrimary }]}>Sign In</Text>
                 </TouchableOpacity>
@@ -350,521 +336,548 @@ export default function SettingsScreen() {
             )}
           </View>
         </View>
-        {/* Intelligence Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Intelligence</Text>
-          <View style={styles.grid}>
-            <View style={styles.card}>
-              <View>
-                <View style={[styles.iconBox, { backgroundColor: colors.errorContainer }]}>
-                  <MaterialIcons name="trending-up" size={20} color={colors.onErrorContainer} />
-                </View>
-                <Text style={styles.cardLabel}>TOP SPENDING</Text>
-                <Text style={styles.cardBody}>
-                  {topSpending
-                    ? `You've spent ${formatCurrency(topSpending.spent)} on ${topSpending.category} this month.`
-                    : 'No spending data yet this month.'}
-                </Text>
-              </View>
-            </View>
 
-            <View style={styles.card}>
-              <View>
-                <View style={[styles.iconBox, { backgroundColor: colors.primaryContainer }]}>
-                  <MaterialIcons name="flag" size={20} color={colors.onPrimaryContainer} />
-                </View>
-                <Text style={styles.cardLabel}>GOAL STATUS</Text>
-                <Text style={styles.cardBody}>
-                  {topGoal
-                    ? `On track for "${topGoal.name}". ${formatCurrency(topGoal.targetAmount - topGoal.currentAmount)} left to target.`
-                    : 'Create a savings goal to track progress here.'}
-                </Text>
-              </View>
-              {topGoal && (
-                <View style={styles.progressBarTrack}>
-                  <View
-                    style={[
-                      styles.progressBarFill,
-                      {
-                        width: `${Math.min(100, (topGoal.currentAmount / topGoal.targetAmount) * 100)}%`,
-                      },
-                    ]}
-                  />
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-
-        {/* Alerts Mini Section */}
+        {/* 2. Backup & Data Protection (Elevated to top priority) */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Alerts</Text>
-            <TouchableOpacity onPress={() => router.navigate('/notifications')}>
-              <Text style={styles.actionText}>VIEW ALL</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.listCard}>
-            {recentAlerts.length > 0 ? (
-              recentAlerts.map((alert) => (
-                <TouchableOpacity
-                  key={alert.id}
-                  style={styles.listItem}
-                  onPress={() => router.navigate('/notifications')}
-                >
-                  <View
-                    style={[
-                      styles.dot,
-                      { backgroundColor: alert.isRead ? 'transparent' : colors.error },
-                    ]}
-                  />
-                  <View style={styles.listItemContent}>
-                    <Text style={styles.listItemTitle}>{alert.title}</Text>
-                    <Text style={styles.listItemBody} numberOfLines={1}>
-                      {alert.description}
-                    </Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-                </TouchableOpacity>
-              ))
+            <Text style={styles.sectionTitle}>Backup & Data Protection</Text>
+            {isDriveConnected ? (
+              <View style={[styles.statusBadge, { backgroundColor: colors.successContainer }]}>
+                <Text style={[styles.statusBadgeText, { color: colors.onSuccessContainer }]}>
+                  PROTECTED
+                </Text>
+              </View>
             ) : (
-              <View style={[styles.listItem, { justifyContent: 'center' }]}>
-                <Text style={styles.listItemBody}>No recent alerts.</Text>
+              <View style={[styles.statusBadge, { backgroundColor: colors.errorContainer }]}>
+                <Text style={[styles.statusBadgeText, { color: colors.onErrorContainer }]}>
+                  ACTION NEEDED
+                </Text>
               </View>
             )}
           </View>
-        </View>
 
-        {/* Preferences Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Preferences</Text>
           <View style={styles.listCard}>
-            <TouchableOpacity style={styles.settingItem} onPress={cycleTheme}>
-              <View style={styles.settingItemLeft}>
-                <MaterialIcons name="palette" size={24} color={colors.secondary} />
-                <View style={styles.settingTextContainer}>
-                  <Text style={styles.settingTitle}>Appearance</Text>
-                  <Text style={styles.settingSub}>
-                    {themeSetting === 'system'
-                      ? 'System Default'
-                      : themeSetting === 'light'
-                        ? 'Light'
-                        : 'Dark'}
-                  </Text>
-                </View>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.settingItem} onPress={cycleCurrency}>
-              <View style={styles.settingItemLeft}>
-                <MaterialIcons name="payments" size={24} color={colors.secondary} />
-                <View style={styles.settingTextContainer}>
-                  <Text style={styles.settingTitle}>Currency</Text>
-                  <Text style={styles.settingSub}>
-                    {currencySetting === 'INR'
-                      ? 'Indian Rupee (₹)'
-                      : currencySetting === 'USD'
-                        ? 'US Dollar ($)'
-                        : currencySetting === 'EUR'
-                          ? 'Euro (€)'
-                          : currencySetting === 'GBP'
-                            ? 'British Pound (£)'
-                            : currencySetting}
-                  </Text>
-                </View>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.settingItem} onPress={() => router.navigate('/security')}>
-              <View style={styles.settingItemLeft}>
-                <MaterialIcons name="lock" size={24} color={colors.secondary} />
-                <View style={styles.settingTextContainer}>
-                  <Text style={styles.settingTitle}>Security & Privacy</Text>
-                  <Text style={styles.settingSub}>
-                    {biometricsEnabled ? 'Biometrics Enabled' : 'Biometrics Disabled'}
-                  </Text>
-                </View>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.settingItem}
-              onPress={() => router.navigate('/(app)/bills')}
-            >
-              <View style={styles.settingItemLeft}>
-                <MaterialIcons name="receipt-long" size={24} color={colors.secondary} />
-                <View style={styles.settingTextContainer}>
-                  <Text style={styles.settingTitle}>Bills & Utilities</Text>
-                  <Text style={styles.settingSub}>Reminders, recurring bills & auto-settlement</Text>
-                </View>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.settingItem}
-              onPress={() => router.navigate('/(app)/splitwise')}
-            >
-              <View style={styles.settingItemLeft}>
-                <MaterialIcons name="group" size={24} color={colors.primary} />
-                <View style={styles.settingTextContainer}>
-                  <Text style={styles.settingTitle}>Splitwise & Shared Expenses</Text>
-                  <Text style={styles.settingSub}>Track friends, debts, IOUs & settlements</Text>
-                </View>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.settingItem}
-              onPress={() => router.navigate('/(app)/investments')}
-            >
-              <View style={styles.settingItemLeft}>
-                <MaterialIcons name="insights" size={24} color="#3B82F6" />
-                <View style={styles.settingTextContainer}>
-                  <Text style={styles.settingTitle}>Wealth & Investments Cockpit</Text>
-                  <Text style={styles.settingSub}>Track mutual funds, stocks, FDs, gold & SIPs</Text>
-                </View>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.settingItem}
-              onPress={() => router.navigate('/(app)/cashflow')}
-            >
-              <View style={styles.settingItemLeft}>
-                <MaterialIcons name="speed" size={24} color="#10B981" />
-                <View style={styles.settingTextContainer}>
-                  <Text style={styles.settingTitle}>Cash Flow & Safe to Spend</Text>
-                  <Text style={styles.settingSub}>30-day runway projection & daily disposable allowance</Text>
-                </View>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.settingItem}
-              onPress={() => router.navigate('/(app)/rules')}
-            >
-              <View style={styles.settingItemLeft}>
-                <MaterialIcons name="auto-fix-high" size={24} color="#8B5CF6" />
-                <View style={styles.settingTextContainer}>
-                  <Text style={styles.settingTitle}>Smart Automation Rules</Text>
-                  <Text style={styles.settingSub}>IFTTT rules to auto-categorize, tag, and organize expenses</Text>
-                </View>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.settingItem}
-              onPress={() => router.navigate('/(app)/debt-payoff')}
-            >
-              <View style={styles.settingItemLeft}>
-                <MaterialIcons name="trending-down" size={24} color="#EF4444" />
-                <View style={styles.settingTextContainer}>
-                  <Text style={styles.settingTitle}>Debt Elimination Strategist</Text>
-                  <Text style={styles.settingSub}>Snowball vs. Avalanche debt freedom payoff roadmap</Text>
-                </View>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.settingItem}
-              onPress={() => router.navigate('/financial-health')}
-            >
-              <View style={styles.settingItemLeft}>
-                <MaterialIcons name="favorite" size={24} color="#EC4899" />
-                <View style={styles.settingTextContainer}>
-                  <Text style={styles.settingTitle}>Financial Health Score</Text>
-                  <Text style={styles.settingSub}>0–100 index across savings, runway, debt & budget</Text>
-                </View>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.settingItem}
-              onPress={() => router.navigate('/manage-categories')}
-            >
-              <View style={styles.settingItemLeft}>
-                <MaterialIcons name="category" size={24} color={colors.secondary} />
-                <View style={styles.settingTextContainer}>
-                  <Text style={styles.settingTitle}>Manage Categories</Text>
-                  <Text style={styles.settingSub}>Customize spending categories</Text>
-                </View>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
-            </TouchableOpacity>
-
+            {/* Prominent Google Drive Status Row */}
             <TouchableOpacity
               style={styles.settingItem}
               onPress={() => router.navigate('/(app)/cloud-backup')}
+              activeOpacity={0.7}
             >
               <View style={styles.settingItemLeft}>
-                <MaterialIcons
-                  name="cloud-queue"
-                  size={24}
-                  color={isDriveConnected ? colors.primary : colors.secondary}
-                />
-                <View style={styles.settingTextContainer}>
-                  <Text style={styles.settingTitle}>Cloud Backup & Restore</Text>
-                  <Text style={styles.settingSub}>
-                    {isDriveConnected
-                      ? `Google Drive (${driveUserEmail || 'Connected'})`
-                      : 'Google Drive • Disconnected'}
-                  </Text>
-                </View>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={colors.outline} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* SMS Intelligence Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>SMS Intelligence</Text>
-          <View style={styles.listCard}>
-            <View style={styles.settingItem}>
-              <View style={styles.settingItemLeft}>
-                <MaterialIcons name="sms" size={24} color={colors.primary} />
-                <View style={styles.settingTextContainer}>
-                  <Text style={styles.settingTitle}>SMS Auto-Tracking</Text>
-                  <Text style={styles.settingSub}>
-                    {permissionStatus === 'granted'
-                      ? 'Access granted • 100% offline'
-                      : permissionStatus === 'permanently_denied'
-                        ? 'Permission blocked in device settings'
-                        : 'Permission not granted'}
-                  </Text>
-                </View>
-              </View>
-              <View
-                style={{
-                  paddingHorizontal: 10,
-                  paddingVertical: 4,
-                  borderRadius: 8,
-                  flexShrink: 0,
-                  backgroundColor:
-                    permissionStatus === 'granted'
-                      ? colors.primaryContainer
-                      : colors.surfaceContainerHighest,
-                }}
-              >
-                <Text
-                  style={{
-                    ...typography.labelMd,
-                    color:
-                      permissionStatus === 'granted'
-                        ? colors.onPrimaryContainer
-                        : colors.onSurfaceVariant,
-                    fontWeight: '700',
-                  }}
+                <View
+                  style={[
+                    styles.iconBox,
+                    {
+                      backgroundColor: isDriveConnected
+                        ? colors.primaryContainer
+                        : colors.errorContainer,
+                    },
+                  ]}
                 >
-                  {permissionStatus === 'granted' ? 'ACTIVE' : 'OFF'}
-                </Text>
+                  <MaterialIcons
+                    name={isDriveConnected ? 'cloud-done' : 'cloud-off'}
+                    size={20}
+                    color={isDriveConnected ? colors.onPrimaryContainer : colors.error}
+                  />
+                </View>
+                <View style={styles.settingTextContainer}>
+                  <Text style={styles.settingTitle}>Google Drive Cloud Backup</Text>
+                  <Text style={styles.settingSub} numberOfLines={2}>
+                    {isDriveConnected
+                      ? `${driveUserEmail || 'Connected'} • ${
+                          lastBackupTime
+                            ? `Last sync: ${new Date(lastBackupTime).toLocaleDateString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}`
+                            : 'No backup uploaded yet'
+                        }`
+                      : 'Not connected • Protect your data against phone loss or switch'}
+                  </Text>
+                </View>
               </View>
-            </View>
 
-            {lastSyncTimestamp ? (
-              <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-                <Text style={{ ...typography.bodyMd, fontSize: 12, color: colors.onSurfaceVariant }}>
-                  Last scanned: {new Date(lastSyncTimestamp).toLocaleString()}
-                </Text>
-              </View>
-            ) : null}
-
-            <View style={{ padding: 16, gap: 8 }}>
-              <TouchableOpacity
-                style={styles.btnPrimary}
-                onPress={handleSmsScan}
-                disabled={isSmsSyncing}
-              >
-                {isSmsSyncing ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                    <ActivityIndicator size="small" color={colors.onPrimary} />
-                    <Text style={styles.btnPrimaryText} numberOfLines={1}>
-                      SCANNING ({smsProgress.processed}/{smsProgress.total || '...'})
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                    <MaterialIcons
-                      name={permissionStatus === 'permanently_denied' ? 'settings' : 'sync'}
-                      size={18}
-                      color={colors.onPrimary}
-                    />
-                    <Text style={styles.btnPrimaryText} numberOfLines={1}>
-                      {permissionStatus === 'granted'
-                        ? 'SCAN SMS NOW'
-                        : permissionStatus === 'permanently_denied'
-                          ? 'OPEN DEVICE SETTINGS'
-                          : 'ENABLE SMS TRACKING'}
+              <View style={styles.settingItemRight}>
+                {!isDriveConnected && (
+                  <View style={[styles.statusBadge, { backgroundColor: colors.errorContainer }]}>
+                    <Text style={[styles.statusBadgeText, { color: colors.onErrorContainer }]}>
+                      SETUP NOW
                     </Text>
                   </View>
                 )}
-              </TouchableOpacity>
-            </View>
+                <MaterialIcons name="chevron-right" size={20} color={colors.outline} />
+              </View>
+            </TouchableOpacity>
 
-            {Platform.OS === 'android' && permissionStatus === 'granted' && (
-              <TouchableOpacity
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  paddingHorizontal: 16,
-                  paddingVertical: 12,
-                  borderTopWidth: 1,
-                  borderTopColor: colors.surfaceVariant,
-                }}
-                onPress={() => Linking.openSettings()}
-                activeOpacity={0.7}
-              >
-                <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={{ ...typography.bodyMd, color: colors.onSurface, fontWeight: '600' }}>
-                    Background Auto-Sync Reliability
-                  </Text>
-                  <Text style={{ ...typography.bodyMd, fontSize: 12, lineHeight: 16, color: colors.onSurfaceVariant }}>
-                    Set battery usage to "Unrestricted" to ensure background SMS scans run reliably.
+            <View style={styles.itemDivider} />
+
+            <SettingRow
+              icon="description"
+              title="Export Statements (PDF / CSV)"
+              subtitle="Generate filtered statements by account and date"
+              onPress={() => router.navigate('/export-statement')}
+            />
+            <SettingRow
+              icon="file-upload"
+              title="Import Statements (CSV)"
+              subtitle="Bulk import banking transactions and reconcile balances"
+              onPress={() => router.navigate('/import-statement')}
+            />
+            <SettingRow
+              icon="backup"
+              title="Full Data Backup & Restore"
+              subtitle="Export unencrypted or encrypted JSON snapshot file"
+              onPress={() => router.navigate('/export-success')}
+              showDivider={false}
+            />
+          </View>
+        </View>
+
+        {/* 3. Preferences Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Preferences</Text>
+          <View style={styles.listCard}>
+            <SettingRow
+              icon="palette"
+              title="Appearance"
+              subtitle="Theme and display mode"
+              value={currentThemeLabel}
+              onPress={() => setThemeModalVisible(true)}
+            />
+            <SettingRow
+              icon="payments"
+              title="Default Currency"
+              subtitle="Formatting symbol & exchange reference"
+              value={`${currentCurrency.code} (${currentCurrency.symbol})`}
+              onPress={() => setCurrencyModalVisible(true)}
+            />
+            <SettingRow
+              icon="lock"
+              title="Security & Privacy"
+              subtitle={biometricsEnabled ? 'Biometrics active' : 'Passcode & app lock'}
+              onPress={() => router.navigate('/security')}
+            />
+            <SettingRow
+              icon="category"
+              title="Manage Categories"
+              subtitle="Customize spending buckets & limits"
+              onPress={() => router.navigate('/manage-categories')}
+            />
+            <SettingRow
+              icon="notifications-active"
+              title="Lock Screen Pulse"
+              subtitle="Send Uber-style live lock screen notification"
+              onPress={async () => {
+                await triggerDailyPulseNotification({
+                  safeToSpend: 1850,
+                  streakDays: 4,
+                  yesterdaySpend: 420,
+                  upcomingBillsCount: 2,
+                });
+                showToast('Lock screen pulse alert sent! Check your notification tray.', 'success');
+              }}
+              showDivider={false}
+            />
+          </View>
+        </View>
+
+        {/* 4. SMS Intelligence Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>SMS Intelligence</Text>
+          <View style={styles.listCard}>
+            {Platform.OS === 'android' ? (
+              <>
+                <View style={styles.settingItem}>
+                  <View style={styles.settingItemLeft}>
+                    <View style={[styles.iconBox, { backgroundColor: colors.surfaceContainerHighest }]}>
+                      <MaterialIcons name="sms" size={20} color={colors.primary} />
+                    </View>
+                    <View style={styles.settingTextContainer}>
+                      <Text style={styles.settingTitle}>SMS Auto-Tracking</Text>
+                      <Text style={styles.settingSub}>
+                        {permissionStatus === 'granted'
+                          ? 'Real-time local extraction from bank alerts'
+                          : permissionStatus === 'permanently_denied'
+                            ? 'Permission blocked in device settings'
+                            : 'Sync debit, credit & UPI transactions automatically'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      {
+                        backgroundColor:
+                          permissionStatus === 'granted'
+                            ? colors.primaryContainer
+                            : colors.surfaceContainerHighest,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusBadgeText,
+                        {
+                          color:
+                            permissionStatus === 'granted'
+                              ? colors.onPrimaryContainer
+                              : colors.onSurfaceVariant,
+                        },
+                      ]}
+                    >
+                      {permissionStatus === 'granted' ? 'ACTIVE' : 'OFF'}
+                    </Text>
+                  </View>
+                </View>
+
+                {lastSyncTimestamp ? (
+                  <View style={styles.metaRow}>
+                    <Text style={styles.metaText}>
+                      Last scanned: {new Date(lastSyncTimestamp).toLocaleString()}
+                    </Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.actionBtnContainer}>
+                  <TouchableOpacity
+                    style={styles.btnPrimary}
+                    onPress={handleSmsScan}
+                    disabled={isSmsSyncing}
+                    activeOpacity={0.8}
+                  >
+                    {isSmsSyncing ? (
+                      <View style={styles.btnRow}>
+                        <ActivityIndicator size="small" color={colors.onPrimary} />
+                        <Text style={styles.btnPrimaryText}>
+                          SCANNING ({smsProgress.processed}/{smsProgress.total || '...'})
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={styles.btnRow}>
+                        <MaterialIcons
+                          name={permissionStatus === 'permanently_denied' ? 'settings' : 'sync'}
+                          size={18}
+                          color={colors.onPrimary}
+                        />
+                        <Text style={styles.btnPrimaryText}>
+                          {permissionStatus === 'granted'
+                            ? 'SCAN SMS NOW'
+                            : permissionStatus === 'permanently_denied'
+                              ? 'OPEN DEVICE SETTINGS'
+                              : 'ENABLE SMS TRACKING'}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {permissionStatus === 'granted' && (
+                  <>
+                    <View style={styles.itemDivider} />
+                    <TouchableOpacity
+                      style={styles.batteryRow}
+                      onPress={() => Linking.openSettings()}
+                      activeOpacity={0.7}
+                    >
+                      <View style={{ flex: 1, paddingRight: 8 }}>
+                        <Text style={styles.batteryTitle}>Background Auto-Sync Reliability</Text>
+                        <Text style={styles.batterySub}>
+                          Set battery usage to "Unrestricted" in system settings to ensure background SMS scans fire reliably.
+                        </Text>
+                      </View>
+                      <MaterialIcons name="chevron-right" size={20} color={colors.outline} />
+                    </TouchableOpacity>
+                  </>
+                )}
+              </>
+            ) : (
+              <View style={styles.platformNoticeCard}>
+                <MaterialIcons name="info-outline" size={20} color={colors.primary} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={styles.settingTitle}>iOS SMS Sandboxing</Text>
+                  <Text style={styles.settingSub}>
+                    iOS system security prevents apps from reading incoming SMS messages. You can import statements via CSV below or log transactions directly.
                   </Text>
                 </View>
-                <MaterialIcons name="chevron-right" size={20} color={colors.outline} />
-              </TouchableOpacity>
+              </View>
             )}
           </View>
         </View>
 
-        {/* Data Vault */}
+        {/* 5. Danger Zone */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Data Vault</Text>
-          <View style={[styles.card, { minHeight: 'auto', gap: 16 }]}>
-            <View>
-              <Text style={styles.settingTitle}>Manage your local data.</Text>
-            </View>
-            <View style={{ gap: 8 }}>
-              <TouchableOpacity
-                style={styles.btnSecondary}
-                onPress={() => router.navigate('/export-statement')}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                  <MaterialIcons name="description" size={18} color={colors.onSurface} />
-                  <Text style={styles.btnSecondaryText} numberOfLines={1}>EXPORT STATEMENT (PDF / CSV)</Text>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.btnSecondary}
-                onPress={() => router.navigate('/import-statement')}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                  <MaterialIcons name="file-upload" size={18} color={colors.onSurface} />
-                  <Text style={styles.btnSecondaryText} numberOfLines={1}>IMPORT STATEMENT (CSV)</Text>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.btnSecondary}
-                onPress={() => router.navigate('/export-success')}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                  <MaterialIcons name="backup" size={18} color={colors.onSurface} />
-                  <Text style={styles.btnSecondaryText}>FULL BACKUP & EXPORT</Text>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.btnPrimary, { backgroundColor: colors.error }]}
-                onPress={handleResetData}
-                disabled={isResetting}
-              >
-                <Text style={[styles.btnPrimaryText, { color: colors.onError }]}>
-                  {isResetting ? 'RESETTING...' : 'RESET APP DATA'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+          <Text style={[styles.sectionTitle, { color: colors.error }]}>Danger Zone</Text>
+          <View style={[styles.listCard, { borderColor: colors.errorContainer }]}>
+            <SettingRow
+              icon="delete-forever"
+              title="Reset App Data"
+              subtitle="Permanently erase all local accounts, transactions & categories"
+              destructive
+              iconBgColor={colors.errorContainer}
+              iconColor={colors.error}
+              onPress={handleResetData}
+              showDivider={false}
+            />
           </View>
         </View>
 
-        {/* About & Legal */}
+        {/* 6. About & Support Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>About & Legal</Text>
-          <View style={[styles.card, { minHeight: 'auto', gap: 16 }]}>
-            {/* 100% On-device Badge */}
-            <View
-              style={{
-                backgroundColor: colors.surfaceContainer,
-                padding: 12,
-                borderRadius: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 12,
-              }}
-            >
-              <MaterialIcons name="verified-user" size={24} color={colors.primary} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ ...typography.bodyMd, fontWeight: '700', color: colors.onSurface }}>
-                  100% Private & On-Device
-                </Text>
-                <Text style={{ ...typography.bodyMd, fontSize: 12, lineHeight: 16, color: colors.onSurfaceVariant }}>
-                  Your SMS & transactions are processed strictly on your phone. No personal financial data is ever uploaded or sold.
-                </Text>
-              </View>
-            </View>
 
-            {/* Links */}
-            <View style={{ gap: 4 }}>
-              <TouchableOpacity
-                style={styles.legalRow}
-                onPress={() => setLegalModalType('privacy')}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <MaterialIcons name="privacy-tip" size={20} color={colors.onSurfaceVariant} />
-                  <Text style={styles.legalRowText}>Privacy Policy</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={20} color={colors.outline} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.legalRow}
-                onPress={() => setLegalModalType('terms')}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <MaterialIcons name="gavel" size={20} color={colors.onSurfaceVariant} />
-                  <Text style={styles.legalRowText}>Terms of Service</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={20} color={colors.outline} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.legalRow}
-                onPress={() => Linking.openURL('https://github.com/homerun/clarity')}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <MaterialIcons name="code" size={20} color={colors.onSurfaceVariant} />
-                  <Text style={styles.legalRowText}>Open Source & Licenses</Text>
-                </View>
-                <MaterialIcons name="open-in-new" size={18} color={colors.outline} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.legalRow}
-                onPress={handleContactSupport}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <MaterialIcons name="help-outline" size={20} color={colors.onSurfaceVariant} />
-                  <Text style={styles.legalRowText}>Report an Issue / Contact Support</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={20} color={colors.outline} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Version Footer */}
-            <View style={{ alignItems: 'center', paddingTop: 6 }}>
-              <Text style={{ ...typography.labelMd, color: colors.onSurfaceVariant, fontSize: 12 }}>
-                Clarity Personal Finance • v{Constants.expoConfig?.version || '1.0.0'} (Production)
+          {/* Privacy Banner */}
+          <View style={styles.privacyBanner}>
+            <MaterialIcons name="verified-user" size={24} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.privacyTitle}>100% Private & On-Device</Text>
+              <Text style={styles.privacyBody}>
+                All financial calculations, SMS analysis, and transaction logs are stored strictly on your phone. Clarity never sells or shares your personal data.
               </Text>
             </View>
           </View>
+
+          {/* Links Card */}
+          <View style={styles.listCard}>
+            <TouchableOpacity
+              style={styles.legalRow}
+              onPress={() => setLegalModalType('privacy')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.legalRowLeft}>
+                <MaterialIcons name="privacy-tip" size={20} color={colors.onSurfaceVariant} />
+                <Text style={styles.legalRowText}>Privacy Policy</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={colors.outline} />
+            </TouchableOpacity>
+
+            <View style={styles.itemDivider} />
+
+            <TouchableOpacity
+              style={styles.legalRow}
+              onPress={() => setLegalModalType('terms')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.legalRowLeft}>
+                <MaterialIcons name="gavel" size={20} color={colors.onSurfaceVariant} />
+                <Text style={styles.legalRowText}>Terms of Service</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={colors.outline} />
+            </TouchableOpacity>
+
+            <View style={styles.itemDivider} />
+
+            <TouchableOpacity
+              style={styles.legalRow}
+              onPress={() => Linking.openURL('https://github.com/homerun/clarity')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.legalRowLeft}>
+                <MaterialIcons name="code" size={20} color={colors.onSurfaceVariant} />
+                <Text style={styles.legalRowText}>Open Source & Licenses</Text>
+              </View>
+              <MaterialIcons name="open-in-new" size={18} color={colors.outline} />
+            </TouchableOpacity>
+
+            <View style={styles.itemDivider} />
+
+            <TouchableOpacity
+              style={styles.legalRow}
+              onPress={handleContactSupport}
+              activeOpacity={0.7}
+            >
+              <View style={styles.legalRowLeft}>
+                <MaterialIcons name="help-outline" size={20} color={colors.onSurfaceVariant} />
+                <Text style={styles.legalRowText}>Report an Issue / Contact Support</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={colors.outline} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Version Footer */}
+          <View style={styles.versionFooter}>
+            <Text style={styles.versionText}>
+              Clarity Personal Finance • v{Constants.expoConfig?.version || '1.0.0'}
+            </Text>
+          </View>
         </View>
       </ScrollView>
+
+      {/* Theme Picker Modal */}
+      <Modal
+        visible={themeModalVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setThemeModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setThemeModalVisible(false)}
+        >
+          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Appearance</Text>
+              <TouchableOpacity
+                onPress={() => setThemeModalVisible(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalOptionList}>
+              {THEME_OPTIONS.map((item, idx) => {
+                const isSelected = themeSetting === item.id;
+                return (
+                  <React.Fragment key={item.id}>
+                    {idx > 0 && <View style={styles.itemDivider} />}
+                    <TouchableOpacity
+                      style={styles.modalOptionItem}
+                      onPress={() => {
+                        setTheme(item.id);
+                        setThemeModalVisible(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.modalOptionLeft}>
+                        <View
+                          style={[
+                            styles.iconBox,
+                            {
+                              backgroundColor: isSelected
+                                ? colors.primaryContainer
+                                : colors.surfaceContainerHighest,
+                            },
+                          ]}
+                        >
+                          <MaterialIcons
+                            name={item.icon}
+                            size={20}
+                            color={isSelected ? colors.onPrimaryContainer : colors.onSurface}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.modalOptionLabel,
+                              isSelected && { color: colors.primary, fontFamily: fontFamilies.bold },
+                            ]}
+                          >
+                            {item.label}
+                          </Text>
+                          <Text style={styles.modalOptionSub}>{item.description}</Text>
+                        </View>
+                      </View>
+                      {isSelected ? (
+                        <MaterialIcons name="check-circle" size={22} color={colors.primary} />
+                      ) : (
+                        <View style={styles.unselectedRadio} />
+                      )}
+                    </TouchableOpacity>
+                  </React.Fragment>
+                );
+              })}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Currency Picker Modal */}
+      <Modal
+        visible={currencyModalVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setCurrencyModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setCurrencyModalVisible(false)}
+        >
+          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Currency</Text>
+              <TouchableOpacity
+                onPress={() => setCurrencyModalVisible(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={{ maxHeight: 380 }}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.modalOptionList}>
+                {CURRENCY_OPTIONS.map((item, idx) => {
+                  const isSelected = currencySetting === item.code;
+                  return (
+                    <React.Fragment key={item.code}>
+                      {idx > 0 && <View style={styles.itemDivider} />}
+                      <TouchableOpacity
+                        style={styles.modalOptionItem}
+                        onPress={() => {
+                          setCurrency(item.code);
+                          setCurrencyModalVisible(false);
+                          showToast(`Default currency changed to ${item.name}`, 'success');
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.modalOptionLeft}>
+                          <View
+                            style={[
+                              styles.currencySymbolBox,
+                              {
+                                backgroundColor: isSelected
+                                  ? colors.primaryContainer
+                                  : colors.surfaceContainerHighest,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.currencySymbolText,
+                                {
+                                  color: isSelected
+                                    ? colors.onPrimaryContainer
+                                    : colors.onSurface,
+                                },
+                              ]}
+                            >
+                              {item.symbol}
+                            </Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={[
+                                styles.modalOptionLabel,
+                                isSelected && { color: colors.primary, fontFamily: fontFamilies.bold },
+                              ]}
+                            >
+                              {item.name}
+                            </Text>
+                            <Text style={styles.modalOptionSub}>{item.code}</Text>
+                          </View>
+                        </View>
+                        {isSelected ? (
+                          <MaterialIcons name="check-circle" size={22} color={colors.primary} />
+                        ) : (
+                          <View style={styles.unselectedRadio} />
+                        )}
+                      </TouchableOpacity>
+                    </React.Fragment>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <LegalModal
         visible={!!legalModalType}
@@ -879,138 +892,103 @@ const getStyles = (colors: ThemeColors) => {
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background, // colors.background
-    },
-
-    iconButton: {
-      width: 40,
-      height: 40,
-      alignItems: 'center',
-      justifyContent: 'center',
-      position: 'relative',
-    },
-    unreadBadgeDot: {
-      position: 'absolute',
-      top: 4,
-      right: 4,
-      minWidth: 16,
-      height: 16,
-      borderRadius: 8,
-      backgroundColor: colors.error,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: 3,
-    },
-    unreadBadgeText: {
-      color: colors.onError,
-      fontSize: 10,
-      fontWeight: '700',
-      lineHeight: 12,
+      backgroundColor: colors.background,
     },
     scrollContent: {
-      padding: 20,
-      gap: 32,
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      gap: 24,
     },
     section: {
-      gap: 16,
+      gap: 10,
     },
     sectionHeaderRow: {
       flexDirection: 'row',
+      alignItems: 'center',
       justifyContent: 'space-between',
-      alignItems: 'flex-end',
+      paddingRight: 4,
     },
     sectionTitle: {
-      ...typography.headlineSm,
-      color: colors.onSurface,
-    },
-    actionText: {
       ...typography.labelMd,
-      color: colors.primary,
-    },
-    grid: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    card: {
-      flex: 1,
-      backgroundColor: colors.surfaceContainerLowest,
-      borderWidth: 1,
-      borderColor: colors.outlineVariant,
-      borderRadius: 16,
-      padding: 16,
-      justifyContent: 'space-between',
-      minHeight: 180,
-    },
-    iconBox: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 12,
-    },
-    cardLabel: {
-      ...typography.labelMd,
+      fontFamily: fontFamilies.bold,
       color: colors.onSurfaceVariant,
-      marginBottom: 4,
-    },
-    cardBody: {
-      ...typography.bodyLg,
-      color: colors.onSurface,
-      lineHeight: 20,
-    },
-    progressBarTrack: {
-      width: '100%',
-      height: 6,
-      backgroundColor: colors.surfaceVariant,
-      borderRadius: 3,
-      marginTop: 16,
-    },
-    progressBarFill: {
-      height: '100%',
-      backgroundColor: colors.primary,
-      borderRadius: 3,
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+      marginLeft: 4,
     },
     listCard: {
       backgroundColor: colors.surfaceContainerLowest,
       borderWidth: 1,
       borderColor: colors.outlineVariant,
-      borderRadius: 16,
+      borderRadius: radius.xl,
       overflow: 'hidden',
     },
-    listItem: {
+    accountCard: {
       flexDirection: 'row',
-      alignItems: 'flex-start',
+      alignItems: 'center',
       padding: 16,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.surfaceVariant,
       gap: 12,
     },
-    dot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      marginTop: 6,
+    avatarCircle: {
+      width: 48,
+      height: 48,
+      borderRadius: radius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
-    listItemContent: {
+    avatarText: {
+      ...typography.headlineSm,
+      fontFamily: fontFamilies.bold,
+    },
+    accountInfo: {
       flex: 1,
+      gap: 2,
     },
-    listItemTitle: {
+    accountName: {
       ...typography.bodyLg,
-      fontWeight: '500',
+      fontFamily: fontFamilies.semiBold,
       color: colors.onSurface,
     },
-    listItemBody: {
+    accountEmail: {
       ...typography.bodyMd,
+      fontSize: 13,
       color: colors.onSurfaceVariant,
+    },
+    badgeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginTop: 2,
+    },
+    badgeText: {
+      ...typography.labelSm,
+      fontFamily: fontFamilies.semiBold,
+    },
+    signOutBtn: {
+      paddingVertical: 7,
+      paddingHorizontal: 12,
+      borderRadius: radius.md,
+      borderWidth: 1,
+    },
+    signOutText: {
+      ...typography.labelSm,
+      fontFamily: fontFamilies.semiBold,
+    },
+    signInBtn: {
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: radius.md,
+    },
+    signInText: {
+      ...typography.labelSm,
+      fontFamily: fontFamilies.bold,
     },
     settingItem: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      padding: 16,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.surfaceVariant,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
       gap: 12,
     },
     settingItemLeft: {
@@ -1019,127 +997,237 @@ const getStyles = (colors: ThemeColors) => {
       gap: 12,
       flex: 1,
     },
+    settingItemRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    iconBox: {
+      width: 38,
+      height: 38,
+      borderRadius: radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     settingTextContainer: {
       flex: 1,
     },
     settingTitle: {
       ...typography.bodyLg,
+      fontFamily: fontFamilies.medium,
+      fontSize: 15,
       color: colors.onSurface,
     },
     settingSub: {
       ...typography.bodyMd,
-      color: colors.secondary,
+      fontSize: 12,
+      lineHeight: 16,
+      color: colors.onSurfaceVariant,
+      marginTop: 2,
+    },
+    settingValueText: {
+      ...typography.bodyMd,
+      fontFamily: fontFamilies.semiBold,
+      color: colors.primary,
+      fontSize: 13,
+    },
+    itemDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.surfaceVariant,
+      marginLeft: 66,
+    },
+    statusBadge: {
+      paddingHorizontal: 9,
+      paddingVertical: 4,
+      borderRadius: radius.full,
+    },
+    statusBadgeText: {
+      ...typography.labelSm,
+      fontFamily: fontFamilies.bold,
+      fontSize: 11,
+    },
+    metaRow: {
+      paddingHorizontal: 16,
+      paddingBottom: 6,
+    },
+    metaText: {
+      ...typography.bodySm,
+      color: colors.onSurfaceVariant,
+    },
+    actionBtnContainer: {
+      padding: 16,
     },
     btnPrimary: {
       backgroundColor: colors.primary,
       paddingVertical: 12,
-      paddingHorizontal: 24,
-      borderRadius: 12,
+      paddingHorizontal: 20,
+      borderRadius: radius.md,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    btnRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
     },
     btnPrimaryText: {
       ...typography.labelMd,
-      fontFamily: 'Manrope_700Bold',
+      fontFamily: fontFamilies.bold,
       color: colors.onPrimary,
       textAlign: 'center',
     },
-    btnSecondary: {
-      backgroundColor: colors.surfaceContainerLow,
-      paddingVertical: 12,
-      paddingHorizontal: 24,
-      borderRadius: 12,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    btnSecondaryText: {
-      ...typography.labelMd,
-      fontFamily: 'Manrope_600SemiBold',
-      color: colors.onSurface,
-      textAlign: 'center',
-    },
-    accountCard: {
+    batteryRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      padding: 16,
-      gap: 12,
-    },
-    guestCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      padding: 16,
-      gap: 12,
-    },
-    avatarCircle: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    avatarText: {
-      ...typography.headlineSm,
-      fontWeight: '700',
-    },
-    accountInfo: {
-      flex: 1,
-    },
-    accountName: {
-      ...typography.bodyLg,
-      fontWeight: '600',
-      color: colors.onSurface,
-    },
-    accountEmail: {
-      ...typography.bodyMd,
-      color: colors.onSurfaceVariant,
-      fontSize: 13,
-      lineHeight: 18,
-    },
-    badgeRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      marginTop: 2,
-      flexShrink: 0,
-    },
-    badgeText: {
-      ...typography.labelMd,
-      fontWeight: '600',
-      fontSize: 12,
-      lineHeight: 16,
-    },
-    signOutBtn: {
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-      borderRadius: 8,
-      borderWidth: 1,
-    },
-    signOutText: {
-      ...typography.labelMd,
-      fontWeight: '600',
-    },
-    signInBtn: {
-      paddingVertical: 8,
+      justifyContent: 'space-between',
       paddingHorizontal: 16,
-      borderRadius: 8,
+      paddingVertical: 12,
     },
-    signInText: {
-      ...typography.labelMd,
-      fontWeight: '700',
+    batteryTitle: {
+      ...typography.bodyMd,
+      fontFamily: fontFamilies.semiBold,
+      color: colors.onSurface,
+    },
+    batterySub: {
+      ...typography.bodySm,
+      color: colors.onSurfaceVariant,
+      marginTop: 2,
+    },
+    platformNoticeCard: {
+      flexDirection: 'row',
+      padding: 16,
+      gap: 12,
+      alignItems: 'flex-start',
+    },
+    privacyBanner: {
+      backgroundColor: colors.surfaceContainerLow,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      borderRadius: radius.xl,
+      padding: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+    },
+    privacyTitle: {
+      ...typography.bodyMd,
+      fontFamily: fontFamilies.bold,
+      color: colors.onSurface,
+    },
+    privacyBody: {
+      ...typography.bodySm,
+      color: colors.onSurfaceVariant,
+      lineHeight: 17,
+      marginTop: 2,
     },
     legalRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: 14,
-      paddingHorizontal: 4,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.surfaceVariant,
+      paddingHorizontal: 16,
+    },
+    legalRowLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
     },
     legalRowText: {
       ...typography.bodyMd,
+      fontFamily: fontFamilies.medium,
       color: colors.onSurface,
-      fontWeight: '500',
+    },
+    versionFooter: {
+      alignItems: 'center',
+      paddingVertical: 10,
+    },
+    versionText: {
+      ...typography.labelSm,
+      color: colors.onSurfaceVariant,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'flex-end',
+    },
+    modalSheet: {
+      backgroundColor: colors.surfaceContainerLowest,
+      borderTopLeftRadius: radius.xl,
+      borderTopRightRadius: radius.xl,
+      paddingTop: 12,
+      paddingBottom: 28,
+      paddingHorizontal: 16,
+      gap: 12,
+    },
+    modalHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.outlineVariant,
+      alignSelf: 'center',
+      marginBottom: 4,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 4,
+      paddingBottom: 8,
+    },
+    modalTitle: {
+      ...typography.headlineSm,
+      fontFamily: fontFamilies.bold,
+      color: colors.onSurface,
+    },
+    modalOptionList: {
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      backgroundColor: colors.surfaceContainerLow,
+      overflow: 'hidden',
+    },
+    modalOptionItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      gap: 12,
+    },
+    modalOptionLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      flex: 1,
+    },
+    modalOptionLabel: {
+      ...typography.bodyMd,
+      fontFamily: fontFamilies.semiBold,
+      color: colors.onSurface,
+    },
+    modalOptionSub: {
+      ...typography.bodySm,
+      color: colors.onSurfaceVariant,
+      marginTop: 2,
+    },
+    unselectedRadio: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      borderWidth: 1.5,
+      borderColor: colors.outlineVariant,
+    },
+    currencySymbolBox: {
+      width: 38,
+      height: 38,
+      borderRadius: radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    currencySymbolText: {
+      ...typography.bodyLg,
+      fontFamily: fontFamilies.bold,
     },
   });
   return styles;

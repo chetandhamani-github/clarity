@@ -2,19 +2,23 @@ import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Text } from '@/components/ui';
+import { Text, useToast } from '@/components/ui';
 import { typography, useTheme, radius, ThemeColors } from '@/theme';
 import { useAppStore } from '@/store/use-app-store';
 import { formatCurrency, formatCurrencyPrivacy } from '@/utils/format';
 import { useSafeToSpend } from '@/hooks/use-cashflow';
+import { useStreaks } from '@/hooks/use-streaks';
+import { triggerDailyPulseNotification } from '@/services/notifications/system-notification';
 
 export function SafeToSpendWidget() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const router = useRouter();
   const { hideBalances } = useAppStore();
+  const { showToast } = useToast();
 
   const { summary, isLoading } = useSafeToSpend();
+  const { streaks } = useStreaks(summary?.safeToSpendDaily);
 
   if (isLoading || !summary) {
     return null;
@@ -39,7 +43,15 @@ export function SafeToSpendWidget() {
             />
           </View>
           <View>
-            <Text style={styles.title}>SAFE TO SPEND</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.title}>SAFE TO SPEND</Text>
+              {streaks && streaks.currentStreak > 0 && (
+                <View style={styles.streakBadge}>
+                  <MaterialIcons name="local-fire-department" size={12} color="#F59E0B" />
+                  <Text style={styles.streakBadgeText}>{streaks.currentStreak}d streak</Text>
+                </View>
+              )}
+            </View>
             <Text style={styles.subTitle}>
               Next Payday in {summary.daysToNextPayday} day{summary.daysToNextPayday === 1 ? '' : 's'} ({summary.nextPaydayDate})
             </Text>
@@ -159,6 +171,50 @@ export function SafeToSpendWidget() {
               Buffer: {formatCurrencyPrivacy(summary.safetyBuffer, false, hideBalances)}
             </Text>
           </View>
+        </View>
+
+        {/* Pulse & Lock Screen Footer Row */}
+        <View style={styles.pulseFooterRow}>
+          <View style={styles.pulseInfoLeft}>
+            {streaks && streaks.yesterdaySpend > 0 ? (
+              <>
+                <MaterialIcons name="schedule" size={13} color={colors.onSurfaceVariant} />
+                <Text style={styles.pulseInfoText} numberOfLines={1}>
+                  Yesterday: {formatCurrencyPrivacy(streaks.yesterdaySpend, false, hideBalances)}
+                </Text>
+              </>
+            ) : streaks && streaks.noSpendDaysThisMonth > 0 ? (
+              <>
+                <MaterialIcons name="verified" size={13} color="#10B981" />
+                <Text style={styles.pulseInfoText} numberOfLines={1}>
+                  {streaks.noSpendDaysThisMonth} no-spend days this month
+                </Text>
+              </>
+            ) : (
+              <>
+                <MaterialIcons name="insights" size={13} color={colors.onSurfaceVariant} />
+                <Text style={styles.pulseInfoText} numberOfLines={1}>
+                  Daily spending pace on track
+                </Text>
+              </>
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={styles.pulseButton}
+            onPress={async () => {
+              await triggerDailyPulseNotification({
+                safeToSpend: summary.safeToSpendDaily,
+                streakDays: streaks?.currentStreak,
+                yesterdaySpend: streaks?.yesterdaySpend,
+              });
+              showToast('Lock screen pulse updated', 'success');
+            }}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="notifications-active" size={12} color={colors.primary} />
+            <Text style={[styles.pulseButtonText, { color: colors.primary }]}>Lock Screen</Text>
+          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     </View>
@@ -308,6 +364,59 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       fontSize: 11,
       color: colors.onSurfaceVariant,
+    },
+    streakBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: radius.full,
+    },
+    streakBadgeText: {
+      ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
+      fontSize: 10,
+      color: '#F59E0B',
+    },
+    pulseFooterRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 12,
+      paddingTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: colors.surfaceContainerHigh,
+    },
+    pulseInfoLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      flex: 1,
+      marginRight: 8,
+    },
+    pulseInfoText: {
+      ...typography.bodyMd,
+      fontSize: 11,
+      color: colors.onSurfaceVariant,
+      flex: 1,
+    },
+    pulseButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: radius.full,
+      backgroundColor: colors.surfaceContainerLow,
+      borderWidth: 1,
+      borderColor: colors.surfaceVariant,
+    },
+    pulseButtonText: {
+      ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
+      fontSize: 10,
     },
   });
   return styles;

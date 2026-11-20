@@ -30,7 +30,7 @@ import { useMonthlyTotals, useNetWorthHistory, useTransactions, useCreateTransac
 import { useDoubleBackToExit } from '@/hooks/use-double-back-to-exit';
 import { useSmsSync } from '@/hooks/useSmsSync';
 import { useNotifications } from '@/hooks/use-notifications';
-import { formatCurrency, formatCurrencyPrivacy, formatLocalDate, getCurrencySymbol, getTransactionSign } from '@/utils/format';
+import { formatCurrency, formatCurrencyPrivacy, formatDate, formatLocalDate, formatTransactionTime, getCurrencySymbol, getTransactionSign } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
 import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
 import { useAppStore } from '@/store/use-app-store';
@@ -130,7 +130,8 @@ export default function DashboardScreen() {
           type: parsed.type || 'expense',
           merchant: parsed.merchant || 'General',
           category: parsed.category || 'General',
-          date: formatLocalDate(new Date()),
+          date: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
           note: parsed.note || 'Logged via Voice',
           isRecurring: false,
           source: 'MANUAL',
@@ -863,11 +864,19 @@ export default function DashboardScreen() {
                       const sign = getTransactionSign(tx.type);
                       const hasMerchant = hasMeaningfulMerchant(tx);
                       const title = getTransactionDisplayName(tx);
-                      const subtitle = tx.type === 'transfer'
-                        ? `${tx.date} • ${tx.accountName} → ${tx.toAccountName || 'Unknown'}`
-                        : (hasMerchant
-                            ? `${tx.date}${tx.accountName ? ` • ${tx.accountName}` : ''} • ${tx.category}`
-                            : `${tx.date}${tx.accountName ? ` • ${tx.accountName}` : ''}`);
+                      const timeStr = formatTransactionTime(tx.date, tx.createdAt);
+                      const dateDisplay = formatDate(tx.date, 'short');
+                      const metaParts: string[] = [dateDisplay];
+                      if (timeStr) metaParts.push(timeStr);
+                      if (tx.type === 'transfer') {
+                        metaParts.push(`${tx.accountName} → ${tx.toAccountName || 'Unknown'}`);
+                      } else if (hasMerchant) {
+                        if (tx.accountName) metaParts.push(tx.accountName);
+                        metaParts.push(tx.category);
+                      } else {
+                        if (tx.accountName) metaParts.push(tx.accountName);
+                      }
+                      const subtitle = metaParts.join(' • ');
 
                       return (
                         <TouchableOpacity

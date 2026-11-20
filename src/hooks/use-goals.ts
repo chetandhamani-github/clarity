@@ -109,3 +109,65 @@ export function useAddGoalContribution() {
     isPending: mutation.isPending,
   };
 }
+
+export function useUpdateGoal() {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Partial<Pick<Goal, 'name' | 'icon' | 'targetAmount' | 'targetDate' | 'category' | 'currentAmount'>>;
+    }) => goalDao.updateGoal(id, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['goals'] });
+      queryClient.invalidateQueries({ queryKey: ['goals', variables.id] });
+      queueAutoBackup('update-goal');
+    },
+  });
+
+  return {
+    mutate: (
+      variables: {
+        id: string;
+        data: Partial<Pick<Goal, 'name' | 'icon' | 'targetAmount' | 'targetDate' | 'category' | 'currentAmount'>>;
+      },
+      options?: { onSuccess?: () => void }
+    ) => {
+      mutation.mutate(variables, { onSuccess: options?.onSuccess });
+    },
+    isPending: mutation.isPending,
+  };
+}
+
+export function useDeleteGoalContribution() {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: ({ contributionId, goalId }: { contributionId: string; goalId: string }) =>
+      goalDao.deleteGoalContribution(contributionId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['goals'] });
+      queryClient.invalidateQueries({ queryKey: ['goals', variables.goalId] });
+      queryClient.invalidateQueries({
+        queryKey: ['goalContributions', variables.goalId],
+      });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+      queueAutoBackup('delete-goal-contribution');
+    },
+  });
+
+  return {
+    mutate: (
+      variables: { contributionId: string; goalId: string },
+      options?: { onSuccess?: () => void }
+    ) => {
+      mutation.mutate(variables, { onSuccess: options?.onSuccess });
+    },
+    isPending: mutation.isPending,
+  };
+}

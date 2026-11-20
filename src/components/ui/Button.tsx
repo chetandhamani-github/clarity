@@ -12,8 +12,27 @@ export const Button = ({ title, variant = 'primary', style, ...props }: ButtonPr
   const { colors } = useTheme();
   const styles = getStyles(colors);
   return (
-    <TouchableOpacity style={[styles.base, (styles as any)[variant], style]} {...props}>
-      <Text style={[styles.text, variant === 'outline' && styles.textOutline]}>{title}</Text>
+    <TouchableOpacity
+      style={[
+        styles.base,
+        variant === 'primary' && styles.primary,
+        variant === 'secondary' && styles.secondary,
+        variant === 'outline' && styles.outline,
+        style,
+      ]}
+      activeOpacity={0.8}
+      {...props}
+    >
+      <Text
+        style={[
+          styles.text,
+          variant === 'primary' && styles.textPrimary,
+          variant === 'secondary' && styles.textSecondary,
+          variant === 'outline' && styles.textOutline,
+        ]}
+      >
+        {title}
+      </Text>
     </TouchableOpacity>
   );
 };
@@ -27,11 +46,27 @@ const getStyles = (colors: ThemeColors) => {
       alignItems: 'center',
       justifyContent: 'center',
     },
+    primary: {
+      backgroundColor: colors.primary,
+    },
+    secondary: {
+      backgroundColor: colors.secondaryContainer,
+    },
+    outline: {
+      backgroundColor: 'transparent',
+      borderWidth: 1,
+      borderColor: colors.outline,
+    },
     text: {
       ...typography.bodyMd,
       fontFamily: 'Manrope_600SemiBold',
-      color: colors.surfaceContainerLowest,
       textAlign: 'center',
+    },
+    textPrimary: {
+      color: colors.onPrimary,
+    },
+    textSecondary: {
+      color: colors.onSecondaryContainer,
     },
     textOutline: {
       color: colors.primary,

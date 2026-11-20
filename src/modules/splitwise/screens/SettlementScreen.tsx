@@ -263,7 +263,7 @@ export function SettlementScreen() {
           type: txType,
           merchant,
           category: 'Loan & Debt Repayment',
-          date: data.date,
+          date: data.date === todayStr ? new Date().toISOString() : data.date,
           isRecurring: false,
           note,
           tags: ['splitwise-settlement'],

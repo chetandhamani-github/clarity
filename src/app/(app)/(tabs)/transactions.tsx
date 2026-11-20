@@ -22,7 +22,7 @@ import {
 } from '@/hooks/use-transactions';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useCategories } from '@/hooks/use-budget';
-import { formatCurrency, formatLocalDate, getTransactionSign, groupTransactionsByDate } from '@/utils/format';
+import { formatCurrency, formatLocalDate, formatTransactionTime, getTransactionSign, groupTransactionsByDate } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
 import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
 import { TransactionFilterModal, ActiveFilters, DatePreset } from '@/components/modals/TransactionFilterModal';
@@ -79,12 +79,21 @@ const TransactionRowItem = React.memo(function TransactionRowItem({
     : getTransactionSign(tx.type);
   const hasMerchant = hasMeaningfulMerchant(tx);
   const title = getTransactionDisplayName(tx);
-  const subtitle =
-    tx.type === 'transfer'
-      ? `${tx.accountName} → ${tx.toAccountName || 'Unknown'}`
-      : hasMerchant
-        ? `${tx.accountName} • ${tx.category}`
-        : tx.accountName || '';
+  const timeStr = formatTransactionTime(tx.date, tx.createdAt);
+
+  const metaParts: string[] = [];
+  if (timeStr) {
+    metaParts.push(timeStr);
+  }
+  if (tx.type === 'transfer') {
+    metaParts.push(`${tx.accountName} → ${tx.toAccountName || 'Unknown'}`);
+  } else if (hasMerchant) {
+    if (tx.accountName) metaParts.push(tx.accountName);
+    metaParts.push(tx.category);
+  } else {
+    if (tx.accountName) metaParts.push(tx.accountName);
+  }
+  const subtitle = metaParts.join(' • ');
 
   return (
     <TouchableOpacity

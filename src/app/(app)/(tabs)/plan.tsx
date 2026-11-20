@@ -184,16 +184,20 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
     const daysPassed = Math.max(1, now.getDate());
     const totalDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const daysLeft = Math.max(0, totalDays - daysPassed);
+    const daysToPace = Math.max(1, totalDays - daysPassed + 1);
 
-    const dailyBurn = totals.totalSpent / daysPassed;
-    const projectedMonthEnd = Math.round(dailyBurn * totalDays);
+    // Operational spending (Needs + Wants) represents regular burn rate.
+    // Savings allocations are intentional lump-sum goal transfers, not operational daily burn.
+    const operationalSpent = totals.needsSpent + totals.wantsSpent;
+    const dailyBurn = operationalSpent > 0 ? operationalSpent / daysPassed : totals.totalSpent / daysPassed;
+    const projectedMonthEnd = Math.round(dailyBurn * totalDays + totals.savingsSpent);
     const variance = projectedMonthEnd - safePlan.monthlyIncome;
     const isOverbudgetRisk = variance > 0;
-    const unpaidBills = billSummary ? billSummary.totalPending + billSummary.totalOverdue : 0;
-    const targetDailyPace =
-      daysLeft > 0 ? Math.max(0, (safePlan.monthlyIncome - totals.totalSpent) / daysLeft) : 0;
-    const safeDailySpend =
-      daysLeft > 0 ? Math.max(0, (safePlan.monthlyIncome - totals.totalSpent - unpaidBills) / daysLeft) : 0;
+
+    // totalPending in billSummary already includes totalOverdue
+    const unpaidBills = billSummary ? billSummary.totalPending : 0;
+    const targetDailyPace = Math.max(0, (safePlan.monthlyIncome - totals.totalSpent) / daysToPace);
+    const safeDailySpend = Math.max(0, (safePlan.monthlyIncome - totals.totalSpent - unpaidBills) / daysToPace);
 
     return {
       daysPassed,
@@ -207,7 +211,14 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
       targetDailyPace: Math.round(targetDailyPace),
       safeDailySpend: Math.round(safeDailySpend),
     };
-  }, [safePlan.monthlyIncome, totals.totalSpent, billSummary?.totalPending, billSummary?.totalOverdue]);
+  }, [
+    safePlan.monthlyIncome,
+    totals.totalSpent,
+    totals.needsSpent,
+    totals.wantsSpent,
+    totals.savingsSpent,
+    billSummary?.totalPending,
+  ]);
 
   const handleOpenCapModal = (cat: CategorySpending) => {
     setSelectedCategoryForCap(cat);

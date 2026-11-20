@@ -17,7 +17,7 @@ import { useTransactions, useAccountHistory } from '@/hooks/use-transactions';
 import { useAccountReconciliation, useCreateAdjustmentEntry } from '@/hooks/use-reconciliation';
 import { useToast, useAlert, DiscrepancyBanner } from '@/components/ui';
 import { LineChart } from 'react-native-gifted-charts';
-import { formatCurrency, formatDate, getTransactionSign } from '@/utils/format';
+import { formatCurrency, formatDate, formatTransactionTime, getTransactionSign } from '@/utils/format';
 import { getCategoryIcon, getAccountTypeIcon, getBankBranding } from '@/utils/icons';
 import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
 
@@ -738,10 +738,13 @@ export default function AccountDetailsScreen() {
                                       : getTransactionDisplayName(tx)}
                                   </Text>
                                   <Text style={styles.txSubtitle} numberOfLines={1}>
-                                    {formatDate(tx.date)}
-                                    {hasMeaningfulMerchant(tx)
-                                      ? ` • ${tx.category}`
-                                      : ''}
+                                    {(() => {
+                                      const timeStr = formatTransactionTime(tx.date, tx.createdAt);
+                                      const parts = [formatDate(tx.date)];
+                                      if (timeStr) parts.push(timeStr);
+                                      if (hasMeaningfulMerchant(tx)) parts.push(tx.category);
+                                      return parts.join(' • ');
+                                    })()}
                                   </Text>
                                 </View>
                               </View>

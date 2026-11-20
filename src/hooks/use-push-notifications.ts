@@ -4,6 +4,7 @@ import * as Device from 'expo-device';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { insertNotification } from '@/services/database/notification-dao';
+import { setupNotificationChannelsAndCategories } from '@/services/notifications/system-notification';
 
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
@@ -26,6 +27,9 @@ if (!isExpoGo) {
 
 async function registerForPushNotificationsAsync() {
   let token;
+
+  // Initialize Uber-style high-visibility channels and interactive categories
+  await setupNotificationChannelsAndCategories().catch(() => {});
 
   if (Platform.OS === 'android' && Notifications) {
     Notifications.setNotificationChannelAsync('default', {
@@ -110,10 +114,31 @@ export function usePushNotifications() {
 
     responseListener.current = Notifications.addNotificationResponseReceivedListener(
       (response: any) => {
+        const actionId = response.actionIdentifier;
         const payload = response.notification?.request?.content;
         const data = payload?.data as { type?: string; actionUrl?: string } | undefined;
 
-        // User clicking a notification should only navigate, never re-insert into the database
+        // Handle interactive notification actions (lock screen / notification buttons)
+        if (actionId === 'ADD_EXPENSE') {
+          router.navigate('/add-transaction' as any);
+          return;
+        }
+        if (actionId === 'VIEW_PULSE') {
+          router.navigate('/(app)/(tabs)' as any);
+          return;
+        }
+        if (actionId === 'VIEW_BILL') {
+          router.navigate(data?.actionUrl ? (data.actionUrl as any) : ('/bills' as any));
+          return;
+        }
+        if (actionId === 'REVIEW_CHARGE') {
+          router.navigate(
+            data?.actionUrl ? (data.actionUrl as any) : ('/(app)/(tabs)/transactions' as any)
+          );
+          return;
+        }
+
+        // User clicking a notification body should only navigate, never re-insert into the database
         if (data?.actionUrl) {
           router.navigate(data.actionUrl as any);
         } else {

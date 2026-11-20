@@ -5,7 +5,7 @@ import { useCreateTransaction } from '@/hooks/use-transactions';
 import { ParsedPaymentIntent, parsePaymentClipboard } from '@/services/clipboard/payment-clipboard-parser';
 import { useAppStore } from '@/store/use-app-store';
 import { radius, ThemeColors, typography, useTheme } from '@/theme';
-import { formatCurrency } from '@/utils/format';
+import { formatCurrency, formatLocalDate } from '@/utils/format';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
@@ -113,7 +113,7 @@ export function SmartClipboardPrompt() {
         type: 'expense',
         merchant: intent.merchant,
         category: 'Food & Dining', // Smart rules engine will automatically override if a rule matches!
-        date: intent.dateStr,
+        date: intent.dateStr === formatLocalDate(new Date()) ? new Date().toISOString() : intent.dateStr,
         isRecurring: false,
         note: intent.upiRef ? `UPI Ref: ${intent.upiRef}` : 'Logged via Quick Clipboard',
         source: 'MANUAL',

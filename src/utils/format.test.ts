@@ -1,4 +1,4 @@
-import { formatPercentage, getTransactionSign, groupTransactionsByDate } from './format';
+import { formatPercentage, formatTransactionTime, getTransactionSign, groupTransactionsByDate } from './format';
 
 describe('format utilities', () => {
   it('formats percentages correctly', () => {
@@ -12,10 +12,10 @@ describe('format utilities', () => {
     expect(getTransactionSign('transfer')).toBe('');
   });
 
-  it('groups transactions by date properly', () => {
+  it('groups transactions by date properly and ensures latest entry on same day is first', () => {
     const mockTxs = [
-      { id: '1', date: '2026-09-01', amount: 100 },
-      { id: '2', date: '2026-09-01', amount: 50 },
+      { id: '1', date: '2026-09-01T09:00:00.000Z', amount: 100 },
+      { id: '2', date: '2026-09-01T14:30:00.000Z', amount: 50 },
       { id: '3', date: '2026-08-30', amount: 200 },
     ];
 
@@ -23,8 +23,43 @@ describe('format utilities', () => {
     expect(groups.length).toBe(2);
     expect(groups[0].date).toBe('2026-09-01');
     expect(groups[0].items.length).toBe(2);
+    // Entry with 14:30 must be first, not last
+    expect(groups[0].items[0].id).toBe('2');
+    expect(groups[0].items[1].id).toBe('1');
     expect(groups[1].date).toBe('2026-08-30');
     expect(groups[1].items.length).toBe(1);
+  });
+
+  it('sorts same-day transactions by createdAt when date has no time component', () => {
+    const mockTxs = [
+      { id: 'tx-early', date: '2026-11-20', createdAt: '2026-11-20T08:00:00.000Z', amount: 30 },
+      { id: 'tx-late', date: '2026-11-20', createdAt: '2026-11-20T17:00:00.000Z', amount: 80 },
+    ];
+
+    const groups = groupTransactionsByDate(mockTxs);
+    expect(groups[0].items[0].id).toBe('tx-late');
+    expect(groups[0].items[1].id).toBe('tx-early');
+  });
+
+  describe('formatTransactionTime', () => {
+    it('formats time from ISO date string with time component', () => {
+      const time = formatTransactionTime('2026-11-20T14:30:00.000Z');
+      expect(time).toBeTruthy();
+      expect(typeof time).toBe('string');
+    });
+
+    it('formats time from createdAt when date is plain YYYY-MM-DD', () => {
+      const time = formatTransactionTime('2026-11-20', '2026-11-20T10:15:00.000Z');
+      expect(time).toBeTruthy();
+    });
+
+    it('returns null when date has no time and no createdAt', () => {
+      expect(formatTransactionTime('2026-11-20')).toBeNull();
+    });
+
+    it('returns null when neither date nor createdAt has time component', () => {
+      expect(formatTransactionTime('2026-11-10', '2026-11-20')).toBeNull();
+    });
   });
 
   it('masks currency when privacy mode is active', () => {

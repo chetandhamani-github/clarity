@@ -80,6 +80,45 @@ export async function updateGoalAmount(id: string, newAmount: number): Promise<v
   await db.runAsync('UPDATE goals SET current_amount = ? WHERE id = ?;', [newAmount, id]);
 }
 
+export async function updateGoal(
+  id: string,
+  goal: Partial<Pick<Goal, 'name' | 'icon' | 'targetAmount' | 'targetDate' | 'category' | 'currentAmount'>>
+): Promise<void> {
+  const db = getDatabase();
+  const sets: string[] = [];
+  const params: any[] = [];
+
+  if (goal.name !== undefined) {
+    sets.push('name = ?');
+    params.push(goal.name);
+  }
+  if (goal.icon !== undefined) {
+    sets.push('icon = ?');
+    params.push(goal.icon);
+  }
+  if (goal.targetAmount !== undefined) {
+    sets.push('target_amount = ?');
+    params.push(goal.targetAmount);
+  }
+  if (goal.currentAmount !== undefined) {
+    sets.push('current_amount = ?');
+    params.push(goal.currentAmount);
+  }
+  if (goal.targetDate !== undefined) {
+    sets.push('target_date = ?');
+    params.push(goal.targetDate);
+  }
+  if (goal.category !== undefined) {
+    sets.push('category = ?');
+    params.push(goal.category);
+  }
+
+  if (sets.length === 0) return;
+  params.push(id);
+
+  await db.runAsync(`UPDATE goals SET ${sets.join(', ')} WHERE id = ?;`, params);
+}
+
 export async function deleteGoal(id: string): Promise<void> {
   const db = getDatabase();
   await db.runAsync('DELETE FROM goals WHERE id = ?;', [id]);
@@ -100,6 +139,7 @@ export async function getGoalContributions(goalId: string): Promise<GoalContribu
     amount: r.amount,
     description: r.description || '',
     date: r.date,
+    transactionId: r.transaction_id || undefined,
   }));
 }
 
@@ -167,4 +207,40 @@ export async function addGoalContribution(
   });
 
   return id;
+}
+
+export async function deleteGoalContribution(contributionId: string): Promise<void> {
+  const db = getDatabase();
+  await db.withTransactionAsync(async () => {
+    const contrib = await db.getFirstAsync<any>(
+      'SELECT * FROM goal_contributions WHERE id = ?;',
+      [contributionId]
+    );
+    if (!contrib) return;
+
+    if (contrib.transaction_id) {
+      const trans = await db.getFirstAsync<any>(
+        'SELECT * FROM transactions WHERE id = ?;',
+        [contrib.transaction_id]
+      );
+      if (trans && trans.account_id) {
+        await db.runAsync('UPDATE accounts SET balance = balance + ? WHERE id = ?;', [
+          trans.amount,
+          trans.account_id,
+        ]);
+        await db.runAsync('DELETE FROM transactions WHERE id = ?;', [contrib.transaction_id]);
+      }
+    }
+
+    const goal = await getGoalById(contrib.goal_id);
+    if (goal) {
+      const newAmount = Math.max(0, goal.currentAmount - contrib.amount);
+      await db.runAsync('UPDATE goals SET current_amount = ? WHERE id = ?;', [
+        newAmount,
+        contrib.goal_id,
+      ]);
+    }
+
+    await db.runAsync('DELETE FROM goal_contributions WHERE id = ?;', [contributionId]);
+  });
 }

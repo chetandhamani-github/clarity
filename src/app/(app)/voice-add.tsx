@@ -69,7 +69,7 @@ export default function VoiceAddScreen() {
           type: parsed.type || 'expense',
           merchant: parsed.merchant || 'General',
           category: parsed.category || 'General',
-          date: formatLocalDate(new Date()),
+          date: new Date().toISOString(),
           note: parsed.note || 'Logged via Quick Voice',
           isRecurring: false,
           source: 'MANUAL',

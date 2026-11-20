@@ -147,7 +147,7 @@ export async function evaluateGoalMilestoneAlerts(
 
     if (prevPct < 100 && newPct >= 100) {
       await insertNotification({
-        title: 'Goal Achieved! 🎉',
+        title: 'Goal Achieved',
         description: `Congratulations! You reached your savings target of ${formatCurrency(goal.targetAmount)} for "${goal.name}".`,
         type: 'milestone',
         actionUrl: `/(app)/goal-details?id=${goal.id}`,
@@ -155,7 +155,7 @@ export async function evaluateGoalMilestoneAlerts(
       DeviceEventEmitter.emit('notificationsUpdated');
     } else if (prevPct < 75 && newPct >= 75) {
       await insertNotification({
-        title: '75% Milestone Reached 🚀',
+        title: '75% Milestone Reached',
         description: `You are 75% of the way to "${goal.name}" (${formatCurrency(newAmount)} of ${formatCurrency(goal.targetAmount)}).`,
         type: 'milestone',
         actionUrl: `/(app)/goal-details?id=${goal.id}`,
@@ -163,7 +163,7 @@ export async function evaluateGoalMilestoneAlerts(
       DeviceEventEmitter.emit('notificationsUpdated');
     } else if (prevPct < 50 && newPct >= 50) {
       await insertNotification({
-        title: 'Halfway There! 🎯',
+        title: 'Halfway There',
         description: `You have reached 50% of your savings goal for "${goal.name}". Keep it up!`,
         type: 'milestone',
         actionUrl: `/(app)/goal-details?id=${goal.id}`,

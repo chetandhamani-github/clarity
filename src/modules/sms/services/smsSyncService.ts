@@ -810,7 +810,7 @@ export class SmsSyncService {
             smsId: transaction.smsId,
             parsedTxId: transaction.id,
             merchant: effectiveMerchant,
-            date: formatLocalDate(new Date(transaction.timestamp)),
+            date: new Date(transaction.timestamp).toISOString(),
           });
           await SmsDao.linkClarityTransaction(transaction.id, manualMatch.id);
           transaction.transactionId = manualMatch.id;
@@ -852,7 +852,7 @@ export class SmsSyncService {
               type: txType,
               merchant: effectiveMerchant,
               category: finalCategory,
-              date: formatLocalDate(new Date(transaction.timestamp)),
+              date: new Date(transaction.timestamp).toISOString(),
               isRecurring: false,
               note: finalNote,
               source: 'SMS',
@@ -875,7 +875,7 @@ export class SmsSyncService {
             type: txType,
             merchant: effectiveMerchant,
             category: transaction.category,
-            date: formatLocalDate(new Date(transaction.timestamp)),
+            date: new Date(transaction.timestamp).toISOString(),
             isRecurring: false,
             note: 'Imported via SMS (' + bankName + ')',
             source: 'SMS',

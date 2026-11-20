@@ -64,6 +64,7 @@ export interface Transaction {
   parsedTxId?: string;
   receiptUri?: string;
   tags?: string[];
+  createdAt?: string;
 }
 
 export interface Tag {
@@ -132,6 +133,7 @@ export interface GoalContribution {
   amount: number;
   description: string;
   date: string;
+  transactionId?: string;
 }
 
 export interface BudgetPlan {

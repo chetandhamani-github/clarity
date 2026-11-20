@@ -30,10 +30,8 @@ export default function AppLayout() {
         <Stack.Screen name="splitwise-person-details" />
         <Stack.Screen name="investments" />
         <Stack.Screen name="cashflow" />
-        <Stack.Screen name="rules" />
         <Stack.Screen name="debt-payoff" />
         <Stack.Screen name="financial-health" />
-        <Stack.Screen name="add-rule" options={{ presentation: 'modal' }} />
         <Stack.Screen name="add-investment" options={{ presentation: 'modal' }} />
         <Stack.Screen name="add-transaction" options={{ presentation: 'modal' }} />
         <Stack.Screen name="add-bill" options={{ presentation: 'modal' }} />

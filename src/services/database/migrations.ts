@@ -29,6 +29,7 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
       is_recurring INTEGER NOT NULL DEFAULT 0,
       note TEXT NOT NULL DEFAULT '',
       splits_json TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
     );
 
@@ -434,6 +435,22 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
 
   try {
     await db.execAsync('CREATE INDEX IF NOT EXISTS idx_accounts_sort_order ON accounts(sort_order ASC, created_at DESC);');
+  } catch {
+    // Index may already exist
+  }
+
+  try {
+    const tableInfo = await db.getAllAsync<{ name: string }>('PRAGMA table_info(transactions)');
+    const hasCreatedAt = tableInfo.some((col) => col.name === 'created_at');
+    if (!hasCreatedAt) {
+      await db.execAsync('ALTER TABLE transactions ADD COLUMN created_at TEXT;');
+    }
+  } catch {
+    // Column may already exist
+  }
+
+  try {
+    await db.execAsync('CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at DESC);');
   } catch {
     // Index may already exist
   }

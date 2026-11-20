@@ -8,7 +8,7 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
-import { Text, Header, AccountsSkeleton, SkeletonBox } from '@/components/ui';
+import { Text, Header, AccountsSkeleton, SkeletonBox, WealthCardSkeleton } from '@/components/ui';
 import { spacing, typography, useTheme, radius, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
@@ -24,7 +24,7 @@ import {
   formatCurrencyWholePrivacy,
 } from '@/utils/format';
 import { getBankBranding } from '@/utils/icons';
-import type { Account } from '@/types';
+import type { Account, PortfolioSummary } from '@/types';
 import { useAppStore } from '@/store/use-app-store';
 import { ReorderableAccountSection } from '@/components/common';
 
@@ -39,7 +39,7 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
   const router = useRouter();
 
   const { accounts, isLoading, refetch } = useAccounts();
-  const { summary: portfolioSummary } = usePortfolioSummary();
+  const { summary: portfolioSummary, isLoading: isPortfolioLoading } = usePortfolioSummary();
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [isDraggingAccounts, setIsDraggingAccounts] = useState(false);
   const { hideBalances, toggleHideBalances } = useAppStore();
@@ -170,99 +170,17 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
                   </View>
 
                   {/* Wealth & Asset Allocation Cockpit Banner */}
-                  <TouchableOpacity
-                    style={[
-                      styles.portfolioCockpitCard,
-                      {
-                        backgroundColor: colors.surfaceContainerLowest,
-                        borderColor: colors.surfaceVariant,
-                      },
-                    ]}
-                    onPress={() => router.navigate('/(app)/investments')}
-                    activeOpacity={0.88}
-                  >
-                    <View style={styles.portfolioHeaderRow}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                        <View
-                          style={[
-                            styles.portfolioIconCircle,
-                            { backgroundColor: 'rgba(59, 130, 246, 0.12)' },
-                          ]}
-                        >
-                          <MaterialIcons name="insights" size={20} color="#3B82F6" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={styles.portfolioCardTitle}>Wealth & Portfolio</Text>
-                            {portfolioSummary && portfolioSummary.unrealizedGainLoss !== 0 && (
-                              <View
-                                style={[
-                                  styles.miniPnlBadge,
-                                  {
-                                    backgroundColor:
-                                      portfolioSummary.unrealizedGainLoss >= 0
-                                        ? 'rgba(16, 185, 129, 0.12)'
-                                        : 'rgba(239, 68, 68, 0.12)',
-                                  },
-                                ]}
-                              >
-                                <Text
-                                  style={[
-                                    styles.miniPnlText,
-                                    {
-                                      color:
-                                        portfolioSummary.unrealizedGainLoss >= 0
-                                          ? '#10B981'
-                                          : '#EF4444',
-                                    },
-                                  ]}
-                                  numberOfLines={1}
-                                >
-                                  {portfolioSummary.unrealizedGainLoss >= 0 ? '+' : ''}
-                                  {portfolioSummary.gainLossPercentage.toFixed(1)}%
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                          <Text style={styles.portfolioCardSubtitle} numberOfLines={1}>
-                            {portfolioSummary && portfolioSummary.holdingsCount > 0
-                              ? `${portfolioSummary.holdingsCount} assets • ${formatCurrencyPrivacy(portfolioSummary.totalPortfolioValue, false, hideBalances)}`
-                              : 'Track Mutual Funds, Stocks, FDs, Gold & SIPs'}
-                          </Text>
-                        </View>
-                      </View>
-                      <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-                    </View>
-
-                    {/* Allocation Horizontal Stacked Bar */}
-                    {portfolioSummary && portfolioSummary.allocations.length > 0 && (
-                      <View style={styles.allocationBarContainer}>
-                        <View style={styles.allocationStackedBar}>
-                          {portfolioSummary.allocations.map((alloc) => (
-                            <View
-                              key={alloc.assetClass}
-                              style={{
-                                flex: Math.max(alloc.percentage, 2),
-                                backgroundColor: alloc.color,
-                                height: 6,
-                              }}
-                            />
-                          ))}
-                        </View>
-
-                        <View style={styles.allocationPillsRow}>
-                          {portfolioSummary.allocations.slice(0, 4).map((alloc) => (
-                            <View key={alloc.assetClass} style={styles.miniAllocPill}>
-                              <View style={[styles.miniDot, { backgroundColor: alloc.color }]} />
-                              <Text style={styles.miniAllocText}>
-                                {alloc.label.split(' ')[0]}: {alloc.percentage}%
-                              </Text>
-                            </View>
-                          ))}
-                        </View>
-                      </View>
-                    )}
-                  </TouchableOpacity>
+                  {isPortfolioLoading && !portfolioSummary ? (
+                    <WealthCardSkeleton />
+                  ) : (
+                    <WealthPortfolioCard
+                      portfolioSummary={portfolioSummary}
+                      hideBalances={hideBalances}
+                      onPress={() => router.navigate('/(app)/investments')}
+                      colors={colors}
+                      styles={styles}
+                    />
+                  )}
 
                   {/* Assets Section */}
                   {assetAccounts.length > 0 && (
@@ -347,6 +265,118 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
     </View>
   );
 }
+
+interface WealthPortfolioCardProps {
+  portfolioSummary: PortfolioSummary | null;
+  hideBalances: boolean;
+  onPress: () => void;
+  colors: ThemeColors;
+  styles: ReturnType<typeof getStyles>;
+}
+
+const WealthPortfolioCard = React.memo(function WealthPortfolioCard({
+  portfolioSummary,
+  hideBalances,
+  onPress,
+  colors,
+  styles,
+}: WealthPortfolioCardProps) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.portfolioCockpitCard,
+        {
+          backgroundColor: colors.surfaceContainerLowest,
+          borderColor: colors.surfaceVariant,
+        },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.88}
+    >
+      <View style={styles.portfolioHeaderRow}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+          <View
+            style={[
+              styles.portfolioIconCircle,
+              { backgroundColor: 'rgba(59, 130, 246, 0.12)' },
+            ]}
+          >
+            <MaterialIcons name="insights" size={20} color="#3B82F6" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.portfolioCardTitle}>Wealth & Portfolio</Text>
+              {portfolioSummary && portfolioSummary.unrealizedGainLoss !== 0 && (
+                <View
+                  style={[
+                    styles.miniPnlBadge,
+                    {
+                      backgroundColor:
+                        portfolioSummary.unrealizedGainLoss >= 0
+                          ? 'rgba(16, 185, 129, 0.12)'
+                          : 'rgba(239, 68, 68, 0.12)',
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.miniPnlText,
+                      {
+                        color:
+                          portfolioSummary.unrealizedGainLoss >= 0
+                            ? '#10B981'
+                            : '#EF4444',
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {portfolioSummary.unrealizedGainLoss >= 0 ? '+' : ''}
+                    {portfolioSummary.gainLossPercentage.toFixed(1)}%
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.portfolioCardSubtitle} numberOfLines={1}>
+              {portfolioSummary && portfolioSummary.holdingsCount > 0
+                ? `${portfolioSummary.holdingsCount} assets • ${formatCurrencyPrivacy(portfolioSummary.totalPortfolioValue, false, hideBalances)}`
+                : 'Track Mutual Funds, Stocks, FDs, Gold & SIPs'}
+            </Text>
+          </View>
+        </View>
+        <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+      </View>
+
+      {/* Allocation Horizontal Stacked Bar */}
+      {portfolioSummary && portfolioSummary.allocations.length > 0 && (
+        <View style={styles.allocationBarContainer}>
+          <View style={styles.allocationStackedBar}>
+            {portfolioSummary.allocations.map((alloc) => (
+              <View
+                key={alloc.assetClass}
+                style={{
+                  flex: Math.max(alloc.percentage, 2),
+                  backgroundColor: alloc.color,
+                  height: 6,
+                }}
+              />
+            ))}
+          </View>
+
+          <View style={styles.allocationPillsRow}>
+            {portfolioSummary.allocations.slice(0, 4).map((alloc) => (
+              <View key={alloc.assetClass} style={styles.miniAllocPill}>
+                <View style={[styles.miniDot, { backgroundColor: alloc.color }]} />
+                <Text style={styles.miniAllocText}>
+                  {alloc.label.split(' ')[0]}: {alloc.percentage}%
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+});
 
 function AccountDetailCard({
   account,

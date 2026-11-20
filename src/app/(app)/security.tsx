@@ -12,7 +12,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { useQueryClient } from '@tanstack/react-query';
-import { Text, Button, Header, useToast, useAlert } from '@/components/ui';
+import { Text, Header, useToast, useAlert } from '@/components/ui';
 import { PassphraseModal } from '@/components/modals/PassphraseModal';
 import { spacing, typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -438,11 +438,6 @@ export default function SecurityPrivacyScreen() {
             </View>
           </View>
         </View>
-
-        {/* Save Changes */}
-        <View style={styles.footer}>
-          <Button title="Save Changes" onPress={() => router.back()} style={styles.saveBtn} />
-        </View>
       </ScrollView>
 
       <PassphraseModal
@@ -627,20 +622,6 @@ const getStyles = (colors: ThemeColors) => {
     errorBtnText: {
       ...typography.labelMd,
       color: colors.onError,
-    },
-    footer: {
-      marginTop: 16,
-      alignItems: 'center',
-    },
-    saveBtn: {
-      minWidth: 200,
-      height: 48,
-      borderRadius: 12,
-      shadowColor: colors.onSurface,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.1,
-      shadowRadius: 12,
-      elevation: 2,
     },
   });
   return styles;

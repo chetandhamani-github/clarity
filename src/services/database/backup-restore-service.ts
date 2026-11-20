@@ -298,8 +298,8 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
     if (Array.isArray(data.transactions)) {
       for (const t of data.transactions) {
         await db.runAsync(
-          `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, to_account_id, splits_json, source, status, sms_id, parsed_tx_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, to_account_id, splits_json, source, status, sms_id, parsed_tx_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             t.id,
             t.account_id ?? t.accountId,
@@ -316,6 +316,7 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
             t.status ?? 'VERIFIED',
             t.sms_id ?? t.smsId ?? null,
             t.parsed_tx_id ?? t.parsedTxId ?? null,
+            t.created_at ?? t.createdAt ?? new Date().toISOString(),
           ]
         );
       }

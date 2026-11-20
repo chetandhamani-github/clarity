@@ -39,7 +39,7 @@ export async function scanReceiptWithAi(
     headers: {
       'X-Installation-Id': installationId,
     },
-    timeoutMs: 60000,
+    timeoutMs: 90000,
   });
 }
 
@@ -54,7 +54,7 @@ export async function chatWithFinancialCopilot(
     headers: {
       'X-Installation-Id': installationId,
     },
-    timeoutMs: 60000,
+    timeoutMs: 90000,
   });
 }
 
