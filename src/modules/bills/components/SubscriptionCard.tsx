@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Text, useToast, useAlert } from '@/components/ui';
 import { useTheme, typography, radius } from '@/theme';
@@ -16,10 +17,11 @@ interface SubscriptionCardProps {
 
 export function SubscriptionCard({ subscription, onPress }: SubscriptionCardProps) {
   const { colors } = useTheme();
+  const router = useRouter();
   const { hideBalances } = useAppStore();
   const { showToast } = useToast();
   const { showAlert } = useAlert();
-  const { deleteSubscription } = useBills();
+  const { updateSubscription, deleteSubscription } = useBills();
 
   const monthlyCost = BillService.calculateMonthlyNormalizedCost(
     subscription.amount,
@@ -80,6 +82,38 @@ export function SubscriptionCard({ subscription, onPress }: SubscriptionCardProp
     ]);
   };
 
+  const handleOpenOptions = () => {
+    const isPaused = subscription.status === 'paused';
+    showAlert(subscription.name, 'Manage subscription', [
+      {
+        text: 'Edit',
+        onPress: () =>
+          router.navigate({
+            pathname: '/(app)/add-bill',
+            params: { subId: subscription.id, type: 'subscription' },
+          }),
+      },
+      {
+        text: isPaused ? 'Resume' : 'Pause',
+        onPress: async () => {
+          await updateSubscription(subscription.id, {
+            status: isPaused ? 'active' : 'paused',
+          });
+          showToast(
+            isPaused ? 'Subscription resumed' : 'Subscription paused',
+            'info'
+          );
+        },
+      },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: handleDelete,
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
   return (
     <TouchableOpacity
       style={[
@@ -89,7 +123,7 @@ export function SubscriptionCard({ subscription, onPress }: SubscriptionCardProp
           borderColor: colors.outlineVariant,
         },
       ]}
-      onPress={onPress || handleDelete}
+      onPress={onPress || handleOpenOptions}
       activeOpacity={0.88}
     >
       <View style={styles.cardMain}>

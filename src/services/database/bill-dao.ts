@@ -2,7 +2,12 @@ import { DeviceEventEmitter } from 'react-native';
 import { getDatabase } from './index';
 import { insertNotification } from './notification-dao';
 import { formatCurrency } from '@/utils/format';
-import { calculateNextDate } from '@/utils/date';
+import {
+  calculateNextDate,
+  formatLocalDateYmd,
+  shiftMonthsPreserveDay,
+  shiftYmdDays,
+} from '@/utils/date';
 import type {
   BillReminder,
   BillerCategory,
@@ -320,7 +325,7 @@ export async function markBillAsPaid(
   paidTransactionId?: string
 ): Promise<{ updatedBill: BillReminder; nextBill?: BillReminder }> {
   const db = getDatabase();
-  const effectivePaidDate = paidDate || new Date().toISOString().split('T')[0];
+  const effectivePaidDate = paidDate || formatLocalDateYmd(new Date());
 
   const current = await getBillById(id);
   if (!current) {
@@ -346,16 +351,10 @@ export async function markBillAsPaid(
 
     // Auto-schedule next cycle if recurring
     if (current.repeatFrequency && current.repeatFrequency !== 'one_time') {
-      const nextDueDate = calculateNextDate(
-        current.dueDate,
-        current.repeatFrequency === 'quarterly' ? 'monthly' : (current.repeatFrequency as any)
-      );
-
-      // If quarterly, advance 3 months
       const actualNextDueDate =
         current.repeatFrequency === 'quarterly'
-          ? calculateNextDate(calculateNextDate(nextDueDate, 'monthly'), 'monthly')
-          : nextDueDate;
+          ? shiftMonthsPreserveDay(current.dueDate, 3)
+          : calculateNextDate(current.dueDate, current.repeatFrequency as any);
 
       nextBill = await insertBill({
         source: current.source,
@@ -410,18 +409,28 @@ export async function mergeOrInsertSmsBill(extracted: {
   // Search for an existing bill from same biller within 25 days of due date
   const [year, month, day] = extracted.dueDate.split('-').map(Number);
   const dueTime = new Date(year, month - 1, day).getTime();
-  const minRange = new Date(dueTime - 25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-  const maxRange = new Date(dueTime + 25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const minRange = shiftYmdDays(extracted.dueDate, -25);
+  const maxRange = shiftYmdDays(extracted.dueDate, 25);
 
+  const trimmedBiller = extracted.billerName.trim();
+  const billerPattern = trimmedBiller.length >= 2 ? `%${trimmedBiller}%` : '__NO_MATCH__';
   const existing = await db.getFirstAsync<BillReminderRow>(
     `SELECT * FROM bill_reminders 
-     WHERE (biller_name LIKE ? OR ? LIKE '%' || biller_name || '%' OR (account_reference IS NOT NULL AND account_reference != '' AND account_reference = ?))
+     WHERE (
+         biller_name LIKE ?
+         OR (LENGTH(TRIM(biller_name)) >= 2 AND ? != '' AND LOWER(?) LIKE '%' || LOWER(TRIM(biller_name)) || '%')
+         OR (account_reference IS NOT NULL AND account_reference != '' AND account_reference = ?)
+       )
        AND due_date BETWEEN ? AND ?
      LIMIT 1`,
-    [`%${extracted.billerName}%`, extracted.billerName, extracted.accountReference ?? '', minRange, maxRange]
+    [billerPattern, trimmedBiller, trimmedBiller, extracted.accountReference ?? '', minRange, maxRange]
   );
 
   if (existing) {
+    if (existing.status === 'DISMISSED') {
+      return { bill: mapRow(existing), isNew: false };
+    }
+
     // If already marked as paid, preserve status and update metadata only
     if (existing.status === 'PAID') {
       await db.runAsync(
@@ -463,9 +472,13 @@ export async function mergeOrInsertSmsBill(extracted: {
   }
 
   const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
   const todayTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const diffDays = Math.round((dueTime - todayTime) / (1000 * 60 * 60 * 24));
+
+  const categoryPattern =
+    extracted.billerCategory && extracted.billerCategory !== 'other'
+      ? `%${extracted.billerCategory}%`
+      : '__NO_MATCH__';
 
   // If the bill is older than 30 days in the past, ignore it or check if it was already settled
   if (diffDays < -30) {
@@ -474,7 +487,7 @@ export async function mergeOrInsertSmsBill(extracted: {
       `SELECT * FROM bill_reminders 
        WHERE biller_name LIKE ? AND due_date BETWEEN ? AND ?
        LIMIT 1`,
-      [`%${extracted.billerName}%`, minRange, maxRange]
+      [billerPattern, minRange, maxRange]
     );
     if (existingPaid) {
       return { bill: mapRow(existingPaid), isNew: false };
@@ -488,8 +501,8 @@ export async function mergeOrInsertSmsBill(extracted: {
          AND date BETWEEN ? AND ?
        LIMIT 1`,
       [
-        `%${extracted.billerName}%`,
-        `%${extracted.billerCategory}%`,
+        billerPattern,
+        categoryPattern,
         extracted.amountDue,
         Math.max(1, extracted.amountDue * 0.02),
         minRange,
@@ -544,8 +557,8 @@ export async function mergeOrInsertSmsBill(extracted: {
        AND date BETWEEN ? AND ?
      LIMIT 1`,
     [
-      `%${extracted.billerName}%`,
-      `%${extracted.billerCategory}%`,
+      billerPattern,
+      categoryPattern,
       extracted.amountDue,
       Math.max(1, extracted.amountDue * 0.02),
       minRange,
@@ -602,13 +615,16 @@ export async function findMatchingUnpaidBill(
   toleranceDays: number = 7,
   tolerancePct: number = 0.02
 ): Promise<BillReminder | null> {
+  const cleanMerchant = billerOrMerchant.toLowerCase().trim();
+  if (cleanMerchant.length < 2) {
+    return null;
+  }
+
   const db = getDatabase();
   const txDate = transactionDateStr.split('T')[0];
-  const [year, month, day] = txDate.split('-').map(Number);
-  const targetTime = new Date(year, month - 1, day).getTime();
 
-  const minDueDate = new Date(targetTime - toleranceDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-  const maxDueDate = new Date(targetTime + toleranceDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const minDueDate = shiftYmdDays(txDate, -toleranceDays);
+  const maxDueDate = shiftYmdDays(txDate, toleranceDays);
 
   const rows = await db.getAllAsync<BillReminderRow>(
     `SELECT * FROM bill_reminders 
@@ -617,14 +633,13 @@ export async function findMatchingUnpaidBill(
     [minDueDate, maxDueDate]
   );
 
-  const cleanMerchant = billerOrMerchant.toLowerCase().trim();
-
   for (const row of rows) {
     const cleanBiller = row.biller_name.toLowerCase().trim();
+    const cleanRef = row.account_reference ? row.account_reference.toLowerCase().trim() : '';
     const isNameMatch =
-      cleanMerchant.includes(cleanBiller) ||
-      cleanBiller.includes(cleanMerchant) ||
-      (row.account_reference && cleanMerchant.includes(row.account_reference.toLowerCase()));
+      (cleanBiller.length >= 2 &&
+        (cleanMerchant.includes(cleanBiller) || cleanBiller.includes(cleanMerchant))) ||
+      (cleanRef.length >= 3 && cleanMerchant.includes(cleanRef));
 
     if (!isNameMatch) continue;
 

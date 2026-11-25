@@ -43,6 +43,6 @@ export interface NotificationSettingsState {
 
 export type NotificationParseResult =
   | { type: 'TRANSACTION'; transaction: ParsedTransaction; isDuplicate: boolean }
-  | { type: 'BILL'; bill: ExtractedBill }
+  | { type: 'BILL'; bill: ExtractedBill; isNew?: boolean; billId?: string }
   | { type: 'IGNORED'; reason: string };
 

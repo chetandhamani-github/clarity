@@ -135,6 +135,8 @@ describe('ai.api', () => {
         year: 2026,
         totalIncome: 80000,
         totalExpenses: 45000,
+        canonicalHealthScore: 77,
+        currencySymbol: '₹',
         topCategories: ['Rent: 20000', 'Groceries: 12000'],
       });
 
@@ -145,6 +147,8 @@ describe('ai.api', () => {
           year: 2026,
           totalIncome: 80000,
           totalExpenses: 45000,
+          canonicalHealthScore: 77,
+          currencySymbol: '₹',
           topCategories: ['Rent: 20000', 'Groceries: 12000'],
         },
         {

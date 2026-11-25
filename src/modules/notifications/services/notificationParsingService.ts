@@ -5,10 +5,9 @@ import { SmsPipelineService } from '@/modules/sms/services/smsPipelineService';
 import { SmsSyncService } from '@/modules/sms/services/smsSyncService';
 import { SmsDao } from '@/modules/sms/storage/smsDao';
 import { BillService } from '@/modules/bills/services/BillService';
+import { mapExternalBillerCategory } from '@/modules/bills/utils/bill-helpers';
 import { BillAlertEngine } from '@/services/notifications/bill-alert-engine';
-import { mergeOrInsertSmsBill } from '@/services/database/bill-dao';
 import type { RawSmsMessage } from '@/modules/sms/types';
-import type { BillCategory } from '@/modules/bills/types/bill.types';
 import type { RawNotificationPayload, NotificationParseResult } from '../types';
 
 const GENERIC_TITLE_REGEX =
@@ -64,48 +63,19 @@ function invalidateLedgerQueries(): void {
       ['accounts'],
       ['totals'],
       ['cashflow'],
+      ['safeToSpend'],
+      ['categorySpending'],
+      ['budgetPlan'],
       ['bills'],
-      ['financial-health'],
+      ['financial_health_report'],
+      ['aiDigest'],
+      ['active_debt_list'],
     ];
     for (const queryKey of keys) {
       queryClient.invalidateQueries({ queryKey }).catch(() => {});
     }
   } catch {
     // Ignore when QueryClient is unavailable in isolated unit tests
-  }
-}
-
-function mapToBillCategory(billerCategory: string): BillCategory {
-  switch (billerCategory) {
-    case 'electricity':
-      return 'electricity';
-    case 'water':
-      return 'water';
-    case 'piped_gas':
-    case 'lpg_cylinder':
-      return 'other';
-    case 'broadband':
-    case 'landline':
-      return 'internet';
-    case 'mobile_postpaid':
-      return 'mobile';
-    case 'credit_card':
-      return 'credit_card';
-    case 'loan_emi':
-      return 'emi';
-    case 'insurance':
-      return 'insurance';
-    case 'rent':
-    case 'housing_society':
-      return 'rent';
-    case 'subscription':
-    case 'dth':
-    case 'cable_tv':
-      return 'subscription';
-    case 'tuition':
-      return 'education';
-    default:
-      return 'other';
   }
 }
 
@@ -151,9 +121,9 @@ export class NotificationParsingService {
       try {
         const extractedBill = BillExtractor.extractBill(message);
         if (extractedBill) {
-          const billCategory = mapToBillCategory(extractedBill.billerCategory);
+          const billCategory = mapExternalBillerCategory(extractedBill.billerCategory);
 
-          const { bill: insertedBill } = await BillService.mergeOrInsertExternalBill({
+          const { bill: insertedBill, isNew } = await BillService.mergeOrInsertExternalBill({
             title: extractedBill.billerName,
             provider: extractedBill.billerName,
             category: billCategory,
@@ -167,15 +137,12 @@ export class NotificationParsingService {
             notes: `Auto-detected from ${notification.appName || 'Push Notification'}`,
           });
 
-          await mergeOrInsertSmsBill({
-            ...extractedBill,
-            smsId: message.id,
-          });
+          await SmsDao.saveSmsBatch([message]).catch(() => {});
 
-          if (insertedBill) {
+          if (insertedBill && insertedBill.status !== 'paid' && insertedBill.status !== 'dismissed') {
             await BillAlertEngine.scheduleNativeBillReminder({
               id: insertedBill.id,
-              billerName: insertedBill.title,
+              billerName: insertedBill.provider || insertedBill.title,
               amountDue: insertedBill.amount,
               dueDate: insertedBill.dueDate,
               status: insertedBill.status,
@@ -184,10 +151,12 @@ export class NotificationParsingService {
           }
 
           invalidateLedgerQueries();
-          DeviceEventEmitter.emit('billDetected', extractedBill);
+          if (isNew) {
+            DeviceEventEmitter.emit('billDetected', extractedBill);
+          }
           DeviceEventEmitter.emit('notificationsUpdated');
 
-          return { type: 'BILL', bill: extractedBill };
+          return { type: 'BILL', bill: extractedBill, isNew, billId: insertedBill?.id };
         }
       } catch {
         // Continue to transaction extraction if bill parsing had non-critical issue

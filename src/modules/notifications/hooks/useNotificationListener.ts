@@ -51,8 +51,8 @@ export function useNotificationListener() {
             parseBills: parseBillsRef.current,
           });
 
-          if (result.type === 'BILL') {
-            showDetectedBillModal(result.bill);
+          if (result.type === 'BILL' && result.isNew !== false) {
+            showDetectedBillModal(result.bill, result.billId);
           }
 
           if (result.type !== 'IGNORED') {

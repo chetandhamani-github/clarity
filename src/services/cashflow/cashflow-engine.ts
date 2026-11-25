@@ -179,8 +179,12 @@ export async function calculateSafeToSpend(
   try {
     const legacyBills = await getUpcomingBillsDao(45);
     const existingIds = new Set(upcomingBills.map((b) => b.id));
+    const existingKeys = new Set(
+      upcomingBills.map((b) => `${b.title.trim().toLowerCase()}|${b.dueDate}`)
+    );
     for (const lb of legacyBills) {
-      if (!existingIds.has(lb.id)) {
+      const key = `${lb.billerName.trim().toLowerCase()}|${lb.dueDate}`;
+      if (!existingIds.has(lb.id) && !existingKeys.has(key)) {
         upcomingBills.push({
           id: lb.id,
           title: lb.billerName,

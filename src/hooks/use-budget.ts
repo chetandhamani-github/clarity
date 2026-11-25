@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { BudgetPlan, BudgetCategory, BucketType, CategorySpending } from '@/types';
 import {
+  getBudgetPlanForMonth,
   getCurrentBudgetPlan,
   upsertBudgetPlan,
   getAllCategories,
@@ -11,11 +12,14 @@ import {
 } from '@/services/database/budget-dao';
 import { queueAutoBackup } from '@/services/cloud/google-drive-service';
 import { evaluateCategoryBudgetAlert } from '@/services/notifications/alert-engine';
+import { invalidateAnalyticsAndHealthQueries } from '@/hooks/use-financial-health';
 
-export function useBudgetPlan() {
+export function useBudgetPlan(month?: number, year?: number) {
+  const isSpecificMonth = month !== undefined && year !== undefined;
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['budgetPlan'],
-    queryFn: () => getCurrentBudgetPlan(),
+    queryKey: isSpecificMonth ? ['budgetPlan', month, year] : ['budgetPlan'],
+    queryFn: () =>
+      isSpecificMonth ? getBudgetPlanForMonth(month, year) : getCurrentBudgetPlan(),
   });
 
   return { plan: data || null, isLoading, refetch };
@@ -28,6 +32,7 @@ export function useUpdateBudgetPlan() {
     mutationFn: (data: Omit<BudgetPlan, 'id'>) => upsertBudgetPlan(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('update-budget');
     },
   });

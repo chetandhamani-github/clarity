@@ -10,6 +10,7 @@ import {
   getTotalBalance,
 } from '@/services/database/account-dao';
 import { queueAutoBackup } from '@/services/cloud/google-drive-service';
+import { invalidateAnalyticsAndHealthQueries } from '@/hooks/use-financial-health';
 
 export function useAccounts() {
   const { data, isLoading, refetch } = useQuery({
@@ -46,6 +47,7 @@ export function useCreateAccount() {
     mutationFn: (data: Omit<Account, 'id' | 'createdAt'>) => insertAccount(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('create-account');
     },
   });
@@ -66,6 +68,7 @@ export function useDeleteAccount() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('delete-account');
     },
   });
@@ -86,6 +89,7 @@ export function useUpdateAccount() {
       updateAccountDao(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('update-account');
     },
   });

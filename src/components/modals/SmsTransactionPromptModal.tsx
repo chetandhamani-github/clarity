@@ -13,6 +13,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme, typography, ThemeColors } from '@/theme';
 import { useSmsStore } from '@/store/useSmsStore';
 import { useQueryClient } from '@tanstack/react-query';
+import { invalidateAnalyticsAndHealthQueries } from '@/hooks/use-financial-health';
 import { formatCurrency, formatDate } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
 import { hasMeaningfulMerchant } from '@/utils/transaction-display';
@@ -85,6 +86,8 @@ export function SmsTransactionPromptModal({ visible, onDismiss }: Props) {
       await queryClient.invalidateQueries({ queryKey: ['accounts'] });
       await queryClient.invalidateQueries({ queryKey: ['totals'] });
       await queryClient.invalidateQueries({ queryKey: ['recent-transactions'] });
+      await queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
 
       showToast(
         `${importedCount} transaction${importedCount === 1 ? '' : 's'} fetched successfully!`,

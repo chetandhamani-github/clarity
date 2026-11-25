@@ -11,6 +11,7 @@ import type { InvestmentHolding, InvestmentMaturityItem, PortfolioSummary } from
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useAccounts } from './use-accounts';
+import { invalidateAnalyticsAndHealthQueries } from './use-financial-health';
 
 export function useInvestments() {
   const { data, isLoading, refetch } = useQuery({
@@ -73,6 +74,7 @@ export function useCreateInvestmentHolding() {
       queryClient.invalidateQueries({ queryKey: ['portfolioSummary'] });
       queryClient.invalidateQueries({ queryKey: ['investmentMaturityCalendar'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
     },
   });
 
@@ -103,6 +105,7 @@ export function useUpdateInvestmentHolding() {
       queryClient.invalidateQueries({ queryKey: ['portfolioSummary'] });
       queryClient.invalidateQueries({ queryKey: ['investmentMaturityCalendar'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
     },
   });
 
@@ -141,6 +144,7 @@ export function useDeleteInvestmentHolding() {
       queryClient.invalidateQueries({ queryKey: ['portfolioSummary'] });
       queryClient.invalidateQueries({ queryKey: ['investmentMaturityCalendar'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
     },
   });
 

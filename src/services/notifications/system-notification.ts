@@ -139,6 +139,7 @@ export async function triggerLocalSystemNotification(
   }
 
   try {
+    const channelId = options.channelId || NOTIFICATION_CHANNELS.DEFAULT;
     await Notifications.scheduleNotificationAsync({
       content: {
         title: options.title,
@@ -150,9 +151,10 @@ export async function triggerLocalSystemNotification(
           isLocal: true,
         },
         sound: true,
-        channelId: options.channelId || NOTIFICATION_CHANNELS.DEFAULT,
+        channelId,
       },
-      trigger: null,
+      // expo-notifications reads trigger.channelId on Android to assign the notification channel immediately
+      trigger: Platform.OS === 'android' ? { channelId } : null,
     });
   } catch {
     // Suppress errors if permission is not granted or device is in DND
@@ -206,7 +208,7 @@ export async function triggerDuplicateChargeAlert(params: {
     categoryIdentifier: NOTIFICATION_CATEGORIES.ANOMALY,
     data: {
       type: 'duplicate_charge',
-      actionUrl: '/(tabs)/transactions',
+      actionUrl: '/(app)/(tabs)/transactions',
     },
   });
 }
@@ -227,7 +229,7 @@ export async function triggerPriceIncreaseAlert(params: {
     categoryIdentifier: NOTIFICATION_CATEGORIES.ANOMALY,
     data: {
       type: 'price_increase',
-      actionUrl: '/bills',
+      actionUrl: '/(app)/bills',
     },
   });
 }

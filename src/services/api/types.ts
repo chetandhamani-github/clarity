@@ -204,6 +204,10 @@ export interface MonthlyDigestPayload {
   year: number;
   totalIncome: number;
   totalExpenses: number;
+  plannedIncome?: number;
+  currencySymbol?: string;
+  canonicalHealthScore?: number;
+  healthSummary?: string;
   topCategories?: string[];
   needsPercent?: number;
   wantsPercent?: number;

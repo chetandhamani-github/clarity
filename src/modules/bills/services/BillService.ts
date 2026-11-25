@@ -1,5 +1,10 @@
 import { BillsRepository } from '../database/bills.repository';
 import { ReminderService } from './ReminderService';
+import {
+  clearReminderStateForBill,
+  clearSentRemindersWithPrefix,
+} from '@/services/notifications/reminder-state';
+import { getLocalTodayYmd, shiftYmdDays } from '@/utils/date';
 import type {
   Bill,
   BillCategory,
@@ -14,6 +19,31 @@ import type {
 } from '../types/bill.types';
 import { getDatabase } from '@/services/database';
 
+async function scheduleNativeBill(bill: Bill): Promise<void> {
+  try {
+    const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
+    await BillAlertEngine.scheduleNativeBillReminder({
+      id: bill.id,
+      billerName: bill.provider || bill.title,
+      amountDue: bill.amount,
+      dueDate: bill.dueDate,
+      reminderDaysBefore: bill.reminderDays ?? 3,
+      status: bill.status,
+    });
+  } catch {
+    // Ignore scheduling errors in test/headless mode
+  }
+}
+
+async function cancelNativeBill(billId: string): Promise<void> {
+  try {
+    const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
+    await BillAlertEngine.cancelNativeBillReminder(billId);
+  } catch {
+    // Ignore scheduling errors in test/headless mode
+  }
+}
+
 export class BillService {
   /**
    * Creates a bill, schedules reminder notification, and returns created entity.
@@ -24,6 +54,7 @@ export class BillService {
     // Schedule reminders if bill is upcoming
     if (bill.status === 'upcoming') {
       await ReminderService.scheduleBillReminder(bill);
+      await scheduleNativeBill(bill);
     }
 
     return bill;
@@ -36,10 +67,13 @@ export class BillService {
     await BillsRepository.updateBill(id, updates);
     const updated = await BillsRepository.getBillById(id);
     if (updated) {
-      if (updated.status === 'upcoming') {
+      if (updated.status === 'upcoming' || updated.status === 'overdue') {
+        clearReminderStateForBill(id);
         await ReminderService.scheduleBillReminder(updated);
+        await scheduleNativeBill(updated);
       } else {
         await ReminderService.cancelBillReminder(id);
+        await cancelNativeBill(id);
       }
     }
   }
@@ -49,6 +83,7 @@ export class BillService {
    */
   public static async deleteBill(id: string): Promise<void> {
     await ReminderService.cancelBillReminder(id);
+    await cancelNativeBill(id);
     await BillsRepository.deleteBill(id);
   }
 
@@ -64,10 +99,12 @@ export class BillService {
 
     // Cancel old reminder
     await ReminderService.cancelBillReminder(id);
+    await cancelNativeBill(id);
 
     // If a next recurring bill was generated, schedule reminders for it
     if (result.nextBill) {
       await ReminderService.scheduleBillReminder(result.nextBill);
+      await scheduleNativeBill(result.nextBill);
     }
 
     return result;
@@ -76,17 +113,21 @@ export class BillService {
   // --- Subscriptions ---
 
   public static async createSubscription(dto: CreateSubscriptionDTO): Promise<Subscription> {
-    return BillsRepository.insertSubscription(dto);
+    const created = await BillsRepository.insertSubscription(dto);
+    clearSentRemindersWithPrefix(`subscription_due:${created.id}:`);
+    return created;
   }
 
   public static async updateSubscription(
     id: string,
     updates: UpdateSubscriptionDTO
   ): Promise<void> {
-    return BillsRepository.updateSubscription(id, updates);
+    await BillsRepository.updateSubscription(id, updates);
+    clearSentRemindersWithPrefix(`subscription_due:${id}:`);
   }
 
   public static async deleteSubscription(id: string): Promise<void> {
+    clearSentRemindersWithPrefix(`subscription_due:${id}:`);
     return BillsRepository.deleteSubscription(id);
   }
 
@@ -137,8 +178,8 @@ export class BillService {
     // 2. Fetch candidate bills within flexible billing period (±30 days around due date)
     const [year, month, day] = extracted.dueDate.split('-').map(Number);
     const dueTime = new Date(year, month - 1, day).getTime();
-    const minRange = new Date(dueTime - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const maxRange = new Date(dueTime + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const minRange = shiftYmdDays(extracted.dueDate, -30);
+    const maxRange = shiftYmdDays(extracted.dueDate, 30);
 
     const candidates = await db.getAllAsync<{
       id: string;
@@ -302,6 +343,14 @@ export class BillService {
 
     // 4. If high-confidence match found, update existing bill
     if (bestCandidate && highestScore >= 50) {
+      if (bestCandidate.status === 'dismissed') {
+        if (!bestCandidate.sms_id && extracted.smsId) {
+          await BillsRepository.updateBill(bestCandidate.id, { smsId: extracted.smsId });
+        }
+        const existing = await BillsRepository.getBillById(bestCandidate.id);
+        return { bill: existing!, isNew: false };
+      }
+
       if (bestCandidate.status === 'paid') {
         // Keep it paid, update missing metadata
         await BillsRepository.updateBill(bestCandidate.id, {
@@ -313,7 +362,10 @@ export class BillService {
         return { bill: updated!, isNew: false };
       }
 
-      // Update upcoming or overdue bill
+      const todayStr = getLocalTodayYmd();
+      const nextStatus = extracted.dueDate < todayStr ? 'overdue' : 'upcoming';
+
+      // Update upcoming or overdue bill and resync reminders
       await BillsRepository.updateBill(bestCandidate.id, {
         provider:
           bestCandidate.provider && bestCandidate.provider !== bestCandidate.title
@@ -323,27 +375,42 @@ export class BillService {
         minAmount:
           extracted.minAmount !== undefined ? extracted.minAmount : bestCandidate.min_amount ?? undefined,
         dueDate: extracted.dueDate,
+        status: nextStatus,
         accountReference: extracted.accountReference || bestCandidate.account_reference || undefined,
         paymentUrl: extracted.paymentUrl || bestCandidate.payment_url || undefined,
         smsId: extracted.smsId || bestCandidate.sms_id || undefined,
       });
 
       const updated = await BillsRepository.getBillById(bestCandidate.id);
+      if (updated) {
+        clearReminderStateForBill(bestCandidate.id);
+        await ReminderService.scheduleBillReminder(updated);
+        await scheduleNativeBill(updated);
+      }
       return { bill: updated!, isNew: false };
     }
 
     // 5. If brand new bill, check if an existing expense transaction already paid it
+    const trimmedProvider = extracted.provider.trim();
+    const providerPattern = trimmedProvider.length >= 2 ? `%${trimmedProvider}%` : '__NO_MATCH__';
+    const categoryPattern =
+      extracted.category && extracted.category !== 'other' ? `%${extracted.category}%` : '__NO_MATCH__';
     const matchedPayment = await db.getFirstAsync<{ id: string; date: string }>(
       `SELECT id, date FROM transactions 
-       WHERE (merchant LIKE ? OR category LIKE ? OR ? LIKE '%' || merchant || '%') 
+       WHERE (
+           merchant LIKE ?
+           OR category LIKE ?
+           OR (LENGTH(TRIM(merchant)) >= 2 AND ? != '' AND LOWER(?) LIKE '%' || LOWER(TRIM(merchant)) || '%')
+         ) 
          AND ABS(amount - ?) <= ? 
          AND type = 'expense'
          AND date BETWEEN ? AND ?
        LIMIT 1`,
       [
-        `%${extracted.provider}%`,
-        `%${extracted.category}%`,
-        extracted.provider,
+        providerPattern,
+        categoryPattern,
+        trimmedProvider,
+        trimmedProvider,
         extracted.amount,
         Math.max(2, extracted.amount * 0.03),
         minRange,
@@ -399,16 +466,19 @@ export class BillService {
     toleranceDaysAfter: number = 10,
     tolerancePct: number = 0.02
   ): Promise<Bill | null> {
+    const cleanMerchant = merchant.toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
+    if (cleanMerchant.length < 2) {
+      return null;
+    }
+
     const db = getDatabase();
     await BillsRepository.ensureSchema();
 
     const txDate = transactionDate.split('T')[0];
-    const [y, m, d] = txDate.split('-').map(Number);
-    const targetTime = new Date(y, m - 1, d).getTime();
 
     // A bill paid today could be due anywhere from toleranceDaysAfter ago (late) up to toleranceDaysBefore ahead (early)
-    const minDueDate = new Date(targetTime - toleranceDaysAfter * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const maxDueDate = new Date(targetTime + toleranceDaysBefore * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const minDueDate = shiftYmdDays(txDate, -toleranceDaysAfter);
+    const maxDueDate = shiftYmdDays(txDate, toleranceDaysBefore);
 
     const rows = await db.getAllAsync<{ id: string; provider: string; title: string; amount: number; min_amount: number | null; account_reference: string | null }>(
       `SELECT id, provider, title, amount, min_amount, account_reference 
@@ -418,18 +488,20 @@ export class BillService {
       [minDueDate, maxDueDate]
     );
 
-    const cleanMerchant = merchant.toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
     const merchantTokens = new Set(cleanMerchant.split(/\s+/).filter((t) => t.length >= 3));
     const noiseWords = new Set(['payment', 'billdesk', 'autopay', 'bill', 'paid', 'transfer', 'imps', 'neft', 'rtgs', 'bank']);
 
     for (const r of rows) {
       const cleanProvider = (r.provider || r.title).toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
       const providerTokens = cleanProvider.split(/\s+/).filter((t) => t.length >= 3 && !noiseWords.has(t));
+      const cleanRef = r.account_reference
+        ? r.account_reference.toLowerCase().replace(/[^a-z0-9]/g, '')
+        : '';
 
       const isDirectMatch =
-        cleanMerchant.includes(cleanProvider) ||
-        cleanProvider.includes(cleanMerchant) ||
-        (r.account_reference && cleanMerchant.includes(r.account_reference.toLowerCase().replace(/[^a-z0-9]/g, '')));
+        (cleanProvider.length >= 2 &&
+          (cleanMerchant.includes(cleanProvider) || cleanProvider.includes(cleanMerchant))) ||
+        (cleanRef.length >= 3 && cleanMerchant.includes(cleanRef));
 
       let isTokenMatch = false;
       if (!isDirectMatch && providerTokens.length > 0) {

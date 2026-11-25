@@ -25,8 +25,16 @@ object NotificationListenerBridge {
     @Volatile
     private var appContext: Context? = null
 
+    @Volatile
+    private var isJsListenerReady: Boolean = false
+
+    @Volatile
+    private var isServiceCurrentlyBound: Boolean = false
+
     private val lock = Any()
+    private val listenerLock = Any()
     private val recentIds = LinkedHashSet<String>()
+    private var activeJsListeners: Int = 0
 
     fun init(context: Context?) {
         if (context != null) {
@@ -38,10 +46,46 @@ object NotificationListenerBridge {
         this.reactContext = context
         if (context != null) {
             this.appContext = context.applicationContext
+        } else {
+            this.isJsListenerReady = false
+            synchronized(listenerLock) {
+                activeJsListeners = 0
+            }
         }
     }
 
+    fun setJsListenerReady(ready: Boolean) {
+        this.isJsListenerReady = ready
+    }
+
+    fun addJsListener(eventName: String) {
+        if (eventName == "onNotificationReceived") {
+            synchronized(listenerLock) {
+                activeJsListeners += 1
+            }
+        }
+    }
+
+    fun removeJsListeners(count: Int) {
+        synchronized(listenerLock) {
+            activeJsListeners = maxOf(0, activeJsListeners - maxOf(0, count))
+        }
+    }
+
+    private fun hasActiveJsListeners(): Boolean {
+        synchronized(listenerLock) {
+            return activeJsListeners > 0
+        }
+    }
+
+    fun getLastDisconnectOrConnectWindow(context: Context?): Pair<Long, Long> {
+        val ctx = context?.applicationContext ?: appContext ?: return (0L to 0L)
+        val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getLong(KEY_LAST_CONNECTED_AT, 0L) to prefs.getLong(KEY_LAST_DISCONNECTED_AT, 0L)
+    }
+
     fun recordListenerConnected(context: Context?, connected: Boolean) {
+        isServiceCurrentlyBound = connected
         val ctx = context?.applicationContext ?: appContext ?: return
         val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val now = System.currentTimeMillis().toDouble()
@@ -55,7 +99,21 @@ object NotificationListenerBridge {
         }.apply()
     }
 
-    fun getHealthSnapshot(context: Context?): Bundle {
+    fun clearLocalState(context: Context? = null) {
+        init(context)
+        synchronized(lock) {
+            recentIds.clear()
+            val ctx = appContext ?: return
+            val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit()
+                .remove(KEY_PENDING_JSON)
+                .remove(KEY_LAST_EVENT_AT)
+                .remove(KEY_LAST_EVENT_APP)
+                .apply()
+        }
+    }
+
+    fun getHealthSnapshot(context: Context?, hasPermission: Boolean = true): Bundle {
         val ctx = context?.applicationContext ?: appContext
         val snapshot = Bundle()
         if (ctx == null) {
@@ -73,7 +131,7 @@ object NotificationListenerBridge {
                 0
             }
 
-            snapshot.putBoolean("isServiceConnected", prefs.getBoolean(KEY_LISTENER_CONNECTED, false))
+            snapshot.putBoolean("isServiceConnected", hasPermission && isServiceCurrentlyBound)
             snapshot.putInt("pendingCount", pendingCount)
 
             val lastConnectedAt = prefs.getLong(KEY_LAST_CONNECTED_AT, 0L)
@@ -122,7 +180,7 @@ object NotificationListenerBridge {
         }
 
         val ctx = reactContext
-        if (ctx != null && ctx.hasActiveReactInstance()) {
+        if (ctx != null && ctx.hasActiveReactInstance() && hasActiveJsListeners() && isJsListenerReady) {
             try {
                 val map = Arguments.fromBundle(notificationData)
                 ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
@@ -136,7 +194,7 @@ object NotificationListenerBridge {
         persistToBuffer(notificationData)
     }
 
-    fun drainPendingNotifications(context: Context? = null): List<Bundle> {
+    fun peekPendingNotifications(context: Context? = null): List<Bundle> {
         init(context)
         val ctx = appContext ?: return emptyList()
 
@@ -144,8 +202,6 @@ object NotificationListenerBridge {
             val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val raw = prefs.getString(KEY_PENDING_JSON, null) ?: return emptyList()
             if (raw.isEmpty()) return emptyList()
-
-            prefs.edit().remove(KEY_PENDING_JSON).apply()
 
             return try {
                 val array = JSONArray(raw)
@@ -158,6 +214,49 @@ object NotificationListenerBridge {
             } catch (_: Exception) {
                 emptyList()
             }
+        }
+    }
+
+    fun ackPendingNotifications(context: Context? = null, processedIds: Set<String>) {
+        if (processedIds.isEmpty()) return
+        init(context)
+        val ctx = appContext ?: return
+
+        synchronized(lock) {
+            val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val raw = prefs.getString(KEY_PENDING_JSON, null) ?: return
+            if (raw.isEmpty()) return
+
+            try {
+                val array = JSONArray(raw)
+                val remaining = JSONArray()
+                for (i in 0 until array.length()) {
+                    val item = array.optJSONObject(i) ?: continue
+                    val itemId = item.optString("id", "")
+                    if (!processedIds.contains(itemId)) {
+                        remaining.put(item)
+                    }
+                }
+                if (remaining.length() == 0) {
+                    prefs.edit().remove(KEY_PENDING_JSON).apply()
+                } else {
+                    prefs.edit().putString(KEY_PENDING_JSON, remaining.toString()).apply()
+                }
+            } catch (_: Exception) {
+                // Ignore malformed JSON
+            }
+        }
+    }
+
+    fun drainPendingNotifications(context: Context? = null): List<Bundle> {
+        init(context)
+        val ctx = appContext ?: return emptyList()
+
+        synchronized(lock) {
+            val list = peekPendingNotifications(ctx)
+            val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit().remove(KEY_PENDING_JSON).apply()
+            return list
         }
     }
 

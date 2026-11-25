@@ -7,8 +7,14 @@ import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import java.security.MessageDigest
+import kotlin.math.abs
 
 class ClarityNotificationListenerService : NotificationListenerService() {
+
+    private val signatureLock = Any()
+    private val recentContentSignatures = LinkedHashMap<String, Pair<Long, String>>()
+    private val MAX_SIGNATURE_CACHE = 120
+    private val DEDUPE_WINDOW_MS = 2_000L
 
     override fun onCreate() {
         super.onCreate()
@@ -17,7 +23,25 @@ class ClarityNotificationListenerService : NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        val (lastConnectedAt, lastDisconnectedAt) =
+            NotificationListenerBridge.getLastDisconnectOrConnectWindow(applicationContext)
         NotificationListenerBridge.recordListenerConnected(applicationContext, true)
+
+        // Sweep missed active financial notifications that arrived while service was disconnected
+        if (lastDisconnectedAt > 0L || lastConnectedAt > 0L) {
+            val now = System.currentTimeMillis()
+            val anchor = if (lastDisconnectedAt > 0L) lastDisconnectedAt else lastConnectedAt
+            val cutoff = maxOf(anchor - 60_000L, now - 86_400_000L)
+            try {
+                activeNotifications?.forEach { sbn ->
+                    if (sbn != null && sbn.postTime >= cutoff) {
+                        onNotificationPosted(sbn)
+                    }
+                }
+            } catch (_: Exception) {
+                // activeNotifications may throw before system binds completely
+            }
+        }
     }
 
     override fun onListenerDisconnected() {
@@ -30,6 +54,11 @@ class ClarityNotificationListenerService : NotificationListenerService() {
                 // Rebind best-effort only
             }
         }
+    }
+
+    override fun onDestroy() {
+        NotificationListenerBridge.recordListenerConnected(applicationContext, false)
+        super.onDestroy()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
@@ -78,7 +107,7 @@ class ClarityNotificationListenerService : NotificationListenerService() {
         }
 
         val postTime = sbn.postTime
-        val notificationId = buildStableId(packageName, title, text, bigText, postTime)
+        val notificationId = buildStableId(packageName, sbn.key ?: "", title, text, bigText, postTime)
 
         val bundle = Bundle().apply {
             putString("id", notificationId)
@@ -111,19 +140,36 @@ class ClarityNotificationListenerService : NotificationListenerService() {
 
     private fun buildStableId(
         packageName: String,
+        notificationKey: String,
         title: String,
         text: String,
         bigText: String,
         postTime: Long
     ): String {
-        val bucket = postTime / 120_000L
-        val raw = "$packageName|${title.lowercase()}|${text.lowercase()}|${bigText.lowercase()}|$bucket"
-        return try {
-            val digest = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8))
-            val hex = digest.take(10).joinToString("") { "%02x".format(it) }
-            "notif_$hex"
-        } catch (_: Exception) {
-            "notif_${raw.hashCode()}_$bucket"
+        val signature = "$packageName|$notificationKey|${title.lowercase()}|${text.lowercase()}|${bigText.lowercase()}"
+        synchronized(signatureLock) {
+            val existing = recentContentSignatures[signature]
+            if (existing != null && abs(postTime - existing.first) < DEDUPE_WINDOW_MS) {
+                return existing.second
+            }
+
+            val raw = "$signature|$postTime"
+            val id = try {
+                val digest = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8))
+                val hex = digest.take(10).joinToString("") { "%02x".format(it) }
+                "notif_$hex"
+            } catch (_: Exception) {
+                "notif_${raw.hashCode()}_$postTime"
+            }
+
+            if (recentContentSignatures.size >= MAX_SIGNATURE_CACHE) {
+                val oldestKey = recentContentSignatures.entries.firstOrNull()?.key
+                if (oldestKey != null) {
+                    recentContentSignatures.remove(oldestKey)
+                }
+            }
+            recentContentSignatures[signature] = postTime to id
+            return id
         }
     }
 }

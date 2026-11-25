@@ -144,4 +144,20 @@ class AiControllerTest {
                 .andExpect(jsonPath("$.headline").value("Great Progress: You saved 50% this month!"))
                 .andExpect(jsonPath("$.actionableTips.length()").value(1));
     }
+
+    @Test
+    @DisplayName("POST /api/v1/ai/digest should return 400 when month is invalid")
+    void shouldRejectInvalidMonthInDigest() throws Exception {
+        MonthlyDigestRequest invalid = MonthlyDigestRequest.builder()
+                .month(13)
+                .year(2026)
+                .totalIncome(50000.0)
+                .totalExpenses(20000.0)
+                .build();
+
+        mockMvc.perform(post("/api/v1/ai/digest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalid)))
+                .andExpect(status().isBadRequest());
+    }
 }

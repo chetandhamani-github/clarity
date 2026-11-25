@@ -66,7 +66,16 @@ export default function RootLayout() {
   const hasSeenDrivePrompt = useAppStore((state) => state.hasSeenDrivePrompt);
   const hasSeenNotificationPrompt = useAppStore((state) => state.hasSeenNotificationPrompt);
   const googleDriveConnected = useAppStore((state) => state.googleDriveConnected);
-  const { expoPushToken } = usePushNotifications();
+  const canRequestPushPermissions =
+    hasHydrated &&
+    dbReady &&
+    !isAppLocked &&
+    !showNotificationPrompt &&
+    !isNotificationDisclosureVisible &&
+    (Platform.OS !== 'android' || hasSeenNotificationPrompt);
+  const { expoPushToken } = usePushNotifications({
+    canRequestPermissions: canRequestPushPermissions,
+  });
   const { theme, colors } = useTheme();
 
   const navigationTheme = useMemo(() => {

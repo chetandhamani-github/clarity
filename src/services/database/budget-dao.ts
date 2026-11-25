@@ -51,11 +51,11 @@ function mapBudgetCategoryRow(row: BudgetCategoryRow): BudgetCategory {
   };
 }
 
-export async function getCurrentBudgetPlan(): Promise<BudgetPlan | null> {
+export async function getBudgetPlanForMonth(
+  month: number,
+  year: number
+): Promise<BudgetPlan | null> {
   const db = getDatabase();
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
 
   const row = await db.getFirstAsync<BudgetPlanRow>(
     'SELECT * FROM budget_plans WHERE month = ? AND year = ?',
@@ -64,12 +64,20 @@ export async function getCurrentBudgetPlan(): Promise<BudgetPlan | null> {
 
   if (row) return mapBudgetPlanRow(row);
 
-  // If no plan for this month, see if they had one in previous months to roll forward
-  const lastRow = await db.getFirstAsync<BudgetPlanRow>(
-    'SELECT * FROM budget_plans ORDER BY year DESC, month DESC LIMIT 1'
+  const priorRow = await db.getFirstAsync<BudgetPlanRow>(
+    `SELECT * FROM budget_plans
+     WHERE year < ? OR (year = ? AND month <= ?)
+     ORDER BY year DESC, month DESC
+     LIMIT 1`,
+    [year, year, month]
   );
 
-  return lastRow ? mapBudgetPlanRow(lastRow) : null;
+  return priorRow ? mapBudgetPlanRow(priorRow) : null;
+}
+
+export async function getCurrentBudgetPlan(): Promise<BudgetPlan | null> {
+  const now = new Date();
+  return getBudgetPlanForMonth(now.getMonth() + 1, now.getFullYear());
 }
 
 export async function upsertBudgetPlan(data: Omit<BudgetPlan, 'id'>): Promise<BudgetPlan> {
@@ -236,8 +244,9 @@ export async function getSpentByCategory(
   const rows = await db.getAllAsync<{ category: string; amount: number; splits_json?: string }>(
     `SELECT category, amount, splits_json
      FROM transactions
-     WHERE type = 'expense' AND (date LIKE ? OR date(date, 'localtime') LIKE ?)`,
-    [`${datePrefix}%`, `${datePrefix}%`]
+     WHERE type = 'expense'
+       AND (CASE WHEN date LIKE '%T%' THEN SUBSTR(date(date, 'localtime'), 1, 7) ELSE SUBSTR(date, 1, 7) END) = ?`,
+    [datePrefix]
   );
 
   const result: Record<string, number> = {};

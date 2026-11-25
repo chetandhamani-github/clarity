@@ -8,6 +8,8 @@ import type {
     TransactionType,
     TransactionWithAccount,
 } from '@/types';
+import { DeviceEventEmitter } from 'react-native';
+import { getLocalTodayYmd } from '@/utils/date';
 import { getAccountById } from './account-dao';
 import { getDatabase } from './index';
 import {
@@ -426,6 +428,107 @@ export async function insertTransaction(
   return { id, ...data, category: finalCategory, note: finalNote, source, status, createdAt };
 }
 
+interface RevertedBillInfo {
+  id: string;
+  title: string;
+  provider: string;
+  amount: number;
+  dueDate: string;
+  reminderDays: number;
+  status: string;
+}
+
+async function revertLinkedBillsForTransaction(
+  db: ReturnType<typeof getDatabase>,
+  txId: string
+): Promise<{ modernBills: RevertedBillInfo[]; legacyCount: number }> {
+  const todayLocal = getLocalTodayYmd();
+  const nowIso = new Date().toISOString();
+  const modernBills: RevertedBillInfo[] = [];
+
+  try {
+    const linkedModern = await db.getAllAsync<{
+      id: string;
+      title: string;
+      provider: string;
+      amount: number;
+      due_date: string;
+      reminder_days: number | null;
+    }>(
+      `SELECT id, title, provider, amount, due_date, reminder_days FROM bills WHERE paid_transaction_id = ?`,
+      [txId]
+    );
+
+    for (const row of linkedModern) {
+      const nextStatus = row.due_date < todayLocal ? 'overdue' : 'upcoming';
+      await db.runAsync(
+        `UPDATE bills
+         SET status = ?, last_paid_date = NULL, paid_transaction_id = NULL, updated_at = ?
+         WHERE id = ?`,
+        [nextStatus, nowIso, row.id]
+      );
+      modernBills.push({
+        id: row.id,
+        title: row.title,
+        provider: row.provider,
+        amount: row.amount,
+        dueDate: row.due_date,
+        reminderDays: row.reminder_days ?? 3,
+        status: nextStatus,
+      });
+    }
+  } catch {
+    // Table may not exist in older/isolated setups
+  }
+
+  let legacyCount = 0;
+  try {
+    const linkedLegacy = await db.getAllAsync<{ id: string; due_date: string }>(
+      `SELECT id, due_date FROM bill_reminders WHERE paid_transaction_id = ?`,
+      [txId]
+    );
+    for (const row of linkedLegacy) {
+      const nextStatus = row.due_date < todayLocal ? 'OVERDUE' : 'UNPAID';
+      await db.runAsync(
+        `UPDATE bill_reminders
+         SET status = ?, paid_date = NULL, paid_transaction_id = NULL
+         WHERE id = ?`,
+        [nextStatus, row.id]
+      );
+      legacyCount++;
+    }
+  } catch {
+    // Ignore
+  }
+
+  return { modernBills, legacyCount };
+}
+
+async function resyncRevertedBills(reverted: {
+  modernBills: RevertedBillInfo[];
+  legacyCount: number;
+}): Promise<void> {
+  if (reverted.modernBills.length === 0 && reverted.legacyCount === 0) return;
+
+  try {
+    const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
+    for (const bill of reverted.modernBills) {
+      await BillAlertEngine.scheduleNativeBillReminder({
+        id: bill.id,
+        billerName: bill.provider || bill.title,
+        amountDue: bill.amount,
+        dueDate: bill.dueDate,
+        reminderDaysBefore: bill.reminderDays,
+        status: bill.status,
+      });
+    }
+  } catch {
+    // Ignore
+  }
+
+  DeviceEventEmitter.emit('billsUpdated');
+}
+
 export async function updateTransaction(
   id: string,
   data: Partial<Omit<Transaction, 'id'>>
@@ -446,6 +549,12 @@ export async function updateTransaction(
   const newType = data.type ?? oldTx.type;
 
   const oldAccount = await getAccountById(oldTx.account_id);
+  const shouldRevertLinkedBills =
+    newType !== 'expense' || Math.abs(newAmount - oldTx.amount) > Math.max(1, oldTx.amount * 0.02);
+  let revertedBills: { modernBills: RevertedBillInfo[]; legacyCount: number } = {
+    modernBills: [],
+    legacyCount: 0,
+  };
 
   const executeUpdate = async () => {
     // 2. Revert old transaction's effect on old account
@@ -593,6 +702,10 @@ export async function updateTransaction(
         }
       }
     }
+
+    if (shouldRevertLinkedBills) {
+      revertedBills = await revertLinkedBillsForTransaction(db, id);
+    }
   };
 
   if (typeof db.withTransactionAsync === 'function') {
@@ -607,6 +720,8 @@ export async function updateTransaction(
       throw error;
     }
   }
+
+  await resyncRevertedBills(revertedBills);
 
   if (data.tags !== undefined) {
     try {
@@ -625,6 +740,10 @@ export async function deleteTransaction(id: string): Promise<void> {
   if (!tx) return;
 
   const account = await getAccountById(tx.account_id);
+  let revertedBills: { modernBills: RevertedBillInfo[]; legacyCount: number } = {
+    modernBills: [],
+    legacyCount: 0,
+  };
 
   const executeDelete = async () => {
     // 1. Revert transaction's effect on account
@@ -666,6 +785,9 @@ export async function deleteTransaction(id: string): Promise<void> {
       ]);
     }
 
+    // 2.5. Revert any bills previously settled by this transaction
+    revertedBills = await revertLinkedBillsForTransaction(db, id);
+
     // 3. Delete the transaction
     await db.runAsync('DELETE FROM transactions WHERE id = ?', [id]);
   };
@@ -682,6 +804,8 @@ export async function deleteTransaction(id: string): Promise<void> {
       throw error;
     }
   }
+
+  await resyncRevertedBills(revertedBills);
 }
 
 export async function bulkDeleteTransactions(ids: string[]): Promise<void> {
@@ -706,6 +830,8 @@ export async function bulkUpdateAccount(ids: string[], targetAccountId: string):
   }
 }
 
+const LOCAL_MONTH_EXPR = `CASE WHEN date LIKE '%T%' THEN SUBSTR(date(date, 'localtime'), 1, 7) ELSE SUBSTR(date, 1, 7) END`;
+
 export async function getMonthlyTotals(month: number, year: number): Promise<MonthlyTotals> {
   const db = getDatabase();
 
@@ -718,8 +844,8 @@ export async function getMonthlyTotals(month: number, year: number): Promise<Mon
       COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as income,
       COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as expenses
      FROM transactions 
-     WHERE date LIKE ? OR date(date, 'localtime') LIKE ?`,
-    [`${datePrefix}%`, `${datePrefix}%`]
+     WHERE (${LOCAL_MONTH_EXPR}) = ?`,
+    [datePrefix]
   );
 
   return {
@@ -734,10 +860,7 @@ export async function getMonthlyReports(): Promise<
   const db = getDatabase();
   const rows = await db.getAllAsync<{ datePrefix: string; income: number; expenses: number }>(
     `SELECT 
-      CASE 
-        WHEN date LIKE '%T%' THEN SUBSTR(date(date, 'localtime'), 1, 7)
-        ELSE SUBSTR(date, 1, 7)
-      END as datePrefix,
+      (${LOCAL_MONTH_EXPR}) as datePrefix,
       COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as income,
       COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as expenses
      FROM transactions 
@@ -760,14 +883,14 @@ export async function getTopMerchants(
     `SELECT merchant, SUM(amount) as total
      FROM transactions 
      WHERE type = 'expense'
-       AND (date LIKE ? OR date(date, 'localtime') LIKE ?)
+       AND (${LOCAL_MONTH_EXPR}) = ?
        AND merchant IS NOT NULL
        AND TRIM(merchant) != ''
        AND LOWER(TRIM(merchant)) NOT LIKE '%transaction'
      GROUP BY merchant
      ORDER BY total DESC
      LIMIT ?`,
-    [`${datePrefix}%`, `${datePrefix}%`, limit]
+    [datePrefix, limit]
   );
   return rows;
 }

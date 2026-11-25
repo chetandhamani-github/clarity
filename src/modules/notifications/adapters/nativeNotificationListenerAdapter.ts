@@ -13,6 +13,10 @@ interface NativeNotificationListenerBridge {
   openBatteryOptimizationSettings?(): Promise<boolean>;
   getListenerHealth?(): Promise<NotificationListenerHealth>;
   requestRebind?(): Promise<boolean>;
+  setJsListenerReady?(ready: boolean): void;
+  clearBridgeState?(): Promise<boolean>;
+  peekPendingNotifications?(): Promise<RawNotificationPayload[]>;
+  ackPendingNotifications?(ids: string[]): Promise<boolean>;
   drainPendingNotifications(): Promise<RawNotificationPayload[]>;
   addListener(eventName: string): void;
   removeListeners(count: number): void;
@@ -57,6 +61,43 @@ export class NativeNotificationListenerAdapter {
 
     try {
       return await bridge.requestPermission();
+    } catch {
+      return false;
+    }
+  }
+
+  public static hasTransactionalQueueSupport(): boolean {
+    const bridge = this.getBridge();
+    return Boolean(
+      bridge &&
+        typeof bridge.peekPendingNotifications === 'function' &&
+        typeof bridge.ackPendingNotifications === 'function'
+    );
+  }
+
+  public static async peekPendingNotifications(): Promise<RawNotificationPayload[]> {
+    const bridge = this.getBridge();
+    if (!bridge) return [];
+
+    try {
+      if (typeof bridge.peekPendingNotifications === 'function') {
+        const results = await bridge.peekPendingNotifications();
+        return results || [];
+      }
+      const results = await bridge.drainPendingNotifications();
+      return results || [];
+    } catch {
+      return [];
+    }
+  }
+
+  public static async ackPendingNotifications(ids: string[]): Promise<boolean> {
+    if (ids.length === 0) return true;
+    const bridge = this.getBridge();
+    if (!bridge || typeof bridge.ackPendingNotifications !== 'function') return false;
+
+    try {
+      return await bridge.ackPendingNotifications(ids);
     } catch {
       return false;
     }
@@ -113,6 +154,27 @@ export class NativeNotificationListenerAdapter {
 
     try {
       return await bridge.requestRebind();
+    } catch {
+      return false;
+    }
+  }
+
+  public static setJsListenerReady(ready: boolean): void {
+    const bridge = this.getBridge();
+    if (!bridge?.setJsListenerReady) return;
+    try {
+      bridge.setJsListenerReady(ready);
+    } catch {
+      // Ignore bridge call failures
+    }
+  }
+
+  public static async clearBridgeState(): Promise<boolean> {
+    const bridge = this.getBridge();
+    if (!bridge?.clearBridgeState) return false;
+
+    try {
+      return await bridge.clearBridgeState();
     } catch {
       return false;
     }

@@ -13,15 +13,13 @@ import {
   useMonthlyReports,
 } from '@/hooks/use-transactions';
 import { useAccounts } from '@/hooks/use-accounts';
-import { useCategorySpending } from '@/hooks/use-budget';
+import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
+import { useFinancialHealth } from '@/hooks/use-financial-health';
+import { useMonthlyAiDigest } from '@/hooks/use-ai-digest';
 import { formatCurrency, formatCurrencyPrivacy } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
 import { getTransactionDisplayName } from '@/utils/transaction-display';
 import { useAppStore } from '@/store/use-app-store';
-import { fetchMonthlyAiDigest } from '@/services/api/ai.api';
-import type { MonthlyDigestResult } from '@/services/api/types';
-import { useNetworkStore } from '@/store/use-network-store';
-import { isNetworkError } from '@/services/network/network.service';
 
 export default function AnalyticsScreen() {
   const { colors } = useTheme();
@@ -47,6 +45,11 @@ export default function AnalyticsScreen() {
   const { totals, isLoading: loadingTotals } = useMonthlyTotals(selectedMonth, selectedYear);
   const { accounts, isLoading: loadingAccounts } = useAccounts();
   const { spending, isLoading: loadingSpending } = useCategorySpending(selectedMonth, selectedYear);
+  const { plan: budgetPlan, isLoading: loadingPlan } = useBudgetPlan(selectedMonth, selectedYear);
+  const { report: healthReport, isLoading: loadingHealth } = useFinancialHealth(
+    selectedMonth,
+    selectedYear
+  );
   const { merchants, isLoading: loadingMerchants } = useTopMerchants(
     selectedMonth,
     selectedYear,
@@ -58,12 +61,31 @@ export default function AnalyticsScreen() {
   const { showToast } = useToast();
   const { reports, isLoading: loadingReports } = useMonthlyReports();
 
-  const isConnected = useNetworkStore((state) => state.isConnected);
-  const checkConnection = useNetworkStore((state) => state.checkConnection);
+  const isLoading =
+    loadingTotals ||
+    loadingAccounts ||
+    loadingSpending ||
+    loadingMerchants ||
+    loadingRecurring ||
+    loadingReports ||
+    loadingPlan;
 
-  const [digest, setDigest] = useState<MonthlyDigestResult | null>(null);
-  const [loadingDigest, setLoadingDigest] = useState(false);
-  const [digestOffline, setDigestOffline] = useState(false);
+  const {
+    digest,
+    isLoading: loadingDigest,
+    isRetrying: retryingDigest,
+    isOffline: digestOffline,
+    isError: digestError,
+    retry: handleRetryDigest,
+  } = useMonthlyAiDigest({
+    month: selectedMonth,
+    year: selectedYear,
+    totals,
+    budgetPlan,
+    spending,
+    healthReport,
+    isDataReady: !isLoading && !loadingHealth,
+  });
 
   const handleOpenCopilot = () => {
     router.navigate({
@@ -71,71 +93,6 @@ export default function AnalyticsScreen() {
       params: { month: selectedMonth.toString(), year: selectedYear.toString() },
     });
   };
-
-  const handleRetryDigest = async () => {
-    await checkConnection();
-    if (totals.income > 0 || totals.expenses > 0) {
-      setLoadingDigest(true);
-      setDigestOffline(false);
-      try {
-        const topCatList =
-          spending?.slice(0, 3).map((s) => `${s.category}: ${Math.round(s.spent)}`) || [];
-        const res = await fetchMonthlyAiDigest({
-          month: selectedMonth,
-          year: selectedYear,
-          totalIncome: totals.income,
-          totalExpenses: totals.expenses,
-          topCategories: topCatList,
-        });
-        setDigest(res);
-        setDigestOffline(false);
-      } catch (err: unknown) {
-        if (isNetworkError(err) || !useNetworkStore.getState().isConnected) {
-          setDigestOffline(true);
-        }
-      } finally {
-        setLoadingDigest(false);
-      }
-    }
-  };
-
-  useEffect(() => {
-    let isCancelled = false;
-    const loadDigest = async () => {
-      setLoadingDigest(true);
-      setDigestOffline(false);
-      try {
-        const topCatList =
-          spending?.slice(0, 3).map((s) => `${s.category}: ${Math.round(s.spent)}`) || [];
-        const res = await fetchMonthlyAiDigest({
-          month: selectedMonth,
-          year: selectedYear,
-          totalIncome: totals.income,
-          totalExpenses: totals.expenses,
-          topCategories: topCatList,
-        });
-        if (!isCancelled) {
-          setDigest(res);
-          setDigestOffline(false);
-        }
-      } catch (err: unknown) {
-        if (!isCancelled) {
-          if (isNetworkError(err) || !useNetworkStore.getState().isConnected) {
-            setDigestOffline(true);
-          }
-        }
-      } finally {
-        if (!isCancelled) setLoadingDigest(false);
-      }
-    };
-
-    if (totals.income > 0 || totals.expenses > 0) {
-      loadDigest();
-    }
-    return () => {
-      isCancelled = true;
-    };
-  }, [selectedMonth, selectedYear, totals.income, totals.expenses, spending]);
 
   const handleCancelRecurring = (tx: any) => {
     const title = getTransactionDisplayName(tx);
@@ -159,16 +116,9 @@ export default function AnalyticsScreen() {
     );
   };
 
-  const isLoading =
-    loadingTotals ||
-    loadingAccounts ||
-    loadingSpending ||
-    loadingMerchants ||
-    loadingRecurring ||
-    loadingReports;
-
   const netCashFlow = totals.income - totals.expenses;
   const savingsRate = totals.income > 0 ? (netCashFlow / totals.income) * 100 : 0;
+  const digestHealthScore = healthReport?.overallScore ?? digest?.financialHealthScore ?? 0;
 
   const assets = accounts.filter((a) => a.balance > 0).reduce((sum, a) => sum + a.balance, 0);
   const liabilities = accounts
@@ -319,7 +269,11 @@ export default function AnalyticsScreen() {
                     <Text style={styles.inOutLabel}>Out</Text>
                   </View>
                   <Text style={styles.savedMessage}>
-                    {netCashFlow >= 0
+                    {totals.income <= 0
+                      ? totals.expenses > 0
+                        ? 'No income transactions recorded this month.'
+                        : 'No cash flow activity recorded this month.'
+                      : netCashFlow >= 0
                       ? `You saved ${savingsRate.toFixed(1)}% of your income this month.`
                       : `You spent more than your income by ${Math.abs(savingsRate).toFixed(1)}% this month.`}
                   </Text>
@@ -460,9 +414,9 @@ export default function AnalyticsScreen() {
                           styles.digestScoreBadge,
                           {
                             backgroundColor:
-                              (digest.financialHealthScore ?? 0) >= 70
+                              digestHealthScore >= 70
                                 ? colors.primaryContainer
-                                : (digest.financialHealthScore ?? 0) >= 40
+                                : digestHealthScore >= 40
                                 ? colors.surfaceContainerHigh
                                 : colors.errorContainer,
                           },
@@ -473,16 +427,16 @@ export default function AnalyticsScreen() {
                             styles.digestScoreText,
                             {
                               color:
-                                (digest.financialHealthScore ?? 0) >= 70
+                                digestHealthScore >= 70
                                   ? colors.onPrimaryContainer
-                                  : (digest.financialHealthScore ?? 0) >= 40
+                                  : digestHealthScore >= 40
                                   ? colors.onSurface
                                   : colors.onErrorContainer,
                             },
                           ]}
                           numberOfLines={1}
                         >
-                          Health Score: {digest.financialHealthScore ?? 0}/100
+                          Health Score: {digestHealthScore}/100
                         </Text>
                       </View>
                     </View>
@@ -497,11 +451,18 @@ export default function AnalyticsScreen() {
                       <Text style={styles.digestSummaryText}>{digest.savingsAssessment}</Text>
                     ) : null}
 
-                    {digest.actionableTips && digest.actionableTips.length > 0 && (
+                    {((digest.insights && digest.insights.length > 0) ||
+                      (digest.actionableTips && digest.actionableTips.length > 0)) && (
                       <View style={styles.digestRecommendationsList}>
                         <Text style={styles.digestSectionTitle}>Key Observations & Actions</Text>
-                        {digest.actionableTips.map((tip, idx) => (
-                          <View key={idx} style={styles.digestRecItem}>
+                        {digest.insights?.map((insight, idx) => (
+                          <View key={`insight-${idx}`} style={styles.digestRecItem}>
+                            <MaterialIcons name="insights" size={16} color={colors.secondary} />
+                            <Text style={styles.digestRecText}>{insight}</Text>
+                          </View>
+                        ))}
+                        {digest.actionableTips?.map((tip, idx) => (
+                          <View key={`tip-${idx}`} style={styles.digestRecItem}>
                             <MaterialIcons name="check-circle" size={16} color={colors.primary} />
                             <Text style={styles.digestRecText}>{tip}</Text>
                           </View>
@@ -509,13 +470,22 @@ export default function AnalyticsScreen() {
                       </View>
                     )}
                   </View>
-                ) : digestOffline || (!digest && !isConnected) ? (
+                ) : digestOffline ? (
                   <NoNetworkView
                     variant="card"
                     title="Clarity AI Digest Offline"
-                    message="Clarity AI requires an active internet connection to generate your monthly financial insights and calculate your health score."
+                    message="Clarity AI requires an active internet connection to generate your monthly financial insights."
                     onRetry={handleRetryDigest}
-                    isRetrying={loadingDigest}
+                    isRetrying={retryingDigest}
+                  />
+                ) : digestError ? (
+                  <NoNetworkView
+                    variant="card"
+                    icon="cloud-off"
+                    title="Clarity AI Digest Unavailable"
+                    message="Clarity AI couldn't generate your monthly digest right now. Please try again."
+                    onRetry={handleRetryDigest}
+                    isRetrying={retryingDigest}
                   />
                 ) : (
                   <View style={styles.aiEmptyBox}>

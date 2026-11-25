@@ -1,6 +1,11 @@
+import { DeviceEventEmitter } from 'react-native';
 import { getDatabase } from './index';
 import type { Notification } from '@/types';
-import { triggerLocalSystemNotification } from '@/services/notifications/system-notification';
+import {
+  NOTIFICATION_CATEGORIES,
+  NOTIFICATION_CHANNELS,
+  triggerLocalSystemNotification,
+} from '@/services/notifications/system-notification';
 
 export async function getNotifications(): Promise<Notification[]> {
   const db = getDatabase();
@@ -52,12 +57,18 @@ function generateId(): string {
   });
 }
 
+export type InsertNotificationInput = Omit<Notification, 'id' | 'isRead' | 'createdAt'> & {
+  createdAt?: string;
+  metadata?: Record<string, unknown>;
+};
+
 export async function insertNotification(
-  notification: Omit<Notification, 'id' | 'isRead' | 'createdAt'> & { createdAt?: string }
+  notification: InsertNotificationInput
 ): Promise<void> {
   const db = getDatabase();
   const id = generateId();
   const createdAt = notification.createdAt || new Date().toISOString();
+  const type = notification.type || 'default';
   await db.runAsync(
     `INSERT INTO notifications (id, title, description, type, action_url, created_at) 
      VALUES (?, ?, ?, ?, ?, ?);`,
@@ -65,16 +76,28 @@ export async function insertNotification(
       id,
       notification.title,
       notification.description,
-      notification.type || 'default',
+      type,
       notification.actionUrl || '',
       createdAt,
     ]
   );
 
-  // Trigger native system notification tray alert
+  const isBillOrAlert = type === 'bill' || type === 'alert';
+  const isBillCategory = type === 'bill' || Boolean(notification.metadata?.billId);
+
+  // Trigger native system notification tray alert with appropriate channel & category
   triggerLocalSystemNotification({
     title: notification.title,
     body: notification.description,
-    data: { actionUrl: notification.actionUrl },
+    channelId: isBillOrAlert ? NOTIFICATION_CHANNELS.BILLS_ALERTS : NOTIFICATION_CHANNELS.DEFAULT,
+    categoryIdentifier: isBillCategory ? NOTIFICATION_CATEGORIES.BILL_REMINDER : undefined,
+    data: {
+      ...(notification.metadata ?? {}),
+      notificationId: id,
+      type,
+      actionUrl: notification.actionUrl,
+    },
   }).catch(() => {});
+
+  DeviceEventEmitter.emit('notificationsUpdated');
 }

@@ -14,6 +14,7 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableArray
 
 class NotificationListenerModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
@@ -86,13 +87,28 @@ class NotificationListenerModule(private val reactContext: ReactApplicationConte
         try {
             val granted = hasNotificationListenerAccess()
             val batteryIgnored = checkBatteryOptimizationIgnored()
-            val snapshot = NotificationListenerBridge.getHealthSnapshot(reactContext.applicationContext)
+            val snapshot = NotificationListenerBridge.getHealthSnapshot(reactContext.applicationContext, granted)
             val map = Arguments.fromBundle(snapshot)
             map.putBoolean("isPermissionGranted", granted)
             map.putBoolean("isBatteryOptimizationIgnored", batteryIgnored)
             promise.resolve(map)
         } catch (e: Exception) {
             promise.reject("NOTIFICATION_HEALTH_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun setJsListenerReady(ready: Boolean) {
+        NotificationListenerBridge.setJsListenerReady(ready)
+    }
+
+    @ReactMethod
+    fun clearBridgeState(promise: Promise) {
+        try {
+            NotificationListenerBridge.clearLocalState(reactContext.applicationContext)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("NOTIFICATION_CLEAR_ERROR", e.message, e)
         }
     }
 
@@ -113,6 +129,37 @@ class NotificationListenerModule(private val reactContext: ReactApplicationConte
     }
 
     @ReactMethod
+    fun peekPendingNotifications(promise: Promise) {
+        try {
+            val list = NotificationListenerBridge.peekPendingNotifications(reactContext.applicationContext)
+            val array = Arguments.createArray()
+            for (bundle in list) {
+                array.pushMap(Arguments.fromBundle(bundle))
+            }
+            promise.resolve(array)
+        } catch (e: Exception) {
+            promise.reject("NOTIFICATION_PEEK_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun ackPendingNotifications(ids: ReadableArray, promise: Promise) {
+        try {
+            val idSet = HashSet<String>(ids.size())
+            for (i in 0 until ids.size()) {
+                val id = ids.getString(i)
+                if (!id.isNullOrEmpty()) {
+                    idSet.add(id)
+                }
+            }
+            NotificationListenerBridge.ackPendingNotifications(reactContext.applicationContext, idSet)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("NOTIFICATION_ACK_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
     fun drainPendingNotifications(promise: Promise) {
         try {
             val list = NotificationListenerBridge.drainPendingNotifications(reactContext.applicationContext)
@@ -128,12 +175,12 @@ class NotificationListenerModule(private val reactContext: ReactApplicationConte
 
     @ReactMethod
     fun addListener(eventName: String) {
-        // NativeEventEmitter requirement
+        NotificationListenerBridge.addJsListener(eventName)
     }
 
     @ReactMethod
     fun removeListeners(count: Int) {
-        // NativeEventEmitter requirement
+        NotificationListenerBridge.removeJsListeners(count)
     }
 
     override fun invalidate() {

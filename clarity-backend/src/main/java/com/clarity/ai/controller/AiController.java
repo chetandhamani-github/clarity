@@ -47,7 +47,7 @@ public class AiController {
 
     @PostMapping("/digest")
     @Operation(summary = "Generate monthly financial digest", description = "Analyzes monthly aggregates under 50/30/20 guideline and returns health score & tips")
-    public ResponseEntity<MonthlyDigestResponse> generateDigest(@RequestBody MonthlyDigestRequest request) {
+    public ResponseEntity<MonthlyDigestResponse> generateDigest(@Valid @RequestBody MonthlyDigestRequest request) {
         MonthlyDigestResponse response = aiService.generateDigest(request);
         return ResponseEntity.ok(response);
     }

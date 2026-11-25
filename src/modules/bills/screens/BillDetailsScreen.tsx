@@ -14,6 +14,7 @@ import { Text, Header, useToast, useAlert, BillDetailSkeleton } from '@/componen
 import { typography, useTheme, radius } from '@/theme';
 import { useAppStore } from '@/store/use-app-store';
 import { formatCurrencyPrivacy } from '@/utils/format';
+import { getLocalTodayYmd } from '@/utils/date';
 import { getBillerBranding } from '@/utils/icons';
 import { useBills } from '../hooks/useBills';
 import { BillStatusBadge } from '../components/BillStatusBadge';
@@ -31,8 +32,8 @@ export function BillDetailsScreen() {
 
   const bill = allBills.find((b) => b.id === billId);
 
-  // Show pixel-perfect skeleton during initial load or while data is resolving
-  if ((isLoading || allBills.length === 0) && !bill) {
+  // Show pixel-perfect skeleton only while initial fetch is loading
+  if (isLoading && !bill) {
     return <BillDetailSkeleton />;
   }
 
@@ -76,12 +77,16 @@ export function BillDetailsScreen() {
 
   const handleMarkUnpaid = async () => {
     try {
+      const revertedStatus = bill.dueDate < getLocalTodayYmd() ? 'overdue' : 'upcoming';
       await updateBill(bill.id, {
-        status: 'upcoming',
-        lastPaidDate: undefined,
-        paidTransactionId: undefined,
+        status: revertedStatus,
+        lastPaidDate: null,
+        paidTransactionId: null,
       });
-      showToast('Marked as upcoming', 'info');
+      showToast(
+        revertedStatus === 'overdue' ? 'Marked as overdue' : 'Marked as upcoming',
+        'info'
+      );
     } catch {
       showToast('Failed to update status', 'error');
     }

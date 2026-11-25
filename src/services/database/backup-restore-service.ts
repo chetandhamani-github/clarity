@@ -803,6 +803,28 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
 
     await db.execAsync('COMMIT');
 
+    // Reset reminder/alert deduplication state, cancel stale OS alarms, and resync restored bills
+    try {
+      const { cleanupRedundantLegacyBillReminders } = await import('./migrations');
+      await cleanupRedundantLegacyBillReminders(db);
+
+      const { BillsRepository } = await import('@/modules/bills/database/bills.repository');
+      BillsRepository.resetSchemaCache();
+
+      const { resetBillReminderCheckCooldown } = await import('@/services/notifications/alert-engine');
+      resetBillReminderCheckCooldown();
+
+      const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
+      await BillAlertEngine.cancelAllNativeBillReminders();
+      await BillAlertEngine.syncAllNativeBillReminders();
+
+      const { DeviceEventEmitter } = await import('react-native');
+      DeviceEventEmitter.emit('billsUpdated');
+      DeviceEventEmitter.emit('notificationsUpdated');
+    } catch {
+      // Ignore post-restore notification sync failures in constrained environments
+    }
+
     // 20. Restore Preferences into App Store
     if (data.preferences) {
       try {

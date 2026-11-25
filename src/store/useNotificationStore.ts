@@ -63,6 +63,11 @@ function getStoredPackages(): string[] {
   return allDefaults;
 }
 
+interface QueuedDetectedBill {
+  bill: ExtractedBill;
+  billId?: string;
+}
+
 interface NotificationStoreState {
   isEnabled: boolean;
   permissionStatus: NotificationPermissionStatus;
@@ -72,6 +77,8 @@ interface NotificationStoreState {
   health: NotificationListenerHealth | null;
   isDisclosureVisible: boolean;
   activeDetectedBill: ExtractedBill | null;
+  activeDetectedBillId: string | null;
+  detectedBillQueue: QueuedDetectedBill[];
   detectedBillModalVisible: boolean;
 
   // Actions
@@ -87,7 +94,7 @@ interface NotificationStoreState {
   setParseBills: (enabled: boolean) => void;
   togglePackage: (packageName: string) => void;
   setAllPackagesEnabled: (enabled: boolean) => void;
-  showDetectedBillModal: (bill: ExtractedBill) => void;
+  showDetectedBillModal: (bill: ExtractedBill, billId?: string) => void;
   closeDetectedBillModal: () => void;
   drainAndProcessPending: () => Promise<number>;
 }
@@ -103,6 +110,8 @@ export const useNotificationStore = create<NotificationStoreState>((set, get) =>
   health: null,
   isDisclosureVisible: false,
   activeDetectedBill: null,
+  activeDetectedBillId: null,
+  detectedBillQueue: [],
   detectedBillModalVisible: false,
 
   checkPermission: async () => {
@@ -178,12 +187,47 @@ export const useNotificationStore = create<NotificationStoreState>((set, get) =>
     set({ enabledPackages: updated });
   },
 
-  showDetectedBillModal: (bill: ExtractedBill) => {
-    set({ activeDetectedBill: bill, detectedBillModalVisible: true });
+  showDetectedBillModal: (bill: ExtractedBill, billId?: string) => {
+    const getBillKey = (item: ExtractedBill) =>
+      `${item.billerName.trim().toLowerCase()}|${Math.round(item.amountDue)}|${item.dueDate}`;
+    const incomingKey = getBillKey(bill);
+
+    const { activeDetectedBill, detectedBillQueue } = get();
+    if (activeDetectedBill && getBillKey(activeDetectedBill) === incomingKey) {
+      return;
+    }
+    if (detectedBillQueue.some((queued) => getBillKey(queued.bill) === incomingKey)) {
+      return;
+    }
+
+    if (!activeDetectedBill) {
+      set({
+        activeDetectedBill: bill,
+        activeDetectedBillId: billId ?? null,
+        detectedBillModalVisible: true,
+      });
+    } else {
+      set({ detectedBillQueue: [...detectedBillQueue, { bill, billId }] });
+    }
   },
 
   closeDetectedBillModal: () => {
-    set({ activeDetectedBill: null, detectedBillModalVisible: false });
+    const { detectedBillQueue } = get();
+    if (detectedBillQueue.length > 0) {
+      const [nextItem, ...remainingQueue] = detectedBillQueue;
+      set({
+        activeDetectedBill: nextItem.bill,
+        activeDetectedBillId: nextItem.billId ?? null,
+        detectedBillQueue: remainingQueue,
+        detectedBillModalVisible: true,
+      });
+    } else {
+      set({
+        activeDetectedBill: null,
+        activeDetectedBillId: null,
+        detectedBillModalVisible: false,
+      });
+    }
   },
 
   drainAndProcessPending: async () => {
@@ -195,12 +239,19 @@ export const useNotificationStore = create<NotificationStoreState>((set, get) =>
       const { isEnabled, parseTransactions, parseBills, enabledPackages } = get();
       if (!isEnabled) return 0;
 
-      const pending = await NativeNotificationListenerAdapter.drainPendingNotifications();
+      const useTransactionalQueue =
+        NativeNotificationListenerAdapter.hasTransactionalQueueSupport();
+      const pending = useTransactionalQueue
+        ? await NativeNotificationListenerAdapter.peekPendingNotifications()
+        : await NativeNotificationListenerAdapter.drainPendingNotifications();
       if (pending.length === 0) return 0;
 
       let processedCount = 0;
+      const ackedIds: string[] = [];
+
       for (const notif of pending) {
         if (!enabledPackages.includes(notif.packageName)) {
+          if (notif.id) ackedIds.push(notif.id);
           continue;
         }
         try {
@@ -208,12 +259,22 @@ export const useNotificationStore = create<NotificationStoreState>((set, get) =>
             parseTransactions,
             parseBills,
           });
+          if (notif.id) {
+            ackedIds.push(notif.id);
+          }
+          if (result.type === 'BILL' && result.isNew !== false) {
+            get().showDetectedBillModal(result.bill, result.billId);
+          }
           if (result.type !== 'IGNORED') {
             processedCount++;
           }
         } catch {
-          // Safe continuation
+          // Safe continuation; leave un-acked when transactional queue is active
         }
+      }
+
+      if (useTransactionalQueue && ackedIds.length > 0) {
+        await NativeNotificationListenerAdapter.ackPendingNotifications(ackedIds);
       }
 
       await get().refreshHealth().catch(() => null);

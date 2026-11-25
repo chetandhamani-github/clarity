@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as goalDao from '@/services/database/goal-dao';
 import { queueAutoBackup } from '@/services/cloud/google-drive-service';
+import { invalidateAnalyticsAndHealthQueries } from '@/hooks/use-financial-health';
 import type { Goal, GoalContribution } from '@/types';
 
 export function useGoals() {
@@ -94,6 +95,7 @@ export function useAddGoalContribution() {
         queryClient.invalidateQueries({ queryKey: ['accounts'] });
         queryClient.invalidateQueries({ queryKey: ['transactions'] });
         queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+        invalidateAnalyticsAndHealthQueries(queryClient);
       }
       queueAutoBackup('contribute-goal');
     },
@@ -157,6 +159,7 @@ export function useDeleteGoalContribution() {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('delete-goal-contribution');
     },
   });

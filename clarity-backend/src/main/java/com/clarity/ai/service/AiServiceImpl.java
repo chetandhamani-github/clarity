@@ -391,35 +391,209 @@ public class AiServiceImpl implements AiService {
 
     @Override
     public MonthlyDigestResponse generateDigest(MonthlyDigestRequest request) {
-        double income = request.getTotalIncome() != null ? request.getTotalIncome() : 0.0;
-        double expenses = request.getTotalExpenses() != null ? request.getTotalExpenses() : 0.0;
-        double savings = Math.max(0, income - expenses);
-        double savingsPct = income > 0 ? (savings / income) * 100 : 0.0;
+        double recordedIncome = sanitizeAmount(request.getTotalIncome());
+        double plannedIncome = sanitizeAmount(request.getPlannedIncome());
+        double effectiveIncome = Math.max(recordedIncome, plannedIncome);
+        double expenses = sanitizeAmount(request.getTotalExpenses());
+        String currency = (request.getCurrencySymbol() != null && !request.getCurrencySymbol().isBlank())
+                ? request.getCurrencySymbol().trim()
+                : "₹";
 
-        int healthScore = 70;
-        if (savingsPct >= 20.0) healthScore += 15;
-        if (savingsPct >= 30.0) healthScore += 10;
-        if (expenses > income) healthScore = 45;
+        double savings = Math.max(0.0, effectiveIncome - expenses);
+        double savingsPct = effectiveIncome > 0.0 ? (savings / effectiveIncome) * 100.0 : 0.0;
+        double expensePct = effectiveIncome > 0.0 ? (expenses / effectiveIncome) * 100.0 : 0.0;
 
-        String headline = savingsPct >= 20.0
-                ? String.format("Great Job! You saved %.1f%% of your income this month.", savingsPct)
-                : String.format("Active Month: You spent %.1f%% of your total income.", 100.0 - savingsPct);
+        int healthScore = resolveDigestHealthScore(request.getCanonicalHealthScore(), effectiveIncome, expenses, savingsPct);
 
-        String assessment = savingsPct >= 20.0
-                ? "Your savings rate comfortably met the recommended 20% target under the 50/30/20 guideline."
-                : "Your discretionary spending cut into your target 20% savings margin. Consider pruning non-essential wants.";
+        if (hasGeminiKey() && (effectiveIncome > 0.0 || expenses > 0.0)) {
+            MonthlyDigestResponse aiDigest = tryGenerateAiDigest(
+                    request, effectiveIncome, expenses, savingsPct, expensePct, currency, healthScore
+            );
+            if (aiDigest != null) {
+                return aiDigest;
+            }
+        }
+
+        return buildDeterministicDigest(request, effectiveIncome, expenses, savingsPct, expensePct, currency, healthScore);
+    }
+
+    private double sanitizeAmount(Double value) {
+        if (value == null || !Double.isFinite(value) || value < 0.0) {
+            return 0.0;
+        }
+        return value;
+    }
+
+    private int resolveDigestHealthScore(
+            Integer canonicalHealthScore,
+            double effectiveIncome,
+            double expenses,
+            double savingsPct
+    ) {
+        if (canonicalHealthScore != null) {
+            return Math.max(0, Math.min(100, canonicalHealthScore));
+        }
+        if (effectiveIncome <= 0.0) {
+            return expenses > 0.0 ? 45 : 55;
+        }
+        if (expenses > effectiveIncome) {
+            double overspendRatio = (expenses - effectiveIncome) / effectiveIncome;
+            return (int) Math.max(25, Math.round(55.0 - Math.min(30.0, overspendRatio * 40.0)));
+        }
+        if (savingsPct >= 30.0) return 90;
+        if (savingsPct >= 20.0) return 82;
+        if (savingsPct >= 10.0) return 72;
+        return 62;
+    }
+
+    private MonthlyDigestResponse tryGenerateAiDigest(
+            MonthlyDigestRequest request,
+            double effectiveIncome,
+            double expenses,
+            double savingsPct,
+            double expensePct,
+            String currency,
+            int canonicalScore
+    ) {
+        String topCats = (request.getTopCategories() != null && !request.getTopCategories().isEmpty())
+                ? String.join(", ", request.getTopCategories())
+                : "None recorded";
+
+        String allocationInfo = (request.getNeedsPercent() != null || request.getWantsPercent() != null || request.getSavingsPercent() != null)
+                ? String.format(
+                        Locale.US,
+                        "Needs: %.1f%%, Wants: %.1f%%, Savings: %.1f%%",
+                        request.getNeedsPercent() != null ? request.getNeedsPercent() : 0.0,
+                        request.getWantsPercent() != null ? request.getWantsPercent() : 0.0,
+                        request.getSavingsPercent() != null ? request.getSavingsPercent() : savingsPct
+                )
+                : String.format(Locale.US, "Savings rate: %.1f%%", savingsPct);
+
+        String pillarNote = (request.getHealthSummary() != null && !request.getHealthSummary().isBlank())
+                ? "Holistic 5-Pillar Health Context: " + request.getHealthSummary().trim() + "\n"
+                : "";
+
+        String prompt = String.format(
+                Locale.US,
+                "You are Clarity AI, a concise personal finance coach.\n" +
+                "Analyze these anonymized monthly numbers for %s/%s and return ONLY valid JSON with keys: " +
+                "headline (string, max 14 words), savingsAssessment (string, 1-2 sentences referencing the 50/30/20 guideline), " +
+                "insights (array of 2 concise observation strings), actionableTips (array of 2-3 specific micro-action strings).\n" +
+                "Always use currency symbol '%s'. Do not include markdown codeblocks or backticks.\n" +
+                "Monthly Income: %s%.0f, Monthly Expenses: %s%.0f (%.1f%% of income), Net Savings Rate: %.1f%%\n" +
+                "50/30/20 Allocation: %s\n" +
+                "Top Categories: %s\n" +
+                "Canonical Financial Health Score: %d/100\n%s",
+                request.getMonth() != null ? request.getMonth() : "Current",
+                request.getYear() != null ? request.getYear() : "",
+                currency,
+                currency, effectiveIncome,
+                currency, expenses,
+                expensePct,
+                savingsPct,
+                allocationInfo,
+                topCats,
+                canonicalScore,
+                pillarNote
+        );
+
+        String rawJson = callGemini(prompt, null, null);
+        if (rawJson == null || rawJson.isBlank()) {
+            return null;
+        }
+
+        try {
+            String cleanJson = extractJsonObject(rawJson);
+            JsonNode node = objectMapper.readTree(cleanJson);
+            String headline = node.hasNonNull("headline") ? node.get("headline").asText("").trim() : "";
+            String assessment = node.hasNonNull("savingsAssessment") ? node.get("savingsAssessment").asText("").trim() : "";
+            List<String> insights = extractStringList(node.get("insights"), 3);
+            List<String> tips = extractStringList(node.get("actionableTips"), 3);
+
+            if (headline.isEmpty() || assessment.isEmpty() || tips.isEmpty()) {
+                return null;
+            }
+
+            return MonthlyDigestResponse.builder()
+                    .headline(headline)
+                    .savingsAssessment(assessment)
+                    .insights(insights)
+                    .actionableTips(tips)
+                    .financialHealthScore(canonicalScore)
+                    .build();
+        } catch (Exception e) {
+            log.warn("[AiService] Failed to parse Gemini monthly digest JSON, falling back: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private MonthlyDigestResponse buildDeterministicDigest(
+            MonthlyDigestRequest request,
+            double effectiveIncome,
+            double expenses,
+            double savingsPct,
+            double expensePct,
+            String currency,
+            int healthScore
+    ) {
+        String headline;
+        String assessment;
+
+        if (effectiveIncome <= 0.0 && expenses <= 0.0) {
+            headline = "No monthly income or expense activity recorded yet.";
+            assessment = "Add your transactions or set a monthly budget plan to unlock personalized 50/30/20 insights.";
+        } else if (effectiveIncome <= 0.0) {
+            headline = String.format(Locale.US, "Recorded %s%,.0f in expenses with no income logged yet.", currency, expenses);
+            assessment = "Log your income transactions or configure a monthly budget income in the Plan tab to evaluate your 50/30/20 savings rate.";
+        } else if (expenses > effectiveIncome) {
+            double overspentPct = expensePct - 100.0;
+            headline = String.format(Locale.US, "Expenses exceeded income by %.1f%% this month.", overspentPct);
+            assessment = String.format(
+                    Locale.US,
+                    "Spending reached %.1f%% of your %s%,.0f monthly income, leaving no room for the target 20%% savings buffer.",
+                    expensePct, currency, effectiveIncome
+            );
+        } else if (savingsPct >= 20.0) {
+            headline = String.format(Locale.US, "Great Job! You saved %.1f%% of your income this month.", savingsPct);
+            assessment = "Your savings rate comfortably met the recommended 20% target under the 50/30/20 guideline.";
+        } else {
+            headline = String.format(Locale.US, "Active Month: You spent %.1f%% of your income and saved %.1f%%.", expensePct, savingsPct);
+            assessment = "Your spending stayed within income, though discretionary wants trimmed your 20% savings target.";
+        }
 
         List<String> insights = new ArrayList<>();
-        insights.add(String.format("Total monthly expenses came to ₹%,.0f against ₹%,.0f income.", expenses, income));
+        if (effectiveIncome > 0.0) {
+            insights.add(String.format(Locale.US, "Monthly expenses totaled %s%,.0f against %s%,.0f income (%.1f%% spent).",
+                    currency, expenses, currency, effectiveIncome, expensePct));
+        } else if (expenses > 0.0) {
+            insights.add(String.format(Locale.US, "Monthly expenses totaled %s%,.0f with no recorded or planned income.", currency, expenses));
+        }
         if (request.getTopCategories() != null && !request.getTopCategories().isEmpty()) {
             insights.add("Your primary spend category was " + request.getTopCategories().get(0) + ".");
         }
+        if (request.getWantsPercent() != null && request.getWantsPercent() > 30.0) {
+            insights.add(String.format(Locale.US, "Discretionary wants reached %.1f%% of income (50/30/20 guideline target is 30%%).",
+                    request.getWantsPercent()));
+        }
 
-        List<String> tips = Arrays.asList(
-                "Review active subscriptions to eliminate unused memberships.",
-                "Automate savings contributions on the 1st of each month to lock in your 20% target.",
-                "Use UPI statement sync regularly to capture small micro-spends."
-        );
+        List<String> tips = new ArrayList<>();
+        if (effectiveIncome <= 0.0 && expenses > 0.0) {
+            tips.add("Set your expected monthly income in the Plan tab or log salary inflows for accurate cashflow pacing.");
+        }
+        if (expenses > effectiveIncome && effectiveIncome > 0.0) {
+            tips.add("Pause non-essential discretionary categories for the rest of the month to close the deficit.");
+        } else if (savingsPct < 20.0 && effectiveIncome > 0.0) {
+            tips.add("Automate a savings transfer right after payday to lock in your 20% savings target.");
+        }
+        if (request.getWantsPercent() != null && request.getWantsPercent() > 30.0) {
+            tips.add("Review recurring subscriptions and dining/shopping caps in the Plan tab to bring wants back under 30%.");
+        }
+        if (tips.size() < 2) {
+            tips.add("Review active subscriptions to eliminate unused recurring charges.");
+        }
+        if (tips.size() < 3) {
+            tips.add("Keep emergency reserves across liquid accounts sufficient for at least 3 months of core expenses.");
+        }
 
         return MonthlyDigestResponse.builder()
                 .headline(headline)
@@ -428,6 +602,32 @@ public class AiServiceImpl implements AiService {
                 .actionableTips(tips)
                 .financialHealthScore(healthScore)
                 .build();
+    }
+
+    private String extractJsonObject(String rawJson) {
+        int startIdx = rawJson.indexOf('{');
+        int endIdx = rawJson.lastIndexOf('}');
+        return (startIdx != -1 && endIdx > startIdx)
+                ? rawJson.substring(startIdx, endIdx + 1)
+                : rawJson.replaceAll("```json", "").replaceAll("```", "").trim();
+    }
+
+    private List<String> extractStringList(JsonNode arrayNode, int maxItems) {
+        List<String> items = new ArrayList<>();
+        if (arrayNode != null && arrayNode.isArray()) {
+            for (JsonNode entry : arrayNode) {
+                if (entry != null && !entry.isNull()) {
+                    String text = entry.asText("").trim();
+                    if (!text.isEmpty()) {
+                        items.add(text);
+                        if (items.size() >= maxItems) {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        return items;
     }
 
     private boolean hasGeminiKey() {

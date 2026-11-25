@@ -8,6 +8,7 @@ import { spacing } from '@/theme/spacing';
 import { ThemeColors, useTheme } from '@/theme/useTheme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
+import { invalidateAnalyticsAndHealthQueries } from '@/hooks/use-financial-health';
 import { getCurrencySymbol } from '@/utils/format';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -111,6 +112,8 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
       await queryClient.invalidateQueries({ queryKey: ['transactions'] });
       await queryClient.invalidateQueries({ queryKey: ['accounts'] });
       await queryClient.invalidateQueries({ queryKey: ['totals'] });
+      await queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
 
       showToast('Transaction approved and added to ledger!', 'success');
 

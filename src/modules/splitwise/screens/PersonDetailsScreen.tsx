@@ -26,6 +26,7 @@ import { SplitwiseSyncService } from '../services/SplitwiseSyncService';
 import { BalanceCalculator } from '../services/BalanceCalculator';
 import type { Debt, Settlement, ExpenseWithSplits } from '../types/splitwise.types';
 import { useQueryClient } from '@tanstack/react-query';
+import { invalidateAnalyticsAndHealthQueries } from '@/hooks/use-financial-health';
 import { getDatabase } from '@/services/database';
 import { deleteTransaction } from '@/services/database/transaction-dao';
 
@@ -264,6 +265,7 @@ export function PersonDetailsScreen() {
                   queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
                   queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
                   queryClient.invalidateQueries({ queryKey: ['netWorthHistory'] });
+                  invalidateAnalyticsAndHealthQueries(queryClient);
                 }
               } catch {
                 // Ignore if linked transaction cleanup fails

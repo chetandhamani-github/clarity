@@ -15,42 +15,10 @@ import { formatCurrency, formatDate } from '@/utils/format';
 import { getBillerBranding } from '@/utils/icons';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { BillService } from '@/modules/bills/services/BillService';
+import { BillsRepository } from '@/modules/bills/database/bills.repository';
+import { mapExternalBillerCategory } from '@/modules/bills/utils/bill-helpers';
+import { useBillsStore } from '@/modules/bills/store/bills.store';
 import { BillAlertEngine } from '@/services/notifications/bill-alert-engine';
-import type { BillCategory } from '@/modules/bills/types/bill.types';
-
-function mapToBillCategory(billerCategory: string): BillCategory {
-  switch (billerCategory) {
-    case 'electricity':
-      return 'electricity';
-    case 'water':
-      return 'water';
-    case 'piped_gas':
-    case 'lpg_cylinder':
-      return 'other';
-    case 'broadband':
-    case 'landline':
-      return 'internet';
-    case 'mobile_postpaid':
-      return 'mobile';
-    case 'credit_card':
-      return 'credit_card';
-    case 'loan_emi':
-      return 'emi';
-    case 'insurance':
-      return 'insurance';
-    case 'rent':
-    case 'housing_society':
-      return 'rent';
-    case 'subscription':
-    case 'dth':
-    case 'cable_tv':
-      return 'subscription';
-    case 'tuition':
-      return 'education';
-    default:
-      return 'other';
-  }
-}
 
 export function BillDetectedPromptModal() {
   const { colors } = useTheme();
@@ -59,6 +27,7 @@ export function BillDetectedPromptModal() {
 
   const visible = useNotificationStore((state) => state.detectedBillModalVisible);
   const bill = useNotificationStore((state) => state.activeDetectedBill);
+  const activeDetectedBillId = useNotificationStore((state) => state.activeDetectedBillId);
   const closeDetectedBillModal = useNotificationStore((state) => state.closeDetectedBillModal);
 
   if (!bill) return null;
@@ -67,36 +36,76 @@ export function BillDetectedPromptModal() {
 
   const handleConfirmAdd = async () => {
     try {
-      const category = mapToBillCategory(bill.billerCategory);
-      const { bill: inserted } = await BillService.mergeOrInsertExternalBill({
-        title: bill.billerName,
-        provider: bill.billerName,
-        category,
-        amount: bill.amountDue,
-        minAmount: bill.minAmountDue,
-        dueDate: bill.dueDate,
-        accountReference: bill.accountReference,
-        paymentUrl: bill.paymentUrl,
-        source: 'sms',
-        notes: 'Confirmed from notification prompt',
-      });
+      let trackedBill = activeDetectedBillId
+        ? await BillsRepository.getBillById(activeDetectedBillId)
+        : null;
 
-      if (inserted) {
+      if (!trackedBill) {
+        const category = mapExternalBillerCategory(bill.billerCategory);
+        const { bill: merged } = await BillService.mergeOrInsertExternalBill({
+          title: bill.billerName,
+          provider: bill.billerName,
+          category,
+          amount: bill.amountDue,
+          minAmount: bill.minAmountDue,
+          dueDate: bill.dueDate,
+          accountReference: bill.accountReference,
+          paymentUrl: bill.paymentUrl,
+          source: 'sms',
+          notes: 'Confirmed from notification prompt',
+        });
+        trackedBill = merged;
+      } else if (trackedBill.status === 'dismissed') {
+        await BillService.updateBill(trackedBill.id, { status: 'upcoming' });
+        trackedBill = (await BillsRepository.getBillById(trackedBill.id)) ?? trackedBill;
+      }
+
+      if (trackedBill && trackedBill.status !== 'paid' && trackedBill.status !== 'dismissed') {
         await BillAlertEngine.scheduleNativeBillReminder({
-          id: inserted.id,
-          billerName: inserted.title,
-          amountDue: inserted.amount,
-          dueDate: inserted.dueDate,
-          status: inserted.status,
-          reminderDaysBefore: inserted.reminderDays ?? 3,
+          id: trackedBill.id,
+          billerName: trackedBill.provider || trackedBill.title,
+          amountDue: trackedBill.amount,
+          dueDate: trackedBill.dueDate,
+          status: trackedBill.status,
+          reminderDaysBefore: trackedBill.reminderDays ?? 3,
         });
       }
 
+      await useBillsStore.getState().loadData().catch(() => {});
       queryClient.invalidateQueries({ queryKey: ['bills'] });
       showToast(`Added reminder for ${bill.billerName}`, 'success');
       closeDetectedBillModal();
     } catch {
       showToast('Could not save bill reminder', 'error');
+    }
+  };
+
+  const handleDismissBill = async () => {
+    try {
+      let targetBillId = activeDetectedBillId;
+      if (!targetBillId) {
+        const allBills = await BillsRepository.getAllBills();
+        const normalizedName = bill.billerName.trim().toLowerCase();
+        const match = allBills.find(
+          (item) =>
+            item.status !== 'paid' &&
+            item.dueDate === bill.dueDate &&
+            Math.abs(item.amount - bill.amountDue) <= 1 &&
+            ((item.provider || item.title).trim().toLowerCase() === normalizedName ||
+              item.title.trim().toLowerCase() === normalizedName)
+        );
+        targetBillId = match?.id ?? null;
+      }
+
+      if (targetBillId) {
+        await BillService.updateBill(targetBillId, { status: 'dismissed' });
+        await useBillsStore.getState().loadData().catch(() => {});
+        queryClient.invalidateQueries({ queryKey: ['bills'] });
+      }
+    } catch {
+      // Fall through cleanly so dismissing the modal never gets stuck
+    } finally {
+      closeDetectedBillModal();
     }
   };
 
@@ -222,7 +231,7 @@ export function BillDetectedPromptModal() {
 
                 <TouchableOpacity
                   style={styles.dismissButton}
-                  onPress={closeDetectedBillModal}
+                  onPress={handleDismissBill}
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.dismissButtonText, { color: colors.onSurfaceVariant }]}>

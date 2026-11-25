@@ -13,6 +13,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Text, Header, DatePickerModal, useToast } from '@/components/ui';
 import { typography, useTheme, ThemeColors, radius } from '@/theme';
 import { getCurrencySymbol } from '@/utils/format';
+import { getLocalTodayYmd } from '@/utils/date';
 import { useBills } from '../hooks/useBills';
 import { BILL_CATEGORIES, BillCategory, BillFrequency, SubscriptionCycle } from '../types/bill.types';
 
@@ -55,11 +56,7 @@ export function AddBillScreen() {
   const [amountStr, setAmountStr] = useState('');
   const [minAmountStr, setMinAmountStr] = useState('');
   const [category, setCategory] = useState<BillCategory>('electricity');
-  const [dueDate, setDueDate] = useState(() => {
-    const d = new Date();
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  });
+  const [dueDate, setDueDate] = useState(getLocalTodayYmd);
   const [frequency, setFrequency] = useState<BillFrequency>('monthly');
   const [subCycle, setSubCycle] = useState<SubscriptionCycle>('monthly');
   const [reminderDays, setReminderDays] = useState<number>(3);
@@ -81,7 +78,7 @@ export function AddBillScreen() {
       setCategory(existingBill.category);
       setDueDate(existingBill.dueDate);
       setFrequency(existingBill.frequency || 'one_time');
-      setReminderDays(existingBill.reminderDays || 3);
+      setReminderDays(existingBill.reminderDays ?? 3);
       setAccountReference(existingBill.accountReference || '');
       setPaymentUrl(existingBill.paymentUrl || '');
       setNotes(existingBill.notes || '');
@@ -146,7 +143,7 @@ export function AddBillScreen() {
             amount: parsedAmount,
             billingCycle: subCycle,
             nextRenewalDate: dueDate,
-            category: 'subscription',
+            category: category || 'subscription',
             status: 'active',
             paymentUrl: paymentUrl.trim() || undefined,
             accountReference: accountReference.trim() || undefined,

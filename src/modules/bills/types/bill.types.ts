@@ -85,19 +85,19 @@ export interface UpdateBillDTO {
   provider?: string;
   category?: BillCategory;
   amount?: number;
-  minAmount?: number;
+  minAmount?: number | null;
   dueDate?: string;
   reminderDays?: number;
   status?: BillStatus;
   notes?: string;
   isRecurring?: boolean;
   frequency?: BillFrequency;
-  lastPaidDate?: string;
-  paidTransactionId?: string;
-  paymentUrl?: string;
-  accountReference?: string;
+  lastPaidDate?: string | null;
+  paidTransactionId?: string | null;
+  paymentUrl?: string | null;
+  accountReference?: string | null;
   source?: BillSource;
-  smsId?: string;
+  smsId?: string | null;
 }
 
 export interface CreateSubscriptionDTO {

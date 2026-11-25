@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Linking, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -6,6 +6,7 @@ import { Text, SkeletonBox, SkeletonCircle, SkeletonText, useToast, useAlert } f
 import { useTheme, typography, fontFamilies } from '@/theme';
 import { useAppStore } from '@/store/use-app-store';
 import { formatCurrencyPrivacy, formatDate } from '@/utils/format';
+import { getLocalTodayYmd, shiftYmdDays } from '@/utils/date';
 import { getBillerBranding } from '@/utils/icons';
 import { BillStatusBadge } from './BillStatusBadge';
 import { useBills } from '../hooks/useBills';
@@ -20,9 +21,16 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
   const { colors } = useTheme();
   const router = useRouter();
   const { hideBalances } = useAppStore();
-  const { upcomingBills, isLoading, markBillPaid } = useBills();
+  const { upcomingBills: allUpcomingBills, isLoading, markBillPaid } = useBills();
   const { showToast } = useToast();
   const { showAlert } = useAlert();
+
+  const upcomingBills = useMemo(() => {
+    const maxDueDate = shiftYmdDays(getLocalTodayYmd(), daysAhead);
+    return allUpcomingBills.filter(
+      (bill) => bill.status === 'overdue' || bill.dueDate <= maxDueDate
+    );
+  }, [allUpcomingBills, daysAhead]);
 
   const handleMarkPaid = async (bill: Bill) => {
     try {
@@ -38,31 +46,39 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
       {
         text: 'Snooze 3 Hours',
         onPress: async () => {
-          await BillAlertEngine.snoozeNativeBillReminder(
+          const snoozedUntil = await BillAlertEngine.snoozeNativeBillReminder(
             {
               id: bill.id,
-              billerName: bill.title,
+              billerName: bill.provider || bill.title,
               amountDue: bill.amount,
               dueDate: bill.dueDate,
             },
             3
           );
-          showToast('Reminder snoozed for 3 hours', 'info');
+          if (snoozedUntil) {
+            showToast('Reminder snoozed for 3 hours', 'info');
+          } else {
+            showToast('Could not snooze reminder', 'error');
+          }
         },
       },
       {
         text: 'Snooze 1 Day',
         onPress: async () => {
-          await BillAlertEngine.snoozeNativeBillReminder(
+          const snoozedUntil = await BillAlertEngine.snoozeNativeBillReminder(
             {
               id: bill.id,
-              billerName: bill.title,
+              billerName: bill.provider || bill.title,
               amountDue: bill.amount,
               dueDate: bill.dueDate,
             },
             24
           );
-          showToast('Reminder snoozed for 1 day', 'info');
+          if (snoozedUntil) {
+            showToast('Reminder snoozed for 1 day', 'info');
+          } else {
+            showToast('Could not snooze reminder', 'error');
+          }
         },
       },
       { text: 'Cancel', style: 'cancel' },

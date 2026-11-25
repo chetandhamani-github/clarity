@@ -480,6 +480,34 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
   } catch {
     // Notifications migration fallback
   }
+
+  // Remove redundant dual-written legacy bill_reminders rows that already exist in bills
+  await cleanupRedundantLegacyBillReminders(db);
+}
+
+export async function cleanupRedundantLegacyBillReminders(
+  db: SQLite.SQLiteDatabase
+): Promise<void> {
+  try {
+    await db.execAsync(`
+      DELETE FROM bill_reminders
+      WHERE EXISTS (
+        SELECT 1 FROM bills b
+        WHERE (
+          (bill_reminders.sms_id IS NOT NULL AND bill_reminders.sms_id != '' AND b.sms_id = bill_reminders.sms_id)
+          OR (
+            b.due_date = bill_reminders.due_date
+            AND (
+              LOWER(TRIM(b.provider)) = LOWER(TRIM(bill_reminders.biller_name))
+              OR LOWER(TRIM(b.title)) = LOWER(TRIM(bill_reminders.biller_name))
+            )
+          )
+        )
+      );
+    `);
+  } catch {
+    // Legacy bill_reminders cleanup fallback
+  }
 }
 
 

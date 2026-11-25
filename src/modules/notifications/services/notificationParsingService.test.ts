@@ -117,9 +117,11 @@ describe('NotificationParsingService', () => {
     if (result.type === 'BILL') {
       expect(result.bill.billerName).toBe('Adani Electricity');
       expect(result.bill.amountDue).toBe(1420);
+      expect(result.isNew).toBe(true);
     }
 
     expect(BillService.mergeOrInsertExternalBill).toHaveBeenCalledTimes(1);
+    expect(SmsDao.saveSmsBatch).toHaveBeenCalledTimes(1);
     expect(BillAlertEngine.scheduleNativeBillReminder).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'bill_123',
@@ -128,6 +130,36 @@ describe('NotificationParsingService', () => {
         dueDate: '2026-11-28',
       })
     );
+  });
+
+  it('marks merged duplicate bill notifications with isNew false', async () => {
+    (BillExtractor.extractBill as jest.Mock).mockReturnValue({
+      billerName: 'Adani Electricity',
+      billerCategory: 'electricity',
+      amountDue: 1420,
+      dueDate: '2026-11-28',
+    });
+
+    (BillService.mergeOrInsertExternalBill as jest.Mock).mockResolvedValue({
+      bill: {
+        id: 'bill_123',
+        title: 'Adani Electricity',
+        category: 'electricity',
+        amount: 1420,
+        dueDate: '2026-11-28',
+        status: 'upcoming',
+        reminderDays: 3,
+      },
+      isNew: false,
+    });
+
+    const result = await NotificationParsingService.processNotification(sampleBillNotification);
+
+    expect(result.type).toBe('BILL');
+    if (result.type === 'BILL') {
+      expect(result.isNew).toBe(false);
+    }
+    expect(SmsDao.saveSmsBatch).toHaveBeenCalledTimes(1);
   });
 
   it('correctly extracts, saves, and imports a non-duplicate transaction notification', async () => {

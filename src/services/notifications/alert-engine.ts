@@ -4,8 +4,31 @@ import { insertNotification } from '@/services/database/notification-dao';
 import { getGoalById } from '@/services/database/goal-dao';
 import { getMonthlyTotals } from '@/services/database/transaction-dao';
 import { getSpentByCategory } from '@/services/database/budget-dao';
+import { hasSentReminder, markReminderSent } from '@/services/notifications/reminder-state';
+import { ReminderService } from '@/modules/bills/services/ReminderService';
+import { BillAlertEngine } from './bill-alert-engine';
 import { formatCurrency } from '@/utils/format';
 import type { Transaction } from '@/types';
+
+const BILL_REMINDER_CHECK_COOLDOWN_MS = 60 * 1000;
+let billRemindersInFlight: Promise<void> | null = null;
+let lastBillReminderCheckAt = 0;
+
+export function resetBillReminderCheckCooldown(): void {
+  lastBillReminderCheckAt = 0;
+}
+
+function formatLocalYmd(date: Date): string {
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function getClampedMonthDate(year: number, monthIndex: number, day: number): Date {
+  const normalizedYear = year + Math.floor(monthIndex / 12);
+  const normalizedMonth = ((monthIndex % 12) + 12) % 12;
+  const maxDays = new Date(normalizedYear, normalizedMonth + 1, 0).getDate();
+  return new Date(normalizedYear, normalizedMonth, Math.min(Math.max(1, day), maxDays));
+}
 
 export async function evaluateCategoryBudgetAlert(
   categoryNameInput: string,
@@ -39,7 +62,7 @@ export async function evaluateCategoryBudgetAlert(
       // Clean up previous budget alert notifications for this category in current month
       await db.runAsync(
         `DELETE FROM notifications 
-         WHERE type = 'alert' 
+         WHERE type IN ('alert', 'budget') 
            AND (title = ? OR title = ?) 
            AND created_at >= ?`,
         [
@@ -175,117 +198,146 @@ export async function evaluateGoalMilestoneAlerts(
   }
 }
 
-export async function checkUpcomingBillReminders(): Promise<void> {
-  try {
-    const db = getDatabase();
-    const today = new Date();
-    const in3Days = new Date(today);
-    in3Days.setDate(in3Days.getDate() + 3);
-
-    const todayStr = today.toISOString().split('T')[0];
-    const in3DaysStr = in3Days.toISOString().split('T')[0];
-
-    const upcoming = await db.getAllAsync<{
-      id: string;
-      merchant: string;
-      amount: number;
-      next_process_date: string;
-    }>(
-      `SELECT id, merchant, amount, next_process_date 
-       FROM recurring_transactions 
-       WHERE is_active = 1 AND type = 'expense' AND next_process_date > ? AND next_process_date <= ?`,
-      [todayStr, in3DaysStr]
-    );
-
-    for (const bill of upcoming) {
-      // Check if alert already sent in last 2 days
-      const existing = await db.getFirstAsync<{ id: string }>(
-        `SELECT id FROM notifications 
-         WHERE title LIKE ? AND created_at >= date('now', '-2 days')`,
-        [`%${bill.merchant}%`]
-      );
-
-      if (!existing) {
-        await insertNotification({
-          title: `Upcoming Bill: ${bill.merchant}`,
-          description: `Scheduled ${formatCurrency(bill.amount)} due on ${bill.next_process_date}.`,
-          type: 'bill',
-          actionUrl: '/(app)/(tabs)/transactions',
-        });
-        DeviceEventEmitter.emit('notificationsUpdated');
-      }
-    }
-
-    // Evaluate dedicated legacy bill reminders
-    const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
-    await BillAlertEngine.evaluateUpcomingBillAlerts();
-
-    // Evaluate modern bills repository reminders
-    const { ReminderService } = await import('@/modules/bills/services/ReminderService');
-    await ReminderService.evaluateAllBillReminders();
-
-    // Evaluate upcoming subscription renewals
-    const upcomingSubs = await db.getAllAsync<{
-      id: string;
-      name: string;
-      amount: number;
-      next_renewal_date: string;
-    }>(
-      `SELECT id, name, amount, next_renewal_date 
-       FROM subscriptions 
-       WHERE status = 'active' AND next_renewal_date > ? AND next_renewal_date <= ?`,
-      [todayStr, in3DaysStr]
-    );
-
-    for (const sub of upcomingSubs) {
-      const existing = await db.getFirstAsync<{ id: string }>(
-        `SELECT id FROM notifications 
-         WHERE title LIKE ? AND created_at >= date('now', '-2 days')`,
-        [`%${sub.name}%`]
-      );
-
-      if (!existing) {
-        await insertNotification({
-          title: `Subscription Renewal: ${sub.name}`,
-          description: `Your ${sub.name} subscription (${formatCurrency(sub.amount)}) is scheduled to renew on ${sub.next_renewal_date}.`,
-          type: 'bill',
-          actionUrl: '/(app)/bills',
-        });
-        DeviceEventEmitter.emit('notificationsUpdated');
-      }
-    }
-
-    // Evaluate credit card utilization & due dates
-    const creditAccounts = await db.getAllAsync<{
-      id: string;
-      name: string;
-      type: string;
-      balance: number;
-      credit_limit: number | null;
-      due_day: number | null;
-    }>("SELECT id, name, type, balance, credit_limit, due_day FROM accounts WHERE type = 'credit'");
-
-    for (const acc of creditAccounts) {
-      await evaluateAccountBalanceAlerts({
-        id: acc.id,
-        name: acc.name,
-        type: acc.type,
-        balance: acc.balance,
-        creditLimit: acc.credit_limit ?? undefined,
-        dueDay: acc.due_day ?? undefined,
-      });
-    }
-
-    try {
-      const { BillAlertEngine } = await import('./bill-alert-engine');
-      await BillAlertEngine.evaluateUpcomingBillAlerts();
-      await BillAlertEngine.syncAllNativeBillReminders();
-    } catch {
-      // Ignore
-    }
-  } catch {
-    // Error checking upcoming bill reminders
+export async function checkUpcomingBillReminders(
+  options: { force?: boolean } = {}
+): Promise<void> {
+  if (billRemindersInFlight) {
+    return billRemindersInFlight;
   }
+
+  const nowMs = Date.now();
+  if (!options.force && nowMs - lastBillReminderCheckAt < BILL_REMINDER_CHECK_COOLDOWN_MS) {
+    return;
+  }
+
+  billRemindersInFlight = (async () => {
+    try {
+      const db = getDatabase();
+      const today = new Date();
+      const in3Days = new Date(today);
+      in3Days.setDate(in3Days.getDate() + 3);
+
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      const formatYmd = (d: Date) =>
+        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+      const todayStr = formatYmd(today);
+      const in3DaysStr = formatYmd(in3Days);
+
+      const upcoming = await db.getAllAsync<{
+        id: string;
+        merchant: string;
+        amount: number;
+        next_process_date: string;
+      }>(
+        `SELECT id, merchant, amount, next_process_date 
+         FROM recurring_transactions 
+         WHERE is_active = 1 AND type = 'expense' AND next_process_date > ? AND next_process_date <= ?`,
+        [todayStr, in3DaysStr]
+      );
+
+      for (const bill of upcoming) {
+        const alertKey = `recurring_due:${bill.id}:${bill.next_process_date}`;
+        if (hasSentReminder(alertKey)) {
+          continue;
+        }
+
+        const existing = await db.getFirstAsync<{ id: string }>(
+          `SELECT id FROM notifications 
+           WHERE title = ? AND created_at >= date('now', '-2 days')`,
+          [`Upcoming Bill: ${bill.merchant}`]
+        );
+
+        if (!existing) {
+          await insertNotification({
+            title: `Upcoming Bill: ${bill.merchant}`,
+            description: `Scheduled ${formatCurrency(bill.amount)} due on ${bill.next_process_date}.`,
+            type: 'bill',
+            actionUrl: '/(app)/(tabs)/transactions',
+          });
+          DeviceEventEmitter.emit('notificationsUpdated');
+        }
+
+        markReminderSent(alertKey);
+      }
+
+      // Evaluate unified modern bills repository reminders once
+      await ReminderService.evaluateAllBillReminders();
+
+      // Evaluate upcoming subscription renewals
+      const upcomingSubs = await db.getAllAsync<{
+        id: string;
+        name: string;
+        amount: number;
+        next_renewal_date: string;
+      }>(
+        `SELECT id, name, amount, next_renewal_date 
+         FROM subscriptions 
+         WHERE status = 'active' AND next_renewal_date > ? AND next_renewal_date <= ?`,
+        [todayStr, in3DaysStr]
+      );
+
+      for (const sub of upcomingSubs) {
+        const alertKey = `subscription_due:${sub.id}:${sub.next_renewal_date}`;
+        if (hasSentReminder(alertKey)) {
+          continue;
+        }
+
+        const existing = await db.getFirstAsync<{ id: string }>(
+          `SELECT id FROM notifications 
+           WHERE title = ? AND created_at >= date('now', '-2 days')`,
+          [`Subscription Renewal: ${sub.name}`]
+        );
+
+        if (!existing) {
+          await insertNotification({
+            title: `Subscription Renewal: ${sub.name}`,
+            description: `Your ${sub.name} subscription (${formatCurrency(sub.amount)}) is scheduled to renew on ${sub.next_renewal_date}.`,
+            type: 'bill',
+            actionUrl: '/(app)/bills',
+          });
+          DeviceEventEmitter.emit('notificationsUpdated');
+        }
+
+        markReminderSent(alertKey);
+      }
+
+      // Evaluate credit card utilization & due dates
+      const creditAccounts = await db.getAllAsync<{
+        id: string;
+        name: string;
+        type: string;
+        balance: number;
+        credit_limit: number | null;
+        due_day: number | null;
+      }>("SELECT id, name, type, balance, credit_limit, due_day FROM accounts WHERE type = 'credit'");
+
+      for (const acc of creditAccounts) {
+        await evaluateAccountBalanceAlerts({
+          id: acc.id,
+          name: acc.name,
+          type: acc.type,
+          balance: acc.balance,
+          creditLimit: acc.credit_limit ?? undefined,
+          dueDay: acc.due_day ?? undefined,
+        });
+      }
+
+      try {
+        await BillAlertEngine.syncAllNativeBillReminders();
+      } catch {
+        // Ignore
+      }
+
+      lastBillReminderCheckAt = Date.now();
+    } catch {
+      // Error checking upcoming bill reminders
+    }
+  })().finally(() => {
+    billRemindersInFlight = null;
+  });
+
+  return billRemindersInFlight;
 }
 
 export async function checkUpcomingGoalDeadlines(): Promise<void> {
@@ -295,8 +347,8 @@ export async function checkUpcomingGoalDeadlines(): Promise<void> {
     const in7Days = new Date(today);
     in7Days.setDate(in7Days.getDate() + 7);
 
-    const todayStr = today.toISOString().split('T')[0];
-    const in7DaysStr = in7Days.toISOString().split('T')[0];
+    const todayStr = formatLocalYmd(today);
+    const in7DaysStr = formatLocalYmd(in7Days);
 
     const upcomingGoals = await db.getAllAsync<{
       id: string;
@@ -359,7 +411,7 @@ export async function evaluateAccountBalanceAlerts(account: {
 
       // 1. Credit Card High Utilization Warning (>=80%)
       if (limit && limit > 0) {
-        const spent = Math.abs(account.balance);
+        const spent = account.balance < 0 ? Math.abs(account.balance) : 0;
         const utilization = (spent / limit) * 100;
 
         if (utilization >= 80) {
@@ -403,27 +455,42 @@ export async function evaluateAccountBalanceAlerts(account: {
         today.setHours(0, 0, 0, 0);
         const year = today.getFullYear();
         const month = today.getMonth();
-        let nextDueDate = new Date(year, month, paymentDueDay);
+        let nextDueDate = getClampedMonthDate(year, month, paymentDueDay);
         if (nextDueDate < today) {
-          nextDueDate = new Date(year, month + 1, paymentDueDay);
+          nextDueDate = getClampedMonthDate(year, month + 1, paymentDueDay);
         }
         const daysUntilDue = Math.ceil((nextDueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
         if (daysUntilDue <= 3) {
-          const existingDueAlert = await db.getFirstAsync<{ id: string }>(
-            `SELECT id FROM notifications 
-             WHERE type = 'alert' AND title LIKE ? AND created_at >= date('now', '-2 days')`,
-            [`%Credit Card Due: ${account.name}%`]
-          );
+          const dueDateKey = formatLocalYmd(nextDueDate);
+          const stage = daysUntilDue === 0 ? 'due_today' : 'due_soon';
+          const alertKey = `cc_due:${account.id}:${dueDateKey}:${stage}`;
 
-          if (!existingDueAlert) {
-            await insertNotification({
-              title: `Credit Card Due: ${account.name}`,
-              description: `Payment of ${formatCurrency(Math.abs(account.balance))} is due ${daysUntilDue === 0 ? 'today' : `in ${daysUntilDue} day${daysUntilDue > 1 ? 's' : ''}`}.`,
-              type: 'alert',
-              actionUrl: '/(app)/(tabs)/accounts',
-            });
-            DeviceEventEmitter.emit('notificationsUpdated');
+          if (!hasSentReminder(alertKey)) {
+            const existingDueAlert =
+              stage === 'due_soon'
+                ? await db.getFirstAsync<{ id: string }>(
+                    `SELECT id FROM notifications 
+                     WHERE type = 'alert' AND title = ? AND created_at >= date('now', '-2 days')`,
+                    [`Credit Card Due: ${account.name}`]
+                  )
+                : await db.getFirstAsync<{ id: string }>(
+                    `SELECT id FROM notifications 
+                     WHERE type = 'alert' AND title = ? AND description LIKE '%today%' AND created_at >= date('now', '-1 day')`,
+                    [`Credit Card Due: ${account.name}`]
+                  );
+
+            if (!existingDueAlert) {
+              await insertNotification({
+                title: `Credit Card Due: ${account.name}`,
+                description: `Payment of ${formatCurrency(Math.abs(account.balance))} is due ${daysUntilDue === 0 ? 'today' : `in ${daysUntilDue} day${daysUntilDue > 1 ? 's' : ''}`}.`,
+                type: 'alert',
+                actionUrl: '/(app)/(tabs)/accounts',
+              });
+              DeviceEventEmitter.emit('notificationsUpdated');
+            }
+
+            markReminderSent(alertKey);
           }
         }
       }

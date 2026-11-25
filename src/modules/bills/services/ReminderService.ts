@@ -1,8 +1,17 @@
 import { DeviceEventEmitter } from 'react-native';
 import { formatCurrency, parseDateSafely } from '@/utils/format';
 import { insertNotification, getNotifications } from '@/services/database/notification-dao';
+import {
+  clearReminderStateForBill,
+  getBillSnoozeUntil,
+  hasSentReminder,
+  markReminderSent,
+} from '@/services/notifications/reminder-state';
 import { BillsRepository } from '../database/bills.repository';
 import type { Bill } from '../types/bill.types';
+
+const OVERDUE_REMINDER_MAX_DAYS = 14;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 export class ReminderService {
   /**
@@ -12,13 +21,23 @@ export class ReminderService {
     if (bill.status !== 'upcoming') return;
 
     const [y, m, d] = bill.dueDate.split('-').map(Number);
+    if (!y || !m || !d) return;
+
     const dueTime = new Date(y, m - 1, d).getTime();
     const now = new Date();
     const todayTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const diffDays = Math.round((dueTime - todayTime) / (1000 * 60 * 60 * 24));
+    const diffDays = Math.round((dueTime - todayTime) / ONE_DAY_MS);
 
-    // If bill is due within reminder window, trigger proactive notification immediately
+    // If bill is due within reminder window, trigger proactive notification once for that stage
     if (diffDays >= 0 && diffDays <= (bill.reminderDays ?? 3)) {
+      const name = bill.provider || bill.title;
+      const stage = diffDays === 0 ? 'due_today' : 'due_soon';
+      const alertKey = `bill:${bill.id}:${bill.dueDate}:${stage}`;
+
+      if (hasSentReminder(alertKey)) {
+        return;
+      }
+
       const timingText =
         diffDays === 0
           ? 'is due today'
@@ -26,15 +45,20 @@ export class ReminderService {
             ? 'is due tomorrow'
             : `is due in ${diffDays} days (${bill.dueDate})`;
 
-      const title = `Bill Due: ${bill.provider || bill.title}`;
-      const description = `${bill.provider || bill.title} bill of ${formatCurrency(bill.amount)} ${timingText}.`;
+      const title =
+        diffDays === 0
+          ? `Bill Due Today: ${name}`
+          : diffDays === 1
+            ? `Bill Due Tomorrow: ${name}`
+            : `Bill Due in ${diffDays} Days: ${name}`;
+      const description = `${name} bill of ${formatCurrency(bill.amount)} ${timingText}.`;
 
-      // Check if already notified recently
+      // Fallback check against in-app notifications table in case state predates persistent key tracking
       const existing = await getNotifications();
       const recent = existing.some(
         (n) =>
-          n.title.includes(bill.provider || bill.title) &&
-          now.getTime() - parseDateSafely(n.createdAt).getTime() < 24 * 60 * 60 * 1000
+          (n.title === title || n.title === `Bill Due: ${name}`) &&
+          now.getTime() - parseDateSafely(n.createdAt).getTime() < ONE_DAY_MS
       );
 
       if (!recent) {
@@ -43,23 +67,25 @@ export class ReminderService {
           description,
           type: diffDays === 0 ? 'alert' : 'bill',
           actionUrl: '/(app)/bills',
+          metadata: { billId: bill.id },
         });
         DeviceEventEmitter.emit('notificationsUpdated');
       }
+
+      markReminderSent(alertKey, now.getTime());
     }
   }
 
   /**
-   * Cancels scheduled reminders when a bill is paid or deleted.
+   * Clears reminder state when a bill is paid or deleted.
    */
-  public static async cancelBillReminder(_billId: string): Promise<void> {
-    // In-app notifications are stored in SQLite; we do not need to delete past notifications,
-    // but future evaluation will skip paid/deleted bills.
+  public static async cancelBillReminder(billId: string): Promise<void> {
+    clearReminderStateForBill(billId);
   }
 
   /**
    * Proactively evaluates all upcoming and overdue bills.
-   * Called during background sync or on app startup.
+   * Triggers at most once per milestone stage (due_soon, due_today, overdue) per billing cycle.
    */
   public static async evaluateAllBillReminders(): Promise<number> {
     try {
@@ -68,17 +94,22 @@ export class ReminderService {
 
       const existingNotifications = await getNotifications();
       const now = new Date();
+      const nowMs = now.getTime();
       const todayTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 
       let alertedCount = 0;
 
       for (const bill of upcomingBills) {
         if (bill.status === 'paid' || bill.status === 'dismissed') continue;
+        if (getBillSnoozeUntil(bill.id, nowMs) !== null) continue;
 
         const [y, m, d] = bill.dueDate.split('-').map(Number);
-        const dueTime = new Date(y, m - 1, d).getTime();
-        const diffDays = Math.round((dueTime - todayTime) / (1000 * 60 * 60 * 24));
+        if (!y || !m || !d) continue;
 
+        const dueTime = new Date(y, m - 1, d).getTime();
+        const diffDays = Math.round((dueTime - todayTime) / ONE_DAY_MS);
+
+        let stage: 'overdue' | 'due_today' | 'due_soon' | null = null;
         let alertTitle = '';
         let alertDesc = '';
         let alertType: 'alert' | 'bill' = 'bill';
@@ -86,40 +117,64 @@ export class ReminderService {
         const name = bill.provider || bill.title;
 
         if (diffDays < 0) {
+          if (Math.abs(diffDays) > OVERDUE_REMINDER_MAX_DAYS) {
+            continue;
+          }
+          stage = 'overdue';
           alertTitle = `Overdue Bill: ${name}`;
           alertDesc = `Your ${name} bill of ${formatCurrency(bill.amount)} was due on ${bill.dueDate}. Please pay to avoid late fees.`;
           alertType = 'alert';
         } else if (diffDays === 0) {
+          stage = 'due_today';
           alertTitle = `Bill Due Today: ${name}`;
           alertDesc = `Reminder: ${name} bill of ${formatCurrency(bill.amount)} is due today.`;
           alertType = 'alert';
-        } else if (diffDays === 1) {
-          alertTitle = `Bill Due Tomorrow: ${name}`;
-          alertDesc = `${name} bill of ${formatCurrency(bill.amount)} is due tomorrow (${bill.dueDate}).`;
-          alertType = 'bill';
         } else if (diffDays <= (bill.reminderDays ?? 3)) {
-          alertTitle = `Bill Due in ${diffDays} Days: ${name}`;
-          alertDesc = `${name} bill of ${formatCurrency(bill.amount)} is due on ${bill.dueDate}.`;
+          stage = 'due_soon';
+          if (diffDays === 1) {
+            alertTitle = `Bill Due Tomorrow: ${name}`;
+            alertDesc = `${name} bill of ${formatCurrency(bill.amount)} is due tomorrow (${bill.dueDate}).`;
+          } else {
+            alertTitle = `Bill Due in ${diffDays} Days: ${name}`;
+            alertDesc = `${name} bill of ${formatCurrency(bill.amount)} is due on ${bill.dueDate}.`;
+          }
           alertType = 'bill';
         }
 
-        if (!alertTitle) continue;
+        if (!stage || !alertTitle) continue;
 
-        const alreadyAlerted = existingNotifications.some((n) => {
-          const isSameTitle = n.title.includes(name);
-          const isRecent = now.getTime() - parseDateSafely(n.createdAt).getTime() < 24 * 60 * 60 * 1000;
-          return isSameTitle && isRecent;
+        const alertKey = `bill:${bill.id}:${bill.dueDate}:${stage}`;
+        if (hasSentReminder(alertKey)) {
+          continue;
+        }
+
+        const alreadyAlertedInDb = existingNotifications.some((n) => {
+          const isRecent = nowMs - parseDateSafely(n.createdAt).getTime() < ONE_DAY_MS;
+          if (!isRecent) return false;
+          if (n.title === alertTitle) return true;
+          if (
+            stage === 'due_soon' &&
+            (n.title === `Bill Due: ${name}` ||
+              n.title === `Bill Due Tomorrow: ${name}` ||
+              (n.title.startsWith('Bill Due in ') && n.title.endsWith(`: ${name}`)))
+          ) {
+            return true;
+          }
+          return false;
         });
 
-        if (!alreadyAlerted) {
+        if (!alreadyAlertedInDb) {
           await insertNotification({
             title: alertTitle,
             description: alertDesc,
             type: alertType,
             actionUrl: '/(app)/bills',
+            metadata: { billId: bill.id },
           });
           alertedCount++;
         }
+
+        markReminderSent(alertKey, nowMs);
       }
 
       if (alertedCount > 0) {

@@ -27,6 +27,7 @@ import { getBankBranding } from '@/utils/icons';
 import type { Account, PortfolioSummary } from '@/types';
 import { useAppStore } from '@/store/use-app-store';
 import { ReorderableAccountSection } from '@/components/common';
+import { supportsStatementImport } from '@/services/export/statement-import-helpers';
 
 interface AccountsScreenProps {
   showBack?: boolean;
@@ -802,6 +803,27 @@ function AccountDetailCard({
           <Text style={styles.payBillButtonText} numberOfLines={1}>Pay Bill / Settle Debt</Text>
         </TouchableOpacity>
       )}
+
+      {supportsStatementImport(account.type) && (
+        <TouchableOpacity
+          style={[
+            styles.importStatementButton,
+            { marginTop: hasOutstandingDebt && onSettleDebt ? 10 : 16 },
+          ]}
+          onPress={() =>
+            router.navigate({
+              pathname: '/(app)/import-statement',
+              params: { accountId: account.id },
+            })
+          }
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="upload-file" size={18} color={colors.primary} />
+          <Text style={styles.importStatementButtonText} numberOfLines={1}>
+            Import Statement (PDF / CSV)
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -962,6 +984,25 @@ const getStyles = (colors: ThemeColors) => {
       fontSize: 14,
       lineHeight: 20,
       color: colors.onPrimary,
+    },
+    importStatementButton: {
+      backgroundColor: colors.surfaceContainerLow,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      paddingVertical: 11,
+      paddingHorizontal: 14,
+    },
+    importStatementButtonText: {
+      ...typography.labelMd,
+      fontFamily: 'Manrope_600SemiBold',
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.primary,
     },
     sectionCard: {
       backgroundColor: colors.surfaceContainerLowest,
@@ -1135,6 +1176,8 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       fontSize: 12,
       fontWeight: '600',
+      flex: 1,
+      flexShrink: 1,
     },
     cycleGrid: {
       flexDirection: 'row',

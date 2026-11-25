@@ -27,6 +27,7 @@ import { useMonthlyBillSummary } from '@/hooks/use-bills';
 import { useGoals } from '@/hooks/use-goals';
 import { useSafeToSpend } from '@/hooks/use-cashflow';
 import { useDebtPayoff } from '@/hooks/use-debt-payoff';
+import { useFinancialHealth } from '@/hooks/use-financial-health';
 import { chatWithFinancialCopilot } from '@/services/api/ai.api';
 import { fetchRemoteConfig } from '@/services/api/config.api';
 import { apiClient } from '@/services/api/client';
@@ -164,6 +165,7 @@ export default function CopilotScreen() {
   const { summary: safeToSpendSummary } = useSafeToSpend();
   const { debts } = useDebtPayoff();
   const { transactions: recurringTransactions } = useRecurringTransactions();
+  const { report: healthReport } = useFinancialHealth(selectedMonth, selectedYear);
 
   const isConnected = useNetworkStore((state) => state.isConnected);
   const isChecking = useNetworkStore((state) => state.isChecking);
@@ -416,6 +418,13 @@ export default function CopilotScreen() {
       );
     }
 
+    // 12. Holistic Financial Health Score
+    if (healthReport) {
+      parts.push(
+        `[FINANCIAL HEALTH SCORE] Overall: ${healthReport.overallScore}/100 (${healthReport.grade} - ${healthReport.headline}), Runway: ${healthReport.pillars.runway.metricValue}, Savings Rate: ${healthReport.pillars.savingsRate.metricValue}, Credit Utilization: ${healthReport.pillars.creditUtilization.metricValue}, DTI: ${healthReport.pillars.debtBurden.metricValue}, Spend/Income: ${healthReport.pillars.budgetAdherence.metricValue}`
+      );
+    }
+
     return parts.join('\n');
   }, [
     selectedMonth,
@@ -431,6 +440,7 @@ export default function CopilotScreen() {
     goals,
     safeToSpendSummary,
     plan,
+    healthReport,
   ]);
 
   const handleSendMessage = useCallback(async (textToSend?: string) => {

@@ -23,6 +23,7 @@ import {
   toggleRecurringTransactionActive,
 } from '@/services/database/recurring-dao';
 import { queueAutoBackup } from '@/services/cloud/google-drive-service';
+import { invalidateAnalyticsAndHealthQueries } from '@/hooks/use-financial-health';
 import type {
   MonthlyTotals,
   Transaction,
@@ -56,6 +57,7 @@ export function useCreateTransaction() {
       queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
       queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
       queryClient.invalidateQueries({ queryKey: ['goals'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('create-transaction');
     },
   });
@@ -84,6 +86,7 @@ export function useUpdateTransaction() {
       queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
       queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
       queryClient.invalidateQueries({ queryKey: ['goals'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('update-transaction');
     },
   });
@@ -121,6 +124,7 @@ export function useDeleteTransaction() {
       queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
       queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
       queryClient.invalidateQueries({ queryKey: ['goals'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('delete-transaction');
     },
   });
@@ -144,6 +148,7 @@ export function useBulkDeleteTransactions() {
       queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
       queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
       queryClient.invalidateQueries({ queryKey: ['goals'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('bulk-delete-transactions');
     },
   });
@@ -172,6 +177,7 @@ export function useBulkUpdateCategory() {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
       queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('bulk-update-category');
     },
   });
@@ -199,6 +205,7 @@ export function useBulkUpdateAccount() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('bulk-update-account');
     },
   });
@@ -262,6 +269,7 @@ export function useCreateRecurringTransaction() {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['transactions', 'recurring'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('recurring-create');
     },
   });
@@ -282,6 +290,7 @@ export function useDeleteRecurringTransaction() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['transactions', 'recurring'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('recurring-delete');
     },
   });
@@ -303,6 +312,7 @@ export function useToggleRecurringTransaction() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['transactions', 'recurring'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('recurring-toggle');
     },
   });

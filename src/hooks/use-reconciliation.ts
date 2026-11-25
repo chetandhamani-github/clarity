@@ -5,6 +5,7 @@ import {
   type AccountReconciliationStatus,
 } from '@/services/database/reconciliation-service';
 import { queueAutoBackup } from '@/services/cloud/google-drive-service';
+import { invalidateAnalyticsAndHealthQueries } from '@/hooks/use-financial-health';
 
 export function useAccountReconciliation(accountId: string | undefined) {
   const { data, isLoading, refetch } = useQuery({
@@ -31,6 +32,7 @@ export function useCreateAdjustmentEntry() {
       queryClient.invalidateQueries({ queryKey: ['reconciliation', variables.accountId] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('create-adjustment-entry');
     },
   });

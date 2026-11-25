@@ -1,7 +1,7 @@
 import { mmkv } from '@/lib/storage';
 import { BillsRepository } from '@/modules/bills/database/bills.repository';
 import { BillService } from '@/modules/bills/services/BillService';
-import type { BillCategory } from '@/modules/bills/types/bill.types';
+import { mapExternalBillerCategory } from '@/modules/bills/utils/bill-helpers';
 import { LocalCategorizerEngine } from '@/modules/sms/categorizer/localCategorizerEngine';
 import { DuplicateDetectionEngine } from '@/modules/sms/duplicate/duplicateDetectionEngine';
 import { BillExtractor } from '@/modules/sms/extractor/billExtractor';
@@ -23,7 +23,6 @@ import {
     updateAccount,
     updateAccountBalance,
 } from '@/services/database/account-dao';
-import { mergeOrInsertSmsBill } from '@/services/database/bill-dao';
 import {
     findManualMatch,
     insertTransaction,
@@ -229,6 +228,7 @@ export class SmsSyncService {
 
         // Evaluate bill reminders for proactive notifications
         BillAlertEngine.evaluateUpcomingBillAlerts().catch(() => {});
+        BillAlertEngine.syncAllNativeBillReminders().catch(() => {});
         BillsRepository.deduplicateExistingBills().catch(() => {});
 
         reportProgress('complete', scannedCount, scannedCount, batchIndex, batchIndex);
@@ -332,6 +332,7 @@ export class SmsSyncService {
 
         // Evaluate bill reminders for proactive notifications
         BillAlertEngine.evaluateUpcomingBillAlerts().catch(() => {});
+        BillAlertEngine.syncAllNativeBillReminders().catch(() => {});
         BillsRepository.deduplicateExistingBills().catch(() => {});
       }
 
@@ -403,28 +404,7 @@ export class SmsSyncService {
         const extractedBill = BillExtractor.extractBill(message);
         if (extractedBill) {
           // 1. Save to modern Bills module (displayed in UI)
-          const billCategory: BillCategory =
-            extractedBill.billerCategory === 'electricity'
-              ? 'electricity'
-              : extractedBill.billerCategory === 'water'
-              ? 'water'
-              : extractedBill.billerCategory === 'mobile_postpaid'
-              ? 'mobile'
-              : extractedBill.billerCategory === 'broadband'
-              ? 'internet'
-              : extractedBill.billerCategory === 'credit_card'
-              ? 'credit_card'
-              : extractedBill.billerCategory === 'loan_emi'
-              ? 'emi'
-              : extractedBill.billerCategory === 'insurance'
-              ? 'insurance'
-              : extractedBill.billerCategory === 'rent'
-              ? 'rent'
-              : extractedBill.billerCategory === 'dth'
-              ? 'subscription'
-              : extractedBill.billerCategory === 'tuition'
-              ? 'education'
-              : 'other';
+          const billCategory = mapExternalBillerCategory(extractedBill.billerCategory);
 
           await BillService.mergeOrInsertExternalBill({
             title: extractedBill.billerName,
@@ -438,12 +418,6 @@ export class SmsSyncService {
             smsId: message.id,
             source: 'sms',
             notes: `Auto-detected from SMS: ${extractedBill.billerName}`,
-          });
-
-          // 2. Also keep legacy table in sync
-          await mergeOrInsertSmsBill({
-            ...extractedBill,
-            smsId: message.id,
           });
         }
       } catch {

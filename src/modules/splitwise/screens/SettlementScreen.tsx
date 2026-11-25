@@ -28,6 +28,7 @@ import type { SettlementType } from '../types/splitwise.types';
 import { useAccounts } from '@/hooks/use-accounts';
 import { insertTransaction } from '@/services/database/transaction-dao';
 import { useQueryClient } from '@tanstack/react-query';
+import { invalidateAnalyticsAndHealthQueries } from '@/hooks/use-financial-health';
 import type { TransactionType } from '@/types';
 
 export interface SettlementFormData {
@@ -279,6 +280,7 @@ export function SettlementScreen() {
         queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
         queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
         queryClient.invalidateQueries({ queryKey: ['netWorthHistory'] });
+        invalidateAnalyticsAndHealthQueries(queryClient);
       }
 
       SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {});

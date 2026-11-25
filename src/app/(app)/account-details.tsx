@@ -20,6 +20,7 @@ import { LineChart } from 'react-native-gifted-charts';
 import { formatCurrency, formatDate, formatTransactionTime, getTransactionSign } from '@/utils/format';
 import { getCategoryIcon, getAccountTypeIcon, getBankBranding } from '@/utils/icons';
 import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
+import { supportsStatementImport } from '@/services/export/statement-import-helpers';
 
 export default function AccountDetailsScreen() {
   const { colors } = useTheme();
@@ -81,6 +82,17 @@ export default function AccountDetailsScreen() {
   const handleEdit = () => {
     setShowMenu(false);
     router.navigate(`/(app)/add-account?id=${accountId}`);
+  };
+
+  const canImportStatement = account ? supportsStatementImport(account.type) : false;
+
+  const handleImportStatement = () => {
+    if (!account) return;
+    setShowMenu(false);
+    router.navigate({
+      pathname: '/(app)/import-statement',
+      params: { accountId: account.id },
+    });
   };
 
   // Format history for LineChart
@@ -151,15 +163,22 @@ export default function AccountDetailsScreen() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    const clampDayDate = (year: number, monthIndex: number, day: number) => {
+      const normYear = year + Math.floor(monthIndex / 12);
+      const normMonth = ((monthIndex % 12) + 12) % 12;
+      const maxDay = new Date(normYear, normMonth + 1, 0).getDate();
+      return new Date(normYear, normMonth, Math.min(Math.max(1, day), maxDay));
+    };
+
     let nextStatementDate: Date | null = null;
     if (cycleDay) {
       const year = today.getFullYear();
       const month = today.getMonth();
-      const candidateThisMonth = new Date(year, month, cycleDay);
+      const candidateThisMonth = clampDayDate(year, month, cycleDay);
       if (candidateThisMonth >= today) {
         nextStatementDate = candidateThisMonth;
       } else {
-        nextStatementDate = new Date(year, month + 1, cycleDay);
+        nextStatementDate = clampDayDate(year, month + 1, cycleDay);
       }
     }
 
@@ -168,11 +187,11 @@ export default function AccountDetailsScreen() {
     if (dueDay) {
       const year = today.getFullYear();
       const month = today.getMonth();
-      const candidateThisMonth = new Date(year, month, dueDay);
+      const candidateThisMonth = clampDayDate(year, month, dueDay);
       if (candidateThisMonth >= today) {
         nextDueDate = candidateThisMonth;
       } else {
-        nextDueDate = new Date(year, month + 1, dueDay);
+        nextDueDate = clampDayDate(year, month + 1, dueDay);
       }
       daysUntilDue = Math.ceil((nextDueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     }
@@ -231,28 +250,13 @@ export default function AccountDetailsScreen() {
               <MaterialIcons name="edit" size={22} color={colors.onSurface} />
             </TouchableOpacity>
 
-            <View style={{ position: 'relative' }}>
-              <TouchableOpacity
-                style={styles.iconButton}
-                onPress={() => setShowMenu(!showMenu)}
-                disabled={!account}
-              >
-                <MaterialIcons name="more-vert" size={24} color={colors.onSurfaceVariant} />
-              </TouchableOpacity>
-
-              {showMenu && (
-                <View style={styles.menuPopup}>
-                  <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
-                    <MaterialIcons name="edit" size={20} color={colors.onSurface} />
-                    <Text style={styles.menuItemText}>Edit Account</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
-                    <MaterialIcons name="delete" size={20} color={colors.error} />
-                    <Text style={[styles.menuItemText, { color: colors.error }]}>Delete Account</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => setShowMenu((prev) => !prev)}
+              disabled={!account}
+            >
+              <MaterialIcons name="more-vert" size={24} color={colors.onSurfaceVariant} />
+            </TouchableOpacity>
           </View>
         }
       />
@@ -618,6 +622,8 @@ export default function AccountDetailsScreen() {
                               fontSize: 11,
                               color: colors.error,
                               fontWeight: '500',
+                              flex: 1,
+                              flexShrink: 1,
                             }}
                           >
                             Utilization is above 80%. Pay down balance to safeguard your credit score.
@@ -637,6 +643,8 @@ export default function AccountDetailsScreen() {
                           fontSize: 12,
                           color: colors.primary,
                           fontWeight: '500',
+                          flex: 1,
+                          flexShrink: 1,
                         }}
                       >
                         Set card limit to track credit utilization & score safety
@@ -657,6 +665,30 @@ export default function AccountDetailsScreen() {
                 onAdjust={handleAdjustBalance}
                 isAdjusting={isAdjusting}
               />
+            )}
+
+            {/* Statement Import Action Card */}
+            {canImportStatement && (
+              <TouchableOpacity
+                style={styles.importStatementCard}
+                onPress={handleImportStatement}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Import statement"
+              >
+                <View style={styles.importStatementIconBox}>
+                  <MaterialIcons name="upload-file" size={22} color={colors.onPrimaryContainer} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.importStatementTitle}>
+                    {account.type === 'credit' ? 'Import Card Statement' : 'Import Bank Statement'}
+                  </Text>
+                  <Text style={styles.importStatementSubtitle}>
+                    Upload PDF or CSV to sync transactions & balance
+                  </Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={22} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
             )}
 
             {/* Recent Activity */}
@@ -686,7 +718,9 @@ export default function AccountDetailsScreen() {
                       <View style={styles.emptyActivityBox}>
                         <MaterialIcons name="receipt-long" size={32} color={colors.outline} />
                         <Text style={styles.emptyActivityText}>
-                          No transactions found for this account.
+                          {canImportStatement
+                            ? 'No transactions found for this account yet. Import a PDF or CSV statement above to get started.'
+                            : 'No transactions found for this account.'}
                         </Text>
                       </View>
                     ) : (
@@ -778,9 +812,35 @@ export default function AccountDetailsScreen() {
                 </View>
               </ScrollView>
             )}
+
+      {showMenu && account && (
+        <View style={styles.menuOverlay} pointerEvents="box-none">
+          <TouchableOpacity
+            style={styles.menuBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowMenu(false)}
+          />
+          <View style={[styles.menuPopup, { top: insets.top + 52 }]}>
+            {canImportStatement && (
+              <TouchableOpacity style={styles.menuItem} onPress={handleImportStatement}>
+                <MaterialIcons name="upload-file" size={20} color={colors.primary} />
+                <Text style={styles.menuItemText}>Import Statement</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
+              <MaterialIcons name="edit" size={20} color={colors.onSurface} />
+              <Text style={styles.menuItemText}>Edit Account</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
+              <MaterialIcons name="delete" size={20} color={colors.error} />
+              <Text style={[styles.menuItemText, { color: colors.error }]}>Delete Account</Text>
+            </TouchableOpacity>
           </View>
-        );
-      }
+        </View>
+      )}
+    </View>
+  );
+}
 
 const getStyles = (colors: ThemeColors) => {
   const styles = StyleSheet.create({
@@ -792,30 +852,69 @@ const getStyles = (colors: ThemeColors) => {
     iconButton: {
       padding: 8,
     },
+    menuOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 50,
+    },
+    menuBackdrop: {
+      ...StyleSheet.absoluteFillObject,
+    },
     menuPopup: {
       position: 'absolute',
-      top: 48,
-      right: 8,
+      right: 16,
       backgroundColor: colors.surfaceContainerHigh,
       borderRadius: 12,
       borderWidth: 1,
       borderColor: colors.surfaceVariant,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.1,
+      shadowOpacity: 0.12,
       shadowRadius: 12,
-      elevation: 4,
-      minWidth: 160,
-      zIndex: 20,
+      elevation: 6,
+      minWidth: 196,
+      zIndex: 51,
     },
     menuItem: {
       flexDirection: 'row',
       alignItems: 'center',
-      padding: 16,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
       gap: 12,
     },
     menuItemText: {
       ...typography.bodyLg,
+      color: colors.onSurface,
+    },
+    importStatementCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      backgroundColor: colors.surfaceContainerLowest,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      borderRadius: 16,
+      padding: 14,
+    },
+    importStatementIconBox: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      backgroundColor: colors.primaryContainer,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    importStatementTitle: {
+      ...typography.bodyLg,
+      fontSize: 15,
+      lineHeight: 22,
+      fontWeight: '700',
+      color: colors.onSurface,
+    },
+    importStatementSubtitle: {
+      ...typography.bodySm,
+      lineHeight: 18,
+      color: colors.onSurfaceVariant,
+      marginTop: 2,
     },
     scrollContent: {
       padding: 20,
@@ -1042,8 +1141,11 @@ const getStyles = (colors: ThemeColors) => {
     addBillingCycleText: {
       ...typography.bodyMd,
       fontSize: 13,
+      lineHeight: 18,
       color: colors.primary,
       fontWeight: '600',
+      flex: 1,
+      flexShrink: 1,
     },
   });
   return styles;

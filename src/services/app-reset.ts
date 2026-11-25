@@ -24,6 +24,14 @@ export async function resetEntireAppData(queryClient?: QueryClient): Promise<voi
   // 2. Drop and re-seed the SQLite database
   await clearDatabase();
 
+  // 2.5 Cancel all OS-scheduled notifications before wiping state
+  try {
+    const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
+    await BillAlertEngine.cancelAllNativeBillReminders();
+  } catch {
+    // Ignore in test/headless mode
+  }
+
   // 3. Reset repository and engine schema/memory caches
   BillsRepository.resetSchemaCache();
   DuplicateDetectionEngine.clearCache();

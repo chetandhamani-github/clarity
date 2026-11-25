@@ -11,6 +11,7 @@ import { radius, ThemeColors, typography, useTheme } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Dimensions,
   Platform,
@@ -28,6 +29,7 @@ import { useGoals } from '@/hooks/use-goals';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
 import { usePortfolioSummary } from '@/hooks/use-investments';
 import { useInvalidateCashflow, useSafeToSpend } from '@/hooks/use-cashflow';
+import { invalidateAnalyticsAndHealthQueries } from '@/hooks/use-financial-health';
 import { useMonthlyTotals, useNetWorthHistory, useTransactions, useCreateTransaction } from '@/hooks/use-transactions';
 import { useDoubleBackToExit } from '@/hooks/use-double-back-to-exit';
 import { useNotifications } from '@/hooks/use-notifications';
@@ -89,6 +91,7 @@ export default function DashboardScreen() {
   );
 
   // Fetch Data
+  const queryClient = useQueryClient();
   const invalidateCashflow = useInvalidateCashflow();
   const { accounts, isLoading: accountsLoading, refetch: refetchAccounts } = useAccounts();
   const {
@@ -174,6 +177,7 @@ export default function DashboardScreen() {
     setRefreshing(true);
     try {
       invalidateCashflow();
+      invalidateAnalyticsAndHealthQueries(queryClient);
       await Promise.all([
         refetchAccounts(),
         refetchTransactions(),
@@ -187,6 +191,7 @@ export default function DashboardScreen() {
       setRefreshing(false);
     }
   }, [
+    queryClient,
     invalidateCashflow,
     refetchAccounts,
     refetchTransactions,

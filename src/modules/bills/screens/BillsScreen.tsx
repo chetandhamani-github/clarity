@@ -373,7 +373,9 @@ export function BillsScreen() {
               </Text>
               <TouchableOpacity
                 style={[styles.emptyAddButton, { backgroundColor: colors.primary }]}
-                onPress={() => router.navigate('/(app)/add-bill')}
+                onPress={() =>
+                  router.navigate({ pathname: '/(app)/add-bill', params: { type: 'subscription' } })
+                }
                 activeOpacity={0.85}
               >
                 <MaterialIcons name="add" size={18} color={colors.onPrimary} />

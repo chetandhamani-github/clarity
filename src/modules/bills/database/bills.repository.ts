@@ -1,5 +1,10 @@
 import { DeviceEventEmitter } from 'react-native';
 import { getDatabase } from '@/services/database';
+import {
+  getLocalTodayYmd,
+  shiftMonthsPreserveDay,
+  shiftYmdDays,
+} from '@/utils/date';
 import type {
   Bill,
   BillCategory,
@@ -180,9 +185,7 @@ export class BillsRepository {
     const db = getDatabase();
 
     // Auto-update overdue bills
-    const now = new Date();
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const today = getLocalTodayYmd();
 
     await db.runAsync(
       `UPDATE bills 
@@ -200,12 +203,8 @@ export class BillsRepository {
   public static async getUpcomingBills(daysAhead: number = 30): Promise<Bill[]> {
     await this.ensureSchema();
     const db = getDatabase();
-    const now = new Date();
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-
-    const futureDate = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
-    const maxDueDate = `${futureDate.getFullYear()}-${pad(futureDate.getMonth() + 1)}-${pad(futureDate.getDate())}`;
+    const today = getLocalTodayYmd();
+    const maxDueDate = shiftYmdDays(today, daysAhead);
 
     await db.runAsync(
       `UPDATE bills 
@@ -229,9 +228,7 @@ export class BillsRepository {
   public static async getOverdueBills(): Promise<Bill[]> {
     await this.ensureSchema();
     const db = getDatabase();
-    const now = new Date();
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const today = getLocalTodayYmd();
 
     await db.runAsync(
       `UPDATE bills 
@@ -383,11 +380,15 @@ export class BillsRepository {
     }
     if (updates.lastPaidDate !== undefined) {
       sets.push('last_paid_date = ?');
-      params.push(updates.lastPaidDate ?? null);
+      params.push(updates.lastPaidDate);
+    } else if (updates.status === 'upcoming' || updates.status === 'overdue') {
+      sets.push('last_paid_date = NULL');
     }
     if (updates.paidTransactionId !== undefined) {
       sets.push('paid_transaction_id = ?');
-      params.push(updates.paidTransactionId ?? null);
+      params.push(updates.paidTransactionId);
+    } else if (updates.status === 'upcoming' || updates.status === 'overdue') {
+      sets.push('paid_transaction_id = NULL');
     }
     if (updates.paymentUrl !== undefined) {
       sets.push('payment_url = ?');
@@ -434,7 +435,7 @@ export class BillsRepository {
       throw new Error(`Bill not found: ${id}`);
     }
 
-    const effectivePaidDate = paidDate || new Date().toISOString().split('T')[0];
+    const effectivePaidDate = paidDate || getLocalTodayYmd();
 
     await db.runAsync(
       `UPDATE bills 
@@ -453,9 +454,18 @@ export class BillsRepository {
 
     let nextBill: Bill | undefined;
 
-    // If recurring, calculate and generate next occurrence
+    // If recurring, advance past stale missed cycles while preserving anchor billing day
     if (bill.isRecurring && bill.frequency && bill.frequency !== 'one_time') {
-      const nextDueDate = this.calculateNextOccurrence(bill.dueDate, bill.frequency);
+      const anchorDay = parseInt(bill.dueDate.split('-')[2] || '', 10) || undefined;
+      let nextDueDate = this.calculateNextOccurrence(bill.dueDate, bill.frequency, anchorDay);
+      let cycleGuard = 0;
+      while (nextDueDate <= effectivePaidDate && cycleGuard < 120) {
+        const stepped = this.calculateNextOccurrence(nextDueDate, bill.frequency, anchorDay);
+        if (stepped <= nextDueDate) break;
+        nextDueDate = stepped;
+        cycleGuard++;
+      }
+
       nextBill = await this.insertBill({
         title: bill.title,
         provider: bill.provider,
@@ -652,9 +662,8 @@ export class BillsRepository {
       } else if (b.status === 'overdue') {
         overdueCount++;
         overdueAmount += b.amount;
-        upcomingAmount += b.amount; // Count overdue in upcoming total commitment
       } else if (b.status === 'paid') {
-        if (b.lastPaidDate?.startsWith(monthPrefix) || isThisMonth) {
+        if (b.lastPaidDate ? b.lastPaidDate.startsWith(monthPrefix) : isThisMonth) {
           paidCount++;
           paidThisMonthAmount += b.amount;
         }
@@ -701,55 +710,22 @@ export class BillsRepository {
     }
   }
 
-  public static calculateNextOccurrence(currentDate: string, frequency: BillFrequency): string {
-    const [yStr, mStr, dStr] = currentDate.split('-');
-    let year = parseInt(yStr, 10);
-    let month = parseInt(mStr, 10);
-    let day = parseInt(dStr, 10);
-    const pad = (n: number) => n.toString().padStart(2, '0');
-
+  public static calculateNextOccurrence(
+    currentDate: string,
+    frequency: BillFrequency,
+    targetDay?: number
+  ): string {
     switch (frequency) {
-      case 'weekly': {
-        const date = new Date(year, month - 1, day);
-        date.setDate(date.getDate() + 7);
-        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-      }
-      case 'monthly': {
-        month += 1;
-        if (month > 12) {
-          month = 1;
-          year += 1;
-        }
-        const maxDays = new Date(year, month, 0).getDate();
-        day = Math.min(day, maxDays);
-        return `${year}-${pad(month)}-${pad(day)}`;
-      }
-      case 'quarterly': {
-        month += 3;
-        if (month > 12) {
-          month -= 12;
-          year += 1;
-        }
-        const maxDays = new Date(year, month, 0).getDate();
-        day = Math.min(day, maxDays);
-        return `${year}-${pad(month)}-${pad(day)}`;
-      }
-      case 'yearly': {
-        year += 1;
-        const maxDays = new Date(year, month, 0).getDate();
-        day = Math.min(day, maxDays);
-        return `${year}-${pad(month)}-${pad(day)}`;
-      }
-      default: {
-        month += 1;
-        if (month > 12) {
-          month = 1;
-          year += 1;
-        }
-        const maxDays = new Date(year, month, 0).getDate();
-        day = Math.min(day, maxDays);
-        return `${year}-${pad(month)}-${pad(day)}`;
-      }
+      case 'weekly':
+        return shiftYmdDays(currentDate, 7);
+      case 'monthly':
+        return shiftMonthsPreserveDay(currentDate, 1, targetDay);
+      case 'quarterly':
+        return shiftMonthsPreserveDay(currentDate, 3, targetDay);
+      case 'yearly':
+        return shiftMonthsPreserveDay(currentDate, 12, targetDay);
+      default:
+        return shiftMonthsPreserveDay(currentDate, 1, targetDay);
     }
   }
 
@@ -881,6 +857,9 @@ export class BillsRepository {
           Math.round((new Date(y1, m1 - 1, day1).getTime() - new Date(y2, m2 - 1, day2).getTime()) / 86400000)
         );
         if (diffDays <= 25) return true;
+      } else if (ref1.length >= 3 && ref2.length >= 3) {
+        // Explicitly distinct account references never represent duplicate bills
+        return false;
       }
     }
 
@@ -908,13 +887,13 @@ export class BillsRepository {
     const words1 = n1.split(/\s+/).filter((w) => w.length >= 3);
     const words2 = n2.split(/\s+/).filter((w) => w.length >= 3);
     const hasSharedWord = words1.some((w) => words2.includes(w));
-    const isNameSub = n1.includes(n2) || n2.includes(n1);
+    const isNameSub = n1.length >= 2 && n2.length >= 2 && (n1.includes(n2) || n2.includes(n1));
 
-    if (isSameCategory && isAmountClose && (hasSharedWord || isNameSub || diffDays <= 3)) {
+    if (isSameCategory && isAmountClose && (hasSharedWord || isNameSub)) {
       return true;
     }
 
-    if ((hasSharedWord || isNameSub) && isAmountClose) {
+    if ((hasSharedWord || isNameSub) && isAmountClose && diffDays <= 7) {
       return true;
     }
 

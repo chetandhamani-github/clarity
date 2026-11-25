@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -174,8 +175,14 @@ export default function SettingsScreen() {
     (state) => state.permissionStatus
   );
   const isNotificationTrackingEnabled = useNotificationStore((state) => state.isEnabled);
+  const parseNotificationTransactions = useNotificationStore((state) => state.parseTransactions);
+  const parseNotificationBills = useNotificationStore((state) => state.parseBills);
   const notificationHealth = useNotificationStore((state) => state.health);
   const setNotificationTrackingEnabled = useNotificationStore((state) => state.setIsEnabled);
+  const setParseNotificationTransactions = useNotificationStore(
+    (state) => state.setParseTransactions
+  );
+  const setParseNotificationBills = useNotificationStore((state) => state.setParseBills);
   const openNotificationDisclosure = useNotificationStore((state) => state.openDisclosure);
   const openBatterySettings = useNotificationStore((state) => state.openBatterySettings);
   const requestRebind = useNotificationStore((state) => state.requestRebind);
@@ -571,6 +578,44 @@ export default function SettingsScreen() {
 
                 {isAutoTrackingGranted && (
                   <>
+                    <View style={styles.itemDivider} />
+                    <View style={styles.settingItem}>
+                      <View style={styles.settingTextContainer}>
+                        <Text style={styles.settingTitle}>Parse Transaction Alerts</Text>
+                        <Text style={styles.settingSub}>
+                          Extract debits and credits from banking & UPI notifications
+                        </Text>
+                      </View>
+                      <Switch
+                        value={parseNotificationTransactions}
+                        onValueChange={setParseNotificationTransactions}
+                        disabled={!isNotificationTrackingEnabled}
+                        trackColor={{
+                          false: colors.surfaceContainerHighest,
+                          true: colors.primary,
+                        }}
+                        thumbColor={colors.surface}
+                      />
+                    </View>
+                    <View style={styles.itemDivider} />
+                    <View style={styles.settingItem}>
+                      <View style={styles.settingTextContainer}>
+                        <Text style={styles.settingTitle}>Detect Bill Reminders</Text>
+                        <Text style={styles.settingSub}>
+                          Auto-capture upcoming utility and credit card bill alerts
+                        </Text>
+                      </View>
+                      <Switch
+                        value={parseNotificationBills}
+                        onValueChange={setParseNotificationBills}
+                        disabled={!isNotificationTrackingEnabled}
+                        trackColor={{
+                          false: colors.surfaceContainerHighest,
+                          true: colors.primary,
+                        }}
+                        thumbColor={colors.surface}
+                      />
+                    </View>
                     <View style={styles.itemDivider} />
                     <TouchableOpacity
                       style={styles.batteryRow}
