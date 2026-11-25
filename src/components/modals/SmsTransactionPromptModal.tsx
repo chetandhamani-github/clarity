@@ -82,11 +82,16 @@ export function SmsTransactionPromptModal({ visible, onDismiss }: Props) {
     setIsProcessing(true);
     try {
       const importedCount = await importPendingTransactions(Array.from(selectedIds));
+      if (importedCount === 0) {
+        showToast('Could not import selected transactions. Please try again.', 'error');
+        return;
+      }
+
       await queryClient.invalidateQueries({ queryKey: ['transactions'] });
       await queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      await queryClient.invalidateQueries({ queryKey: ['totals'] });
-      await queryClient.invalidateQueries({ queryKey: ['recent-transactions'] });
       await queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+      await queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
+      await queryClient.invalidateQueries({ queryKey: ['goals'] });
       invalidateAnalyticsAndHealthQueries(queryClient);
 
       showToast(
@@ -120,8 +125,8 @@ export function SmsTransactionPromptModal({ visible, onDismiss }: Props) {
   const isAllSelected = selectedCount === totalCount && totalCount > 0;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleDeny}>
-      <TouchableWithoutFeedback onPress={handleDeny}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
+      <TouchableWithoutFeedback onPress={onDismiss}>
         <View style={styles.overlay}>
           <TouchableWithoutFeedback>
             <View style={styles.card}>

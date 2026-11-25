@@ -1,14 +1,17 @@
-import type { QueryClient } from '@tanstack/react-query';
-import { clearDatabase } from '@/services/database';
-import { clearAutoBackupTimer } from '@/services/cloud/google-drive-service';
 import { mmkv } from '@/lib/storage';
-import { useAppStore } from '@/store/use-app-store';
-import { useBillsStore } from '@/modules/bills/store/bills.store';
-import { useSplitwiseStore } from '@/modules/splitwise/store/splitwise.store';
-import { useSmsStore } from '@/store/useSmsStore';
-import { useCopilotStore } from '@/store/use-copilot-store';
 import { BillsRepository } from '@/modules/bills/database/bills.repository';
+import { useBillsStore } from '@/modules/bills/store/bills.store';
+import { NativeNotificationListenerAdapter } from '@/modules/notifications/adapters/nativeNotificationListenerAdapter';
+import { DEFAULT_TARGET_APPS } from '@/modules/notifications/constants';
 import { DuplicateDetectionEngine } from '@/modules/sms/duplicate/duplicateDetectionEngine';
+import { useSplitwiseStore } from '@/modules/splitwise/store/splitwise.store';
+import { clearAutoBackupTimer } from '@/services/cloud/google-drive-service';
+import { clearDatabase } from '@/services/database';
+import { useAppStore } from '@/store/use-app-store';
+import { useCopilotStore } from '@/store/use-copilot-store';
+import { useNotificationStore } from '@/store/useNotificationStore';
+import { useSmsStore } from '@/store/useSmsStore';
+import type { QueryClient } from '@tanstack/react-query';
 
 const INSTALLATION_ID_STORAGE_KEY = 'clarity_device_installation_id';
 
@@ -32,9 +35,10 @@ export async function resetEntireAppData(queryClient?: QueryClient): Promise<voi
     // Ignore in test/headless mode
   }
 
-  // 3. Reset repository and engine schema/memory caches
+  // 3. Reset repository and engine schema/memory caches & native notification bridge buffer
   BillsRepository.resetSchemaCache();
   DuplicateDetectionEngine.clearCache();
+  await NativeNotificationListenerAdapter.clearBridgeState().catch(() => false);
 
   // 4. Wipe MMKV storage while preserving installation id
   const installationId = mmkv.getString(INSTALLATION_ID_STORAGE_KEY);
@@ -94,6 +98,20 @@ export async function resetEntireAppData(queryClient?: QueryClient): Promise<voi
     reviewQueueCount: 0,
     pendingTransactions: [],
     isPromptVisible: false,
+  });
+
+  useNotificationStore.setState({
+    isEnabled: true,
+    permissionStatus: 'denied',
+    parseTransactions: true,
+    parseBills: true,
+    enabledPackages: DEFAULT_TARGET_APPS.map((app) => app.packageName),
+    health: null,
+    isDisclosureVisible: false,
+    activeDetectedBill: null,
+    activeDetectedBillId: null,
+    detectedBillQueue: [],
+    detectedBillModalVisible: false,
   });
 
   useCopilotStore.getState().clearMessages();

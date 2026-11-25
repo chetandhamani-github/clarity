@@ -277,6 +277,22 @@ export const useNotificationStore = create<NotificationStoreState>((set, get) =>
         await NativeNotificationListenerAdapter.ackPendingNotifications(ackedIds);
       }
 
+      try {
+        const [{ useSmsStore }, { SmsDao }] = await Promise.all([
+          import('@/store/useSmsStore'),
+          import('@/modules/sms/storage/smsDao'),
+        ]);
+        await useSmsStore.getState().refreshReviewQueueCount().catch(() => {});
+        if (typeof SmsDao.getUnlinkedParsedTransactions === 'function') {
+          const unlinked = await SmsDao.getUnlinkedParsedTransactions();
+          if (unlinked.length > 0 || useSmsStore.getState().pendingTransactions.length > 0) {
+            useSmsStore.getState().setPendingTransactions(unlinked);
+          }
+        }
+      } catch {
+        // Ignore store sync failure in isolated tests
+      }
+
       await get().refreshHealth().catch(() => null);
       return processedCount;
     })().finally(() => {

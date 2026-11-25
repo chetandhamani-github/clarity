@@ -8,34 +8,33 @@ import { BillExtractor } from '@/modules/sms/extractor/billExtractor';
 import { TransactionExtractor } from '@/modules/sms/extractor/transactionExtractor';
 import { SmsReaderService } from '@/modules/sms/reader/smsReaderService';
 import { RecurringDetectionEngine } from '@/modules/sms/recurring/recurringDetectionEngine';
+import { createReviewItem } from '@/modules/sms/reviewQueue/reviewItemFactory';
 import { BillSettlementEngine } from '@/modules/sms/services/billSettlementEngine';
 import { SmsDao } from '@/modules/sms/storage/smsDao';
 import type {
-    ParsedTransaction,
-    RawSmsMessage,
-    ReviewQueueItem,
-    SmsSyncProgress,
+  ParsedTransaction,
+  RawSmsMessage,
+  ReviewQueueItem,
+  SmsSyncProgress,
 } from '@/modules/sms/types';
 import { getDatabase } from '@/services/database';
 import {
-    getAllAccounts,
-    insertAccount,
-    updateAccount,
-    updateAccountBalance,
+  getAllAccounts,
+  insertAccount,
+  updateAccount,
+  updateAccountBalance,
 } from '@/services/database/account-dao';
 import {
-    findManualMatch,
-    insertTransaction,
-    mergeManualWithSmsTransaction,
+  findManualMatch,
+  insertTransaction,
+  mergeManualWithSmsTransaction,
 } from '@/services/database/transaction-dao';
-import { BillAlertEngine } from '@/services/notifications/bill-alert-engine';
 import {
-  evaluateTransactionBudgetAlerts,
   evaluateAccountBalanceAlerts,
+  evaluateTransactionBudgetAlerts,
 } from '@/services/notifications/alert-engine';
-import { formatLocalDate } from '@/utils/format';
+import { BillAlertEngine } from '@/services/notifications/bill-alert-engine';
 import { hasMeaningfulMerchant } from '@/utils/transaction-display';
-import { createReviewItem } from '@/modules/sms/reviewQueue/reviewItemFactory';
 import { SmsPipelineService } from './smsPipelineService';
 
 const LAST_SYNC_KEY = 'clarity_last_sms_sync_timestamp';
@@ -349,8 +348,11 @@ export class SmsSyncService {
   public static async importParsedTransactions(
     parsedTransactions: ParsedTransaction[]
   ): Promise<void> {
-    await this.syncToClarityTransactions(parsedTransactions);
+    const { linkedCount, failedCount } = await this.syncToClarityTransactions(parsedTransactions);
     await this.reconcileAvailableBalances();
+    if (parsedTransactions.length > 0 && linkedCount === 0 && failedCount > 0) {
+      throw new Error('Failed to import transactions into ledger');
+    }
   }
 
   private static async processSmsBatch(messages: RawSmsMessage[]): Promise<{
@@ -652,12 +654,12 @@ export class SmsSyncService {
 
   private static async syncToClarityTransactions(
     parsedTransactions: ParsedTransaction[]
-  ): Promise<void> {
+  ): Promise<{ linkedCount: number; failedCount: number }> {
     const validTransactions = parsedTransactions.filter(
       (transaction) => !transaction.isDuplicate && !transaction.transactionId
     );
     if (validTransactions.length === 0) {
-      return;
+      return { linkedCount: 0, failedCount: 0 };
     }
 
     // Ensure accounts exist and are synced first
@@ -665,6 +667,8 @@ export class SmsSyncService {
 
     const database = getDatabase();
     let accounts = await getAllAccounts();
+    let linkedCount = 0;
+    let failedCount = 0;
 
     for (const transaction of validTransactions) {
       try {
@@ -818,6 +822,13 @@ export class SmsSyncService {
             }
           }
 
+          // If account balance was not already updated via an explicit availableBalance snapshot,
+          // apply this transaction's delta directly so UPI/alert-only transactions update balances.
+          const hasBalanceSnapshot =
+            accountType !== 'credit' &&
+            transaction.availableBalance !== undefined &&
+            transaction.availableBalance !== null;
+
           // Insert brand new verified SMS transaction
           const createdTransaction = await insertTransaction(
             {
@@ -834,11 +845,12 @@ export class SmsSyncService {
               smsId: transaction.smsId,
               parsedTxId: transaction.id,
             },
-            { updateAccountBalance: false }
+            { updateAccountBalance: !hasBalanceSnapshot }
           );
 
           await SmsDao.linkClarityTransaction(transaction.id, createdTransaction.id);
           transaction.transactionId = createdTransaction.id;
+          linkedCount += 1;
 
           if (!isReversal) {
             await this.pairCrossAccountTransfer({
@@ -851,6 +863,10 @@ export class SmsSyncService {
               rawBody: transaction.rawBody,
             });
           }
+        }
+
+        if (manualMatch) {
+          linkedCount += 1;
         }
 
         // Settle any matching unpaid bill & evaluate budget alerts for expense transaction
@@ -877,9 +893,11 @@ export class SmsSyncService {
           }).catch(() => {});
         }
       } catch {
-        // Failed to create transaction
+        failedCount += 1;
       }
     }
+
+    return { linkedCount, failedCount };
   }
 
   /**
@@ -912,11 +930,14 @@ export class SmsSyncService {
         let latestBalance = await database.getFirstAsync<{
           available_balance: number | null;
           transaction_date: string | null;
+          transaction_id: string | null;
         }>(
-          `SELECT p.available_balance, p.transaction_date
+          `SELECT p.available_balance, p.transaction_date, p.transaction_id
            FROM parsed_transactions p
            JOIN transactions t ON p.transaction_id = t.id
-           WHERE t.account_id = ? AND p.available_balance IS NOT NULL
+           WHERE t.account_id = ?
+             AND p.available_balance IS NOT NULL
+             AND (p.duplicate_of IS NULL OR p.duplicate_of != 'USER_DELETED')
            ORDER BY p.transaction_date DESC, p.created_at DESC
            LIMIT 1`,
           [account.id]
@@ -926,23 +947,71 @@ export class SmsSyncService {
           latestBalance = await database.getFirstAsync<{
             available_balance: number | null;
             transaction_date: string | null;
+            transaction_id: string | null;
           }>(
-            `SELECT available_balance, transaction_date
+            `SELECT available_balance, transaction_date, transaction_id
              FROM parsed_transactions
-             WHERE account_mask LIKE ? AND available_balance IS NOT NULL
+             WHERE account_mask LIKE ?
+               AND available_balance IS NOT NULL
+               AND (duplicate_of IS NULL OR duplicate_of != 'USER_DELETED')
              ORDER BY transaction_date DESC, created_at DESC
              LIMIT 1`,
             [`%${account.lastFour}`]
           );
         }
 
-        if (latestBalance?.available_balance !== null && latestBalance?.available_balance !== undefined) {
-          await updateAccountBalance(account.id, latestBalance.available_balance);
+        if (
+          latestBalance?.available_balance !== null &&
+          latestBalance?.available_balance !== undefined
+        ) {
+          let reconciledBalance = latestBalance.available_balance;
+          if (latestBalance.transaction_date) {
+            const subsequentTxs =
+              (await database.getAllAsync<{
+                id: string;
+                amount: number;
+                type: string;
+                account_id: string;
+                to_account_id?: string | null;
+              }>(
+                `SELECT id, amount, type, account_id, to_account_id
+                 FROM transactions
+                 WHERE (account_id = ? OR to_account_id = ?)
+                   AND date > ?
+                   AND (id != ? OR ? IS NULL)`,
+                [
+                  account.id,
+                  account.id,
+                  latestBalance.transaction_date,
+                  latestBalance.transaction_id ?? null,
+                  latestBalance.transaction_id ?? null,
+                ]
+              )) ?? [];
+
+            let deltaSinceSnapshot = 0;
+            for (const tx of subsequentTxs) {
+              if (tx.type === 'income') {
+                deltaSinceSnapshot += tx.amount;
+              } else if (tx.type === 'expense') {
+                deltaSinceSnapshot -= tx.amount;
+              } else if (tx.type === 'transfer') {
+                if (tx.account_id === account.id) {
+                  deltaSinceSnapshot -= tx.amount;
+                } else if (tx.to_account_id === account.id) {
+                  deltaSinceSnapshot += tx.amount;
+                }
+              }
+            }
+            reconciledBalance =
+              Math.round((latestBalance.available_balance + deltaSinceSnapshot) * 100) / 100;
+          }
+
+          await updateAccountBalance(account.id, reconciledBalance);
           evaluateAccountBalanceAlerts({
             id: account.id,
             name: account.name,
             type: account.type,
-            balance: latestBalance.available_balance,
+            balance: reconciledBalance,
           }).catch(() => {});
         }
       }
@@ -1026,6 +1095,52 @@ export class SmsSyncService {
 
           if (targetAccount) {
             const database = getDatabase();
+            const existingTx = await database.getFirstAsync<{
+              account_id: string;
+              amount: number;
+              type: string;
+            }>(
+              'SELECT account_id, amount, type FROM transactions WHERE id = ?',
+              [original.transactionId]
+            );
+
+            if (existingTx && existingTx.account_id !== targetAccount.id) {
+              const previousAccount = accounts.find((a) => a.id === existingTx.account_id);
+              if (previousAccount) {
+                const revertDelta =
+                  existingTx.type === 'income'
+                    ? -existingTx.amount
+                    : existingTx.type === 'expense'
+                    ? existingTx.amount
+                    : 0;
+                if (revertDelta !== 0) {
+                  await updateAccountBalance(
+                    previousAccount.id,
+                    Math.round((previousAccount.balance + revertDelta) * 100) / 100
+                  );
+                }
+              }
+
+              const hasSnapshotOnTarget =
+                targetAccount.type !== 'credit' &&
+                enriched.availableBalance !== undefined &&
+                enriched.availableBalance !== null;
+              if (!hasSnapshotOnTarget) {
+                const applyDelta =
+                  existingTx.type === 'income'
+                    ? existingTx.amount
+                    : existingTx.type === 'expense'
+                    ? -existingTx.amount
+                    : 0;
+                if (applyDelta !== 0) {
+                  await updateAccountBalance(
+                    targetAccount.id,
+                    Math.round((targetAccount.balance + applyDelta) * 100) / 100
+                  );
+                }
+              }
+            }
+
             await database.runAsync(
               'UPDATE transactions SET account_id = ? WHERE id = ?',
               [targetAccount.id, original.transactionId]

@@ -1,5 +1,5 @@
+import type { ClassificationResult, ExtractedTransaction, RawSmsMessage } from '@/modules/sms/types';
 import { BaseBankParser } from './baseBankParser';
-import type { RawSmsMessage, ExtractedTransaction, ClassificationResult } from '@/modules/sms/types';
 
 export class IdfcParser extends BaseBankParser {
   readonly bankId = 'IDFC';
@@ -15,9 +15,9 @@ export class IdfcParser extends BaseBankParser {
 
     const body = message.body;
     // IDFC pattern: "Rs.500.00 debited from IDFC FIRST Bank A/C ... to [merchant] on ..."
-    const toMatch = body.match(/to\s+([A-Za-z0-9*.\-&_\s]+?)(?:\s+on|\s+ref|\.|$)/i);
+    const toMatch = body.match(/\bto\s+([A-Za-z0-9*.\-&_\s]+?)(?:\s+on|\s+ref|\.|$)/i);
     if (toMatch && toMatch[1]) {
-      extracted.merchant = toMatch[1].trim();
+      extracted.merchant = this.pickMerchant(toMatch[1], extracted.merchant);
     }
 
     return extracted;

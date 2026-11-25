@@ -38,8 +38,6 @@ export function useNotificationListener() {
       await drainAndProcessPending();
     };
 
-    syncHealthAndDrain();
-
     const unsubscribe = NativeNotificationListenerAdapter.subscribeToNotifications(
       async (notif: RawNotificationPayload) => {
         if (!isEnabledRef.current) return;
@@ -64,6 +62,9 @@ export function useNotificationListener() {
       }
     );
 
+    NativeNotificationListenerAdapter.setJsListenerReady(true);
+    syncHealthAndDrain();
+
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === 'active') {
         syncHealthAndDrain();
@@ -73,6 +74,7 @@ export function useNotificationListener() {
     const appStateSub = AppState.addEventListener('change', handleAppStateChange);
 
     return () => {
+      NativeNotificationListenerAdapter.setJsListenerReady(false);
       unsubscribe();
       appStateSub.remove();
     };

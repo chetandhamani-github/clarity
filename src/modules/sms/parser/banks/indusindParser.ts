@@ -1,5 +1,5 @@
+import type { ClassificationResult, ExtractedTransaction, RawSmsMessage } from '@/modules/sms/types';
 import { BaseBankParser } from './baseBankParser';
-import type { RawSmsMessage, ExtractedTransaction, ClassificationResult } from '@/modules/sms/types';
 
 export class IndusindParser extends BaseBankParser {
   readonly bankId = 'INDBNK';
@@ -15,9 +15,9 @@ export class IndusindParser extends BaseBankParser {
 
     const body = message.body;
     // IndusInd pattern: "IndusInd Bank: INR 500 debited from A/C XX1234 on 01-Jan at [merchant]..."
-    const atMatch = body.match(/at\s+([A-Za-z0-9*.\-&_\s]+?)(?:\s+on|\s+ref|\.|$)/i);
+    const atMatch = body.match(/\bat\s+([A-Za-z0-9*.\-&_\s]+?)(?:\s+on|\s+ref|\.|$)/i);
     if (atMatch && atMatch[1]) {
-      extracted.merchant = atMatch[1].trim();
+      extracted.merchant = this.pickMerchant(atMatch[1], extracted.merchant);
     }
 
     return extracted;

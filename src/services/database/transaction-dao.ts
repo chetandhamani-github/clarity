@@ -788,6 +788,20 @@ export async function deleteTransaction(id: string): Promise<void> {
     // 2.5. Revert any bills previously settled by this transaction
     revertedBills = await revertLinkedBillsForTransaction(db, id);
 
+    // 2.6. Mark linked parsed SMS/notification records as user-deleted so they are not re-surfaced on next launch
+    try {
+      await db.runAsync(
+        `UPDATE parsed_transactions
+         SET is_duplicate = 1,
+             duplicate_of = 'USER_DELETED',
+             transaction_id = NULL
+         WHERE transaction_id = ? OR (? IS NOT NULL AND id = ?)`,
+        [id, tx.parsed_tx_id ?? null, tx.parsed_tx_id ?? null]
+      );
+    } catch {
+      // parsed_transactions table may not exist in isolated unit tests
+    }
+
     // 3. Delete the transaction
     await db.runAsync('DELETE FROM transactions WHERE id = ?', [id]);
   };

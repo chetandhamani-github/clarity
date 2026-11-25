@@ -734,34 +734,35 @@ endobj
       });
     });
 
-    it('unlocks RC4-128 (/V 2 /R 3) SBI-style 11-digit account password PDF', async () => {
-      const pwdPad = Buffer.from([
-        0x28, 0xbf, 0x4e, 0x5e, 0x4e, 0x75, 0x8a, 0x41, 0x64, 0x00, 0x4e, 0x56, 0xff, 0xfa, 0x01, 0x08,
-        0x2e, 0x2e, 0x00, 0xb6, 0xd0, 0x68, 0x3e, 0x80, 0x2f, 0x0c, 0xa9, 0xfe, 0x64, 0x53, 0x69, 0x7a,
-      ]);
-      const rc4Enc = (key: Buffer, data: Buffer): Buffer => {
-        const S = Array.from({ length: 256 }, (_, idx) => idx);
-        let j = 0;
-        for (let i = 0; i < 256; i++) {
-          j = (j + S[i] + key[i % key.length]) & 0xff;
-          const tmp = S[i];
-          S[i] = S[j];
-          S[j] = tmp;
-        }
-        const out = Buffer.alloc(data.length);
-        let a = 0;
-        let b = 0;
-        for (let k = 0; k < data.length; k++) {
-          a = (a + 1) & 0xff;
-          b = (b + S[a]) & 0xff;
-          const tmp = S[a];
-          S[a] = S[b];
-          S[b] = tmp;
-          out[k] = data[k] ^ S[(S[a] + S[b]) & 0xff];
-        }
-        return out;
-      };
+    const rc4EncryptTest = (key: Buffer, data: Buffer): Buffer => {
+      const S = Array.from({ length: 256 }, (_, idx) => idx);
+      let j = 0;
+      for (let i = 0; i < 256; i++) {
+        j = (j + S[i] + key[i % key.length]) & 0xff;
+        const tmp = S[i];
+        S[i] = S[j];
+        S[j] = tmp;
+      }
+      const out = Buffer.alloc(data.length);
+      let a = 0;
+      let b = 0;
+      for (let k = 0; k < data.length; k++) {
+        a = (a + 1) & 0xff;
+        b = (b + S[a]) & 0xff;
+        const tmp = S[a];
+        S[a] = S[b];
+        S[b] = tmp;
+        out[k] = data[k] ^ S[(S[a] + S[b]) & 0xff];
+      }
+      return out;
+    };
 
+    const PDF_PWD_PAD_TEST = Buffer.from([
+      0x28, 0xbf, 0x4e, 0x5e, 0x4e, 0x75, 0x8a, 0x41, 0x64, 0x00, 0x4e, 0x56, 0xff, 0xfa, 0x01, 0x08,
+      0x2e, 0x2e, 0x00, 0xb6, 0xd0, 0x68, 0x3e, 0x80, 0x2f, 0x0c, 0xa9, 0xfe, 0x64, 0x53, 0x69, 0x7a,
+    ]);
+
+    it('unlocks RC4-128 (/V 2 /R 3) SBI-style 11-digit account password PDF', async () => {
       const password = '00123456789';
       const id1 = Buffer.from('a1b2c3d4e5f60718293a4b5c6d7e8f90', 'hex');
       const oValue = Buffer.alloc(32, 0x33);
@@ -769,7 +770,7 @@ endobj
       const pBytes = Buffer.alloc(4);
       pBytes.writeInt32LE(pInt, 0);
 
-      const paddedPwd = Buffer.concat([Buffer.from(password, 'latin1'), pwdPad]).subarray(0, 32);
+      const paddedPwd = Buffer.concat([Buffer.from(password, 'latin1'), PDF_PWD_PAD_TEST]).subarray(0, 32);
       const md5 = forge.md.md5.create();
       md5.update(paddedPwd.toString('binary'));
       md5.update(oValue.toString('binary'));
@@ -784,12 +785,12 @@ endobj
       const encKey = hash.subarray(0, 16);
 
       const uMd5 = forge.md.md5.create();
-      uMd5.update(pwdPad.toString('binary'));
+      uMd5.update(PDF_PWD_PAD_TEST.toString('binary'));
       uMd5.update(id1.toString('binary'));
       let uData = Buffer.from(uMd5.digest().getBytes(), 'binary');
       for (let i = 0; i < 20; i++) {
         const roundKey = Buffer.from(encKey.map((b: number) => b ^ i));
-        uData = rc4Enc(roundKey, uData);
+        uData = rc4EncryptTest(roundKey, uData);
       }
       const uValue = Buffer.concat([uData, Buffer.alloc(16, 0)]);
 
@@ -800,7 +801,7 @@ endobj
 
       const plainStream = 'BT /F1 10 Tf 1 0 0 1 40 700 Tm (07 Apr 2026 BY TRANSFER NEFT 15,000.00 33,000.00) Tj ET';
       const flate = Buffer.from(pako.deflate(Buffer.from(plainStream, 'latin1')));
-      const encryptedStream = rc4Enc(objKey, flate);
+      const encryptedStream = rc4EncryptTest(objKey, flate);
 
       const mockPdf = `%PDF-1.4
 1 0 obj
@@ -839,32 +840,6 @@ trailer
     });
 
     it('decodes /LZWDecode compressed PDF streams alongside RC4-40 (/V 1 /R 2) encryption', async () => {
-      const pwdPad = Buffer.from([
-        0x28, 0xbf, 0x4e, 0x5e, 0x4e, 0x75, 0x8a, 0x41, 0x64, 0x00, 0x4e, 0x56, 0xff, 0xfa, 0x01, 0x08,
-        0x2e, 0x2e, 0x00, 0xb6, 0xd0, 0x68, 0x3e, 0x80, 0x2f, 0x0c, 0xa9, 0xfe, 0x64, 0x53, 0x69, 0x7a,
-      ]);
-      const rc4Enc = (key: Buffer, data: Buffer): Buffer => {
-        const S = Array.from({ length: 256 }, (_, idx) => idx);
-        let j = 0;
-        for (let i = 0; i < 256; i++) {
-          j = (j + S[i] + key[i % key.length]) & 0xff;
-          const tmp = S[i];
-          S[i] = S[j];
-          S[j] = tmp;
-        }
-        const out = Buffer.alloc(data.length);
-        let a = 0;
-        let b = 0;
-        for (let k = 0; k < data.length; k++) {
-          a = (a + 1) & 0xff;
-          b = (b + S[a]) & 0xff;
-          const tmp = S[a];
-          S[a] = S[b];
-          S[b] = tmp;
-          out[k] = data[k] ^ S[(S[a] + S[b]) & 0xff];
-        }
-        return out;
-      };
       const encodeLzw9Bit = (input: Buffer): Buffer => {
         const codes: number[] = [256];
         for (let idx = 0; idx < input.length; idx++) {
@@ -895,14 +870,14 @@ trailer
       const pBytes = Buffer.alloc(4);
       pBytes.writeInt32LE(pInt, 0);
 
-      const paddedPwd = Buffer.concat([Buffer.from(password, 'latin1'), pwdPad]).subarray(0, 32);
+      const paddedPwd = Buffer.concat([Buffer.from(password, 'latin1'), PDF_PWD_PAD_TEST]).subarray(0, 32);
       const md5 = forge.md.md5.create();
       md5.update(paddedPwd.toString('binary'));
       md5.update(oValue.toString('binary'));
       md5.update(pBytes.toString('binary'));
       md5.update(id1.toString('binary'));
       const encKey = Buffer.from(md5.digest().getBytes(), 'binary').subarray(0, 5);
-      const uValue = rc4Enc(encKey, pwdPad);
+      const uValue = rc4EncryptTest(encKey, PDF_PWD_PAD_TEST);
 
       const objMd5 = forge.md.md5.create();
       objMd5.update(encKey.toString('binary'));
@@ -911,7 +886,7 @@ trailer
 
       const plainStream = 'BT /F1 10 Tf 1 0 0 1 40 700 Tm (08 Apr 2026 ZOMATO UPI 350.00 12,000.00) Tj ET';
       const lzwCompressed = encodeLzw9Bit(Buffer.from(plainStream, 'latin1'));
-      const encryptedStream = rc4Enc(objKey, lzwCompressed);
+      const encryptedStream = rc4EncryptTest(objKey, lzwCompressed);
 
       const mockPdf = `%PDF-1.3
 1 0 obj

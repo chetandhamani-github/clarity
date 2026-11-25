@@ -1,6 +1,5 @@
+import type { ClassificationResult, ExtractedTransaction, RawSmsMessage } from '@/modules/sms/types';
 import { BaseBankParser } from './baseBankParser';
-import type { RawSmsMessage, ExtractedTransaction, ClassificationResult } from '@/modules/sms/types';
-import { TransactionExtractor } from '@/modules/sms/extractor/transactionExtractor';
 
 export class HdfcParser extends BaseBankParser {
   readonly bankId = 'HDFC';
@@ -16,13 +15,13 @@ export class HdfcParser extends BaseBankParser {
 
     // HDFC specific merchant pattern: "... to VPA [vpa] ..." or "... at [merchant] on ..."
     const body = message.body;
-    const vpaMatch = body.match(/to\s+VPA\s+([a-zA-Z0-9.\-_@]+)/i);
+    const vpaMatch = body.match(/\bto\s+VPA\s+([a-zA-Z0-9.\-_@]+)/i);
     if (vpaMatch && vpaMatch[1]) {
-      extracted.merchant = vpaMatch[1];
+      extracted.merchant = this.pickMerchant(vpaMatch[1], extracted.merchant);
     } else {
-      const atMatch = body.match(/at\s+([A-Za-z0-9*.\-&\s]+?)\s+on\s+\d/i);
+      const atMatch = body.match(/\bat\s+([A-Za-z0-9*.\-&\s]+?)\s+on\s+\d/i);
       if (atMatch && atMatch[1]) {
-        extracted.merchant = atMatch[1].trim();
+        extracted.merchant = this.pickMerchant(atMatch[1], extracted.merchant);
       }
     }
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  DeviceEventEmitter,
   View,
   StyleSheet,
   Modal,
@@ -72,6 +73,7 @@ export function BillDetectedPromptModal() {
       }
 
       await useBillsStore.getState().loadData().catch(() => {});
+      DeviceEventEmitter.emit('billsUpdated');
       queryClient.invalidateQueries({ queryKey: ['bills'] });
       showToast(`Added reminder for ${bill.billerName}`, 'success');
       closeDetectedBillModal();
@@ -100,6 +102,7 @@ export function BillDetectedPromptModal() {
       if (targetBillId) {
         await BillService.updateBill(targetBillId, { status: 'dismissed' });
         await useBillsStore.getState().loadData().catch(() => {});
+        DeviceEventEmitter.emit('billsUpdated');
         queryClient.invalidateQueries({ queryKey: ['bills'] });
       }
     } catch {

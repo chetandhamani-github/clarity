@@ -1,8 +1,8 @@
-import { create } from 'zustand';
-import type { SmsAnalytics, ParsedTransaction } from '@/modules/sms/types';
-import { SmsSyncService } from '@/modules/sms/services/smsSyncService';
 import { SmsAnalyticsService } from '@/modules/sms/services/smsAnalyticsService';
+import { SmsSyncService } from '@/modules/sms/services/smsSyncService';
 import { SmsDao } from '@/modules/sms/storage/smsDao';
+import type { ParsedTransaction, SmsAnalytics } from '@/modules/sms/types';
+import { create } from 'zustand';
 
 interface SmsStoreState {
   analytics: SmsAnalytics | null;
@@ -45,10 +45,10 @@ export const useSmsStore = create<SmsStoreState>((set, get) => ({
   },
 
   setPendingTransactions: (txs: ParsedTransaction[]) => {
-    set({
+    set((state) => ({
       pendingTransactions: txs,
-      isPromptVisible: false,
-    });
+      isPromptVisible: txs.length === 0 ? false : state.isPromptVisible,
+    }));
   },
 
   openTransactionPrompt: () => {
@@ -80,15 +80,27 @@ export const useSmsStore = create<SmsStoreState>((set, get) => ({
       await SmsSyncService.importParsedTransactions(toImport);
     }
 
-    set({
-      pendingTransactions: [],
-      isPromptVisible: false,
-    });
+    let remainingUnlinked: ParsedTransaction[] = [];
+    let importedCount = toImport.length;
+    if (typeof SmsDao.getUnlinkedParsedTransactions === 'function') {
+      try {
+        remainingUnlinked = await SmsDao.getUnlinkedParsedTransactions();
+        const unlinkedIdSet = new Set(remainingUnlinked.map((tx) => tx.id));
+        importedCount = toImport.filter((tx) => !unlinkedIdSet.has(tx.id)).length;
+      } catch {
+        remainingUnlinked = [];
+      }
+    }
+
+    set((state) => ({
+      pendingTransactions: remainingUnlinked,
+      isPromptVisible: remainingUnlinked.length === 0 || importedCount > 0 ? false : state.isPromptVisible,
+    }));
 
     await get().refreshAnalytics();
     await get().refreshReviewQueueCount();
 
-    return toImport.length;
+    return importedCount;
   },
 
   dismissPendingTransactions: async (idsToDismiss?: string[]) => {

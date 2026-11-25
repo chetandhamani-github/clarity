@@ -15,9 +15,9 @@ export class BobParser extends BaseBankParser {
 
     const body = message.body;
     // Bank of Baroda pattern: "BOB: Your A/C ... debited by Rs. 500 on ... to [merchant]..."
-    const toMatch = body.match(/to\s+([A-Za-z0-9*.\-&_\s]+?)(?:\s+on|\s+ref|\.|$)/i);
+    const toMatch = body.match(/\bto\s+([A-Za-z0-9*.\-&_\s]+?)(?:\s+on|\s+ref|\.|$)/i);
     if (toMatch && toMatch[1]) {
-      extracted.merchant = toMatch[1].trim();
+      extracted.merchant = this.pickMerchant(toMatch[1], extracted.merchant);
     }
 
     return extracted;

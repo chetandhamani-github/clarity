@@ -15,9 +15,9 @@ export class CanaraParser extends BaseBankParser {
 
     const body = message.body;
     // Canara Bank pattern: "Canara Bank: A/c ... debited for Rs 500 towards [merchant]..."
-    const towardsMatch = body.match(/towards\s+([A-Za-z0-9*.\-&_\s]+?)(?:\s+on|\s+ref|\.|$)/i);
+    const towardsMatch = body.match(/\btowards\s+([A-Za-z0-9*.\-&_\s]+?)(?:\s+on|\s+ref|\.|$)/i);
     if (towardsMatch && towardsMatch[1]) {
-      extracted.merchant = towardsMatch[1].trim();
+      extracted.merchant = this.pickMerchant(towardsMatch[1], extracted.merchant);
     }
 
     return extracted;

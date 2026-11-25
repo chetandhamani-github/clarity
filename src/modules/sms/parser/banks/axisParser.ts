@@ -15,9 +15,9 @@ export class AxisParser extends BaseBankParser {
 
     const body = message.body;
     // Axis pattern: "...debited with INR 500.00 on 01-01-25 info: [merchant] Avl Bal..."
-    const infoMatch = body.match(/info[:\s]+([A-Za-z0-9*.\-&_\s]+?)(?:\s+Avl|\s+Not|\.|$)/i);
+    const infoMatch = body.match(/\binfo[:\s]+([A-Za-z0-9*.\-&_\s]+?)(?:\s+Avl|\s+Not|\.|$)/i);
     if (infoMatch && infoMatch[1]) {
-      extracted.merchant = infoMatch[1].trim();
+      extracted.merchant = this.pickMerchant(infoMatch[1], extracted.merchant);
     }
 
     return extracted;

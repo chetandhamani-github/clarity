@@ -15,9 +15,9 @@ export class FederalBankParser extends BaseBankParser {
 
     const body = message.body;
     // Federal Bank pattern: "Federal Bank: A/c XX1234 debited for Rs 500 at [merchant]..."
-    const atMatch = body.match(/at\s+([A-Za-z0-9*.\-&_\s]+?)(?:\s+on|\s+ref|\.|$)/i);
+    const atMatch = body.match(/\bat\s+([A-Za-z0-9*.\-&_\s]+?)(?:\s+on|\s+ref|\.|$)/i);
     if (atMatch && atMatch[1]) {
-      extracted.merchant = atMatch[1].trim();
+      extracted.merchant = this.pickMerchant(atMatch[1], extracted.merchant);
     }
 
     return extracted;

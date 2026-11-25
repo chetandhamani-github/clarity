@@ -15,9 +15,9 @@ export class AuBankParser extends BaseBankParser {
 
     const body = message.body;
     // AU pattern: "AU Bank: A/c **1234 debited by INR 500.00 on ... towards [merchant] ..."
-    const towardsMatch = body.match(/towards\s+([A-Za-z0-9*.\-&_\s]+?)(?:\s+on|\s+ref|\.|$)/i);
+    const towardsMatch = body.match(/\btowards\s+([A-Za-z0-9*.\-&_\s]+?)(?:\s+on|\s+ref|\.|$)/i);
     if (towardsMatch && towardsMatch[1]) {
-      extracted.merchant = towardsMatch[1].trim();
+      extracted.merchant = this.pickMerchant(towardsMatch[1], extracted.merchant);
     }
 
     return extracted;

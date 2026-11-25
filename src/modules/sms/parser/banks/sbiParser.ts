@@ -1,5 +1,5 @@
+import type { ClassificationResult, ExtractedTransaction, RawSmsMessage } from '@/modules/sms/types';
 import { BaseBankParser } from './baseBankParser';
-import type { RawSmsMessage, ExtractedTransaction, ClassificationResult } from '@/modules/sms/types';
 
 export class SbiParser extends BaseBankParser {
   readonly bankId = 'SBI';
@@ -15,9 +15,9 @@ export class SbiParser extends BaseBankParser {
 
     const body = message.body;
     // SBI pattern: "...debited by 500.0 on 01Jan25 trf to [merchant] Ref No..."
-    const trfMatch = body.match(/trf\s+to\s+([A-Za-z0-9*.\-&_\s]+?)(?:\s+Ref|\s+Bal|\.|$)/i);
+    const trfMatch = body.match(/\btrf\s+to\s+([A-Za-z0-9*.\-&_\s]+?)(?:\s+Ref|\s+Bal|\.|$)/i);
     if (trfMatch && trfMatch[1]) {
-      extracted.merchant = trfMatch[1].trim();
+      extracted.merchant = this.pickMerchant(trfMatch[1], extracted.merchant);
     }
 
     return extracted;

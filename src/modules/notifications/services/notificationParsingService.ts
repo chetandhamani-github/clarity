@@ -80,10 +80,30 @@ function invalidateLedgerQueries(): void {
 }
 
 export class NotificationParsingService {
+  private static processingQueue: Promise<void> = Promise.resolve();
+
   /**
    * Process an incoming notification payload through Clarity's intelligence engine.
+   * Serialized to prevent concurrent cross-app notifications from racing duplicate/account checks.
    */
-  public static async processNotification(
+  public static processNotification(
+    notification: RawNotificationPayload,
+    options: {
+      parseTransactions?: boolean;
+      parseBills?: boolean;
+    } = {}
+  ): Promise<NotificationParseResult> {
+    const run = this.processingQueue.then(() =>
+      this.processNotificationInternal(notification, options)
+    );
+    this.processingQueue = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
+  }
+
+  private static async processNotificationInternal(
     notification: RawNotificationPayload,
     options: {
       parseTransactions?: boolean;
@@ -151,6 +171,10 @@ export class NotificationParsingService {
           }
 
           invalidateLedgerQueries();
+          import('@/modules/bills/store/bills.store')
+            .then(({ useBillsStore }) => useBillsStore.getState().loadData())
+            .catch(() => {});
+          DeviceEventEmitter.emit('billsUpdated');
           if (isNew) {
             DeviceEventEmitter.emit('billDetected', extractedBill);
           }
@@ -179,7 +203,24 @@ export class NotificationParsingService {
 
           if (!tx.isDuplicate) {
             // Import immediately into Clarity accounts & transactions ledger
-            await SmsSyncService.importParsedTransactions([tx]);
+            try {
+              await SmsSyncService.importParsedTransactions([tx]);
+            } catch {
+              if (typeof SmsDao.getUnlinkedParsedTransactions === 'function') {
+                const unlinked = await SmsDao.getUnlinkedParsedTransactions().catch(() => []);
+                import('@/store/useSmsStore')
+                  .then(({ useSmsStore }) => {
+                    if (unlinked.length > 0) {
+                      useSmsStore.getState().setPendingTransactions(unlinked);
+                    }
+                  })
+                  .catch(() => {});
+              }
+              return {
+                type: 'IGNORED',
+                reason: 'IMPORT_FAILED_QUEUED_FOR_PROMPT',
+              };
+            }
             invalidateLedgerQueries();
             DeviceEventEmitter.emit('transactionParsed', tx);
             DeviceEventEmitter.emit('notificationsUpdated');
