@@ -1,35 +1,35 @@
-import '@/lib/reactotron';
+import { GoogleDrivePromptModal } from '@/components/modals/GoogleDrivePromptModal';
+import { NotificationPermissionPromptModal } from '@/components/modals/NotificationPermissionPromptModal';
+import { SmsTransactionPromptModal } from '@/components/modals/SmsTransactionPromptModal';
+import { AlertProvider, AppLockModal, Text, ToastProvider } from '@/components/ui';
+import { usePushNotifications } from '@/hooks/use-push-notifications';
 import '@/lib/navigation';
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
-import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { AppState, type AppStateStatus, StyleSheet, View, Platform } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { queryClient } from '@/lib/query-client';
+import '@/lib/reactotron';
+import { mmkv } from '@/lib/storage';
+import { BackendProvider } from '@/providers/BackendProvider';
+import { initDatabase } from '@/services/database';
+import { checkUpcomingBillReminders, checkUpcomingGoalDeadlines } from '@/services/notifications/alert-engine';
+import { useAppStore } from '@/store/use-app-store';
+import { useNotificationStore } from '@/store/useNotificationStore';
+import { useSmsStore } from '@/store/useSmsStore';
+import { typography } from '@/theme';
+import { useTheme } from '@/theme/useTheme';
 import {
-  useFonts,
   Manrope_400Regular,
   Manrope_500Medium,
   Manrope_600SemiBold,
   Manrope_700Bold,
+  useFonts,
 } from '@expo-google-fonts/manrope';
-import * as SplashScreen from 'expo-splash-screen';
-import { initDatabase } from '@/services/database';
-import { ToastProvider, AlertProvider, AppLockModal, Text } from '@/components/ui';
-import { GoogleDrivePromptModal } from '@/components/modals/GoogleDrivePromptModal';
-import { SmsPermissionPromptModal } from '@/components/modals/SmsPermissionPromptModal';
-import { SmsTransactionPromptModal } from '@/components/modals/SmsTransactionPromptModal';
-import { NotificationPermissionPromptModal } from '@/components/modals/NotificationPermissionPromptModal';
-import { useSmsStore } from '@/store/useSmsStore';
-import { usePushNotifications } from '@/hooks/use-push-notifications';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
-import { typography } from '@/theme';
-import { useTheme } from '@/theme/useTheme';
+import { MaterialIcons } from '@expo/vector-icons';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { queryClient } from '@/lib/query-client';
-import { BackendProvider } from '@/providers/BackendProvider';
-import { useAppStore } from '@/store/use-app-store';
-import { checkUpcomingBillReminders, checkUpcomingGoalDeadlines } from '@/services/notifications/alert-engine';
-import { mmkv } from '@/lib/storage';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AppState, type AppStateStatus, Platform, StyleSheet, View } from 'react-native';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -53,17 +53,17 @@ export default function RootLayout() {
   const [isAppLocked, setIsAppLocked] = useState(checkInitialLockState);
   const [isScreenShielded, setIsScreenShielded] = useState(false);
   const [showDrivePrompt, setShowDrivePrompt] = useState(false);
-  const [showSmsPrompt, setShowSmsPrompt] = useState(false);
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
   const isTransactionPromptVisible = useSmsStore((state) => state.isPromptVisible);
   const closeTransactionPrompt = useSmsStore((state) => state.closeTransactionPrompt);
+  const isNotificationDisclosureVisible = useNotificationStore((state) => state.isDisclosureVisible);
+  const closeNotificationDisclosure = useNotificationStore((state) => state.closeDisclosure);
   const lastBackgroundTime = useRef<number | null>(null);
 
   const biometricEnabled = useAppStore((state) => state.biometricEnabled);
   const timeoutSetting = useAppStore((state) => state.timeoutSetting);
   const hasHydrated = useAppStore((state) => state._hasHydrated);
   const hasSeenDrivePrompt = useAppStore((state) => state.hasSeenDrivePrompt);
-  const hasSeenSmsPrompt = useAppStore((state) => state.hasSeenSmsPrompt);
   const hasSeenNotificationPrompt = useAppStore((state) => state.hasSeenNotificationPrompt);
   const googleDriveConnected = useAppStore((state) => state.googleDriveConnected);
   const { expoPushToken } = usePushNotifications();
@@ -93,61 +93,44 @@ export default function RootLayout() {
     }
   }, [hasHydrated, biometricEnabled, timeoutSetting]);
 
-  // First-time launch SMS permission prompt (Android only, first priority)
+  // First-time launch Notification tracking permission prompt (Android only, first priority)
   useEffect(() => {
     if (
       Platform.OS === 'android' &&
       hasHydrated &&
       dbReady &&
-      !hasSeenSmsPrompt
-    ) {
-      const timer = setTimeout(() => {
-        setShowSmsPrompt(true);
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [hasHydrated, dbReady, hasSeenSmsPrompt]);
-
-  // First-time launch Google Drive backup prompt (staggered after initial permissions)
-  useEffect(() => {
-    if (
-      hasHydrated &&
-      dbReady &&
-      !hasSeenDrivePrompt &&
-      !googleDriveConnected &&
-      hasSeenSmsPrompt &&
-      !showSmsPrompt
-    ) {
-      const timer = setTimeout(() => {
-        setShowDrivePrompt(true);
-      }, 1200);
-      return () => clearTimeout(timer);
-    }
-  }, [hasHydrated, dbReady, hasSeenDrivePrompt, googleDriveConnected, hasSeenSmsPrompt, showSmsPrompt]);
-
-  // First-time launch Notification tracking permission prompt (Android only)
-  useEffect(() => {
-    if (
-      Platform.OS === 'android' &&
-      hasHydrated &&
-      dbReady &&
-      !hasSeenNotificationPrompt &&
-      hasSeenSmsPrompt &&
-      !showDrivePrompt &&
-      !showSmsPrompt
+      !hasSeenNotificationPrompt
     ) {
       const timer = setTimeout(() => {
         setShowNotificationPrompt(true);
       }, 1500);
       return () => clearTimeout(timer);
     }
+  }, [hasHydrated, dbReady, hasSeenNotificationPrompt]);
+
+  // First-time launch Google Drive backup prompt (staggered after notification prompt)
+  useEffect(() => {
+    const notificationStepDone = Platform.OS !== 'android' || hasSeenNotificationPrompt;
+    if (
+      hasHydrated &&
+      dbReady &&
+      !hasSeenDrivePrompt &&
+      !googleDriveConnected &&
+      notificationStepDone &&
+      !showNotificationPrompt
+    ) {
+      const timer = setTimeout(() => {
+        setShowDrivePrompt(true);
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
   }, [
     hasHydrated,
     dbReady,
+    hasSeenDrivePrompt,
+    googleDriveConnected,
     hasSeenNotificationPrompt,
-    hasSeenSmsPrompt,
-    showDrivePrompt,
-    showSmsPrompt,
+    showNotificationPrompt,
   ]);
 
   const [fontsLoaded, fontsError] = useFonts({
@@ -184,28 +167,13 @@ export default function RootLayout() {
           const { useAuthStore } = await import('@/store/use-auth-store');
           await useAuthStore.getState().initializeAuth().catch(() => {});
 
-          // Silent incremental SMS scan on app launch (ask user if new transactions found)
-          const { SmsPermissionManager } = await import(
-            '@/modules/sms/permissions/smsPermissionManager'
-          );
-          const smsStatus = await SmsPermissionManager.checkSmsPermission();
-          if (smsStatus === 'granted') {
-            const { SmsSyncService } = await import('@/modules/sms/services/smsSyncService');
-            await SmsSyncService.runIncrementalScan({
-              autoCreateClarityTransactions: false,
-            }).catch(() => null);
-
-            // Bank accounts and bills auto-fetch immediately
-            queryClient.invalidateQueries({ queryKey: ['accounts'] });
-            queryClient.invalidateQueries({ queryKey: ['bills'] });
-
-            // Only transactions await user confirmation
-            const { SmsDao } = await import('@/modules/sms/storage/smsDao');
-            const unlinked = await SmsDao.getUnlinkedParsedTransactions();
-            if (unlinked.length > 0) {
-              const { useSmsStore } = await import('@/store/useSmsStore');
-              useSmsStore.getState().setPendingTransactions(unlinked);
-            }
+          // Refresh review queue and surface any unlinked parsed transactions on app launch
+          const { useSmsStore } = await import('@/store/useSmsStore');
+          await useSmsStore.getState().refreshReviewQueueCount().catch(() => {});
+          const { SmsDao } = await import('@/modules/sms/storage/smsDao');
+          const unlinked = await SmsDao.getUnlinkedParsedTransactions();
+          if (unlinked.length > 0) {
+            useSmsStore.getState().setPendingTransactions(unlinked);
           }
         } catch {
           // Recurring processing error ignored
@@ -252,31 +220,6 @@ export default function RootLayout() {
           .then(({ processDueRecurringTransactions }) => processDueRecurringTransactions())
           .catch(() => {});
         checkUpcomingBillReminders().catch(() => {});
-
-        // Silent incremental SMS scan on app resume
-        import('@/modules/sms/permissions/smsPermissionManager')
-          .then(async ({ SmsPermissionManager }) => {
-            const status = await SmsPermissionManager.checkSmsPermission();
-            if (status === 'granted') {
-              const { SmsSyncService } = await import('@/modules/sms/services/smsSyncService');
-              await SmsSyncService.runIncrementalScan({
-                autoCreateClarityTransactions: false,
-              }).catch(() => null);
-
-              // Bank accounts and bills auto-fetch immediately
-              queryClient.invalidateQueries({ queryKey: ['accounts'] });
-              queryClient.invalidateQueries({ queryKey: ['bills'] });
-
-              // Only transactions await user confirmation
-              const { SmsDao } = await import('@/modules/sms/storage/smsDao');
-              const unlinked = await SmsDao.getUnlinkedParsedTransactions();
-              if (unlinked.length > 0) {
-                const { useSmsStore } = await import('@/store/useSmsStore');
-                useSmsStore.getState().setPendingTransactions(unlinked);
-              }
-            }
-          })
-          .catch(() => {});
       }
     };
 
@@ -330,30 +273,32 @@ export default function RootLayout() {
                   </View>
                 )}
                 <AppLockModal visible={isAppLocked} onUnlock={() => setIsAppLocked(false)} />
-                <GoogleDrivePromptModal
-                  visible={showDrivePrompt && !isAppLocked}
-                  onDismiss={() => setShowDrivePrompt(false)}
-                />
-                <SmsPermissionPromptModal
-                  visible={showSmsPrompt && !isAppLocked && !showDrivePrompt}
-                  onDismiss={() => setShowSmsPrompt(false)}
-                />
                 <NotificationPermissionPromptModal
                   visible={
-                    showNotificationPrompt &&
-                    !isAppLocked &&
-                    !showDrivePrompt &&
-                    !showSmsPrompt
+                    isNotificationDisclosureVisible ||
+                    (showNotificationPrompt && !isAppLocked)
                   }
-                  onDismiss={() => setShowNotificationPrompt(false)}
+                  onDismiss={() => {
+                    setShowNotificationPrompt(false);
+                    closeNotificationDisclosure();
+                  }}
+                />
+                <GoogleDrivePromptModal
+                  visible={
+                    showDrivePrompt &&
+                    !isAppLocked &&
+                    !showNotificationPrompt &&
+                    !isNotificationDisclosureVisible
+                  }
+                  onDismiss={() => setShowDrivePrompt(false)}
                 />
                 <SmsTransactionPromptModal
                   visible={
                     isTransactionPromptVisible &&
                     !isAppLocked &&
                     !showDrivePrompt &&
-                    !showSmsPrompt &&
-                    !showNotificationPrompt
+                    !showNotificationPrompt &&
+                    !isNotificationDisclosureVisible
                   }
                   onDismiss={closeTransactionPrompt}
                 />

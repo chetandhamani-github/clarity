@@ -1,33 +1,16 @@
 import { create } from 'zustand';
-import type {
-  SmsPermissionStatus,
-  SmsSyncProgress,
-  SmsAnalytics,
-  ParsedTransaction,
-} from '@/modules/sms/types';
-import { SmsPermissionManager } from '@/modules/sms/permissions/smsPermissionManager';
-import { SmsSyncService, SyncOptions } from '@/modules/sms/services/smsSyncService';
+import type { SmsAnalytics, ParsedTransaction } from '@/modules/sms/types';
+import { SmsSyncService } from '@/modules/sms/services/smsSyncService';
 import { SmsAnalyticsService } from '@/modules/sms/services/smsAnalyticsService';
 import { SmsDao } from '@/modules/sms/storage/smsDao';
 
 interface SmsStoreState {
-  permissionStatus: SmsPermissionStatus;
-  isSyncing: boolean;
-  progress: SmsSyncProgress;
-  lastSyncTimestamp: number | null;
   analytics: SmsAnalytics | null;
   reviewQueueCount: number;
-  error: string | null;
   pendingTransactions: ParsedTransaction[];
   isPromptVisible: boolean;
 
   // Actions
-  checkPermission: () => Promise<SmsPermissionStatus>;
-  requestPermission: () => Promise<SmsPermissionStatus>;
-  startInitialSync: (options?: SyncOptions) => Promise<void>;
-  startIncrementalSync: (options?: SyncOptions) => Promise<void>;
-  initializeBaseline: () => Promise<number>;
-  cancelSync: () => void;
   refreshAnalytics: () => Promise<void>;
   refreshReviewQueueCount: () => Promise<void>;
   setPendingTransactions: (txs: ParsedTransaction[]) => void;
@@ -38,141 +21,10 @@ interface SmsStoreState {
 }
 
 export const useSmsStore = create<SmsStoreState>((set, get) => ({
-  permissionStatus: 'denied',
-  isSyncing: false,
-  progress: {
-    total: 0,
-    processed: 0,
-    batchIndex: 0,
-    totalBatches: 0,
-    phase: 'idle',
-  },
-  lastSyncTimestamp: SmsSyncService.getLastSyncTimestamp(),
   analytics: null,
   reviewQueueCount: 0,
-  error: null,
   pendingTransactions: [],
   isPromptVisible: false,
-
-  checkPermission: async () => {
-    const status = await SmsPermissionManager.checkSmsPermission();
-    set({ permissionStatus: status });
-    return status;
-  },
-
-  requestPermission: async () => {
-    const status = await SmsPermissionManager.requestSmsPermission();
-    set({ permissionStatus: status });
-    return status;
-  },
-
-  startInitialSync: async (options?: SyncOptions) => {
-    if (get().isSyncing) return;
-
-    set({
-      isSyncing: true,
-      error: null,
-      progress: {
-        total: 0,
-        processed: 0,
-        batchIndex: 0,
-        totalBatches: 0,
-        phase: 'fetching',
-      },
-    });
-
-    try {
-      const result = await SmsSyncService.runInitialScan({
-        ...options,
-        onProgress: (progress) => {
-          set({ progress });
-          options?.onProgress?.(progress);
-        },
-      });
-
-      const lastSync = SmsSyncService.getLastSyncTimestamp();
-      set({
-        isSyncing: false,
-        lastSyncTimestamp: lastSync,
-      });
-
-      if (
-        options?.autoCreateClarityTransactions === false &&
-        !options?.skipHistoricalTransactions &&
-        result.newTransactions &&
-        result.newTransactions.length > 0
-      ) {
-        get().setPendingTransactions(result.newTransactions);
-      }
-
-      await get().refreshAnalytics();
-      await get().refreshReviewQueueCount();
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : 'Sync failed';
-      set({
-        isSyncing: false,
-        error: errorMsg,
-        progress: {
-          ...get().progress,
-          phase: 'error',
-          error: errorMsg,
-        },
-      });
-      throw err;
-    }
-  },
-
-  startIncrementalSync: async (options?: SyncOptions) => {
-    if (get().isSyncing) return;
-
-    set({ isSyncing: true, error: null });
-
-    try {
-      const result = await SmsSyncService.runIncrementalScan({
-        ...options,
-        onProgress: (progress) => {
-          set({ progress });
-          options?.onProgress?.(progress);
-        },
-      });
-
-      const lastSync = SmsSyncService.getLastSyncTimestamp();
-      set({
-        isSyncing: false,
-        lastSyncTimestamp: lastSync,
-      });
-
-      if (
-        options?.autoCreateClarityTransactions === false &&
-        !options?.skipHistoricalTransactions &&
-        result.newTransactions &&
-        result.newTransactions.length > 0
-      ) {
-        get().setPendingTransactions(result.newTransactions);
-      }
-
-      await get().refreshAnalytics();
-      await get().refreshReviewQueueCount();
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : 'Incremental sync failed';
-      set({
-        isSyncing: false,
-        error: errorMsg,
-      });
-      throw err;
-    }
-  },
-
-  initializeBaseline: async () => {
-    const baseline = await SmsSyncService.initializeBaseline();
-    set({ lastSyncTimestamp: baseline });
-    return baseline;
-  },
-
-  cancelSync: () => {
-    SmsSyncService.cancelSync();
-    set({ isSyncing: false });
-  },
 
   refreshAnalytics: async () => {
     try {

@@ -53,9 +53,9 @@ export class TransactionExtractor {
   ];
 
   private static readonly MERCHANT_PATTERNS = [
-    /\b(?:credited|received|deposited)\b[\s\S]{0,80}?\b(?:from|by)\s+([A-Za-z0-9@*.\-'&_\s]{2,80}?)(?:\s+(?:on|upi\s+ref|ref|rrn|utr|avl\.?\s*bal|available\s+bal(?:ance)?|bal(?:ance)?)|[.;\n]|$)/i,
-    /(?:at|to|towards|vpa|paid to|transferred to|trf to|info\/)\s+([A-Za-z0-9@*.\-'&_\s]{2,40}?)(?:\s+on\b|\s+for\b|\s+dated\b|\s+upi\s+ref|\s+ref|\s+avl|\s+not you|\s+via|\s+using|[.;\n]|$)/i,
-    /(?:info[:\s]+)([A-Za-z0-9@*.\-'&_\s]{2,40}?)(?:\s+on\b|\s+for\b|\s+upi\s+ref|\s+ref|\s+avl|[.;\n]|$)/i,
+    /\b(?:credited|received|deposited|(?:paid|sent|transferred)\s+you)\b[\s\S]{0,80}?\b(?:from|by)\s+([A-Za-z0-9@*.\-'&_\s]{2,80}?)(?:\s+(?:on|via|using|completed|credited|debited|upi\s+ref|ref|rrn|utr|avl\.?\s*bal|available\s+bal(?:ance)?|bal(?:ance)?)|[.;\n|]|$)/i,
+    /(?:at|to|towards|vpa|paid to|transferred to|trf to|info\/)\s+([A-Za-z0-9@*.\-'&_\s]{2,40}?)(?:\s+on\b|\s+for\b|\s+from\b|\s+dated\b|\s+completed\b|\s+credited\b|\s+debited\b|\s+upi\s+ref|\s+ref|\s+avl|\s+not you|\s+via|\s+using|[.;\n|]|$)/i,
+    /(?:info[:\s]+)([A-Za-z0-9@*.\-'&_\s]{2,40}?)(?:\s+on\b|\s+for\b|\s+from\b|\s+upi\s+ref|\s+ref|\s+avl|[.;\n|]|$)/i,
   ];
 
   private static readonly BANK_MAPPINGS: Record<string, string> = {
@@ -187,6 +187,11 @@ export class TransactionExtractor {
       /\bpre[- ]debit\s+notification\b/i.test(body);
     if (isFutureDebitAlert) {
       return null;
+    }
+
+    const isIncomingP2P = /\b(?:paid|sent|transferred)\s+you\b/i.test(body);
+    if (isIncomingP2P) {
+      return 'CREDIT';
     }
 
     const isTransferToOwnAccount =
@@ -341,6 +346,47 @@ export class TransactionExtractor {
       if (/^SVCBNK/i.test(token)) return 'SVC Co-operative Bank';
       if (/^SARASW/i.test(token)) return 'Saraswat Bank';
       if (/^COSMOS/i.test(token)) return 'Cosmos Bank';
+    }
+
+    // 1.5 Check full app / bank display names (e.g. from Android NotificationListenerService)
+    const ADDRESS_NAME_MAPPINGS: Array<[RegExp, string]> = [
+      [/\bhdfc\b/i, 'HDFC Bank'],
+      [/\bicici\b/i, 'ICICI Bank'],
+      [/\b(?:sbi|state bank)\b/i, 'State Bank of India'],
+      [/\baxis\b/i, 'Axis Bank'],
+      [/\bkotak\b/i, 'Kotak Mahindra Bank'],
+      [/\bidfc\b/i, 'IDFC FIRST Bank'],
+      [/\bau\s*small\b|\baubank\b/i, 'AU Small Finance Bank'],
+      [/\bfederal\b/i, 'Federal Bank'],
+      [/\bindusind\b/i, 'IndusInd Bank'],
+      [/\bcanara\b/i, 'Canara Bank'],
+      [/\bbank\s+of\s+baroda\b|\bbaroda\b/i, 'Bank of Baroda'],
+      [/\bpunjab\s+national\b|\bpnb\b/i, 'Punjab National Bank'],
+      [/\bbank\s+of\s+india\b/i, 'Bank of India'],
+      [/\bunion\s+bank\b/i, 'Union Bank of India'],
+      [/\bcentral\s+bank\b/i, 'Central Bank of India'],
+      [/\bindian\s+overseas\b/i, 'Indian Overseas Bank'],
+      [/\bindian\s+bank\b/i, 'Indian Bank'],
+      [/\bbank\s+of\s+maharashtra\b/i, 'Bank of Maharashtra'],
+      [/\bidbi\b/i, 'IDBI Bank'],
+      [/\buco\b/i, 'UCO Bank'],
+      [/\byes\s*bank\b/i, 'YES Bank'],
+      [/\brbl\b/i, 'RBL Bank'],
+      [/\bstandard\s+chartered\b/i, 'Standard Chartered Bank'],
+      [/\bcitibank\b/i, 'Citibank'],
+      [/\bhsbc\b/i, 'HSBC Bank'],
+      [/\bdbs\b/i, 'DBS Bank'],
+      [/\bairtel\s+payments\b/i, 'Airtel Payments Bank'],
+      [/\bindia\s+post\s+payments\b/i, 'India Post Payments Bank'],
+      [/\bjupiter\b/i, 'Jupiter Money'],
+      [/\bfi\s*money\b/i, 'Fi Money'],
+      [/\bslice\b/i, 'Slice'],
+    ];
+
+    for (const [pattern, bankName] of ADDRESS_NAME_MAPPINGS) {
+      if (pattern.test(cleanAddress)) {
+        return bankName;
+      }
     }
 
     // Direct mapping lookup fallback

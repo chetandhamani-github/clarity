@@ -1,9 +1,8 @@
 import type { ISmsReaderAdapter, RawSmsMessage, SmsReadOptions } from '@/modules/sms/types';
-import { NativeSmsReaderAdapter } from './nativeSmsReaderAdapter';
 import { MockSmsReaderAdapter } from './mockSmsReaderAdapter';
 
 export class SmsReaderService {
-  private static adapter: ISmsReaderAdapter = new NativeSmsReaderAdapter();
+  private static adapter: ISmsReaderAdapter = new MockSmsReaderAdapter();
 
   /**
    * Set custom reader adapter (e.g. MockSmsReaderAdapter in tests).
@@ -20,10 +19,10 @@ export class SmsReaderService {
   }
 
   /**
-   * Reset adapter to default NativeSmsReaderAdapter.
+   * Reset adapter to default in-memory adapter.
    */
   public static resetAdapter(): void {
-    this.adapter = new NativeSmsReaderAdapter();
+    this.adapter = new MockSmsReaderAdapter();
   }
 
   /**

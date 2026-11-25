@@ -82,18 +82,8 @@ export async function resetEntireAppData(queryClient?: QueryClient): Promise<voi
   });
 
   useSmsStore.setState({
-    isSyncing: false,
-    progress: {
-      total: 0,
-      processed: 0,
-      batchIndex: 0,
-      totalBatches: 0,
-      phase: 'idle',
-    },
-    lastSyncTimestamp: null,
     analytics: null,
     reviewQueueCount: 0,
-    error: null,
     pendingTransactions: [],
     isPromptVisible: false,
   });
@@ -103,7 +93,6 @@ export async function resetEntireAppData(queryClient?: QueryClient): Promise<voi
   // 6. Reset user preferences & prompt flags in useAppStore
   const appStore = useAppStore.getState();
   appStore.setLastCloudBackupTime(null);
-  appStore.setHasSeenSmsPrompt(false);
   appStore.setHasSeenDrivePrompt(false);
   appStore.setHasSeenNotificationPrompt(false);
   appStore.setLastDismissedClipboardHash(null);

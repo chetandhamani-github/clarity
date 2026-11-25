@@ -1,15 +1,15 @@
-import { resetEntireAppData } from './app-reset';
-import { clearDatabase } from '@/services/database';
-import { clearAutoBackupTimer } from '@/services/cloud/google-drive-service';
 import { mmkv } from '@/lib/storage';
-import { useAppStore } from '@/store/use-app-store';
-import { useBillsStore } from '@/modules/bills/store/bills.store';
-import { useSplitwiseStore } from '@/modules/splitwise/store/splitwise.store';
-import { useSmsStore } from '@/store/useSmsStore';
-import { useCopilotStore } from '@/store/use-copilot-store';
 import { BillsRepository } from '@/modules/bills/database/bills.repository';
+import { useBillsStore } from '@/modules/bills/store/bills.store';
 import { DuplicateDetectionEngine } from '@/modules/sms/duplicate/duplicateDetectionEngine';
+import { useSplitwiseStore } from '@/modules/splitwise/store/splitwise.store';
+import { clearAutoBackupTimer } from '@/services/cloud/google-drive-service';
+import { clearDatabase } from '@/services/database';
+import { useAppStore } from '@/store/use-app-store';
+import { useCopilotStore } from '@/store/use-copilot-store';
+import { useSmsStore } from '@/store/useSmsStore';
 import type { QueryClient } from '@tanstack/react-query';
+import { resetEntireAppData } from './app-reset';
 
 jest.mock('@/services/database', () => ({
   clearDatabase: jest.fn().mockResolvedValue(undefined),
@@ -44,7 +44,7 @@ describe('resetEntireAppData', () => {
 
     useSmsStore.setState({
       pendingTransactions: [{ id: 'tx-1' } as any],
-      lastSyncTimestamp: 1700000000000,
+      reviewQueueCount: 2,
       isPromptVisible: true,
     });
 
@@ -53,7 +53,7 @@ describe('resetEntireAppData', () => {
     });
 
     useAppStore.setState({
-      hasSeenSmsPrompt: true,
+      hasSeenNotificationPrompt: true,
       hasSeenDrivePrompt: true,
       lastCloudBackupTime: '2026-11-19T10:00:00Z',
       isPostResetLocked: false,
@@ -89,7 +89,7 @@ describe('resetEntireAppData', () => {
     expect(useSplitwiseStore.getState().people).toEqual([]);
     expect(useSplitwiseStore.getState().searchQuery).toBe('');
     expect(useSmsStore.getState().pendingTransactions).toEqual([]);
-    expect(useSmsStore.getState().lastSyncTimestamp).toBeNull();
+    expect(useSmsStore.getState().reviewQueueCount).toBe(0);
     expect(useSmsStore.getState().isPromptVisible).toBe(false);
 
     // Verify Copilot reset message
@@ -99,7 +99,7 @@ describe('resetEntireAppData', () => {
 
     // Verify AppStore flags
     expect(useAppStore.getState().isPostResetLocked).toBe(true);
-    expect(useAppStore.getState().hasSeenSmsPrompt).toBe(false);
+    expect(useAppStore.getState().hasSeenNotificationPrompt).toBe(false);
     expect(useAppStore.getState().hasSeenDrivePrompt).toBe(false);
     expect(useAppStore.getState().lastCloudBackupTime).toBeNull();
     expect(useAppStore.getState().hideBalances).toBe(false);

@@ -1,7 +1,7 @@
 import type { TargetAppConfig } from './types';
 
 export const DEFAULT_TARGET_APPS: TargetAppConfig[] = [
-  // UPI & Payments
+  // UPI & Payments Apps
   {
     packageName: 'com.google.android.apps.nbu.paisa.user',
     name: 'Google Pay',
@@ -51,7 +51,43 @@ export const DEFAULT_TARGET_APPS: TargetAppConfig[] = [
     icon: 'trending-up',
     enabled: true,
   },
-  // Banks
+  {
+    packageName: 'com.mobikwik_new',
+    name: 'MobiKwik',
+    category: 'upi',
+    icon: 'account-balance-wallet',
+    enabled: true,
+  },
+  {
+    packageName: 'com.freecharge.android',
+    name: 'Freecharge',
+    category: 'upi',
+    icon: 'bolt',
+    enabled: true,
+  },
+  {
+    packageName: 'money.jupiter',
+    name: 'Jupiter',
+    category: 'banking',
+    icon: 'savings',
+    enabled: true,
+  },
+  {
+    packageName: 'money.fi',
+    name: 'Fi Money',
+    category: 'banking',
+    icon: 'savings',
+    enabled: true,
+  },
+  {
+    packageName: 'indwin.c3.shareapp',
+    name: 'Slice',
+    category: 'upi',
+    icon: 'credit-card',
+    enabled: true,
+  },
+
+  // Major Private Banks
   {
     packageName: 'com.snapwork.hdfc',
     name: 'HDFC Bank',
@@ -62,13 +98,6 @@ export const DEFAULT_TARGET_APPS: TargetAppConfig[] = [
   {
     packageName: 'com.csam.icici.bank.imobile',
     name: 'ICICI Bank',
-    category: 'banking',
-    icon: 'account-balance',
-    enabled: true,
-  },
-  {
-    packageName: 'com.sbi.lotusintouch',
-    name: 'State Bank of India',
     category: 'banking',
     icon: 'account-balance',
     enabled: true,
@@ -102,6 +131,78 @@ export const DEFAULT_TARGET_APPS: TargetAppConfig[] = [
     enabled: true,
   },
   {
+    packageName: 'com.yesbank',
+    name: 'YES Bank',
+    category: 'banking',
+    icon: 'account-balance',
+    enabled: true,
+  },
+  {
+    packageName: 'com.rblbank.mobank',
+    name: 'RBL Bank',
+    category: 'banking',
+    icon: 'account-balance',
+    enabled: true,
+  },
+  {
+    packageName: 'com.fedmobile',
+    name: 'Federal Bank',
+    category: 'banking',
+    icon: 'account-balance',
+    enabled: true,
+  },
+  {
+    packageName: 'com.scb.breeze.in',
+    name: 'Standard Chartered',
+    category: 'banking',
+    icon: 'account-balance',
+    enabled: true,
+  },
+  {
+    packageName: 'com.citibank.mobile.in',
+    name: 'Citibank',
+    category: 'banking',
+    icon: 'account-balance',
+    enabled: true,
+  },
+  {
+    packageName: 'com.hsbc.in.hsbcindiapersonalbanking',
+    name: 'HSBC Bank',
+    category: 'banking',
+    icon: 'account-balance',
+    enabled: true,
+  },
+  {
+    packageName: 'com.dbs.in.dbsmbanking',
+    name: 'DBS Bank',
+    category: 'banking',
+    icon: 'account-balance',
+    enabled: true,
+  },
+  {
+    packageName: 'com.aubank.aupay',
+    name: 'AU Small Finance Bank',
+    category: 'banking',
+    icon: 'account-balance',
+    enabled: true,
+  },
+
+  // Major Public Sector Banks
+  {
+    packageName: 'com.sbi.lotusintouch',
+    name: 'State Bank of India',
+    category: 'banking',
+    icon: 'account-balance',
+    enabled: true,
+  },
+  {
+    packageName: 'com.sbi.upi',
+    name: 'SBI YONO',
+    category: 'banking',
+    icon: 'account-balance',
+    enabled: true,
+  },
+  {
     packageName: 'com.bankofbaroda.mconnect',
     name: 'Bank of Baroda',
     category: 'banking',
@@ -116,25 +217,89 @@ export const DEFAULT_TARGET_APPS: TargetAppConfig[] = [
     enabled: true,
   },
   {
-    packageName: 'com.fedmobile',
-    name: 'Federal Bank',
+    packageName: 'com.pnb.one',
+    name: 'Punjab National Bank',
     category: 'banking',
     icon: 'account-balance',
     enabled: true,
   },
   {
-    packageName: 'money.jupiter',
-    name: 'Jupiter',
+    packageName: 'com.infrasofttech.uboi',
+    name: 'Union Bank of India',
     category: 'banking',
-    icon: 'savings',
+    icon: 'account-balance',
     enabled: true,
   },
   {
-    packageName: 'money.fi',
-    name: 'Fi Money',
+    packageName: 'com.boi.mpassbook',
+    name: 'Bank of India',
     category: 'banking',
-    icon: 'savings',
+    icon: 'account-balance',
+    enabled: true,
+  },
+  {
+    packageName: 'com.cbi.mobile',
+    name: 'Central Bank of India',
+    category: 'banking',
+    icon: 'account-balance',
+    enabled: true,
+  },
+  {
+    packageName: 'com.infrasoft.indianbank',
+    name: 'Indian Bank',
+    category: 'banking',
+    icon: 'account-balance',
+    enabled: true,
+  },
+  {
+    packageName: 'com.idbi',
+    name: 'IDBI Bank',
+    category: 'banking',
+    icon: 'account-balance',
+    enabled: true,
+  },
+  {
+    packageName: 'com.uco.ucobank',
+    name: 'UCO Bank',
+    category: 'banking',
+    icon: 'account-balance',
+    enabled: true,
+  },
+  {
+    packageName: 'com.bom.mobile',
+    name: 'Bank of Maharashtra',
+    category: 'banking',
+    icon: 'account-balance',
+    enabled: true,
+  },
+  {
+    packageName: 'com.fss.iobmob',
+    name: 'Indian Overseas Bank',
+    category: 'banking',
+    icon: 'account-balance',
+    enabled: true,
+  },
+
+  // Payments Banks
+  {
+    packageName: 'com.paytm.business',
+    name: 'Paytm for Business',
+    category: 'upi',
+    icon: 'store',
+    enabled: true,
+  },
+  {
+    packageName: 'com.airtel.bank',
+    name: 'Airtel Payments Bank',
+    category: 'banking',
+    icon: 'account-balance',
+    enabled: true,
+  },
+  {
+    packageName: 'com.ippb.mobile',
+    name: 'India Post Payments Bank',
+    category: 'banking',
+    icon: 'account-balance',
     enabled: true,
   },
 ];
-

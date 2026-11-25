@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Text } from '@/components/ui';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme, typography, ThemeColors } from '@/theme';
@@ -12,8 +12,8 @@ interface Props {
   hasBudgetPlan: boolean;
   hasGoals?: boolean;
   googleDriveConnected: boolean;
-  onEnableSms?: () => void;
-  smsGranted?: boolean;
+  onEnableAutoTracking?: () => void;
+  autoTrackingEnabled?: boolean;
 }
 
 export function OnboardingChecklistCard({
@@ -22,8 +22,8 @@ export function OnboardingChecklistCard({
   hasBudgetPlan,
   hasGoals = false,
   googleDriveConnected,
-  onEnableSms,
-  smsGranted = false,
+  onEnableAutoTracking,
+  autoTrackingEnabled = false,
 }: Props) {
   const { colors } = useTheme();
   const styles = getStyles(colors);
@@ -42,12 +42,18 @@ export function OnboardingChecklistCard({
     },
     {
       id: 'transactions',
-      title: 'Auto-Track SMS or Log Spend',
-      desc: 'Detect bank SMS or record cash expenses',
+      title: Platform.OS === 'android' ? 'Auto-Track Alerts or Log Spend' : 'Import or Log Spend',
+      desc:
+        Platform.OS === 'android'
+          ? 'Enable banking alerts, import PDF/CSV, or record spend'
+          : 'Import PDF/CSV statements or record cash expenses',
       icon: 'receipt-long' as const,
-      isCompleted: hasTransactions || smsGranted,
+      isCompleted: hasTransactions || autoTrackingEnabled,
       route: '/(app)/add-transaction',
-      action: !smsGranted && onEnableSms ? onEnableSms : undefined,
+      action:
+        Platform.OS === 'android' && !autoTrackingEnabled && onEnableAutoTracking
+          ? onEnableAutoTracking
+          : undefined,
     },
     {
       id: 'budget',

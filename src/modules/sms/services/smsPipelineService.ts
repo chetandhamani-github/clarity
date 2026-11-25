@@ -88,8 +88,19 @@ export class SmsPipelineService {
       extracted.accountMask = extracted.accountMask && extracted.accountMask !== 'XXXX' ? extracted.accountMask : 'XXXX';
     }
 
-    // 3. Local Categorization
-    const category = LocalCategorizerEngine.categorize(extracted, classification.classification);
+    // 3. Local Categorization (user-saved merchant rules override built-in heuristics)
+    let category = LocalCategorizerEngine.categorize(extracted, classification.classification);
+    if (extracted.merchant) {
+      try {
+        const { findCategoryForMerchant } = await import('@/services/database/merchant-rule-dao');
+        const customCategory = await findCategoryForMerchant(extracted.merchant);
+        if (customCategory) {
+          category = customCategory;
+        }
+      } catch {
+        // Ignore when SQLite is unavailable in isolated parser tests
+      }
+    }
 
     // 4. Duplicate Check
     const dupCheck = await DuplicateDetectionEngine.isDuplicate(extracted, {

@@ -15,6 +15,17 @@ export interface RawNotificationPayload {
 
 export type NotificationPermissionStatus = 'granted' | 'denied' | 'unavailable';
 
+export interface NotificationListenerHealth {
+  isPermissionGranted: boolean;
+  isServiceConnected: boolean;
+  isBatteryOptimizationIgnored: boolean;
+  pendingCount: number;
+  lastEventAt?: number;
+  lastEventApp?: string;
+  lastConnectedAt?: number;
+  lastDisconnectedAt?: number;
+}
+
 export interface TargetAppConfig {
   packageName: string;
   name: string;

@@ -4,12 +4,16 @@ import { NativeNotificationListenerAdapter } from '@/modules/notifications/adapt
 import { NotificationParsingService } from '@/modules/notifications/services/notificationParsingService';
 import { DEFAULT_TARGET_APPS } from '@/modules/notifications/constants';
 import type { ExtractedBill } from '@/modules/sms/extractor/billExtractor';
-import type { NotificationPermissionStatus } from '@/modules/notifications/types';
+import type {
+  NotificationPermissionStatus,
+  NotificationListenerHealth,
+} from '@/modules/notifications/types';
 
 const KEY_ENABLED = 'clarity_notif_tracking_enabled';
 const KEY_PARSE_TX = 'clarity_notif_parse_transactions';
 const KEY_PARSE_BILLS = 'clarity_notif_parse_bills';
 const KEY_ENABLED_PACKAGES = 'clarity_notif_enabled_packages';
+const KEY_KNOWN_PACKAGES = 'clarity_notif_known_packages';
 
 function getStoredBoolean(key: string, defaultValue: boolean): boolean {
   const val = mmkv.getString(key);
@@ -18,17 +22,45 @@ function getStoredBoolean(key: string, defaultValue: boolean): boolean {
 }
 
 function getStoredPackages(): string[] {
+  const allDefaults = DEFAULT_TARGET_APPS.map((app) => app.packageName);
   const val = mmkv.getString(KEY_ENABLED_PACKAGES);
   if (!val) {
-    return DEFAULT_TARGET_APPS.map((app) => app.packageName);
+    mmkv.set(KEY_KNOWN_PACKAGES, JSON.stringify(allDefaults));
+    return allDefaults;
   }
+
   try {
     const parsed = JSON.parse(val);
-    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed)) {
+      const knownRaw = mmkv.getString(KEY_KNOWN_PACKAGES);
+      const knownSet = new Set<string>(
+        knownRaw ? (JSON.parse(knownRaw) as string[]) : []
+      );
+      const merged = new Set<string>(parsed.filter((item): item is string => typeof item === 'string'));
+      let changed = false;
+
+      for (const pkg of allDefaults) {
+        if (!knownSet.has(pkg)) {
+          merged.add(pkg);
+          changed = true;
+        }
+      }
+
+      if (changed || !knownRaw) {
+        const mergedArr = Array.from(merged);
+        mmkv.set(KEY_ENABLED_PACKAGES, JSON.stringify(mergedArr));
+        mmkv.set(KEY_KNOWN_PACKAGES, JSON.stringify(allDefaults));
+        return mergedArr;
+      }
+
+      return parsed.filter((item): item is string => typeof item === 'string');
+    }
   } catch {
-    // fallback
+    // Fallback to defaults if stored JSON is corrupted
   }
-  return DEFAULT_TARGET_APPS.map((app) => app.packageName);
+
+  mmkv.set(KEY_KNOWN_PACKAGES, JSON.stringify(allDefaults));
+  return allDefaults;
 }
 
 interface NotificationStoreState {
@@ -37,12 +69,19 @@ interface NotificationStoreState {
   parseTransactions: boolean;
   parseBills: boolean;
   enabledPackages: string[];
+  health: NotificationListenerHealth | null;
+  isDisclosureVisible: boolean;
   activeDetectedBill: ExtractedBill | null;
   detectedBillModalVisible: boolean;
 
   // Actions
   checkPermission: () => Promise<NotificationPermissionStatus>;
   requestPermission: () => Promise<boolean>;
+  refreshHealth: () => Promise<NotificationListenerHealth | null>;
+  openBatterySettings: () => Promise<boolean>;
+  requestRebind: () => Promise<boolean>;
+  openDisclosure: () => void;
+  closeDisclosure: () => void;
   setIsEnabled: (enabled: boolean) => void;
   setParseTransactions: (enabled: boolean) => void;
   setParseBills: (enabled: boolean) => void;
@@ -53,12 +92,16 @@ interface NotificationStoreState {
   drainAndProcessPending: () => Promise<number>;
 }
 
+let drainInFlight: Promise<number> | null = null;
+
 export const useNotificationStore = create<NotificationStoreState>((set, get) => ({
   isEnabled: getStoredBoolean(KEY_ENABLED, true),
   permissionStatus: 'denied',
   parseTransactions: getStoredBoolean(KEY_PARSE_TX, true),
   parseBills: getStoredBoolean(KEY_PARSE_BILLS, true),
   enabledPackages: getStoredPackages(),
+  health: null,
+  isDisclosureVisible: false,
   activeDetectedBill: null,
   detectedBillModalVisible: false,
 
@@ -74,6 +117,33 @@ export const useNotificationStore = create<NotificationStoreState>((set, get) =>
     set({ permissionStatus: status });
     return granted;
   },
+
+  refreshHealth: async () => {
+    const health = await NativeNotificationListenerAdapter.getListenerHealth();
+    if (health) {
+      set({
+        health,
+        permissionStatus: health.isPermissionGranted ? 'granted' : 'denied',
+      });
+    }
+    return health;
+  },
+
+  openBatterySettings: async () => {
+    return NativeNotificationListenerAdapter.openBatteryOptimizationSettings();
+  },
+
+  requestRebind: async () => {
+    const rebound = await NativeNotificationListenerAdapter.requestRebind();
+    if (rebound) {
+      await get().refreshHealth();
+    }
+    return rebound;
+  },
+
+  openDisclosure: () => set({ isDisclosureVisible: true }),
+
+  closeDisclosure: () => set({ isDisclosureVisible: false }),
 
   setIsEnabled: (enabled: boolean) => {
     mmkv.set(KEY_ENABLED, String(enabled));
@@ -117,31 +187,41 @@ export const useNotificationStore = create<NotificationStoreState>((set, get) =>
   },
 
   drainAndProcessPending: async () => {
-    const { isEnabled, parseTransactions, parseBills, enabledPackages } = get();
-    if (!isEnabled) return 0;
-
-    const pending = await NativeNotificationListenerAdapter.drainPendingNotifications();
-    if (pending.length === 0) return 0;
-
-    let processedCount = 0;
-    for (const notif of pending) {
-      if (!enabledPackages.includes(notif.packageName)) {
-        continue;
-      }
-      try {
-        const result = await NotificationParsingService.processNotification(notif, {
-          parseTransactions,
-          parseBills,
-        });
-        if (result.type !== 'IGNORED') {
-          processedCount++;
-        }
-      } catch {
-        // Safe continuation
-      }
+    if (drainInFlight) {
+      return drainInFlight;
     }
 
-    return processedCount;
+    drainInFlight = (async () => {
+      const { isEnabled, parseTransactions, parseBills, enabledPackages } = get();
+      if (!isEnabled) return 0;
+
+      const pending = await NativeNotificationListenerAdapter.drainPendingNotifications();
+      if (pending.length === 0) return 0;
+
+      let processedCount = 0;
+      for (const notif of pending) {
+        if (!enabledPackages.includes(notif.packageName)) {
+          continue;
+        }
+        try {
+          const result = await NotificationParsingService.processNotification(notif, {
+            parseTransactions,
+            parseBills,
+          });
+          if (result.type !== 'IGNORED') {
+            processedCount++;
+          }
+        } catch {
+          // Safe continuation
+        }
+      }
+
+      await get().refreshHealth().catch(() => null);
+      return processedCount;
+    })().finally(() => {
+      drainInFlight = null;
+    });
+
+    return drainInFlight;
   },
 }));
-

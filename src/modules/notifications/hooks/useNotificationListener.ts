@@ -11,6 +11,8 @@ export function useNotificationListener() {
   const parseBills = useNotificationStore((state) => state.parseBills);
   const enabledPackages = useNotificationStore((state) => state.enabledPackages);
   const checkPermission = useNotificationStore((state) => state.checkPermission);
+  const refreshHealth = useNotificationStore((state) => state.refreshHealth);
+  const requestRebind = useNotificationStore((state) => state.requestRebind);
   const drainAndProcessPending = useNotificationStore((state) => state.drainAndProcessPending);
   const showDetectedBillModal = useNotificationStore((state) => state.showDetectedBillModal);
 
@@ -27,11 +29,17 @@ export function useNotificationListener() {
   enabledPkgsRef.current = enabledPackages;
 
   useEffect(() => {
-    // 1. Initial permission check and drain on mount
-    checkPermission();
-    drainAndProcessPending();
+    const syncHealthAndDrain = async () => {
+      const status = await checkPermission();
+      const health = await refreshHealth();
+      if (status === 'granted' && health && !health.isServiceConnected) {
+        await requestRebind().catch(() => false);
+      }
+      await drainAndProcessPending();
+    };
 
-    // 2. Real-time native notification subscriber
+    syncHealthAndDrain();
+
     const unsubscribe = NativeNotificationListenerAdapter.subscribeToNotifications(
       async (notif: RawNotificationPayload) => {
         if (!isEnabledRef.current) return;
@@ -46,17 +54,19 @@ export function useNotificationListener() {
           if (result.type === 'BILL') {
             showDetectedBillModal(result.bill);
           }
+
+          if (result.type !== 'IGNORED') {
+            refreshHealth().catch(() => null);
+          }
         } catch {
           // Fault isolation: incoming notification failure must not crash UI
         }
       }
     );
 
-    // 3. Drain buffer when app returns to foreground
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === 'active') {
-        checkPermission();
-        drainAndProcessPending();
+        syncHealthAndDrain();
       }
     };
 
@@ -66,6 +76,11 @@ export function useNotificationListener() {
       unsubscribe();
       appStateSub.remove();
     };
-  }, [checkPermission, drainAndProcessPending, showDetectedBillModal]);
+  }, [
+    checkPermission,
+    refreshHealth,
+    requestRebind,
+    drainAndProcessPending,
+    showDetectedBillModal,
+  ]);
 }
-

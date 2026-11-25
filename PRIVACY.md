@@ -9,12 +9,12 @@ Clarity Finance ("Clarity", "we", "our") is designed with a strict privacy-first
 - **No Third-Party Analytics / Tracking**: Clarity does not sell, rent, monetize, or track your personal or financial data.
 - **No External Data Transmission**: Your transaction records, balances, and financial activities never leave your phone unless you explicitly choose to backup your data to your private Google Drive account.
 
-## 2. Financial SMS Processing (SMS Permissions)
-- **Scope & Purpose**: With your explicit runtime permission (`READ_SMS`), Clarity scans incoming and historical SMS messages specifically from financial institutions, banks, credit card providers, and registered utility billers (e.g. HDFC, SBI, ICICI, Axis, Paytm, electricity/water boards) to automatically extract financial transactions, account balances, and upcoming bill due dates.
-- **Strictly On-Device Analysis**: All SMS message text parsing, categorizing, and extraction are performed **100% locally on your device** using local offline algorithms.
-- **Personal Messages Excluded**: Clarity completely ignores personal chats, OTPs, promotional messages, and non-financial communications.
-- **No SMS Uploading**: Your SMS message bodies and message metadata are never transmitted, uploaded, or exposed to any remote server or third-party service.
-- **Opt-in & Revocation**: You can grant or revoke SMS permissions at any time via device settings without losing access to the rest of the application.
+## 2. Financial Notification Processing (Notification Access)
+- **Scope & Purpose**: With your explicit consent via Android **Notification Access** (`BIND_NOTIFICATION_LISTENER_SERVICE`), Clarity reads incoming push notifications strictly from a curated allowlist of banking and UPI apps (e.g., Google Pay, PhonePe, Paytm, CRED, HDFC, SBI, ICICI, Axis) to automatically extract financial transactions and upcoming bill reminders.
+- **Strictly On-Device Analysis**: All notification parsing, categorization, and extraction are performed **100% locally on your device** using offline deterministic parsers.
+- **Personal Messages Excluded**: Messaging apps (such as SMS/MMS apps, WhatsApp, and personal chats) are explicitly excluded at the native Android service level—Clarity never inspects personal conversations or OTP messages.
+- **No Notification Uploading**: Notification titles, text, and metadata are never transmitted, uploaded, or exposed to any remote server or third-party service.
+- **Opt-in & Revocation**: You can pause auto-tracking inside Clarity or revoke Notification Access at any time via Android system settings without losing access to manual tracking or statement import.
 
 ## 3. Google Drive Cloud Backup
 - If you choose to connect **Google Drive**, Clarity utilizes the secure `drive.appdata` scope to create and store private database backups (`clarity_backup.json`).
@@ -22,8 +22,9 @@ Clarity Finance ("Clarity", "we", "our") is designed with a strict privacy-first
 - **No Developer Access**: The developers of Clarity cannot access, view, or transfer your Google Drive backup files. Data transfers directly and securely between your device and Google's servers.
 
 ## 4. Permissions Summary
-- **READ_SMS**: Used exclusively to detect and record financial transactions and bill due dates on-device.
+- **Notification Access (`BIND_NOTIFICATION_LISTENER_SERVICE`)**: Used exclusively to detect and record financial transactions and bill due dates from whitelisted banking/UPI app notifications on-device.
 - **Biometric Authentication (`USE_BIOMETRIC`, `USE_FINGERPRINT`)**: Used locally on your device to lock and unlock the app. Biometric credentials never leave your device hardware keystore.
+- **Microphone (`RECORD_AUDIO`)**: Used only when you explicitly invoke voice transaction entry.
 - **Internet Access**: Used solely for Google Drive backup synchronization, remote feature flags, and push notifications.
 - **Notifications**: Used to deliver timely bill payment reminders and budget limit warnings to your device.
 

@@ -1,6 +1,6 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import * as SecureStore from 'expo-secure-store';
+import { create } from 'zustand';
+import { createJSONStorage, persist, StateStorage } from 'zustand/middleware';
 
 export const zustandStorage: StateStorage = {
   setItem: async (name, value) => {
@@ -28,7 +28,6 @@ interface AppState {
   autoBackupEnabled: boolean;
   autoBackupOnlyWifi: boolean;
   hasSeenDrivePrompt: boolean;
-  hasSeenSmsPrompt: boolean;
   hasSeenNotificationPrompt: boolean;
   hideBalances: boolean;
   hasDismissedOnboardingChecklist: boolean;
@@ -49,7 +48,6 @@ interface AppState {
   setAutoBackupEnabled: (enabled: boolean) => void;
   setAutoBackupOnlyWifi: (value: boolean) => void;
   setHasSeenDrivePrompt: (seen: boolean) => void;
-  setHasSeenSmsPrompt: (seen: boolean) => void;
   setHasSeenNotificationPrompt: (seen: boolean) => void;
   setHideBalances: (value: boolean) => void;
   toggleHideBalances: () => void;
@@ -77,7 +75,6 @@ export const useAppStore = create<AppState>()(
       autoBackupEnabled: true,
       autoBackupOnlyWifi: true,
       hasSeenDrivePrompt: false,
-      hasSeenSmsPrompt: false,
       hasSeenNotificationPrompt: false,
       hideBalances: false,
       hasDismissedOnboardingChecklist: false,
@@ -103,7 +100,6 @@ export const useAppStore = create<AppState>()(
       setAutoBackupEnabled: (enabled) => set({ autoBackupEnabled: enabled }),
       setAutoBackupOnlyWifi: (value) => set({ autoBackupOnlyWifi: value }),
       setHasSeenDrivePrompt: (seen) => set({ hasSeenDrivePrompt: seen }),
-      setHasSeenSmsPrompt: (seen) => set({ hasSeenSmsPrompt: seen }),
       setHasSeenNotificationPrompt: (seen) => set({ hasSeenNotificationPrompt: seen }),
       setHideBalances: (value) => set({ hideBalances: value }),
       toggleHideBalances: () => set((state) => ({ hideBalances: !state.hideBalances })),

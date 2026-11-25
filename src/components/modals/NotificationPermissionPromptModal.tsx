@@ -62,24 +62,24 @@ export function NotificationPermissionPromptModal({ visible, onDismiss }: Props)
               </View>
 
               {/* Title & Description */}
-              <Text style={styles.title}>Instant UPI & Bill Tracking</Text>
+              <Text style={styles.title}>Enable Notification Auto-Tracking</Text>
               <Text style={styles.subtitle}>
-                Enable notification access to instantly detect UPI payments, card debits, and upcoming utility bills the moment they appear.
+                Clarity accesses notification titles and text strictly from whitelisted banking and UPI apps to detect transactions and bill reminders automatically.
               </Text>
 
               {/* Feature Points */}
               <View style={styles.featuresList}>
                 <View style={styles.featureItem}>
                   <MaterialIcons name="security" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>100% on-device — only banking & UPI apps are monitored</Text>
+                  <Text style={styles.featureText}>100% on-device — never uploaded, shared, or sold</Text>
+                </View>
+                <View style={styles.featureItem}>
+                  <MaterialIcons name="lock" size={20} color={colors.primary} />
+                  <Text style={styles.featureText}>Personal chats, SMS messages & OTPs are never read</Text>
                 </View>
                 <View style={styles.featureItem}>
                   <MaterialIcons name="bolt" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>Real-time expense capture without SMS delivery delays</Text>
-                </View>
-                <View style={styles.featureItem}>
-                  <MaterialIcons name="receipt-long" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>Automatic prompts for electricity, credit card & WiFi bills</Text>
+                  <Text style={styles.featureText}>Real-time UPI, card debit & utility bill capture</Text>
                 </View>
               </View>
 
@@ -97,7 +97,7 @@ export function NotificationPermissionPromptModal({ visible, onDismiss }: Props)
                     <>
                       <MaterialIcons name="check-circle-outline" size={20} color={colors.onPrimary} />
                       <Text style={[styles.primaryButtonText, { color: colors.onPrimary }]}>
-                        Enable in Settings
+                        Agree & Open Settings
                       </Text>
                     </>
                   )}

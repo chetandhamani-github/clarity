@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
   Linking,
   Modal,
   Platform,
@@ -19,10 +18,10 @@ import { Header, Text, useAlert, useToast } from '@/components/ui';
 import { LegalModal } from '@/components/modals/LegalModal';
 import { useGoogleDrive } from '@/hooks/use-google-drive';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
-import { useSmsSync } from '@/hooks/useSmsSync';
 import { resetEntireAppData } from '@/services/app-reset';
 import { useAppStore } from '@/store/use-app-store';
 import { useAuthStore } from '@/store/use-auth-store';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { ThemeColors, fontFamilies, radius, typography, useTheme } from '@/theme';
 
 interface CurrencyOption {
@@ -171,14 +170,16 @@ export default function SettingsScreen() {
   } = useGoogleDrive();
   const { user, isAuthenticated, signOut, isLoading: isAuthLoading } = useAuthStore();
 
-  const {
-    permissionStatus,
-    isSyncing: isSmsSyncing,
-    progress: smsProgress,
-    lastSyncTimestamp,
-    startInitialSync,
-    requestPermission: requestSmsPermission,
-  } = useSmsSync();
+  const notificationPermissionStatus = useNotificationStore(
+    (state) => state.permissionStatus
+  );
+  const isNotificationTrackingEnabled = useNotificationStore((state) => state.isEnabled);
+  const notificationHealth = useNotificationStore((state) => state.health);
+  const setNotificationTrackingEnabled = useNotificationStore((state) => state.setIsEnabled);
+  const openNotificationDisclosure = useNotificationStore((state) => state.openDisclosure);
+  const openBatterySettings = useNotificationStore((state) => state.openBatterySettings);
+  const requestRebind = useNotificationStore((state) => state.requestRebind);
+  const refreshNotificationHealth = useNotificationStore((state) => state.refreshHealth);
 
   const [isResetting, setIsResetting] = useState(false);
   const [legalModalType, setLegalModalType] = useState<'privacy' | 'terms' | null>(null);
@@ -194,34 +195,35 @@ export default function SettingsScreen() {
       name: currencySetting,
     };
 
-  const handleSmsScan = async () => {
-    try {
-      if (permissionStatus === 'permanently_denied') {
-        Linking.openSettings();
-        return;
-      }
-      if (permissionStatus !== 'granted') {
-        const res = await requestSmsPermission();
-        if (res === 'permanently_denied') {
-          Linking.openSettings();
-          return;
-        }
-        if (res !== 'granted') {
-          showToast('SMS permission is required to scan messages', 'error');
-          return;
-        }
-      }
-      await startInitialSync({
-        autoCreateClarityTransactions: false,
-        skipHistoricalTransactions: true,
-      });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['bills'] });
-      showToast('SMS scan completed! Accounts and bills synced.', 'success');
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'SMS scan failed', 'error');
+  const isAutoTrackingGranted = notificationPermissionStatus === 'granted';
+  const isListenerDisconnected =
+    isAutoTrackingGranted &&
+    Boolean(notificationHealth) &&
+    !notificationHealth?.isServiceConnected;
+
+  const handleAutoTrackingAction = async () => {
+    if (!isAutoTrackingGranted) {
+      openNotificationDisclosure();
+      return;
     }
+
+    if (isListenerDisconnected) {
+      const rebound = await requestRebind();
+      await refreshNotificationHealth();
+      if (rebound) {
+        showToast('Notification listener reconnected.', 'success');
+      } else {
+        openNotificationDisclosure();
+      }
+      return;
+    }
+
+    const nextEnabled = !isNotificationTrackingEnabled;
+    setNotificationTrackingEnabled(nextEnabled);
+    showToast(
+      nextEnabled ? 'Auto-tracking resumed.' : 'Auto-tracking paused.',
+      'info'
+    );
   };
 
   const handleResetData = () => {
@@ -420,7 +422,7 @@ export default function SettingsScreen() {
             />
             <SettingRow
               icon="file-upload"
-              title="Import Statements (CSV)"
+              title="Import Statements (PDF / CSV)"
               subtitle="Bulk import banking transactions and reconcile balances"
               onPress={() => router.navigate('/import-statement')}
             />
@@ -468,25 +470,27 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* 4. SMS Intelligence Section */}
+        {/* 4. Auto-Tracking (Notifications) Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>SMS Intelligence</Text>
+          <Text style={styles.sectionTitle}>Auto-Tracking</Text>
           <View style={styles.listCard}>
             {Platform.OS === 'android' ? (
               <>
                 <View style={styles.settingItem}>
                   <View style={styles.settingItemLeft}>
                     <View style={[styles.iconBox, { backgroundColor: colors.surfaceContainerHighest }]}>
-                      <MaterialIcons name="sms" size={20} color={colors.primary} />
+                      <MaterialIcons name="notifications-active" size={20} color={colors.primary} />
                     </View>
                     <View style={styles.settingTextContainer}>
-                      <Text style={styles.settingTitle}>SMS Auto-Tracking</Text>
+                      <Text style={styles.settingTitle}>UPI & Bank Alert Tracking</Text>
                       <Text style={styles.settingSub}>
-                        {permissionStatus === 'granted'
-                          ? 'Real-time local extraction from bank alerts'
-                          : permissionStatus === 'permanently_denied'
-                            ? 'Permission blocked in device settings'
-                            : 'Sync debit, credit & UPI transactions automatically'}
+                        {!isAutoTrackingGranted
+                          ? 'Real-time local extraction from banking & UPI notifications'
+                          : isListenerDisconnected
+                            ? 'Listener paused by OS — tap Reconnect below'
+                            : isNotificationTrackingEnabled
+                              ? 'Active • Reading whitelisted banking & UPI alerts on-device'
+                              : 'Paused • Toggle resume to capture alerts'}
                       </Text>
                     </View>
                   </View>
@@ -495,7 +499,7 @@ export default function SettingsScreen() {
                       styles.statusBadge,
                       {
                         backgroundColor:
-                          permissionStatus === 'granted'
+                          isAutoTrackingGranted && isNotificationTrackingEnabled && !isListenerDisconnected
                             ? colors.primaryContainer
                             : colors.surfaceContainerHighest,
                       },
@@ -506,21 +510,28 @@ export default function SettingsScreen() {
                         styles.statusBadgeText,
                         {
                           color:
-                            permissionStatus === 'granted'
+                            isAutoTrackingGranted && isNotificationTrackingEnabled && !isListenerDisconnected
                               ? colors.onPrimaryContainer
                               : colors.onSurfaceVariant,
                         },
                       ]}
                     >
-                      {permissionStatus === 'granted' ? 'ACTIVE' : 'OFF'}
+                      {!isAutoTrackingGranted
+                        ? 'OFF'
+                        : isListenerDisconnected
+                          ? 'RECONNECT'
+                          : isNotificationTrackingEnabled
+                            ? 'ACTIVE'
+                            : 'PAUSED'}
                     </Text>
                   </View>
                 </View>
 
-                {lastSyncTimestamp ? (
+                {notificationHealth?.lastEventAt ? (
                   <View style={styles.metaRow}>
                     <Text style={styles.metaText}>
-                      Last scanned: {new Date(lastSyncTimestamp).toLocaleString()}
+                      Last captured: {notificationHealth.lastEventApp || 'Alert'} •{' '}
+                      {new Date(notificationHealth.lastEventAt).toLocaleString()}
                     </Text>
                   </View>
                 ) : null}
@@ -528,48 +539,57 @@ export default function SettingsScreen() {
                 <View style={styles.actionBtnContainer}>
                   <TouchableOpacity
                     style={styles.btnPrimary}
-                    onPress={handleSmsScan}
-                    disabled={isSmsSyncing}
+                    onPress={handleAutoTrackingAction}
                     activeOpacity={0.8}
                   >
-                    {isSmsSyncing ? (
-                      <View style={styles.btnRow}>
-                        <ActivityIndicator size="small" color={colors.onPrimary} />
-                        <Text style={styles.btnPrimaryText}>
-                          SCANNING ({smsProgress.processed}/{smsProgress.total || '...'})
-                        </Text>
-                      </View>
-                    ) : (
-                      <View style={styles.btnRow}>
-                        <MaterialIcons
-                          name={permissionStatus === 'permanently_denied' ? 'settings' : 'sync'}
-                          size={18}
-                          color={colors.onPrimary}
-                        />
-                        <Text style={styles.btnPrimaryText}>
-                          {permissionStatus === 'granted'
-                            ? 'SCAN SMS NOW'
-                            : permissionStatus === 'permanently_denied'
-                              ? 'OPEN DEVICE SETTINGS'
-                              : 'ENABLE SMS TRACKING'}
-                        </Text>
-                      </View>
-                    )}
+                    <View style={styles.btnRow}>
+                      <MaterialIcons
+                        name={
+                          !isAutoTrackingGranted
+                            ? 'notifications-active'
+                            : isListenerDisconnected
+                              ? 'sync'
+                              : isNotificationTrackingEnabled
+                                ? 'pause-circle-outline'
+                                : 'play-circle-outline'
+                        }
+                        size={18}
+                        color={colors.onPrimary}
+                      />
+                      <Text style={styles.btnPrimaryText}>
+                        {!isAutoTrackingGranted
+                          ? 'ENABLE AUTO-TRACKING'
+                          : isListenerDisconnected
+                            ? 'RECONNECT LISTENER'
+                            : isNotificationTrackingEnabled
+                              ? 'PAUSE AUTO-TRACKING'
+                              : 'RESUME AUTO-TRACKING'}
+                      </Text>
+                    </View>
                   </TouchableOpacity>
                 </View>
 
-                {permissionStatus === 'granted' && (
+                {isAutoTrackingGranted && (
                   <>
                     <View style={styles.itemDivider} />
                     <TouchableOpacity
                       style={styles.batteryRow}
-                      onPress={() => Linking.openSettings()}
+                      onPress={() => {
+                        openBatterySettings().then((opened) => {
+                          if (!opened) Linking.openSettings();
+                        });
+                      }}
                       activeOpacity={0.7}
                     >
                       <View style={{ flex: 1, paddingRight: 8 }}>
-                        <Text style={styles.batteryTitle}>Background Auto-Sync Reliability</Text>
+                        <Text style={styles.batteryTitle}>
+                          Background Auto-Tracking Reliability
+                          {notificationHealth?.isBatteryOptimizationIgnored ? ' (Unrestricted)' : ''}
+                        </Text>
                         <Text style={styles.batterySub}>
-                          Set battery usage to "Unrestricted" in system settings to ensure background SMS scans fire reliably.
+                          {notificationHealth?.isBatteryOptimizationIgnored
+                            ? 'Battery optimization is already disabled for reliable background capture.'
+                            : 'Set battery usage to "Unrestricted" in system settings so alerts are captured reliably.'}
                         </Text>
                       </View>
                       <MaterialIcons name="chevron-right" size={20} color={colors.outline} />
@@ -581,9 +601,9 @@ export default function SettingsScreen() {
               <View style={styles.platformNoticeCard}>
                 <MaterialIcons name="info-outline" size={20} color={colors.primary} />
                 <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={styles.settingTitle}>iOS SMS Sandboxing</Text>
+                  <Text style={styles.settingTitle}>iOS Notification Sandboxing</Text>
                   <Text style={styles.settingSub}>
-                    iOS system security prevents apps from reading incoming SMS messages. You can import statements via CSV below or log transactions directly.
+                    iOS prevents apps from reading notifications from other banking apps. You can import statements via PDF / CSV above or log transactions directly.
                   </Text>
                 </View>
               </View>
@@ -618,7 +638,7 @@ export default function SettingsScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.privacyTitle}>100% Private & On-Device</Text>
               <Text style={styles.privacyBody}>
-                All financial calculations, SMS analysis, and transaction logs are stored strictly on your phone. Clarity never sells or shares your personal data.
+                All financial calculations, notification analysis, and transaction logs are stored strictly on your phone. Clarity never sells or shares your personal data.
               </Text>
             </View>
           </View>

@@ -264,6 +264,97 @@ export class SmsDao {
   }
 
   /**
+   * Find cross-app duplicate candidates within a tight time window regardless of mask or bank string.
+   */
+  public static async findCrossAppDuplicates(
+    amount: number,
+    type: 'DEBIT' | 'CREDIT',
+    windowStart: string,
+    windowEnd: string
+  ): Promise<ParsedTransaction[]> {
+    const db = getDatabase();
+    const rows = await db.getAllAsync<ParsedTransactionRow>(
+      `SELECT * FROM parsed_transactions
+       WHERE ABS(amount - ?) <= 0.01
+         AND type = ?
+         AND is_duplicate = 0
+         AND transaction_date BETWEEN ? AND ?
+       ORDER BY transaction_date DESC
+       LIMIT 20`,
+      [amount, type, windowStart, windowEnd]
+    );
+    return rows.map(mapParsedRow);
+  }
+
+  /**
+   * Fetch a single parsed transaction by ID.
+   */
+  public static async getParsedTransactionById(id: string): Promise<ParsedTransaction | null> {
+    const db = getDatabase();
+    const row = await db.getFirstAsync<ParsedTransactionRow>(
+      'SELECT * FROM parsed_transactions WHERE id = ?',
+      [id]
+    );
+    return row ? mapParsedRow(row) : null;
+  }
+
+  /**
+   * Enrich an existing parsed transaction with missing bank, mask, reference number, or balance metadata.
+   */
+  public static async enrichParsedTransaction(
+    id: string,
+    updates: {
+      bank?: string;
+      accountMask?: string;
+      referenceNumber?: string;
+      availableBalance?: number;
+    }
+  ): Promise<void> {
+    const sets: string[] = [];
+    const params: Array<string | number> = [];
+
+    if (updates.bank !== undefined) {
+      sets.push('bank = ?');
+      params.push(updates.bank);
+    }
+    if (updates.accountMask !== undefined) {
+      sets.push('account_mask = ?');
+      params.push(updates.accountMask);
+    }
+    if (updates.referenceNumber !== undefined) {
+      sets.push('reference_number = ?');
+      params.push(updates.referenceNumber);
+    }
+    if (updates.availableBalance !== undefined) {
+      sets.push('available_balance = ?');
+      params.push(updates.availableBalance);
+    }
+
+    if (sets.length === 0) return;
+
+    const db = getDatabase();
+    params.push(id);
+    await db.runAsync(
+      `UPDATE parsed_transactions SET ${sets.join(', ')} WHERE id = ?`,
+      params
+    );
+  }
+
+  /**
+   * Re-link parsed transactions pointing to an old Clarity transaction ID onto a new one.
+   */
+  public static async reassignParsedTransactionLink(
+    oldClarityTxId: string,
+    newClarityTxId: string
+  ): Promise<void> {
+    const db = getDatabase();
+    await db.runAsync(
+      'UPDATE parsed_transactions SET transaction_id = ? WHERE transaction_id = ?',
+      [newClarityTxId, oldClarityTxId]
+    );
+  }
+
+  /**
    * Save items to review queue in a single transaction.
    */
   public static async saveReviewQueueBatch(items: ReviewQueueItem[]): Promise<void> {

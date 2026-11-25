@@ -1,4 +1,4 @@
-import { NotificationParsingService } from './notificationParsingService';
+import { NotificationParsingService, buildNotificationBody } from './notificationParsingService';
 import { BillExtractor } from '@/modules/sms/extractor/billExtractor';
 import { SmsPipelineService } from '@/modules/sms/services/smsPipelineService';
 import { SmsSyncService } from '@/modules/sms/services/smsSyncService';
@@ -22,11 +22,13 @@ jest.mock('@/modules/sms/services/smsPipelineService', () => ({
 jest.mock('@/modules/sms/services/smsSyncService', () => ({
   SmsSyncService: {
     importParsedTransactions: jest.fn(),
+    enrichDuplicateTransaction: jest.fn().mockResolvedValue(false),
   },
 }));
 
 jest.mock('@/modules/sms/storage/smsDao', () => ({
   SmsDao: {
+    getExistingSmsIds: jest.fn().mockResolvedValue(new Set()),
     saveSmsBatch: jest.fn().mockResolvedValue(undefined),
     saveParsedTransactionsBatch: jest.fn().mockResolvedValue(undefined),
     saveReviewQueueBatch: jest.fn().mockResolvedValue(undefined),
@@ -200,9 +202,45 @@ describe('NotificationParsingService', () => {
       expect(result.isDuplicate).toBe(true);
     }
 
-    // Should save record to DB for audit/history but NOT import into active ledger
+    // Should save record to DB for audit/history, enrich original if applicable, and NOT import twice
     expect(SmsDao.saveParsedTransactionsBatch).toHaveBeenCalledWith([mockDuplicateTx]);
     expect(SmsSyncService.importParsedTransactions).not.toHaveBeenCalled();
+    expect(SmsSyncService.enrichDuplicateTransaction).toHaveBeenCalledWith(mockDuplicateTx);
+  });
+
+  it('skips notifications that have already been persisted in SQLite', async () => {
+    (SmsDao.getExistingSmsIds as jest.Mock).mockResolvedValueOnce(
+      new Set([sampleTransactionNotification.id])
+    );
+
+    const result = await NotificationParsingService.processNotification(
+      sampleTransactionNotification
+    );
+
+    expect(result).toEqual({ type: 'IGNORED', reason: 'ALREADY_PROCESSED' });
+    expect(SmsPipelineService.processMessage).not.toHaveBeenCalled();
+  });
+
+  it('enriches counterparty title for UPI notifications where text omits merchant', () => {
+    const outgoing = buildNotificationBody({
+      id: 'gpay_out',
+      packageName: 'com.google.android.apps.nbu.paisa.user',
+      appName: 'Google Pay',
+      title: 'Chai Point',
+      text: 'You paid ₹180',
+      postTime: 1732000000000,
+    });
+    expect(outgoing).toBe('You paid ₹180 to Chai Point');
+
+    const incoming = buildNotificationBody({
+      id: 'gpay_in',
+      packageName: 'com.google.android.apps.nbu.paisa.user',
+      appName: 'Google Pay',
+      title: 'Rahul Sharma',
+      text: 'Paid you ₹500',
+      postTime: 1732000000000,
+    });
+    expect(incoming).toBe('Paid you ₹500 from Rahul Sharma');
   });
 });
 

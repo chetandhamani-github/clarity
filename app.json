@@ -23,7 +23,6 @@
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
-        "READ_SMS",
         "RECORD_AUDIO"
       ],
       "predictiveBackGestureEnabled": false,
@@ -34,7 +33,6 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "./plugins/withSmsReader",
       "./plugins/withNotificationListener",
       "expo-router",
       [

@@ -1,16 +1,15 @@
-import React from 'react';
-import {
-  View,
-  StyleSheet,
-  Modal,
-  TouchableOpacity,
-  ScrollView,
-  Platform,
-} from 'react-native';
 import { Text } from '@/components/ui';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useTheme, typography, ThemeColors } from '@/theme';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
+import { ThemeColors, typography, useTheme } from '@/theme';
+import { MaterialIcons } from '@expo/vector-icons';
+import {
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 interface LegalModalProps {
   visible: boolean;
@@ -68,9 +67,10 @@ export function LegalModal({ visible, type, onClose }: LegalModalProps) {
 
               <Text style={styles.heading}>1. 100% On-Device Processing</Text>
               <Text style={styles.paragraph}>
-                Clarity is built with a privacy-first, on-device architecture. When you grant SMS permissions,
-                all parsing, classification, categorization, and merchant extraction happen entirely on your
-                device. None of your SMS texts, OTPs, or notifications are transmitted to any external server or API.
+                Clarity is built with a privacy-first, on-device architecture. When you grant Notification Access,
+                only notifications from whitelisted banking and UPI apps are parsed, classified, and categorized entirely
+                on your device. Clarity does not read SMS inboxes, personal chats, or OTPs, and no notification
+                content is ever transmitted to any external server or API.
               </Text>
 
               <Text style={styles.heading}>2. Local Data Storage & Sandboxing</Text>
@@ -116,9 +116,9 @@ export function LegalModal({ visible, type, onClose }: LegalModalProps) {
 
               <Text style={styles.heading}>3. Information Accuracy</Text>
               <Text style={styles.paragraph}>
-                While Clarity employs advanced deterministic parsing patterns to interpret financial alerts, SMS formats
-                vary between financial institutions. You are encouraged to reconcile and verify transaction records against
-                your official bank statements.
+                While Clarity employs advanced deterministic parsing patterns to interpret financial alerts, notification
+                and statement formats vary between financial institutions. You are encouraged to reconcile and verify
+                transaction records against your official bank statements.
               </Text>
 
               <Text style={styles.heading}>4. Device Security & Account Safeguards</Text>

@@ -14,6 +14,9 @@ jest.mock('@/modules/sms/storage/smsDao', () => ({
     getLatestSmsTimestamp: jest.fn().mockResolvedValue(null),
     getExistingSmsIds: jest.fn().mockResolvedValue(new Set()),
     getUnlinkedParsedTransactions: jest.fn().mockResolvedValue([]),
+    getParsedTransactionById: jest.fn().mockResolvedValue(null),
+    enrichParsedTransaction: jest.fn().mockResolvedValue(undefined),
+    reassignParsedTransactionLink: jest.fn().mockResolvedValue(undefined),
     linkClarityTransaction: jest.fn().mockResolvedValue(undefined),
     getTransactionsForRecurringAnalysis: jest.fn().mockResolvedValue([]),
   },
@@ -298,6 +301,103 @@ describe('SmsSyncService', () => {
     expect(result.newTransactions).toHaveLength(0);
     expect(insertTransaction).not.toHaveBeenCalled();
     expect(SmsSyncService.getLastSyncTimestamp()).toBe(1705315300000);
+  });
+
+  it('enriches an earlier sparse UPI alert when a richer bank notification arrives', async () => {
+    const { getDatabase } = require('@/services/database');
+    const originalParsed: ParsedTransaction = {
+      id: 'parsed-gpay-1',
+      smsId: 'notif-gpay-1',
+      amount: 450,
+      type: 'DEBIT',
+      merchant: 'Chai Point',
+      category: 'Food & Dining',
+      bank: 'Bank / UPI',
+      accountMask: 'XXXX',
+      timestamp: 1705315200000,
+      confidence: 0.9,
+      isDuplicate: false,
+      transactionId: 'clarity-tx-sparse',
+      createdAt: new Date().toISOString(),
+    };
+    (SmsDao.getParsedTransactionById as jest.Mock).mockResolvedValueOnce(originalParsed);
+
+    const enriched = await SmsSyncService.enrichDuplicateTransaction({
+      ...originalParsed,
+      id: 'parsed-hdfc-dup',
+      smsId: 'notif-hdfc-1',
+      bank: 'HDFC Bank',
+      accountMask: '1234',
+      referenceNumber: '412345678901',
+      availableBalance: 9550,
+      isDuplicate: true,
+      duplicateOf: 'parsed-gpay-1',
+    });
+
+    expect(enriched).toBe(true);
+    expect(SmsDao.enrichParsedTransaction).toHaveBeenCalledWith('parsed-gpay-1', {
+      bank: 'HDFC Bank',
+      accountMask: '1234',
+      referenceNumber: '412345678901',
+      availableBalance: 9550,
+    });
+    expect(getDatabase().runAsync).toHaveBeenCalledWith(
+      'UPDATE transactions SET account_id = ? WHERE id = ?',
+      ['acc-1', 'clarity-tx-sparse']
+    );
+  });
+
+  it('pairs matching cross-account debit and credit within 15 minutes as a transfer', async () => {
+    const { getDatabase } = require('@/services/database');
+    const { getAllAccounts } = require('@/services/database/account-dao');
+    getAllAccounts.mockResolvedValue([
+      ...initialAccounts,
+      {
+        id: 'acc-2',
+        name: 'SBI Savings',
+        type: 'savings',
+        balance: 5000,
+        institution: 'State Bank of India',
+        lastFour: '5678',
+      },
+    ]);
+
+    getDatabase().getFirstAsync.mockResolvedValueOnce({
+      id: 'tx-debit-hdfc',
+      account_id: 'acc-1',
+      note: 'Imported via SMS (HDFC Bank)',
+      merchant: 'SBI Transfer',
+    });
+
+    const creditFromSbi: ParsedTransaction = {
+      id: 'parsed-sbi-credit',
+      smsId: 'notif-sbi-1',
+      amount: 5000,
+      type: 'CREDIT',
+      merchant: 'HDFC Transfer',
+      category: 'Income',
+      bank: 'State Bank of India',
+      accountMask: '5678',
+      timestamp: 1705315200000,
+      confidence: 0.95,
+      isDuplicate: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    await SmsSyncService.importParsedTransactions([creditFromSbi]);
+
+    expect(getDatabase().runAsync).toHaveBeenCalledWith(
+      expect.stringContaining("SET type = 'transfer'"),
+      ['acc-2', 'tx-debit-hdfc']
+    );
+    expect(SmsDao.reassignParsedTransactionLink).toHaveBeenCalledWith(
+      'clarity-tx-1',
+      'tx-debit-hdfc'
+    );
+    expect(getDatabase().runAsync).toHaveBeenCalledWith(
+      'DELETE FROM transactions WHERE id = ?',
+      ['clarity-tx-1']
+    );
   });
 });
 

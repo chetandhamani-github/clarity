@@ -1,4 +1,5 @@
 import { DeviceEventEmitter } from 'react-native';
+import { queryClient } from '@/lib/query-client';
 import { BillExtractor } from '@/modules/sms/extractor/billExtractor';
 import { SmsPipelineService } from '@/modules/sms/services/smsPipelineService';
 import { SmsSyncService } from '@/modules/sms/services/smsSyncService';
@@ -6,9 +7,73 @@ import { SmsDao } from '@/modules/sms/storage/smsDao';
 import { BillService } from '@/modules/bills/services/BillService';
 import { BillAlertEngine } from '@/services/notifications/bill-alert-engine';
 import { mergeOrInsertSmsBill } from '@/services/database/bill-dao';
-import type { RawSmsMessage, ParsedTransaction } from '@/modules/sms/types';
+import type { RawSmsMessage } from '@/modules/sms/types';
 import type { BillCategory } from '@/modules/bills/types/bill.types';
 import type { RawNotificationPayload, NotificationParseResult } from '../types';
+
+const GENERIC_TITLE_REGEX =
+  /(?:₹|rs\.?|inr|\$|€|£|\bpaid\b|\breceived\b|\bdebited\b|\bcredited\b|\btransaction\b|\bpayment\b|\balert\b|\bnotification\b|\bbill\b|\botp\b|\breminder\b)/i;
+
+const ACTION_ONLY_TEXT_REGEX =
+  /^(?:you\s+)?(?:paid|sent|received)\s+(?:you\s+)?(?:₹|rs\.?|inr)\s*[\d,]+(?:\.\d{1,2})?(?:\s|$)/i;
+
+const INCOMING_YOU_REGEX = /^(?:paid|sent|transferred)\s+you\b|^you\s+received\b/i;
+
+function isLikelyCounterpartyTitle(title: string, appName?: string): boolean {
+  const clean = title.trim();
+  if (clean.length < 2 || clean.length > 60) return false;
+  if (appName && clean.toLowerCase() === appName.trim().toLowerCase()) return false;
+  if (GENERIC_TITLE_REGEX.test(clean)) return false;
+  if (/^\d+$/.test(clean)) return false;
+  return true;
+}
+
+export function buildNotificationBody(notification: RawNotificationPayload): string {
+  const title = (notification.title || '').trim();
+  const text = (notification.text || '').trim();
+  const bigText = (notification.bigText || '').trim();
+  const primaryText = bigText.length >= text.length ? bigText : text;
+
+  // Handle common UPI notification pattern where title is counterparty name ("Chai Point")
+  // and text omits "to/from" ("You paid ₹450" or "Paid you ₹500").
+  if (
+    title &&
+    primaryText &&
+    isLikelyCounterpartyTitle(title, notification.appName) &&
+    ACTION_ONLY_TEXT_REGEX.test(primaryText) &&
+    !/\b(?:to|from|at|towards)\b/i.test(primaryText)
+  ) {
+    const isIncoming = INCOMING_YOU_REGEX.test(primaryText);
+    const enrichedLine = isIncoming
+      ? `${primaryText} from ${title}`
+      : `${primaryText} to ${title}`;
+    const remainingParts = [text, bigText].filter(
+      (part) => part && part !== primaryText
+    );
+    return Array.from(new Set([enrichedLine, ...remainingParts])).join('\n').trim();
+  }
+
+  const parts = [title, text, bigText].filter(Boolean);
+  return Array.from(new Set(parts)).join('\n').trim();
+}
+
+function invalidateLedgerQueries(): void {
+  try {
+    const keys = [
+      ['transactions'],
+      ['accounts'],
+      ['totals'],
+      ['cashflow'],
+      ['bills'],
+      ['financial-health'],
+    ];
+    for (const queryKey of keys) {
+      queryClient.invalidateQueries({ queryKey }).catch(() => {});
+    }
+  } catch {
+    // Ignore when QueryClient is unavailable in isolated unit tests
+  }
+}
 
 function mapToBillCategory(billerCategory: string): BillCategory {
   switch (billerCategory) {
@@ -57,12 +122,21 @@ export class NotificationParsingService {
   ): Promise<NotificationParseResult> {
     const { parseTransactions = true, parseBills = true } = options;
 
-    // Combine notification components into unified body
-    const parts = [notification.title, notification.text, notification.bigText].filter(Boolean);
-    const body = Array.from(new Set(parts)).join(' - ').trim();
-
+    const body = buildNotificationBody(notification);
     if (!body) {
       return { type: 'IGNORED', reason: 'EMPTY_NOTIFICATION_BODY' };
+    }
+
+    // Idempotency guard: avoid re-processing notifications already saved in SQLite
+    try {
+      if (typeof SmsDao.getExistingSmsIds === 'function') {
+        const existing = await SmsDao.getExistingSmsIds([notification.id]);
+        if (existing.has(notification.id)) {
+          return { type: 'IGNORED', reason: 'ALREADY_PROCESSED' };
+        }
+      }
+    } catch {
+      // Ignore when SQLite is unavailable in isolated tests
     }
 
     const message: RawSmsMessage = {
@@ -109,6 +183,7 @@ export class NotificationParsingService {
             });
           }
 
+          invalidateLedgerQueries();
           DeviceEventEmitter.emit('billDetected', extractedBill);
           DeviceEventEmitter.emit('notificationsUpdated');
 
@@ -136,8 +211,14 @@ export class NotificationParsingService {
           if (!tx.isDuplicate) {
             // Import immediately into Clarity accounts & transactions ledger
             await SmsSyncService.importParsedTransactions([tx]);
+            invalidateLedgerQueries();
             DeviceEventEmitter.emit('transactionParsed', tx);
             DeviceEventEmitter.emit('notificationsUpdated');
+          } else if (typeof SmsSyncService.enrichDuplicateTransaction === 'function') {
+            const enriched = await SmsSyncService.enrichDuplicateTransaction(tx);
+            if (enriched) {
+              invalidateLedgerQueries();
+            }
           }
 
           return {
@@ -148,6 +229,9 @@ export class NotificationParsingService {
         } else if (pipelineResult.type === 'REVIEW') {
           await SmsDao.saveSmsBatch([message]);
           await SmsDao.saveReviewQueueBatch([pipelineResult.reviewItem]);
+          import('@/store/useSmsStore')
+            .then(({ useSmsStore }) => useSmsStore.getState().refreshReviewQueueCount())
+            .catch(() => {});
           DeviceEventEmitter.emit('notificationsUpdated');
           return {
             type: 'IGNORED',
@@ -170,4 +254,3 @@ export class NotificationParsingService {
     return { type: 'IGNORED', reason: 'PARSING_DISABLED' };
   }
 }
-

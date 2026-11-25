@@ -865,6 +865,18 @@ export class SmsSyncService {
 
           await SmsDao.linkClarityTransaction(transaction.id, createdTransaction.id);
           transaction.transactionId = createdTransaction.id;
+
+          if (!isReversal) {
+            await this.pairCrossAccountTransfer({
+              id: createdTransaction.id,
+              accountId: matchedAccount.id,
+              accountType: matchedAccount.type,
+              amount: transaction.amount,
+              type: txType,
+              timestamp: transaction.timestamp,
+              rawBody: transaction.rawBody,
+            });
+          }
         }
 
         // Settle any matching unpaid bill & evaluate budget alerts for expense transaction
@@ -962,6 +974,176 @@ export class SmsSyncService {
       }
     } catch {
       // Balance reconciliation error ignored
+    }
+  }
+
+  /**
+   * Enrich an existing parsed transaction (and linked Clarity account) when a richer
+   * cross-app notification arrives shortly after a sparse UPI alert.
+   */
+  public static async enrichDuplicateTransaction(duplicateTx: ParsedTransaction): Promise<boolean> {
+    if (!duplicateTx.isDuplicate || !duplicateTx.duplicateOf) return false;
+    if (typeof SmsDao.getParsedTransactionById !== 'function') return false;
+
+    try {
+      const original = await SmsDao.getParsedTransactionById(duplicateTx.duplicateOf);
+      if (!original) return false;
+
+      const originalHasGenericBank =
+        !original.bank || original.bank === 'Bank / UPI' || original.bank === 'Other Bank';
+      const incomingHasSpecificBank =
+        Boolean(duplicateTx.bank) &&
+        duplicateTx.bank !== 'Bank / UPI' &&
+        duplicateTx.bank !== 'Other Bank';
+
+      const originalHasGenericMask = !this.normalizeMask(original.accountMask);
+      const incomingHasMask = Boolean(this.normalizeMask(duplicateTx.accountMask));
+
+      const updates: {
+        bank?: string;
+        accountMask?: string;
+        referenceNumber?: string;
+        availableBalance?: number;
+      } = {};
+
+      if (originalHasGenericBank && incomingHasSpecificBank) {
+        updates.bank = duplicateTx.bank;
+      }
+      if (originalHasGenericMask && incomingHasMask) {
+        updates.accountMask = duplicateTx.accountMask;
+      }
+      if (!original.referenceNumber && duplicateTx.referenceNumber) {
+        updates.referenceNumber = duplicateTx.referenceNumber;
+      }
+      if (
+        (original.availableBalance === undefined || original.availableBalance === null) &&
+        duplicateTx.availableBalance !== undefined &&
+        duplicateTx.availableBalance !== null
+      ) {
+        updates.availableBalance = duplicateTx.availableBalance;
+      }
+
+      if (Object.keys(updates).length === 0) return false;
+
+      if (typeof SmsDao.enrichParsedTransaction === 'function') {
+        await SmsDao.enrichParsedTransaction(original.id, updates);
+      }
+
+      const enriched: ParsedTransaction = {
+        ...original,
+        ...updates,
+        isDuplicate: false,
+      };
+
+      if (incomingHasSpecificBank && (originalHasGenericBank || originalHasGenericMask)) {
+        await this.syncBankAccountsFromParsedBatch([enriched]);
+
+        if (original.transactionId) {
+          const accounts = await getAllAccounts();
+          const isCard =
+            (enriched.rawBody && TransactionExtractor.isCreditCard(enriched.rawBody)) ||
+            /\b(?:card|crd|credit)\b/i.test(enriched.bank);
+          const targetAccount = this.findMatchingAccount(
+            accounts,
+            enriched.bank,
+            this.normalizeMask(enriched.accountMask),
+            isCard ? 'credit' : 'savings'
+          );
+
+          if (targetAccount) {
+            const database = getDatabase();
+            await database.runAsync(
+              'UPDATE transactions SET account_id = ? WHERE id = ?',
+              [targetAccount.id, original.transactionId]
+            );
+          }
+        }
+      } else if (updates.availableBalance !== undefined) {
+        await this.reconcileAvailableBalances();
+      }
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private static async pairCrossAccountTransfer(incoming: {
+    id: string;
+    accountId: string;
+    accountType: string;
+    amount: number;
+    type: 'expense' | 'income';
+    timestamp: number;
+    rawBody?: string;
+  }): Promise<void> {
+    if (
+      incoming.rawBody &&
+      /\b(?:cashback|refund(?:ed)?|revers(?:ed|al)|reward)\b/i.test(incoming.rawBody)
+    ) {
+      return;
+    }
+
+    try {
+      const database = getDatabase();
+      const oppositeType = incoming.type === 'expense' ? 'income' : 'expense';
+      const windowMs = 15 * 60 * 1000;
+      const startIso = new Date(incoming.timestamp - windowMs).toISOString();
+      const endIso = new Date(incoming.timestamp + windowMs).toISOString();
+
+      const counterpart = await database.getFirstAsync<{
+        id: string;
+        account_id: string;
+        note: string | null;
+        merchant: string | null;
+      }>(
+        `SELECT id, account_id, note, merchant
+         FROM transactions
+         WHERE account_id != ?
+           AND type = ?
+           AND source = 'SMS'
+           AND ABS(amount - ?) <= 0.01
+           AND date BETWEEN ? AND ?
+         ORDER BY date DESC
+         LIMIT 1`,
+        [incoming.accountId, oppositeType, incoming.amount, startIso, endIso]
+      );
+
+      if (!counterpart) return;
+      if (
+        counterpart.note &&
+        /\b(?:reversal|refund|cashback|reward)\b/i.test(counterpart.note)
+      ) {
+        return;
+      }
+
+      const outgoingTxId = incoming.type === 'expense' ? incoming.id : counterpart.id;
+      const incomingLegTxId = incoming.type === 'expense' ? counterpart.id : incoming.id;
+      const toAccountId = incoming.type === 'expense' ? counterpart.account_id : incoming.accountId;
+
+      const applyPairing = async () => {
+        await database.runAsync(
+          `UPDATE transactions
+           SET type = 'transfer',
+               to_account_id = ?,
+               category = 'Transfer',
+               note = 'Auto-paired account transfer'
+           WHERE id = ?`,
+          [toAccountId, outgoingTxId]
+        );
+        if (typeof SmsDao.reassignParsedTransactionLink === 'function') {
+          await SmsDao.reassignParsedTransactionLink(incomingLegTxId, outgoingTxId);
+        }
+        await database.runAsync('DELETE FROM transactions WHERE id = ?', [incomingLegTxId]);
+      };
+
+      if (typeof database.withTransactionAsync === 'function') {
+        await database.withTransactionAsync(applyPairing);
+      } else {
+        await applyPairing();
+      }
+    } catch {
+      // Transfer pairing must not interrupt ingestion
     }
   }
 

@@ -51,6 +51,7 @@ export class BillExtractor {
     /\b(?:paid successfully|successfully paid|payment successful|transaction successful)\b/i,
     /\b(?:payment received|received with thanks|thanks for payment|thank you for paying)\b/i,
     /\b(?:credited to|deposited in)\b/i,
+    /\b(?:you\s+paid|paid\s+(?:to|at|towards)\s+|paid\s+(?:₹|rs\.?|inr))\b/i,
   ];
 
   // Bill indicator triggers

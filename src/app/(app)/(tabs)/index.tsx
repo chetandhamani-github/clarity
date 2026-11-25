@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Dimensions,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -29,12 +30,12 @@ import { usePortfolioSummary } from '@/hooks/use-investments';
 import { useInvalidateCashflow, useSafeToSpend } from '@/hooks/use-cashflow';
 import { useMonthlyTotals, useNetWorthHistory, useTransactions, useCreateTransaction } from '@/hooks/use-transactions';
 import { useDoubleBackToExit } from '@/hooks/use-double-back-to-exit';
-import { useSmsSync } from '@/hooks/useSmsSync';
 import { useNotifications } from '@/hooks/use-notifications';
 import { formatCurrency, formatCurrencyPrivacy, formatDate, formatLocalDate, formatTransactionTime, getCurrencySymbol, getTransactionSign } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
 import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
 import { useAppStore } from '@/store/use-app-store';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { useSmsStore } from '@/store/useSmsStore';
 
 const RECENT_TRANSACTIONS_FILTER = { limit: 5 };
@@ -158,25 +159,14 @@ export default function DashboardScreen() {
     [accounts, createTransaction, showToast, refetchTransactions, refetchAccounts, refetchTotals]
   );
 
-  const {
-    permissionStatus: smsPermissionStatus,
-    isSyncing: isSmsSyncing,
-    requestPermission: requestSmsPermission,
-    startInitialSync,
-  } = useSmsSync();
+  const notificationPermissionStatus = useNotificationStore(
+    (state) => state.permissionStatus
+  );
+  const isNotificationTrackingEnabled = useNotificationStore((state) => state.isEnabled);
+  const openNotificationDisclosure = useNotificationStore((state) => state.openDisclosure);
 
-  const handleEnableSms = async () => {
-    const status = await requestSmsPermission();
-    if (status === 'granted') {
-      await startInitialSync({
-        autoCreateClarityTransactions: false,
-        skipHistoricalTransactions: true,
-      });
-      showToast('SMS auto-tracking enabled! Accounts and bills synced.', 'success');
-      refetchTransactions();
-      refetchAccounts();
-      refetchTotals();
-    }
+  const handleEnableAutoTracking = () => {
+    openNotificationDisclosure();
   };
 
   const [refreshing, setRefreshing] = useState(false);
@@ -420,8 +410,10 @@ export default function DashboardScreen() {
                 hasBudgetPlan={Boolean(plan && plan.monthlyIncome > 0)}
                 hasGoals={Boolean(goals && goals.length > 0)}
                 googleDriveConnected={googleDriveConnected}
-                onEnableSms={handleEnableSms}
-                smsGranted={smsPermissionStatus === 'granted'}
+                onEnableAutoTracking={handleEnableAutoTracking}
+                autoTrackingEnabled={
+                  notificationPermissionStatus === 'granted' && isNotificationTrackingEnabled
+                }
               />
 
               {accounts.length === 0 ? (
@@ -448,8 +440,8 @@ export default function DashboardScreen() {
                 </View>
               ) : (
                 <>
-                  {/* SMS Auto-Tracking Banner */}
-                  {smsPermissionStatus !== 'granted' && (
+                  {/* Notification Auto-Tracking Banner */}
+                  {Platform.OS === 'android' && notificationPermissionStatus !== 'granted' && (
                     <View
                       style={{
                         marginBottom: 16,
@@ -475,20 +467,23 @@ export default function DashboardScreen() {
                             justifyContent: 'center',
                           }}
                         >
-                          <MaterialIcons name="sms" size={20} color={colors.onPrimaryContainer} />
+                          <MaterialIcons
+                            name="notifications-active"
+                            size={20}
+                            color={colors.onPrimaryContainer}
+                          />
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={{ ...typography.bodyLg, color: colors.onSurface, fontWeight: '700' }}>
-                            Auto-Track Bank SMS
+                            Auto-Track UPI & Bank Alerts
                           </Text>
                           <Text style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, fontSize: 12 }}>
-                            Detect UPI, cards, & bills 100% offline.
+                            Detect UPI, cards & bills 100% offline.
                           </Text>
                         </View>
                       </View>
                       <TouchableOpacity
-                        onPress={handleEnableSms}
-                        disabled={isSmsSyncing}
+                        onPress={handleEnableAutoTracking}
                         style={{
                           backgroundColor: colors.primary,
                           paddingHorizontal: 12,
@@ -503,7 +498,7 @@ export default function DashboardScreen() {
                             fontWeight: '700',
                           }}
                         >
-                          {isSmsSyncing ? 'SYNCING...' : 'ENABLE'}
+                          ENABLE
                         </Text>
                       </TouchableOpacity>
                     </View>

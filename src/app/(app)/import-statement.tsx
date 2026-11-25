@@ -30,6 +30,10 @@ import {
   type ParsedPdfTransaction,
 } from '@/services/export/pdf-statement-parser';
 import { getTransactions, insertTransaction } from '@/services/database/transaction-dao';
+import {
+  areMerchantsCompatible,
+  extractReferenceToken,
+} from '@/modules/sms/duplicate/duplicateDetectionEngine';
 import { formatCurrency, formatDate } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
 
@@ -111,18 +115,47 @@ export default function ImportStatementScreen() {
     const nonDuplicates: StatementItem[] = [];
     let duplicates = 0;
     const matchedExistingIds = new Set<string>();
+    const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
+
+    const toDateKey = (value: string): string => {
+      const trimmed = value.trim();
+      return trimmed.includes('T') ? trimmed.split('T')[0] : trimmed.slice(0, 10);
+    };
 
     for (const tx of transactionsToProcess) {
-      const txMerchantNorm = (tx.merchant || '').trim().toLowerCase();
+      const txDateKey = toDateKey(tx.date);
+      const txDateMs = new Date(`${txDateKey}T00:00:00Z`).getTime();
+      const txRef = extractReferenceToken(`${tx.merchant} ${tx.note}`);
 
-      const matchedItem = existing.find(
-        (e) =>
-          !matchedExistingIds.has(e.id) &&
-          e.date === tx.date &&
-          Math.abs(e.amount - tx.amount) < 0.01 &&
-          e.type === tx.type &&
-          (!e.merchant || !txMerchantNorm || e.merchant.trim().toLowerCase() === txMerchantNorm)
-      );
+      const matchedItem = existing.find((e) => {
+        if (matchedExistingIds.has(e.id)) return false;
+        if (e.type !== tx.type || Math.abs(e.amount - tx.amount) >= 0.01) return false;
+
+        const existingRef = extractReferenceToken(`${e.merchant} ${e.note}`);
+        if (txRef && existingRef && txRef === existingRef) {
+          return true;
+        }
+
+        const existingDateKey = toDateKey(e.date);
+        if (existingDateKey === txDateKey) {
+          return areMerchantsCompatible(e.merchant, tx.merchant);
+        }
+
+        const existingDateMs = new Date(`${existingDateKey}T00:00:00Z`).getTime();
+        if (
+          Number.isFinite(txDateMs) &&
+          Number.isFinite(existingDateMs) &&
+          Math.abs(existingDateMs - txDateMs) <= TWO_DAYS_MS
+        ) {
+          return (
+            Boolean(tx.merchant?.trim()) &&
+            Boolean(e.merchant?.trim()) &&
+            areMerchantsCompatible(e.merchant, tx.merchant)
+          );
+        }
+
+        return false;
+      });
 
       if (matchedItem) {
         matchedExistingIds.add(matchedItem.id);

@@ -1,10 +1,18 @@
-import { NativeModules, NativeEventEmitter, Platform } from 'react-native';
-import type { RawNotificationPayload, NotificationPermissionStatus } from '../types';
+import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
+import type {
+  NotificationListenerHealth,
+  NotificationPermissionStatus,
+  RawNotificationPayload,
+} from '../types';
 
 interface NativeNotificationListenerBridge {
   isAvailable(): Promise<boolean>;
   isPermissionGranted(): Promise<boolean>;
   requestPermission(): Promise<boolean>;
+  isBatteryOptimizationIgnored?(): Promise<boolean>;
+  openBatteryOptimizationSettings?(): Promise<boolean>;
+  getListenerHealth?(): Promise<NotificationListenerHealth>;
+  requestRebind?(): Promise<boolean>;
   drainPendingNotifications(): Promise<RawNotificationPayload[]>;
   addListener(eventName: string): void;
   removeListeners(count: number): void;
@@ -63,6 +71,50 @@ export class NativeNotificationListenerAdapter {
       return results || [];
     } catch {
       return [];
+    }
+  }
+
+  public static async isBatteryOptimizationIgnored(): Promise<boolean> {
+    const bridge = this.getBridge();
+    if (!bridge?.isBatteryOptimizationIgnored) return true;
+
+    try {
+      return await bridge.isBatteryOptimizationIgnored();
+    } catch {
+      return false;
+    }
+  }
+
+  public static async openBatteryOptimizationSettings(): Promise<boolean> {
+    const bridge = this.getBridge();
+    if (!bridge?.openBatteryOptimizationSettings) return false;
+
+    try {
+      return await bridge.openBatteryOptimizationSettings();
+    } catch {
+      return false;
+    }
+  }
+
+  public static async getListenerHealth(): Promise<NotificationListenerHealth | null> {
+    const bridge = this.getBridge();
+    if (!bridge?.getListenerHealth) return null;
+
+    try {
+      return await bridge.getListenerHealth();
+    } catch {
+      return null;
+    }
+  }
+
+  public static async requestRebind(): Promise<boolean> {
+    const bridge = this.getBridge();
+    if (!bridge?.requestRebind) return false;
+
+    try {
+      return await bridge.requestRebind();
+    } catch {
+      return false;
     }
   }
 

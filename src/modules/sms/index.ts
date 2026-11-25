@@ -1,7 +1,5 @@
 export * from './types';
-export * from './permissions/smsPermissionManager';
 export * from './reader/smsReaderService';
-export * from './reader/nativeSmsReaderAdapter';
 export * from './reader/mockSmsReaderAdapter';
 export * from './classifier/smsClassificationEngine';
 export * from './extractor/transactionExtractor';

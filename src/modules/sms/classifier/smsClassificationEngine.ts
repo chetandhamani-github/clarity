@@ -1,7 +1,6 @@
 import type {
-  RawSmsMessage,
   ClassificationResult,
-  SmsClassification,
+  RawSmsMessage
 } from '@/modules/sms/types';
 
 export class SmsClassificationEngine {
@@ -43,6 +42,13 @@ export class SmsClassificationEngine {
     /\bmandate\s+(?:due\s+on|debit\s+date)\b/i,
     /\brequest\s+to\s+debit\s+your\s+a\/?c\b/i,
     /\bpre[- ]debit\s+notification\b/i,
+  ];
+
+  // Regex patterns for UPI Collect / Payment Requests and Unconfirmed Pending Alerts
+  private static readonly REQUEST_OR_PENDING_PATTERNS = [
+    /\b(?:requested|has\s+requested|payment\s+request|collect\s+request|request\s+from|request\s+for)\b/i,
+    /\b(?:is\s+pending|payment\s+pending|awaiting\s+confirmation|under\s+process)\b/i,
+    /\b(?:request\s+expired|collect\s+expired)\b/i,
   ];
 
   // Financial verbs & currency check
@@ -122,8 +128,11 @@ export class SmsClassificationEngine {
       return false;
     }
 
-    // Ignore pre-debit notifications and scheduled mandate alerts
-    if (this.PRE_DEBIT_PATTERNS.some((p) => p.test(body))) {
+    // Ignore pre-debit notifications, scheduled mandate alerts, and payment/collect requests
+    if (
+      this.PRE_DEBIT_PATTERNS.some((p) => p.test(body)) ||
+      this.REQUEST_OR_PENDING_PATTERNS.some((p) => p.test(body))
+    ) {
       return false;
     }
 
@@ -133,6 +142,7 @@ export class SmsClassificationEngine {
     const hasVerb =
       this.DEBIT_VERBS.some((p) => p.test(body)) ||
       this.CREDIT_VERBS.some((p) => p.test(body)) ||
+      /\b(?:paid|sent|transferred)\s+you\b/i.test(body) ||
       /\b(?:transferred?|remitted)\s+to\s+your\s+(?:a\/?c|account)\b/i.test(body) ||
       (/\b(?:bal(?:ance)?|available\s+bal(?:ance)?|closing\s+bal(?:ance)?)\b/i.test(body) &&
         /(?:a\/?c(?:count)?|acct?\.?|account|card)\b/i.test(body));
@@ -192,7 +202,7 @@ export class SmsClassificationEngine {
       };
     }
 
-    // 3.6 Check Pre-Debit & Scheduled Mandate Alerts
+    // 3.6 Check Pre-Debit, Scheduled Mandate, and Payment Request/Pending Alerts
     if (this.PRE_DEBIT_PATTERNS.some((p) => p.test(body))) {
       reasons.push('Pre-debit or scheduled mandate notification (not an executed transaction)');
       return {
@@ -203,12 +213,29 @@ export class SmsClassificationEngine {
       };
     }
 
+    if (this.REQUEST_OR_PENDING_PATTERNS.some((p) => p.test(body))) {
+      reasons.push('UPI payment request or unconfirmed pending notification');
+      return {
+        classification: 'UNKNOWN',
+        confidence: 0.9,
+        isFinancial: false,
+        reasons,
+      };
+    }
+
     // 4. Financial content check
     const hasAmount = this.AMOUNT_PATTERNS.some((p) => p.test(body));
+    const isIncomingP2PNotification = /\b(?:paid|sent|transferred)\s+you\b/i.test(body);
     const isTransferToOwnAccount =
       /\b(?:transferred?|remitted)\s+to\s+your\s+(?:a\/?c|account)\b/i.test(body);
-    const isDebit = !isTransferToOwnAccount && this.DEBIT_VERBS.some((p) => p.test(body));
-    const isCredit = isTransferToOwnAccount || this.CREDIT_VERBS.some((p) => p.test(body));
+    const isDebit =
+      !isTransferToOwnAccount &&
+      !isIncomingP2PNotification &&
+      this.DEBIT_VERBS.some((p) => p.test(body));
+    const isCredit =
+      isTransferToOwnAccount ||
+      isIncomingP2PNotification ||
+      this.CREDIT_VERBS.some((p) => p.test(body));
     const isBalanceAlert =
       /\b(?:bal(?:ance)?|available\s+bal(?:ance)?|closing\s+bal(?:ance)?|clear\s+bal(?:ance)?)\b/i.test(body) &&
       /(?:a\/?c(?:count)?|acct?\.?|account|card)\b/i.test(body);

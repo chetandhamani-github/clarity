@@ -14,7 +14,6 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ExpoReactHostFactory
 
-import com.homerun.clarity.sms.SmsReaderPackage
 import com.homerun.clarity.notification.NotificationListenerPackage
 
 class MainApplication : Application(), ReactApplication {
@@ -24,7 +23,6 @@ class MainApplication : Application(), ReactApplication {
       context = applicationContext,
       packageList =
         PackageList(this).packages.apply {
-          add(SmsReaderPackage())
           add(NotificationListenerPackage())
         }
     )
