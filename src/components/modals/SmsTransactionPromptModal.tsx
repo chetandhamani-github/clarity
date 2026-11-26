@@ -140,7 +140,7 @@ export function SmsTransactionPromptModal({ visible, onDismiss }: Props) {
               {/* Title & Subtitle */}
               <Text style={styles.title}>New Transactions Found</Text>
               <Text style={styles.subtitle}>
-                Clarity detected {totalCount} new bank SMS transaction{totalCount === 1 ? '' : 's'}.
+                Clarity detected {totalCount} new banking transaction{totalCount === 1 ? '' : 's'}.
                 Select the transactions you want to fetch into your ledger.
               </Text>
 

@@ -24,6 +24,7 @@ interface ExpoNotificationsModule {
   }) => Promise<string>;
   cancelScheduledNotificationAsync?: (identifier: string) => Promise<void>;
   cancelAllScheduledNotificationsAsync?: () => Promise<void>;
+  dismissAllNotificationsAsync?: () => Promise<void>;
 }
 
 let Notifications: ExpoNotificationsModule | null = null;
@@ -167,6 +168,20 @@ export class BillAlertEngine {
     }
     try {
       await Notifications.cancelAllScheduledNotificationsAsync();
+    } catch {
+      // Ignore in test/headless mode
+    }
+  }
+
+  /**
+   * Dismisses already-delivered notifications from the device notification tray.
+   */
+  public static async dismissAllDeliveredNotifications(): Promise<void> {
+    if (!Notifications || typeof Notifications.dismissAllNotificationsAsync !== 'function') {
+      return;
+    }
+    try {
+      await Notifications.dismissAllNotificationsAsync();
     } catch {
       // Ignore in test/headless mode
     }

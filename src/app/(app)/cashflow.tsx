@@ -6,9 +6,9 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
-  Dimensions,
   RefreshControl,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { Text, Header, CashflowSkeleton, useToast } from '@/components/ui';
 import { typography, useTheme, radius, ThemeColors } from '@/theme';
@@ -18,6 +18,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { LineChart } from 'react-native-gifted-charts';
 import { useAppStore } from '@/store/use-app-store';
 import { formatCurrency, formatCurrencyPrivacy } from '@/utils/format';
+import { normalizeLineChartValues } from '@/utils/chart-utils';
 import { useSafeToSpend } from '@/hooks/use-cashflow';
 import type { CashFlowEvent } from '@/types';
 
@@ -125,7 +126,8 @@ export default function CashFlowScreen() {
   }, [allEvents, activeFilter]);
 
   // Chart Data & Dimension preparation
-  const chartWidth = Dimensions.get('window').width - 64;
+  const { width: windowWidth } = useWindowDimensions();
+  const chartWidth = Math.max(160, windowWidth - 64);
   const initialSpacing = 16;
   const endSpacing = 16;
   const numPoints = activeProjections.length;
@@ -134,26 +136,12 @@ export default function CashFlowScreen() {
 
   const chartConfig = useMemo(() => {
     if (!summary || activeProjections.length === 0) {
-      return { yBase: 0, maxValue: 100, hasVariance: false, min: 0, max: 0 };
+      return normalizeLineChartValues([], { anchorZeroWhenNonNegative: true });
     }
-    const rawValues = activeProjections.map((p) => p.projectedBalance);
-    const min = Math.min(...rawValues);
-    const max = Math.max(...rawValues);
-    const range = max - min;
-
-    // To prevent gifted-charts from generating dozens of negative sections below the X-axis
-    // (which balloons chart height to 1000px+), we shift the baseline so all data points >= 0.
-    const yBase = min < 0 ? min - (range === 0 ? 50 : range * 0.05) : 0;
-    const effectiveMax = max - yBase;
-    const maxValue = effectiveMax <= 0 ? 100 : effectiveMax * 1.15;
-
-    return {
-      yBase,
-      maxValue,
-      hasVariance: range > 0,
-      min,
-      max,
-    };
+    return normalizeLineChartValues(
+      activeProjections.map((p) => p.projectedBalance),
+      { anchorZeroWhenNonNegative: true }
+    );
   }, [summary, activeProjections]);
 
   const chartData = useMemo(() => {
@@ -161,20 +149,18 @@ export default function CashFlowScreen() {
 
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-    return activeProjections.map((p) => {
+    return activeProjections.map((p, index) => {
       const dateParts = p.date.split('-');
       const monthStr = monthNames[parseInt(dateParts[1], 10) - 1] || '';
       const formattedDateLabel = `${p.dayOfMonth} ${monthStr}`;
-
-      const normalizedValue = Math.max(0, p.projectedBalance - chartConfig.yBase);
       const isDeficit = p.projectedBalance < 0;
 
       return {
-        value: normalizedValue,
-        dataPointText: `${formattedDateLabel}: ${formatCurrency(p.projectedBalance)}${isDeficit ? ' (Deficit)' : ''}`,
+        value: chartConfig.values[index] ?? 0,
+        dataPointText: `${formattedDateLabel}: ${formatCurrencyPrivacy(p.projectedBalance, false, hideBalances)}${isDeficit ? ' (Deficit)' : ''}`,
       };
     });
-  }, [summary, activeProjections, chartConfig.yBase]);
+  }, [summary, activeProjections, chartConfig.values, hideBalances]);
 
   const axisDates = useMemo(() => {
     if (!summary || activeProjections.length === 0) return [];
@@ -387,6 +373,11 @@ export default function CashFlowScreen() {
                   spacing={chartSpacing}
                   adjustToWidth={true}
                   maxValue={chartConfig.maxValue}
+                  yAxisLabelWidth={0}
+                  yAxisThickness={0}
+                  xAxisThickness={0}
+                  xAxisLabelsHeight={0}
+                  labelsExtraHeight={0}
                   hideDataPoints
                   color={statusColor}
                   thickness={2.5}
@@ -411,13 +402,21 @@ export default function CashFlowScreen() {
                     pointerLabelHeight: 34,
                     activatePointersOnLongPress: true,
                     autoAdjustPointerLabelPosition: true,
-                    pointerLabelComponent: (items: any) => (
-                      <View style={[styles.tooltipBox, { backgroundColor: colors.surfaceContainerHighest }]}>
-                        <Text style={[styles.tooltipText, { color: colors.onSurface }]}>
-                          {items[0].dataPointText}
-                        </Text>
-                      </View>
-                    ),
+                    pointerLabelComponent: (items: { dataPointText?: string }[]) => {
+                      const label = items?.[0]?.dataPointText;
+                      if (!label) return null;
+                      return (
+                        <View style={[styles.tooltipBox, { backgroundColor: colors.surfaceContainerHighest }]}>
+                          <Text
+                            style={[styles.tooltipText, { color: colors.onSurface }]}
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                          >
+                            {label}
+                          </Text>
+                        </View>
+                      );
+                    },
                   }}
                 />
               </View>
@@ -812,7 +811,7 @@ const getStyles = (colors: ThemeColors) => {
       justifyContent: 'center',
       marginTop: 4,
       height: 145,
-      overflow: 'hidden',
+      overflow: 'visible',
     },
     chartAxisRow: {
       flexDirection: 'row',

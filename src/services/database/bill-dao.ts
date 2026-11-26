@@ -587,7 +587,7 @@ export async function mergeOrInsertSmsBill(extracted: {
     status: initialStatus,
     paidDate: matchedPayment ? matchedPayment.date.split('T')[0] : undefined,
     paidTransactionId: matchedPayment ? matchedPayment.id : undefined,
-    note: extracted.note || 'Auto-detected from SMS',
+    note: extracted.note || 'Auto-detected alert',
     reminderDaysBefore: 3,
   });
 
@@ -595,7 +595,7 @@ export async function mergeOrInsertSmsBill(extracted: {
   if (initialStatus === 'UNPAID' && diffDays >= 0) {
     insertNotification({
       title: `New Bill Detected: ${extracted.billerName}`,
-      description: `Bill of ${formatCurrency(extracted.amountDue)} due on ${extracted.dueDate} was auto-detected from SMS.`,
+      description: `Bill of ${formatCurrency(extracted.amountDue)} due on ${extracted.dueDate} was auto-detected.`,
       type: 'bill',
       actionUrl: '/(app)/bills',
     }).catch(() => {});

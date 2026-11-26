@@ -349,6 +349,7 @@ export interface AssetAllocationItem {
 
 export interface PortfolioSummary {
   totalPortfolioValue: number;
+  totalHoldingsValue: number;
   totalInvestedAmount: number;
   unrealizedGainLoss: number;
   gainLossPercentage: number;

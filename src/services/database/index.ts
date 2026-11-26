@@ -42,8 +42,8 @@ export async function clearDatabase(): Promise<void> {
         await activeDb.execAsync(`DROP TABLE IF EXISTS "${obj.name}";`);
       }
     }
-  } catch (error) {
-    console.warn('Dynamic table drop encountered error, falling back to static drops:', error);
+  } catch {
+    // Fallback to static drops below
   }
 
   // Static fallback drops to guarantee all known tables are purged

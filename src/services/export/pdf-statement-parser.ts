@@ -1319,27 +1319,254 @@ function applyTiffPredictor(
   return out;
 }
 
-function inflateBytes(data: Uint8Array): Uint8Array | null {
-  try {
-    return pako.inflate(data);
-  } catch {
-    try {
-      return pako.inflateRaw(data);
-    } catch {
-      if (
-        data.length > 4 &&
-        (data[0] === 0x0a || data[0] === 0x0d || data[0] === 0x20) &&
-        data[1] === 0x78
-      ) {
-        try {
-          return pako.inflate(data.subarray(1));
-        } catch {
-          // Fall through
-        }
-      }
-      return null;
+interface HuffmanTree {
+  counts: Int32Array;
+  symbols: Int32Array;
+}
+
+const DEFLATE_LENGTH_BASE = [
+  3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131,
+  163, 195, 227, 258,
+];
+const DEFLATE_LENGTH_EXTRA = [
+  0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0,
+];
+const DEFLATE_DIST_BASE = [
+  1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049,
+  3073, 4097, 6145, 8193, 12289, 16385, 24577,
+];
+const DEFLATE_DIST_EXTRA = [
+  0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13,
+];
+const DEFLATE_CODE_ORDER = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+
+function buildHuffmanTree(lengths: number[], numSyms: number): HuffmanTree {
+  const counts = new Int32Array(16);
+  for (let i = 0; i < numSyms; i++) {
+    counts[lengths[i]]++;
+  }
+  const offsets = new Int32Array(16);
+  for (let len = 1; len < 15; len++) {
+    offsets[len + 1] = offsets[len] + counts[len];
+  }
+  const symbols = new Int32Array(numSyms);
+  for (let sym = 0; sym < numSyms; sym++) {
+    const len = lengths[sym];
+    if (len !== 0) {
+      symbols[offsets[len]++] = sym;
     }
   }
+  return { counts, symbols };
+}
+
+const FIXED_LIT_LENGTHS = Array.from({ length: 288 }, (_, s) =>
+  s <= 143 ? 8 : s <= 255 ? 9 : s <= 279 ? 7 : 8
+);
+const FIXED_DIST_LENGTHS = Array.from({ length: 32 }, () => 5);
+const FIXED_LIT_TREE = buildHuffmanTree(FIXED_LIT_LENGTHS, 288);
+const FIXED_DIST_TREE = buildHuffmanTree(FIXED_DIST_LENGTHS, 32);
+
+function inflateRawPureJs(rawDeflate: Uint8Array): Uint8Array | null {
+  if (rawDeflate.length === 0) return null;
+  let bytePos = 0;
+  let bitBuf = 0;
+  let bitCnt = 0;
+
+  const ensureBits = (n: number): boolean => {
+    while (bitCnt < n) {
+      if (bytePos >= rawDeflate.length) return false;
+      bitBuf |= rawDeflate[bytePos++] << bitCnt;
+      bitCnt += 8;
+    }
+    return true;
+  };
+
+  const readBits = (n: number): number => {
+    if (n === 0) return 0;
+    if (!ensureBits(n)) return -1;
+    const val = bitBuf & ((1 << n) - 1);
+    bitBuf >>>= n;
+    bitCnt -= n;
+    return val;
+  };
+
+  const decodeSymbol = (tree: HuffmanTree): number => {
+    let code = 0;
+    let first = 0;
+    let index = 0;
+    for (let len = 1; len <= 15; len++) {
+      const bit = readBits(1);
+      if (bit < 0) return -1;
+      code |= bit;
+      const count = tree.counts[len];
+      if (code - count < first) {
+        return tree.symbols[index + (code - first)];
+      }
+      index += count;
+      first += count;
+      first <<= 1;
+      code <<= 1;
+    }
+    return -1;
+  };
+
+  const out: number[] = [];
+  const maxOut = 32 * 1024 * 1024;
+  let completed = false;
+
+  while (out.length < maxOut) {
+    const bfinal = readBits(1);
+    const btype = readBits(2);
+    if (bfinal < 0 || btype < 0) break;
+
+    if (btype === 0) {
+      bitBuf = 0;
+      bitCnt = 0;
+      if (bytePos + 4 > rawDeflate.length) break;
+      const len = rawDeflate[bytePos] | (rawDeflate[bytePos + 1] << 8);
+      const nlen = rawDeflate[bytePos + 2] | (rawDeflate[bytePos + 3] << 8);
+      bytePos += 4;
+      if ((len ^ 0xffff) !== nlen) break;
+      const copyEnd = Math.min(rawDeflate.length, bytePos + len);
+      for (let i = bytePos; i < copyEnd; i++) {
+        out.push(rawDeflate[i]);
+      }
+      bytePos = copyEnd;
+      completed = true;
+    } else if (btype === 1 || btype === 2) {
+      let litTree = FIXED_LIT_TREE;
+      let distTree = FIXED_DIST_TREE;
+
+      if (btype === 2) {
+        const hlit = readBits(5);
+        const hdist = readBits(5);
+        const hclen = readBits(4);
+        if (hlit < 0 || hdist < 0 || hclen < 0) break;
+        const litCount = hlit + 257;
+        const distCount = hdist + 1;
+        const clenCount = hclen + 4;
+        const clenLens = new Array<number>(19).fill(0);
+        for (let i = 0; i < clenCount; i++) {
+          const v = readBits(3);
+          if (v < 0) return out.length > 0 ? new Uint8Array(out) : null;
+          clenLens[DEFLATE_CODE_ORDER[i]] = v;
+        }
+        const clenTree = buildHuffmanTree(clenLens, 19);
+        const allLens: number[] = [];
+        const total = litCount + distCount;
+        while (allLens.length < total) {
+          const sym = decodeSymbol(clenTree);
+          if (sym < 0) return out.length > 0 ? new Uint8Array(out) : null;
+          if (sym < 16) {
+            allLens.push(sym);
+          } else if (sym === 16) {
+            const rep = readBits(2);
+            if (rep < 0 || allLens.length === 0) return null;
+            const prev = allLens[allLens.length - 1];
+            for (let r = 0; r < 3 + rep; r++) allLens.push(prev);
+          } else {
+            const rep = sym === 17 ? readBits(3) : readBits(7);
+            const base = sym === 17 ? 3 : 11;
+            if (rep < 0) return null;
+            for (let r = 0; r < base + rep; r++) allLens.push(0);
+          }
+        }
+        litTree = buildHuffmanTree(allLens.slice(0, litCount), litCount);
+        distTree = buildHuffmanTree(allLens.slice(litCount, total), distCount);
+      }
+
+      let hitEnd = false;
+      while (out.length < maxOut) {
+        const sym = decodeSymbol(litTree);
+        if (sym < 0) break;
+        if (sym < 256) {
+          out.push(sym);
+        } else if (sym === 256) {
+          hitEnd = true;
+          completed = true;
+          break;
+        } else {
+          const lIdx = sym - 257;
+          if (lIdx < 0 || lIdx >= DEFLATE_LENGTH_BASE.length) break;
+          const extraLen = readBits(DEFLATE_LENGTH_EXTRA[lIdx]);
+          if (extraLen < 0) break;
+          const matchLen = DEFLATE_LENGTH_BASE[lIdx] + extraLen;
+
+          const dSym = decodeSymbol(distTree);
+          if (dSym < 0 || dSym >= DEFLATE_DIST_BASE.length) break;
+          const extraDist = readBits(DEFLATE_DIST_EXTRA[dSym]);
+          if (extraDist < 0) break;
+          const dist = DEFLATE_DIST_BASE[dSym] + extraDist;
+          if (dist <= 0 || dist > out.length) break;
+
+          for (let k = 0; k < matchLen; k++) {
+            out.push(out[out.length - dist]);
+          }
+        }
+      }
+      if (!hitEnd) break;
+    } else {
+      break;
+    }
+
+    if (bfinal === 1) break;
+  }
+
+  return completed && out.length > 0 ? new Uint8Array(out) : null;
+}
+
+function getZlibHeaderOffset(data: Uint8Array): number {
+  if (data.length < 2) return 0;
+  const cmf = data[0];
+  const flg = data[1];
+  if ((cmf & 0x0f) === 8 && (((cmf << 8) | flg) % 31 === 0)) {
+    return (flg & 0x20) !== 0 && data.length >= 6 ? 6 : 2;
+  }
+  return 0;
+}
+
+function inflateBytes(data: Uint8Array): { bytes: Uint8Array | null; error?: string } {
+  const errors: string[] = [];
+  const rawOffset = getZlibHeaderOffset(data);
+
+  try {
+    return { bytes: pako.inflate(data) };
+  } catch (err: unknown) {
+    errors.push(`pako:${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  try {
+    return { bytes: pako.inflateRaw(rawOffset > 0 ? data.subarray(rawOffset) : data) };
+  } catch (err: unknown) {
+    errors.push(`raw:${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  if (
+    data.length > 4 &&
+    (data[0] === 0x0a || data[0] === 0x0d || data[0] === 0x20) &&
+    getZlibHeaderOffset(data.subarray(1)) > 0
+  ) {
+    try {
+      return { bytes: pako.inflate(data.subarray(1)) };
+    } catch (err: unknown) {
+      errors.push(`skip1:${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  const pure = inflateRawPureJs(rawOffset > 0 ? data.subarray(rawOffset) : data);
+  if (pure) {
+    return { bytes: pure };
+  }
+
+  if (rawOffset === 0 && data.length > 4) {
+    const skip1Offset = getZlibHeaderOffset(data.subarray(1));
+    if (skip1Offset > 0) {
+      const pureSkip = inflateRawPureJs(data.subarray(1 + skip1Offset));
+      if (pureSkip) return { bytes: pureSkip };
+    }
+  }
+
+  return { bytes: null, error: errors.join('|').slice(0, 140) };
 }
 
 function hasSupportedStreamFilter(dictContent: string): boolean {
@@ -1351,9 +1578,11 @@ function hasSupportedStreamFilter(dictContent: string): boolean {
 function decompressStreamBytes(data: Uint8Array, dictContent: string): {
   bytes: Uint8Array;
   decompressed: boolean;
+  inflateErr?: string;
 } {
   let current = data;
   let changed = false;
+  let inflateErr: string | undefined;
 
   const filters: string[] = [];
   const filterArrMatch = dictContent.match(/\/Filter\s*\[([^\]]+)\]/);
@@ -1379,9 +1608,11 @@ function decompressStreamBytes(data: Uint8Array, dictContent: string): {
       changed = true;
     } else if (filter === '/FlateDecode' || filter === '/Fl') {
       const inflated = inflateBytes(current);
-      if (inflated) {
-        current = inflated;
+      if (inflated.bytes) {
+        current = inflated.bytes;
         changed = true;
+      } else if (inflated.error) {
+        inflateErr = inflated.error;
       }
     } else if (filter === '/LZWDecode' || filter === '/LZW') {
       const lzw = decodeLzw(current, earlyChange);
@@ -1411,7 +1642,7 @@ function decompressStreamBytes(data: Uint8Array, dictContent: string): {
     }
   }
 
-  return { bytes: current, decompressed: changed };
+  return { bytes: current, decompressed: changed, inflateErr };
 }
 
 interface StreamObject {
@@ -2891,8 +3122,8 @@ export async function parseBankStatementPdf(
         ])
       );
 
-      for (const pwd of candidatePasswords) {
-        const key = tryUnlockPdf(pwd, encryptInfo);
+      for (let idx = 0; idx < candidatePasswords.length; idx++) {
+        const key = tryUnlockPdf(candidatePasswords[idx], encryptInfo);
         if (key) {
           encryptionKey = key;
           break;
@@ -2940,17 +3171,19 @@ export async function parseBankStatementPdf(
         /\/Filter\s*\/Crypt\b/.test(stream.dictContent) &&
         /\/Name\s*\/Identity\b/.test(stream.dictContent);
 
-      if (encryptionKey && !encryptInfo?.stmfIsIdentity && !streamHasCryptIdentity) {
+      const didAttemptDecrypt =
+        Boolean(encryptionKey) && !encryptInfo?.stmfIsIdentity && !streamHasCryptIdentity;
+      if (didAttemptDecrypt && encryptionKey) {
         const objKey = isV5Encryption
           ? encryptionKey
           : getObjectKey(encryptionKey, stream.objNum, stream.genNum, isAesEncryption);
         streamPayload = decryptStreamData(stream.streamBytes, objKey, isAesEncryption);
       }
 
-      let { bytes: decompressedBytes, decompressed } = decompressStreamBytes(
-        streamPayload,
-        stream.dictContent
-      );
+      let {
+        bytes: decompressedBytes,
+        decompressed,
+      } = decompressStreamBytes(streamPayload, stream.dictContent);
       let decompressedText = uint8ToBinary(decompressedBytes);
 
       if (

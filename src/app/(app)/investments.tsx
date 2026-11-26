@@ -75,20 +75,21 @@ export default function InvestmentsScreen() {
   }, [holdings, activeTab]);
 
   // Format data for Donut PieChart
+  const positiveAllocations = useMemo(() => {
+    if (!summary || !summary.allocations) return [];
+    return summary.allocations.filter((a) => a.amount > 0);
+  }, [summary]);
+
   const pieData = useMemo(() => {
-    if (!summary || !summary.allocations || summary.allocations.length === 0) {
-      return [{ value: 100, color: colors.surfaceContainerHighest }];
-    }
-    const positiveAllocations = summary.allocations.filter((a) => a.amount > 0);
     if (positiveAllocations.length === 0) {
       return [{ value: 100, color: colors.surfaceContainerHighest }];
     }
     return positiveAllocations.map((item) => ({
-      value: Math.max(1, item.amount),
+      value: item.amount,
       color: item.color,
       text: `${Math.round(item.percentage)}%`,
     }));
-  }, [summary, colors]);
+  }, [positiveAllocations, colors.surfaceContainerHighest]);
 
   const handleDelete = (h: InvestmentHolding) => {
     showAlert(
@@ -248,7 +249,9 @@ export default function InvestmentsScreen() {
                     <Text style={styles.cardTitle}>Asset Allocation</Text>
                   </View>
                   <Text style={styles.allocationSubtext}>
-                    Across {summary.allocations.length} asset classes
+                    {positiveAllocations.length === 0
+                      ? 'No active allocations'
+                      : `Across ${positiveAllocations.length} ${positiveAllocations.length === 1 ? 'asset class' : 'asset classes'}`}
                   </Text>
                 </View>
 
@@ -267,7 +270,7 @@ export default function InvestmentsScreen() {
                             ASSETS
                           </Text>
                           <Text style={{ fontSize: 12, color: colors.onSurface, fontFamily: 'Manrope_700Bold' }}>
-                            100%
+                            {positiveAllocations.length === 0 ? '0%' : '100%'}
                           </Text>
                         </View>
                       )}

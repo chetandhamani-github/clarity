@@ -1,5 +1,8 @@
+import { useContext } from 'react';
 import { Platform, StatusBar as RNStatusBar } from 'react-native';
-import { useSafeAreaInsets, EdgeInsets } from 'react-native-safe-area-context';
+import { SafeAreaInsetsContext, EdgeInsets } from 'react-native-safe-area-context';
+
+const ZERO_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 
 export function calculateSafeInsets(
   insets: EdgeInsets,
@@ -36,6 +39,6 @@ export function calculateSafeInsets(
 }
 
 export function useSafeInsets(): EdgeInsets {
-  const insets = useSafeAreaInsets();
+  const insets = useContext(SafeAreaInsetsContext) ?? ZERO_INSETS;
   return calculateSafeInsets(insets, Platform.OS, RNStatusBar.currentHeight);
 }

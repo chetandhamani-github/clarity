@@ -939,6 +939,81 @@ endobj
       expect(result.errors[0]).toContain('only contains images without selectable text');
       expect(result.errors[0]).toContain('img=1, decFail=0, bt=0');
     });
+
+    it('falls back to pure-JS DEFLATE decoder when pako.inflate and pako.inflateRaw fail', async () => {
+      // Dynamic Huffman stream with repeated LZ77 runs (> 1KB so dynamic trees are emitted)
+      const txLines = Array.from({ length: 18 }, (_, idx) => {
+        const y = 700 - idx * 14;
+        return `BT /F1 10 Tf 1 0 0 1 40 ${y} Tm (01/04/2026 SBI YONO SWIGGY ORDER 450.00 12,000.00) Tj ET`;
+      }).join('\n');
+      const zlibBytes = Buffer.from(pako.deflate(Buffer.from(txLines, 'latin1')));
+
+      const mockPdf = `%PDF-1.5
+1 0 obj
+<< /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Length ${zlibBytes.length} /Filter /FlateDecode >>
+stream
+${zlibBytes.toString('binary')}
+endstream
+endobj
+`;
+      (FileSystem.readAsStringAsync as jest.Mock).mockResolvedValueOnce(
+        Buffer.from(mockPdf, 'binary').toString('base64')
+      );
+
+      const inflateSpy = jest.spyOn(pako, 'inflate').mockImplementation(() => {
+        throw new Error('Hermes simulated inflate failure');
+      });
+      const inflateRawSpy = jest.spyOn(pako, 'inflateRaw').mockImplementation(() => {
+        throw new Error('Hermes simulated inflateRaw failure');
+      });
+
+      try {
+        const result = await parseBankStatementPdf('file:///pure_js_inflate.pdf');
+        expect(result.success).toBe(true);
+        expect(result.transactions).toHaveLength(18);
+        expect(result.transactions[0]).toMatchObject({
+          date: '2026-04-01',
+          amount: 450,
+          balance: 12000,
+        });
+      } finally {
+        inflateSpy.mockRestore();
+        inflateRawSpy.mockRestore();
+      }
+    });
+
+    it('decompresses zlib streams with corrupted ADLER32 trailer bytes', async () => {
+      const content = 'BT /F1 10 Tf 1 0 0 1 40 700 Tm (09 Apr 2026 UPI AMAZON 999.00 8,001.00) Tj ET';
+      const zlibBytes = Buffer.from(pako.deflate(Buffer.from(content, 'latin1')));
+      zlibBytes[zlibBytes.length - 1] ^= 0xff; // Corrupt ADLER32 checksum
+
+      const mockPdf = `%PDF-1.4
+1 0 obj
+<< /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Length ${zlibBytes.length} /Filter /FlateDecode >>
+stream
+${zlibBytes.toString('binary')}
+endstream
+endobj
+`;
+      (FileSystem.readAsStringAsync as jest.Mock).mockResolvedValueOnce(
+        Buffer.from(mockPdf, 'binary').toString('base64')
+      );
+
+      const result = await parseBankStatementPdf('file:///bad_adler.pdf');
+      expect(result.success).toBe(true);
+      expect(result.transactions).toHaveLength(1);
+      expect(result.transactions[0]).toMatchObject({
+        date: '2026-04-09',
+        amount: 999,
+        balance: 8001,
+      });
+    });
   });
 
   describe('SUPPORTED_BANK_PROFILES', () => {

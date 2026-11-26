@@ -47,13 +47,27 @@ const CATEGORY_ICON_MAP: Record<string, IconName> = {
   upi: 'qr-code-scanner',
 };
 
+const CATEGORY_ICON_ENTRIES = Object.entries(CATEGORY_ICON_MAP) as [string, IconName][];
+const CATEGORY_ICON_CACHE = new Map<string, IconName>();
+
 export function getCategoryIcon(category?: string): IconName {
   if (!category) return 'category';
   const key = category.toLowerCase().trim();
-  for (const [mapKey, icon] of Object.entries(CATEGORY_ICON_MAP)) {
-    if (key.includes(mapKey)) return icon;
+  const cached = CATEGORY_ICON_CACHE.get(key);
+  if (cached) return cached;
+
+  let resolved: IconName | undefined = CATEGORY_ICON_MAP[key];
+  if (!resolved) {
+    for (const [mapKey, icon] of CATEGORY_ICON_ENTRIES) {
+      if (key.includes(mapKey)) {
+        resolved = icon;
+        break;
+      }
+    }
   }
-  return CATEGORY_ICON_MAP[key] ?? 'category';
+  const finalIcon = resolved ?? 'category';
+  CATEGORY_ICON_CACHE.set(key, finalIcon);
+  return finalIcon;
 }
 
 const ACCOUNT_TYPE_ICON_MAP: Record<string, IconName> = {

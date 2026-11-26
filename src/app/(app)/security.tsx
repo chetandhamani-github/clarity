@@ -44,6 +44,7 @@ export default function SecurityPrivacyScreen() {
   const queryClient = useQueryClient();
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const [pendingLocalContent, setPendingLocalContent] = useState<string | null>(null);
   const [passphraseModalVisible, setPassphraseModalVisible] = useState(false);
 
@@ -194,9 +195,10 @@ export default function SecurityPrivacyScreen() {
   };
 
   const handleDeleteAllData = () => {
+    if (isResetting) return;
     showAlert(
       'Reset All Data',
-      'Are you sure you want to permanently delete all accounts, transactions, and categories from this device? This action cannot be undone.',
+      'This will permanently delete all local transactions, accounts, categories, receipts, and cached rules from this device. Cloud backups will not be deleted.\n\nThis action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -204,11 +206,14 @@ export default function SecurityPrivacyScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
+              setIsResetting(true);
               await resetEntireAppData(queryClient);
               showToast('All local data was permanently cleared', 'success');
               router.navigate('/(app)/(tabs)');
             } catch {
               showToast('Failed to clear local data', 'error');
+            } finally {
+              setIsResetting(false);
             }
           },
         },
@@ -432,8 +437,14 @@ export default function SecurityPrivacyScreen() {
                   Permanently wipe all accounts, transactions, and categories from this device.
                 </Text>
               </View>
-              <TouchableOpacity style={styles.errorBtn} onPress={handleDeleteAllData}>
-                <Text style={styles.errorBtnText}>Reset Data</Text>
+              <TouchableOpacity
+                style={[styles.errorBtn, isResetting && { opacity: 0.6 }]}
+                onPress={handleDeleteAllData}
+                disabled={isResetting}
+              >
+                <Text style={styles.errorBtnText}>
+                  {isResetting ? 'Resetting...' : 'Reset Data'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>

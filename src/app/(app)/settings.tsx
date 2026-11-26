@@ -236,7 +236,7 @@ export default function SettingsScreen() {
   const handleResetData = () => {
     showAlert(
       'Reset All App Data?',
-      'This will permanently delete all local transactions, accounts, categories, and cached rules from this device. Cloud backups will not be deleted.\n\nThis action cannot be undone.',
+      'This will permanently delete all local transactions, accounts, categories, receipts, and cached rules from this device. Cloud backups will not be deleted.\n\nThis action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

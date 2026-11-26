@@ -90,8 +90,8 @@ export async function evaluateCategoryBudgetAlert(
         DeviceEventEmitter.emit('notificationsUpdated');
       }
     }
-  } catch (error) {
-    console.error('Error evaluating category budget alert:', error);
+  } catch {
+    // Alert evaluation failure should not break callers
   }
 }
 

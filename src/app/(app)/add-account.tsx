@@ -11,15 +11,31 @@ import { useToast, useAlert } from '@/components/ui';
 import { ACCOUNT_TYPES, type AccountType } from '@/types';
 import { getCurrencySymbol } from '@/utils/format';
 
+function parseAccountBalanceInput(raw: string): number | null {
+  const normalized = raw.replace(/[,\s₹$€£]/g, '').trim();
+  if (normalized === '') {
+    return 0;
+  }
+  if (!/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(normalized)) {
+    return null;
+  }
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return Object.is(parsed, -0) ? 0 : parsed;
+}
+
 export default function AddAccountScreen() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const insets = useSafeInsets();
   const router = useRouter();
 
-  const { id, initialType } = useLocalSearchParams<{ id?: string; initialType?: string }>();
-  const isEditing = !!id;
-  const { account, isLoading: isFetching } = useAccount(id);
+  const { id, initialType } = useLocalSearchParams<{ id?: string | string[]; initialType?: string }>();
+  const accountId = Array.isArray(id) ? id[0] : id;
+  const isEditing = !!accountId;
+  const { account, isLoading: isFetching } = useAccount(accountId);
   const { showToast } = useToast();
   const { showAlert } = useAlert();
 
@@ -46,8 +62,9 @@ export default function AddAccountScreen() {
       setName(account.name);
       setType(account.type);
       const isAccLiability = ['credit', 'loan', 'borrowed'].includes(account.type);
+      const numericBalance = Number.isFinite(account.balance) ? account.balance : 0;
       setBalanceStr(
-        isAccLiability ? Math.abs(account.balance).toString() : account.balance.toString()
+        (isAccLiability ? Math.abs(numericBalance) : numericBalance).toString()
       );
       setInstitution(account.institution || '');
       setLastFour(account.lastFour || '');
@@ -68,8 +85,8 @@ export default function AddAccountScreen() {
       showToast('Account name is required', 'error');
       return;
     }
-    const rawBalance = parseFloat(balanceStr);
-    if (isNaN(rawBalance)) {
+    const rawBalance = parseAccountBalanceInput(balanceStr);
+    if (rawBalance === null) {
       showToast('Please enter a valid balance', 'error');
       return;
     }
@@ -99,11 +116,14 @@ export default function AddAccountScreen() {
       creditLimit: validCreditLimit,
     };
 
-    if (isEditing && id) {
-      updateAccount(id, accountData, {
+    if (isEditing && accountId) {
+      updateAccount(accountId, accountData, {
         onSuccess: () => {
           showToast('Account updated successfully', 'success');
           router.back();
+        },
+        onError: (err) => {
+          showToast(err.message || 'Failed to update account', 'error');
         },
       });
     } else {
@@ -111,6 +131,9 @@ export default function AddAccountScreen() {
         onSuccess: () => {
           showToast('Account added successfully', 'success');
           router.back();
+        },
+        onError: (err) => {
+          showToast(err.message || 'Failed to add account', 'error');
         },
       });
     }

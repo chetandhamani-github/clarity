@@ -3,10 +3,15 @@ import { BillsRepository } from '@/modules/bills/database/bills.repository';
 import { useBillsStore } from '@/modules/bills/store/bills.store';
 import { NativeNotificationListenerAdapter } from '@/modules/notifications/adapters/nativeNotificationListenerAdapter';
 import { DEFAULT_TARGET_APPS } from '@/modules/notifications/constants';
+import { NotificationParsingService } from '@/modules/notifications/services/notificationParsingService';
+import { LocalCategorizerEngine } from '@/modules/sms/categorizer/localCategorizerEngine';
 import { DuplicateDetectionEngine } from '@/modules/sms/duplicate/duplicateDetectionEngine';
+import { SmsSyncService } from '@/modules/sms/services/smsSyncService';
 import { useSplitwiseStore } from '@/modules/splitwise/store/splitwise.store';
 import { clearAutoBackupTimer } from '@/services/cloud/google-drive-service';
 import { clearDatabase } from '@/services/database';
+import { resetBillReminderCheckCooldown } from '@/services/notifications/alert-engine';
+import { clearAllReceiptImages } from '@/services/storage/receipt-storage';
 import { useAppStore } from '@/store/use-app-store';
 import { useCopilotStore } from '@/store/use-copilot-store';
 import { useNotificationStore } from '@/store/useNotificationStore';
@@ -15,120 +20,170 @@ import type { QueryClient } from '@tanstack/react-query';
 
 const INSTALLATION_ID_STORAGE_KEY = 'clarity_device_installation_id';
 
+let resetInFlight: Promise<void> | null = null;
+
 /**
- * Resets all application data completely across SQLite, MMKV, Zustand,
- * in-memory engine caches, and TanStack Query cache.
+ * Resets all local application data cleanly across SQLite, receipt & export files,
+ * MMKV, Zustand stores, OS notifications, in-memory caches, and TanStack Query cache.
+ * Preserves device installation ID, remote cloud backups + credentials, app lock security,
+ * and authentication session.
  */
-export async function resetEntireAppData(queryClient?: QueryClient): Promise<void> {
-  // 1. Pause auto-backup timers and lock cloud sync to protect remote Google Drive backups
+export function resetEntireAppData(queryClient?: QueryClient): Promise<void> {
+  if (resetInFlight) {
+    return resetInFlight;
+  }
+
+  resetInFlight = executeResetEntireAppData(queryClient).finally(() => {
+    resetInFlight = null;
+  });
+  return resetInFlight;
+}
+
+async function executeResetEntireAppData(queryClient?: QueryClient): Promise<void> {
+  // 1. Pause auto-backup timers, lock cloud sync to protect Drive backups, and quiesce background ingestion
   clearAutoBackupTimer();
   useAppStore.getState().setPostResetLocked(true);
+  SmsSyncService.cancelSync();
+  NotificationParsingService.setResetInProgress(true);
 
-  // 2. Drop and re-seed the SQLite database
-  await clearDatabase();
-
-  // 2.5 Cancel all OS-scheduled notifications before wiping state
   try {
-    const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
-    await BillAlertEngine.cancelAllNativeBillReminders();
-  } catch {
-    // Ignore in test/headless mode
-  }
+    await NotificationParsingService.flushPendingWork();
 
-  // 3. Reset repository and engine schema/memory caches & native notification bridge buffer
-  BillsRepository.resetSchemaCache();
-  DuplicateDetectionEngine.clearCache();
-  await NativeNotificationListenerAdapter.clearBridgeState().catch(() => false);
+    // 2. Drop and re-seed the SQLite database
+    await clearDatabase();
 
-  // 4. Wipe MMKV storage while preserving installation id
-  const installationId = mmkv.getString(INSTALLATION_ID_STORAGE_KEY);
-  mmkv.clearAll();
-  if (installationId) {
-    mmkv.set(INSTALLATION_ID_STORAGE_KEY, installationId);
-  }
+    // 3. Remove persisted receipt images & cached export files on disk
+    await clearAllReceiptImages();
+    try {
+      const { clearCachedExportFiles } = await import('@/services/export/export-service');
+      await clearCachedExportFiles();
+    } catch {
+      // Ignore in test/headless mode
+    }
 
-  // 5. Reset in-memory Zustand stores
-  useBillsStore.setState({
-    bills: [],
-    subscriptions: [],
-    summary: {
-      upcomingCount: 0,
-      upcomingAmount: 0,
-      overdueCount: 0,
-      overdueAmount: 0,
-      paidCount: 0,
-      paidThisMonthAmount: 0,
-      monthlySubscriptionSpend: 0,
-      activeSubscriptionCount: 0,
-      totalCommittedMonth: 0,
-    },
-    selectedTab: 'upcoming',
-    selectedCategory: 'all',
-    searchQuery: '',
-    isLoading: false,
-  });
+    // 4. Cancel scheduled OS notifications, clear notification tray, & reset alert cooldown
+    try {
+      const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
+      await BillAlertEngine.cancelAllNativeBillReminders();
+      await BillAlertEngine.dismissAllDeliveredNotifications();
+    } catch {
+      // Ignore in test/headless mode
+    }
+    resetBillReminderCheckCooldown();
 
-  useSplitwiseStore.setState({
-    people: [],
-    peopleWithBalances: [],
-    debts: [],
-    settlements: [],
-    groups: [],
-    expenses: [],
-    activeGroupId: null,
-    activeGroupExpenses: [],
-    activeGroupBalances: null,
-    activeGroupMembers: [],
-    overallSummary: {
-      totalOwedToMe: 0,
-      totalIOwe: 0,
-      totalSettled: 0,
-      netBalance: 0,
-      peopleCount: 0,
-    },
-    selectedPersonId: null,
-    selectedFilter: 'ALL',
-    searchQuery: '',
-    isLoading: false,
-    error: null,
-  });
+    // 5. Reset repository & engine caches, custom categorizer rules, and native listener buffer
+    BillsRepository.resetSchemaCache();
+    DuplicateDetectionEngine.clearCache();
+    LocalCategorizerEngine.clearCustomRules();
+    await NativeNotificationListenerAdapter.clearBridgeState().catch(() => false);
 
-  useSmsStore.setState({
-    analytics: null,
-    reviewQueueCount: 0,
-    pendingTransactions: [],
-    isPromptVisible: false,
-  });
+    // 6. Wipe MMKV storage while preserving installation id
+    const installationId = mmkv.getString(INSTALLATION_ID_STORAGE_KEY);
+    mmkv.clearAll();
+    if (installationId) {
+      mmkv.set(INSTALLATION_ID_STORAGE_KEY, installationId);
+    }
 
-  useNotificationStore.setState({
-    isEnabled: true,
-    permissionStatus: 'denied',
-    parseTransactions: true,
-    parseBills: true,
-    enabledPackages: DEFAULT_TARGET_APPS.map((app) => app.packageName),
-    health: null,
-    isDisclosureVisible: false,
-    activeDetectedBill: null,
-    activeDetectedBillId: null,
-    detectedBillQueue: [],
-    detectedBillModalVisible: false,
-  });
+    // 7. Reset in-memory Zustand stores
+    useBillsStore.setState({
+      bills: [],
+      subscriptions: [],
+      summary: {
+        upcomingCount: 0,
+        upcomingAmount: 0,
+        overdueCount: 0,
+        overdueAmount: 0,
+        paidCount: 0,
+        paidThisMonthAmount: 0,
+        monthlySubscriptionSpend: 0,
+        activeSubscriptionCount: 0,
+        totalCommittedMonth: 0,
+      },
+      selectedTab: 'upcoming',
+      selectedCategory: 'all',
+      searchQuery: '',
+      isLoading: false,
+    });
 
-  useCopilotStore.getState().clearMessages();
+    useSplitwiseStore.setState({
+      people: [],
+      peopleWithBalances: [],
+      debts: [],
+      settlements: [],
+      groups: [],
+      expenses: [],
+      activeGroupId: null,
+      activeGroupExpenses: [],
+      activeGroupBalances: null,
+      activeGroupMembers: [],
+      overallSummary: {
+        totalOwedToMe: 0,
+        totalIOwe: 0,
+        totalSettled: 0,
+        netBalance: 0,
+        peopleCount: 0,
+      },
+      selectedPersonId: null,
+      selectedFilter: 'ALL',
+      searchQuery: '',
+      isLoading: false,
+      error: null,
+    });
 
-  // 6. Reset user preferences & prompt flags in useAppStore
-  const appStore = useAppStore.getState();
-  appStore.setLastCloudBackupTime(null);
-  appStore.setHasSeenDrivePrompt(false);
-  appStore.setHasSeenNotificationPrompt(false);
-  appStore.setLastDismissedClipboardHash(null);
-  appStore.setHideBalances(false);
-  appStore.setHasDismissedOnboardingChecklist(false);
+    useSmsStore.setState({
+      analytics: null,
+      reviewQueueCount: 0,
+      pendingTransactions: [],
+      isPromptVisible: false,
+    });
 
-  // 7. Flush TanStack Query cache and force all mounted observers to re-fetch
-  if (queryClient) {
-    await queryClient.cancelQueries();
-    queryClient.clear();
-    await queryClient.invalidateQueries();
+    useNotificationStore.setState({
+      isEnabled: true,
+      permissionStatus: 'denied',
+      parseTransactions: true,
+      parseBills: true,
+      enabledPackages: DEFAULT_TARGET_APPS.map((app) => app.packageName),
+      health: null,
+      isDisclosureVisible: false,
+      activeDetectedBill: null,
+      activeDetectedBillId: null,
+      detectedBillQueue: [],
+      detectedBillModalVisible: false,
+    });
+    // Sync actual OS permission/health so granted Notification Access isn't misreported
+    await useNotificationStore.getState().refreshHealth().catch(() => null);
+
+    useCopilotStore.getState().clearMessages();
+
+    // 8. Reset user financial cycle config, prompt flags, & privacy state in useAppStore
+    const appStore = useAppStore.getState();
+    appStore.setLastCloudBackupTime(null);
+    appStore.setHasSeenDrivePrompt(false);
+    appStore.setHasSeenNotificationPrompt(false);
+    appStore.setLastDismissedClipboardHash(null);
+    appStore.setHideBalances(false);
+    appStore.setHasDismissedOnboardingChecklist(false);
+    appStore.setOnboarded(false);
+    appStore.setPaydayDayOfMonth(1);
+    appStore.setSafetyBufferAmount(2000);
+
+    // 9. Flush TanStack Query cache and notify mounted non-query listeners
+    if (queryClient) {
+      await queryClient.cancelQueries();
+      queryClient.clear();
+      await queryClient.invalidateQueries();
+    }
+
+    try {
+      const { DeviceEventEmitter } = await import('react-native');
+      DeviceEventEmitter?.emit?.('appDataReset');
+      DeviceEventEmitter?.emit?.('billsUpdated');
+      DeviceEventEmitter?.emit?.('notificationsUpdated');
+      DeviceEventEmitter?.emit?.('splitwiseUpdated');
+    } catch {
+      // Ignore in test/headless mode
+    }
+  } finally {
+    NotificationParsingService.setResetInProgress(false);
   }
 }

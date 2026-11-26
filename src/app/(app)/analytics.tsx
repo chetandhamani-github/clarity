@@ -13,6 +13,8 @@ import {
   useMonthlyReports,
 } from '@/hooks/use-transactions';
 import { useAccounts } from '@/hooks/use-accounts';
+import { usePortfolioSummary } from '@/hooks/use-investments';
+import { summarizeAccounts } from '@/utils/account-metrics';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
 import { useFinancialHealth } from '@/hooks/use-financial-health';
 import { useMonthlyAiDigest } from '@/hooks/use-ai-digest';
@@ -120,10 +122,11 @@ export default function AnalyticsScreen() {
   const savingsRate = totals.income > 0 ? (netCashFlow / totals.income) * 100 : 0;
   const digestHealthScore = healthReport?.overallScore ?? digest?.financialHealthScore ?? 0;
 
-  const assets = accounts.filter((a) => a.balance > 0).reduce((sum, a) => sum + a.balance, 0);
-  const liabilities = accounts
-    .filter((a) => a.balance < 0)
-    .reduce((sum, a) => sum + Math.abs(a.balance), 0);
+  const { summary: portfolioSummary } = usePortfolioSummary();
+  const { totalAssets: accountsAssets, totalLiabilities: liabilities } =
+    summarizeAccounts(accounts);
+  const holdingsValue = portfolioSummary?.totalHoldingsValue ?? 0;
+  const assets = accountsAssets + holdingsValue;
   const netWorth = assets - liabilities;
 
   // For Net Worth bars
@@ -334,7 +337,7 @@ export default function AnalyticsScreen() {
                   <View>
                     <Text style={styles.netWorthLabel}>NET WORTH</Text>
                     <Text style={styles.netWorthAmount} numberOfLines={1} adjustsFontSizeToFit>
-                      {formatCurrencyPrivacy(netWorth, hideBalances)}
+                      {formatCurrencyPrivacy(netWorth, false, hideBalances)}
                     </Text>
                   </View>
 
@@ -342,7 +345,7 @@ export default function AnalyticsScreen() {
                     <View style={styles.netWorthBarRow}>
                       <View style={styles.netWorthBarTextRow}>
                         <Text style={styles.netWorthBarLabel}>Assets</Text>
-                        <Text style={styles.netWorthBarValue}>{formatCurrencyPrivacy(assets, hideBalances)}</Text>
+                        <Text style={styles.netWorthBarValue}>{formatCurrencyPrivacy(assets, false, hideBalances)}</Text>
                       </View>
                       <View style={styles.progressBarTrack}>
                         <View
@@ -360,7 +363,7 @@ export default function AnalyticsScreen() {
                     <View style={styles.netWorthBarRow}>
                       <View style={styles.netWorthBarTextRow}>
                         <Text style={styles.netWorthBarLabel}>Liabilities</Text>
-                        <Text style={styles.netWorthBarValue}>{formatCurrencyPrivacy(liabilities, hideBalances)}</Text>
+                        <Text style={styles.netWorthBarValue}>{formatCurrencyPrivacy(liabilities, false, hideBalances)}</Text>
                       </View>
                       <View style={styles.progressBarTrack}>
                         <View

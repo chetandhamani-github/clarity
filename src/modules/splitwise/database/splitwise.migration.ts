@@ -41,9 +41,7 @@ export async function runSplitwiseMigrations(db: SQLite.SQLiteDatabase): Promise
   // 3. Create all indexes after columns are guaranteed to exist
   try {
     await db.execAsync(CREATE_SPLITWISE_INDEXES_SQL);
-  } catch (err) {
-    console.warn('Failed to create splitwise indexes:', err);
-  }
+  } catch {}
 }
 
 /**

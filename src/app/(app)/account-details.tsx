@@ -4,8 +4,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { Text, Header, DetailSkeleton, SkeletonCircle, SkeletonText } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
@@ -18,6 +18,12 @@ import { useAccountReconciliation, useCreateAdjustmentEntry } from '@/hooks/use-
 import { useToast, useAlert, DiscrepancyBanner } from '@/components/ui';
 import { LineChart } from 'react-native-gifted-charts';
 import { formatCurrency, formatDate, formatTransactionTime, getTransactionSign } from '@/utils/format';
+import {
+  buildStartMidEndLabels,
+  normalizeLineChartValues,
+  padChartHistory,
+} from '@/utils/chart-utils';
+import { getLocalTodayYmd } from '@/utils/date';
 import { getCategoryIcon, getAccountTypeIcon, getBankBranding } from '@/utils/icons';
 import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
 import { supportsStatementImport } from '@/services/export/statement-import-helpers';
@@ -96,52 +102,29 @@ export default function AccountDetailsScreen() {
   };
 
   // Format history for LineChart
-  const chartData = useMemo(() => {
-    let data = history;
-    if (!data || data.length === 0)
-      data = [
-        { date: new Date().toISOString().split('T')[0], value: account?.balance || 0 },
-        { date: new Date().toISOString().split('T')[0], value: account?.balance || 0 },
-      ];
-    else if (data.length === 1) data = [data[0], data[0]];
+  const paddedHistory = useMemo(
+    () => padChartHistory(history, account?.balance || 0, getLocalTodayYmd()),
+    [history, account?.balance]
+  );
 
-    return data.map((point, index) => {
-      const isStart = index === 0;
-      const isEnd = index === data.length - 1;
-      const isMid = index === Math.floor(data.length / 2);
+  const chartConfig = useMemo(
+    () => normalizeLineChartValues(paddedHistory.map((point) => point.value)),
+    [paddedHistory]
+  );
 
-      const dateParts = point.date.split('-');
-      const label = isStart || isEnd || isMid ? `${dateParts[1]}/${dateParts[2]}` : '';
-
-      return {
-        value: point.value,
-        label,
+  const chartData = useMemo(
+    () =>
+      paddedHistory.map((point, index) => ({
+        value: chartConfig.values[index] ?? 0,
         dataPointText: formatCurrency(point.value),
-      };
-    });
-  }, [history, account]);
+      })),
+    [paddedHistory, chartConfig.values]
+  );
 
-  const chartConfig = useMemo(() => {
-    const vals = chartData.map((d) => d.value);
-    const min = Math.min(...vals);
-    const max = Math.max(...vals);
-    const range = max - min;
-
-    if (range <= 0) {
-      return {
-        yAxisOffset: min < 0 ? min * 1.2 : 0,
-        maxValue: max <= 0 ? (max === 0 ? 100 : 0) : max * 1.25,
-        hasVariance: false,
-      };
-    }
-
-    const padding = range * 0.15;
-    return {
-      yAxisOffset: Math.max(0, min - padding),
-      maxValue: max + padding,
-      hasVariance: true,
-    };
-  }, [chartData]);
+  const axisDates = useMemo(
+    () => buildStartMidEndLabels(paddedHistory.map((point) => point.date)),
+    [paddedHistory]
+  );
 
   // Calculate Account change percentage
   const balanceChangePercent = useMemo(() => {
@@ -231,8 +214,8 @@ export default function AccountDetailsScreen() {
     };
   }, [account]);
 
-  const screenWidth = Dimensions.get('window').width;
-  const chartWidth = screenWidth - 88;
+  const { width: screenWidth } = useWindowDimensions();
+  const chartWidth = Math.max(160, screenWidth - 84);
   const branding = account ? getBankBranding(account.institution || account.name) : null;
 
   return (
@@ -343,8 +326,8 @@ export default function AccountDetailsScreen() {
               <View
                 style={{
                   marginTop: 12,
-                  height: 135,
-                  overflow: 'hidden',
+                  height: 142,
+                  overflow: 'visible',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
@@ -357,8 +340,12 @@ export default function AccountDetailsScreen() {
                     chartData.length > 1 ? chartWidth / (chartData.length - 1) : chartWidth
                   }
                   adjustToWidth={true}
-                  yAxisOffset={chartConfig.yAxisOffset}
                   maxValue={chartConfig.maxValue}
+                  yAxisLabelWidth={0}
+                  yAxisThickness={0}
+                  xAxisThickness={0}
+                  xAxisLabelsHeight={0}
+                  labelsExtraHeight={0}
                   hideDataPoints
                   color={isPositiveTrend ? colors.primary : colors.error}
                   thickness={3}
@@ -374,36 +361,40 @@ export default function AccountDetailsScreen() {
                   hideYAxisText
                   hideAxesAndRules
                   pointerConfig={{
-                    pointerStripHeight: 140,
+                    pointerStripHeight: 135,
                     pointerStripColor: colors.outline,
                     pointerStripWidth: 2,
                     pointerColor: colors.primary,
                     radius: 6,
-                    pointerLabelWidth: 80,
-                    pointerLabelHeight: 30,
+                    pointerLabelWidth: 116,
+                    pointerLabelHeight: 32,
                     activatePointersOnLongPress: true,
                     autoAdjustPointerLabelPosition: true,
-                    pointerLabelComponent: (items: any) => {
+                    pointerLabelComponent: (items: { dataPointText?: string }[]) => {
+                      const label = items?.[0]?.dataPointText;
+                      if (!label) return null;
                       return (
                         <View
                           style={{
-                            height: 30,
-                            width: 80,
+                            height: 32,
+                            width: 116,
                             justifyContent: 'center',
                             backgroundColor: colors.surfaceContainerHighest,
                             borderRadius: 8,
-                            padding: 4,
+                            paddingHorizontal: 8,
                           }}
                         >
                           <Text
                             style={{
                               color: colors.onSurface,
-                              fontSize: 12,
+                              fontSize: 11,
                               fontWeight: 'bold',
                               textAlign: 'center',
                             }}
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
                           >
-                            {items[0].dataPointText}
+                            {label}
                           </Text>
                         </View>
                       );
@@ -411,6 +402,15 @@ export default function AccountDetailsScreen() {
                   }}
                 />
               </View>
+              {axisDates.length > 0 && (
+                <View style={styles.chartAxisRow}>
+                  {axisDates.map((dateLabel, idx) => (
+                    <Text key={idx} style={styles.chartAxisText}>
+                      {dateLabel}
+                    </Text>
+                  ))}
+                </View>
+              )}
             </View>
 
             {/* Credit Card Billing Cycle Card */}
@@ -799,7 +799,14 @@ export default function AccountDetailsScreen() {
                         {transactions.length > 5 && (
                           <TouchableOpacity
                             style={styles.viewAllBtn}
-                            onPress={() => router.navigate('/transactions')}
+                            onPress={() => {
+                              const targetAccountId = account?.id ?? accountId;
+                              if (!targetAccountId) return;
+                              router.push({
+                                pathname: '/(app)/account-transactions',
+                                params: { accountId: targetAccountId },
+                              });
+                            }}
                           >
                             <Text style={{ color: colors.primary, fontWeight: '500' }}>
                               View All
@@ -955,6 +962,17 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.bodyMd,
       color: colors.onSurfaceVariant,
       marginTop: 4,
+    },
+    chartAxisRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: 4,
+      paddingHorizontal: 2,
+    },
+    chartAxisText: {
+      ...typography.labelMd,
+      fontSize: 10,
+      color: colors.onSurfaceVariant,
     },
     accountIconBox: {
       width: 48,

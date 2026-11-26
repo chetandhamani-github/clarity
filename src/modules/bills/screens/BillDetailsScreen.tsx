@@ -17,6 +17,7 @@ import { formatCurrencyPrivacy } from '@/utils/format';
 import { getLocalTodayYmd } from '@/utils/date';
 import { getBillerBranding } from '@/utils/icons';
 import { useBills } from '../hooks/useBills';
+import { getBillSourceLabel } from '../utils/bill-helpers';
 import { BillStatusBadge } from '../components/BillStatusBadge';
 
 export function BillDetailsScreen() {
@@ -241,7 +242,7 @@ export function BillDetailsScreen() {
 
           <View style={styles.infoRow}>
             <Text style={[styles.infoLabel, { color: colors.onSurfaceVariant }]}>Source</Text>
-            <Text style={[styles.infoValue, { color: colors.onSurface }]}>{bill.source.toUpperCase()}</Text>
+            <Text style={[styles.infoValue, { color: colors.onSurface }]}>{getBillSourceLabel(bill.source)}</Text>
           </View>
 
           {bill.lastPaidDate ? (

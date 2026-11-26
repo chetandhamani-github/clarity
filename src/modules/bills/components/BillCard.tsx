@@ -9,6 +9,7 @@ import { formatCurrencyPrivacy } from '@/utils/format';
 import { getBillerBranding } from '@/utils/icons';
 import { BillStatusBadge } from './BillStatusBadge';
 import { useBills } from '../hooks/useBills';
+import { getBillSourceLabel } from '../utils/bill-helpers';
 import { BillAlertEngine } from '@/services/notifications/bill-alert-engine';
 import type { Bill } from '../types/bill.types';
 
@@ -184,7 +185,7 @@ export function BillCard({ bill, onPress }: BillCardProps) {
 
         <View style={[styles.sourcePill, { backgroundColor: colors.surfaceContainerHighest }]}>
           <Text style={[styles.sourcePillText, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
-            {bill.source.toUpperCase()}
+            {getBillSourceLabel(bill.source)}
           </Text>
         </View>
       </View>

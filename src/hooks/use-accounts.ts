@@ -53,8 +53,11 @@ export function useCreateAccount() {
   });
 
   return {
-    mutate: (data: Omit<Account, 'id' | 'createdAt'>, options?: { onSuccess?: () => void }) => {
-      mutation.mutate(data, { onSuccess: options?.onSuccess });
+    mutate: (
+      data: Omit<Account, 'id' | 'createdAt'>,
+      options?: { onSuccess?: () => void; onError?: (error: Error) => void }
+    ) => {
+      mutation.mutate(data, { onSuccess: options?.onSuccess, onError: options?.onError });
     },
     isPending: mutation.isPending,
   };
@@ -98,9 +101,9 @@ export function useUpdateAccount() {
     mutate: (
       id: string,
       data: Partial<Omit<Account, 'id' | 'createdAt'>>,
-      options?: { onSuccess?: () => void }
+      options?: { onSuccess?: () => void; onError?: (error: Error) => void }
     ) => {
-      mutation.mutate({ id, data }, { onSuccess: options?.onSuccess });
+      mutation.mutate({ id, data }, { onSuccess: options?.onSuccess, onError: options?.onError });
     },
     isPending: mutation.isPending,
   };

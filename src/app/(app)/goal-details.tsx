@@ -412,21 +412,23 @@ export default function GoalDetailsScreen() {
               <View style={styles.card}>
                 <View style={styles.chartContainer}>
                   <View style={styles.svgWrapper}>
-                    <Svg viewBox="0 0 36 36" style={styles.svgChart}>
+                    <Svg viewBox="0 0 36 36" width="100%" height="100%" style={styles.svgChart}>
                       <Path
                         d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                         fill="none"
                         stroke={colors.surfaceVariant}
                         strokeWidth="2.5"
                       />
-                      <Path
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                        fill="none"
-                        stroke={colors.primary}
-                        strokeWidth="2.5"
-                        strokeDasharray={strokeDash}
-                        strokeLinecap="round"
-                      />
+                      {progress > 0 && (
+                        <Path
+                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                          fill="none"
+                          stroke={colors.primary}
+                          strokeWidth="2.5"
+                          strokeDasharray={strokeDash}
+                          strokeLinecap="round"
+                        />
+                      )}
                     </Svg>
                     <View style={styles.chartCenterTextContainer}>
                       <Text style={styles.chartPercentage}>{progress.toFixed(0)}%</Text>
@@ -901,7 +903,6 @@ const getStyles = (colors: ThemeColors) => {
       bottom: 0,
       left: 0,
       right: 0,
-      transform: [{ rotate: '-90deg' }],
     },
     chartCenterTextContainer: {
       position: 'absolute',

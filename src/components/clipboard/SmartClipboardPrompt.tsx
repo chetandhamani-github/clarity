@@ -14,6 +14,7 @@ import {
     Animated,
     AppState,
     AppStateStatus,
+    DeviceEventEmitter,
     StyleSheet,
     TouchableOpacity,
     View,
@@ -48,8 +49,9 @@ export function SmartClipboardPrompt() {
         return;
       }
 
+      const currentDismissedHash = useAppStore.getState().lastDismissedClipboardHash;
       const parsed = parsePaymentClipboard(text);
-      if (parsed && parsed.contentHash !== lastDismissedClipboardHash) {
+      if (parsed && parsed.contentHash !== currentDismissedHash) {
         setIntent(parsed);
         Animated.spring(slideAnim, {
           toValue: 0,
@@ -76,10 +78,16 @@ export function SmartClipboardPrompt() {
       }
     });
 
+    const resetSub = DeviceEventEmitter.addListener('appDataReset', () => {
+      setIntent(null);
+      slideAnim.setValue(140);
+    });
+
     return () => {
       subscription.remove();
+      resetSub.remove();
     };
-  }, [clipboardDetectionEnabled, lastDismissedClipboardHash]);
+  }, [clipboardDetectionEnabled]);
 
   const handleDismiss = () => {
     if (intent) {

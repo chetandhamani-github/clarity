@@ -38,12 +38,6 @@ if (__DEV__) {
   Reactotron.configure({
     name: 'Clarity',
     host,
-    onConnect: () => {
-      console.log(`[Reactotron] Connected successfully to host: ${host}:9090`);
-    },
-    onDisconnect: () => {
-      console.log(`[Reactotron] Disconnected from host: ${host}:9090`);
-    },
   })
     .useReactNative({
       log: true,

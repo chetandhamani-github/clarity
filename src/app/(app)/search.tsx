@@ -12,7 +12,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { Text, Header, ListSkeleton } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useTransactions } from '@/hooks/use-transactions';
 import { formatCurrency, formatTransactionTime, getTransactionSign, groupTransactionsByDate } from '@/utils/format';
@@ -38,6 +38,8 @@ export default function SearchScreen() {
   const styles = getStyles(colors);
   const router = useRouter();
   const insets = useSafeInsets();
+  const params = useLocalSearchParams<{ accountId?: string | string[] }>();
+  const accountId = Array.isArray(params.accountId) ? params.accountId[0] : params.accountId;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -50,6 +52,7 @@ export default function SearchScreen() {
   const { transactions, isLoading } = useTransactions({
     search: debouncedSearchQuery,
     type: typeFilter,
+    accountId,
   });
   const groupedTransactions = groupTransactionsByDate(transactions);
 
@@ -151,7 +154,20 @@ export default function SearchScreen() {
                         const isLast =
                           groupIndex === groupedTransactions.length - 1 &&
                           txIndex === group.items.length - 1;
-                        const sign = getTransactionSign(tx.type);
+                        const isIncomingTransfer =
+                          Boolean(accountId) &&
+                          tx.type === 'transfer' &&
+                          tx.toAccountId === accountId;
+                        const isOutgoingTransfer =
+                          Boolean(accountId) &&
+                          tx.type === 'transfer' &&
+                          tx.accountId === accountId;
+                        const isCredit = tx.type === 'income' || isIncomingTransfer;
+                        const sign = isCredit
+                          ? '+'
+                          : isOutgoingTransfer || tx.type === 'expense'
+                            ? '-'
+                            : getTransactionSign(tx.type);
 
                         return (
                           <TouchableOpacity
@@ -165,7 +181,7 @@ export default function SearchScreen() {
                               <View
                                 style={[
                                   styles.txIconBox,
-                                  tx.type === 'income'
+                                  isCredit
                                     ? { backgroundColor: colors.primaryContainer }
                                     : undefined,
                                 ]}
@@ -174,7 +190,7 @@ export default function SearchScreen() {
                                   name={getCategoryIcon(tx.category)}
                                   size={20}
                                   color={
-                                    tx.type === 'income'
+                                    isCredit
                                       ? colors.onPrimaryContainer
                                       : colors.onSurfaceVariant
                                   }
@@ -210,7 +226,7 @@ export default function SearchScreen() {
                               <Text
                                 style={[
                                   styles.txAmount,
-                                  tx.type === 'income' ? { color: colors.primary } : undefined,
+                                  isCredit ? { color: colors.primary } : undefined,
                                 ]}
                               >
                                 {sign}

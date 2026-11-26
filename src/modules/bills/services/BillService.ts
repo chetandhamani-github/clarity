@@ -441,7 +441,11 @@ export class BillService {
       paymentUrl: extracted.paymentUrl,
       smsId: extracted.smsId,
       source: extracted.source,
-      notes: extracted.notes || `Auto-detected from ${extracted.source.toUpperCase()}`,
+      notes:
+        extracted.notes ||
+        (extracted.source === 'sms'
+          ? 'Auto-detected alert'
+          : `Auto-detected from ${extracted.source.toUpperCase()}`),
       status: initialStatus,
       paidDate: matchedPayment ? matchedPayment.date.split('T')[0] : undefined,
       paidTransactionId: matchedPayment ? matchedPayment.id : undefined,

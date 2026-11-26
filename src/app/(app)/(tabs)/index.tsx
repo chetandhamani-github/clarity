@@ -3,25 +3,26 @@ import { UpcomingBillsWidget, useBills } from '@/modules/bills';
 import { SplitwiseWidget } from '@/modules/splitwise';
 import { SafeToSpendWidget } from '@/components/dashboard/SafeToSpendWidget';
 import { HealthScoreWidget } from '@/components/dashboard/HealthScoreWidget';
+import { SpendingSummaryWidget } from '@/components/dashboard/SpendingSummaryWidget';
 import { AnnouncementBanner } from '@/components/backend';
 import { ReorderableBankAccounts, OnboardingChecklistCard } from '@/components/common';
 import { VoiceTransactionModal } from '@/components/modals/VoiceTransactionModal';
 import type { ParsedVoiceTransaction } from '@/services/voice/voice-parser';
 import { radius, ThemeColors, typography, useTheme } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  Dimensions,
   Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  View
+  View,
+  useWindowDimensions,
 } from 'react-native';
-import { LineChart, PieChart } from 'react-native-gifted-charts';
+import { LineChart } from 'react-native-gifted-charts';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 
 import { useAccounts } from '@/hooks/use-accounts';
@@ -33,7 +34,14 @@ import { invalidateAnalyticsAndHealthQueries } from '@/hooks/use-financial-healt
 import { useMonthlyTotals, useNetWorthHistory, useTransactions, useCreateTransaction } from '@/hooks/use-transactions';
 import { useDoubleBackToExit } from '@/hooks/use-double-back-to-exit';
 import { useNotifications } from '@/hooks/use-notifications';
-import { formatCurrency, formatCurrencyPrivacy, formatDate, formatLocalDate, formatTransactionTime, getCurrencySymbol, getTransactionSign } from '@/utils/format';
+import { formatCurrencyPrivacy, formatDate, formatLocalDate, formatTransactionTime, getCurrencySymbol, getTransactionSign } from '@/utils/format';
+import { summarizeAccounts } from '@/utils/account-metrics';
+import {
+  buildStartMidEndLabels,
+  normalizeLineChartValues,
+  padChartHistory,
+} from '@/utils/chart-utils';
+import { getLocalTodayYmd } from '@/utils/date';
 import { getCategoryIcon } from '@/utils/icons';
 import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
 import { useAppStore } from '@/store/use-app-store';
@@ -112,6 +120,14 @@ export default function DashboardScreen() {
   } = useCategorySpending(currentMonth, currentYear);
   const { history: nwHistory, isLoading: nwLoading, refetch: refetchNw } = useNetWorthHistory(30);
   const { goals } = useGoals();
+
+  useFocusEffect(
+    useCallback(() => {
+      refetchAccounts();
+      refetchPortfolio();
+      refetchNw();
+    }, [refetchAccounts, refetchPortfolio, refetchNw])
+  );
 
   const handleDirectSaveVoice = useCallback(
     (parsed: ParsedVoiceTransaction) => {
@@ -222,17 +238,19 @@ export default function DashboardScreen() {
   const showSkeleton = !hasLoadedRef.current && isAnyLoading;
 
   // Calculate Comprehensive Net Worth (Accounts + Investments)
-  const netWorth = useMemo(() => {
-    const liquidNetWorth = accounts.reduce((sum, account) => sum + account.balance, 0);
-    const investmentsValue = portfolioSummary
-      ? Math.max(
-          0,
-          portfolioSummary.totalPortfolioValue -
-            (portfolioSummary.allocations.find((a) => a.assetClass === 'cash')?.amount || 0)
-        )
-      : 0;
-    return liquidNetWorth + investmentsValue;
-  }, [accounts, portfolioSummary]);
+  const { netBalance: accountsNetWorth } = useMemo(() => summarizeAccounts(accounts), [accounts]);
+  const investmentsValue = useMemo(() => {
+    if (!portfolioSummary) return 0;
+    if (typeof portfolioSummary.totalHoldingsValue === 'number') {
+      return portfolioSummary.totalHoldingsValue;
+    }
+    return Math.max(
+      0,
+      portfolioSummary.totalPortfolioValue -
+        (portfolioSummary.allocations.find((a) => a.assetClass === 'cash')?.amount || 0)
+    );
+  }, [portfolioSummary]);
+  const netWorth = accountsNetWorth + investmentsValue;
 
   // Calculate Budget Progress
   const budgetProgress = useMemo(() => {
@@ -264,83 +282,36 @@ export default function DashboardScreen() {
   const nwTrendStr = `${isPositiveTrend ? '+' : ''}${nwChangePercent.toFixed(1)}%`;
 
   // Format history for LineChart
-  const chartData = useMemo(() => {
-    let data = nwHistory;
-    if (data.length === 0)
-      data = [
-        { date: new Date().toISOString().split('T')[0], value: 0 },
-        { date: new Date().toISOString().split('T')[0], value: 0 },
-      ];
-    else if (data.length === 1) data = [data[0], data[0]];
+  const paddedHistory = useMemo(
+    () => padChartHistory(nwHistory, 0, getLocalTodayYmd()),
+    [nwHistory]
+  );
 
-    return data.map((point, index) => {
-      const isStart = index === 0;
-      const isEnd = index === data.length - 1;
-      const isMid = index === Math.floor(data.length / 2);
+  const chartConfig = useMemo(
+    () => normalizeLineChartValues(paddedHistory.map((point) => point.value)),
+    [paddedHistory]
+  );
 
-      const dateParts = point.date.split('-');
-      const label = isStart || isEnd || isMid ? `${dateParts[1]}/${dateParts[2]}` : '';
+  const chartData = useMemo(
+    () =>
+      paddedHistory.map((point, index) => ({
+        value: chartConfig.values[index] ?? 0,
+        dataPointText: formatCurrencyPrivacy(point.value, false, hideBalances),
+      })),
+    [paddedHistory, chartConfig.values, hideBalances]
+  );
 
-      return {
-        value: point.value,
-        label,
-        dataPointText: formatCurrency(point.value),
-      };
-    });
-  }, [nwHistory]);
+  const axisDates = useMemo(
+    () => buildStartMidEndLabels(paddedHistory.map((point) => point.date)),
+    [paddedHistory]
+  );
 
-  const chartConfig = useMemo(() => {
-    const vals = chartData.map((d) => d.value);
-    const min = Math.min(...vals);
-    const max = Math.max(...vals);
-    const range = max - min;
-
-    if (range <= 0) {
-      return {
-        yAxisOffset: min < 0 ? min * 1.2 : 0,
-        maxValue: max <= 0 ? (max === 0 ? 100 : 0) : max * 1.25,
-        hasVariance: false,
-      };
-    }
-
-    const padding = range * 0.15;
-    return {
-      yAxisOffset: Math.max(0, min - padding),
-      maxValue: max + padding,
-      hasVariance: true,
-    };
-  }, [chartData]);
-
-  const screenWidth = Dimensions.get('window').width;
-  // screen padding 20*2 = 40, card padding 24*2 = 48 -> chartWidth approx screenWidth - 88
-  const chartWidth = screenWidth - 88;
+  const { width: windowWidth } = useWindowDimensions();
+  // screen padding 20*2 = 40, card padding 20*2 = 40, border 1*2 = 2 -> chartWidth approx windowWidth - 84
+  const chartWidth = Math.max(160, windowWidth - 84);
 
   // Savings calculation: Income - Expenses (from transactions)
   const savedAmount = Math.max(0, monthlyTotals.income - monthlyTotals.expenses);
-
-  const pieData = useMemo(() => {
-    const activeSpending = spending.filter((s) => s.spent > 0);
-    if (activeSpending.length === 0) {
-      return [{ value: 1, color: colors.surfaceVariant, text: 'No Data' }];
-    }
-
-    const pieColors = [
-      colors.primary,
-      colors.tertiary,
-      colors.error,
-      '#FF9800',
-      '#4CAF50',
-      '#9C27B0',
-      '#00BCD4',
-    ];
-
-    return activeSpending.map((item, index) => ({
-      value: item.spent,
-      color: pieColors[index % pieColors.length],
-      text: item.category,
-      label: item.category,
-    }));
-  }, [spending, colors]);
 
   const needsLimit = plan ? plan.monthlyIncome * (plan.needsPercent / 100) : 0;
   const wantsLimit = plan ? plan.monthlyIncome * (plan.wantsPercent / 100) : 0;
@@ -559,8 +530,12 @@ export default function DashboardScreen() {
                       chartData.length > 1 ? chartWidth / (chartData.length - 1) : chartWidth
                     }
                     adjustToWidth={true}
-                    yAxisOffset={chartConfig.yAxisOffset}
                     maxValue={chartConfig.maxValue}
+                    yAxisLabelWidth={0}
+                    yAxisThickness={0}
+                    xAxisThickness={0}
+                    xAxisLabelsHeight={0}
+                    labelsExtraHeight={0}
                     hideDataPoints
                     color={isPositiveTrend ? colors.primary : colors.error}
                     thickness={3}
@@ -576,36 +551,40 @@ export default function DashboardScreen() {
                     hideYAxisText
                     hideAxesAndRules
                     pointerConfig={{
-                      pointerStripHeight: 140,
+                      pointerStripHeight: 135,
                       pointerStripColor: colors.outline,
                       pointerStripWidth: 2,
                       pointerColor: colors.primary,
                       radius: 6,
-                      pointerLabelWidth: 80,
-                      pointerLabelHeight: 30,
+                      pointerLabelWidth: 116,
+                      pointerLabelHeight: 32,
                       activatePointersOnLongPress: true,
                       autoAdjustPointerLabelPosition: true,
-                      pointerLabelComponent: (items: any) => {
+                      pointerLabelComponent: (items: { dataPointText?: string }[]) => {
+                        const label = items?.[0]?.dataPointText;
+                        if (!label) return null;
                         return (
                           <View
                             style={{
-                              height: 30,
-                              width: 80,
+                              height: 32,
+                              width: 116,
                               justifyContent: 'center',
                               backgroundColor: colors.surfaceContainerHighest,
                               borderRadius: 8,
-                              padding: 4,
+                              paddingHorizontal: 8,
                             }}
                           >
                             <Text
                               style={{
                                 color: colors.onSurface,
-                                fontSize: 12,
+                                fontSize: 11,
                                 fontWeight: 'bold',
                                 textAlign: 'center',
                               }}
+                              numberOfLines={1}
+                              adjustsFontSizeToFit
                             >
-                              {items[0].dataPointText}
+                              {label}
                             </Text>
                           </View>
                         );
@@ -613,6 +592,16 @@ export default function DashboardScreen() {
                     }}
                   />
                 </View>
+
+                {axisDates.length > 0 && (
+                  <View style={styles.chartAxisRow}>
+                    {axisDates.map((dateLabel, idx) => (
+                      <Text key={idx} style={styles.chartAxisText}>
+                        {dateLabel}
+                      </Text>
+                    ))}
+                  </View>
+                )}
 
                 {/* Wealth Portfolio Quick Link */}
                 <TouchableOpacity
@@ -631,8 +620,7 @@ export default function DashboardScreen() {
                     <Text style={[styles.portfolioPillText, { color: colors.onSurface }]}>
                       {portfolioSummary && portfolioSummary.holdingsCount > 0
                         ? `Investments: ${formatCurrencyPrivacy(
-                            portfolioSummary.totalPortfolioValue -
-                              (portfolioSummary.allocations.find((a) => a.assetClass === 'cash')?.amount || 0),
+                            investmentsValue,
                             false,
                             hideBalances
                           )}`
@@ -694,7 +682,7 @@ export default function DashboardScreen() {
                 >
                   <View style={styles.pendingSmsBannerLeft}>
                     <View style={styles.pendingSmsIcon}>
-                      <MaterialIcons name="sms" size={20} color={colors.primary} />
+                      <MaterialIcons name="notifications-active" size={20} color={colors.primary} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.pendingSmsTitle} numberOfLines={1}>
@@ -764,34 +752,11 @@ export default function DashboardScreen() {
               <SplitwiseWidget />
 
               {/* Spending by Category Donut */}
-              <View style={styles.sectionContainer}>
-                <Text style={styles.sectionTitle}>Spending Summary</Text>
-                <View style={styles.budgetCard}>
-                  <View style={{ alignItems: 'center', marginVertical: 10 }}>
-                    <PieChart
-                      data={pieData}
-                      donut
-                      radius={80}
-                      innerRadius={55}
-                      innerCircleColor={colors.surfaceContainerLowest}
-                      centerLabelComponent={() => {
-                        return (
-                          <View style={{ justifyContent: 'center', alignItems: 'center' }}>
-                            <Text style={{ fontSize: 12, color: colors.onSurfaceVariant }}>
-                              Total
-                            </Text>
-                            <Text
-                              style={{ fontSize: 16, color: colors.onSurface, fontWeight: 'bold' }}
-                            >
-                              {formatCurrencyPrivacy(monthlyTotals.expenses, hideBalances)}
-                            </Text>
-                          </View>
-                        );
-                      }}
-                    />
-                  </View>
-                </View>
-              </View>
+              <SpendingSummaryWidget
+                spending={spending}
+                totalExpenses={monthlyTotals.expenses}
+                hideBalances={hideBalances}
+              />
 
               {/* Budget Allocation */}
               <View style={styles.sectionContainer}>
@@ -1212,10 +1177,21 @@ const getStyles = (colors: ThemeColors) => {
     },
     chartContainer: {
       marginTop: 12,
-      height: 135,
-      overflow: 'hidden',
+      height: 142,
+      overflow: 'visible',
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    chartAxisRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: 4,
+      paddingHorizontal: 2,
+    },
+    chartAxisText: {
+      ...typography.labelMd,
+      fontSize: 10,
+      color: colors.onSurfaceVariant,
     },
     portfolioPillRow: {
       flexDirection: 'row',

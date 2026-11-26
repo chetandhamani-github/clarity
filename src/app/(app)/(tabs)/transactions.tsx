@@ -1,6 +1,7 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
+  Text as RNText,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -9,7 +10,7 @@ import {
   Modal,
 } from 'react-native';
 import { Text, Header, TransactionsSkeleton, useToast, useAlert } from '@/components/ui';
-import { spacing, typography, useTheme, ThemeColors } from '@/theme';
+import { spacing, typography, fontFamilies, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -27,9 +28,10 @@ import { getCategoryIcon } from '@/utils/icons';
 import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
 import { TransactionFilterModal, ActiveFilters, DatePreset } from '@/components/modals/TransactionFilterModal';
 import { ReviewQueueModal } from '@/components/modals/ReviewQueueModal';
+import { useAppStore } from '@/store/use-app-store';
 import { useSmsStore } from '@/store/useSmsStore';
 import { haptics } from '@/utils/haptics';
-import type { TransactionFilters } from '@/types';
+import type { TransactionFilters, TransactionWithAccount } from '@/types';
 
 const FILTERS = [
   { id: 'all', label: 'All', icon: 'list' },
@@ -40,33 +42,29 @@ const FILTERS = [
 
 interface TransactionsScreenProps {
   showBack?: boolean;
+  lockedAccountId?: string;
+  initialCategory?: string;
+  initialType?: 'all' | 'expense' | 'income' | 'transfer';
+  initialDatePreset?: DatePreset;
 }
 
-interface TransactionRowItemProps {
-  tx: any;
-  isLastInSection: boolean;
-  isVeryLast: boolean;
-  isSelected: boolean;
-  hasSelectionMode: boolean;
-  filterAccountId?: string;
-  colors: ThemeColors;
-  styles: any;
-  onPress: (id: string) => void;
-  onLongPress: (id: string) => void;
+interface PreparedTransactionRow {
+  id: string;
+  title: string;
+  subtitle: string;
+  amountText: string;
+  category: string;
+  categoryIcon: ReturnType<typeof getCategoryIcon>;
+  splitCount: number;
+  tagLabel: string | null;
+  hasReceipt: boolean;
+  isCredit: boolean;
 }
 
-const TransactionRowItem = React.memo(function TransactionRowItem({
-  tx,
-  isLastInSection,
-  isVeryLast,
-  isSelected,
-  hasSelectionMode,
-  filterAccountId,
-  colors,
-  styles,
-  onPress,
-  onLongPress,
-}: TransactionRowItemProps) {
+function prepareTransactionRow(
+  tx: TransactionWithAccount,
+  filterAccountId?: string
+): PreparedTransactionRow {
   const isIncomingTransfer =
     Boolean(filterAccountId) && tx.type === 'transfer' && tx.toAccountId === filterAccountId;
   const isOutgoingTransfer =
@@ -90,22 +88,87 @@ const TransactionRowItem = React.memo(function TransactionRowItem({
   } else if (hasMerchant) {
     if (tx.accountName) metaParts.push(tx.accountName);
     metaParts.push(tx.category);
-  } else {
-    if (tx.accountName) metaParts.push(tx.accountName);
+  } else if (tx.accountName) {
+    metaParts.push(tx.accountName);
   }
-  const subtitle = metaParts.join(' • ');
 
+  const tags = tx.tags;
+  const tagLabel =
+    tags && tags.length > 0
+      ? `#${tags[0]}${tags.length > 1 ? ` +${tags.length - 1}` : ''}`
+      : null;
+
+  return {
+    id: tx.id,
+    title,
+    subtitle: metaParts.join(' • '),
+    amountText: `${sign}${formatCurrency(tx.amount)}`,
+    category: tx.category,
+    categoryIcon: getCategoryIcon(tx.category),
+    splitCount: tx.splits?.length ?? 0,
+    tagLabel,
+    hasReceipt: Boolean(tx.receiptUri),
+    isCredit,
+  };
+}
+
+interface SectionHeaderItemProps {
+  title: string;
+  isFirst: boolean;
+  styles: ReturnType<typeof getStyles>;
+}
+
+const SectionHeaderItem = React.memo(function SectionHeaderItem({
+  title,
+  isFirst,
+  styles,
+}: SectionHeaderItemProps) {
+  return (
+    <View style={[styles.dateGroupHeader, isFirst && styles.firstSectionHeader]}>
+      <RNText style={styles.dateGroupText}>{title}</RNText>
+    </View>
+  );
+});
+
+interface TransactionRowItemProps {
+  item: PreparedTransactionRow;
+  isLastInSection: boolean;
+  isVeryLast: boolean;
+  isSelected: boolean;
+  hasSelectionMode: boolean;
+  iconDefaultColor: string;
+  iconCreditColor: string;
+  primaryColor: string;
+  outlineColor: string;
+  styles: ReturnType<typeof getStyles>;
+  onPress: (id: string) => void;
+  onLongPress: (id: string) => void;
+}
+
+const TransactionRowItem = React.memo(function TransactionRowItem({
+  item,
+  isLastInSection,
+  isVeryLast,
+  isSelected,
+  hasSelectionMode,
+  iconDefaultColor,
+  iconCreditColor,
+  primaryColor,
+  outlineColor,
+  styles,
+  onPress,
+  onLongPress,
+}: TransactionRowItemProps) {
   return (
     <TouchableOpacity
-      key={tx.id}
       style={[
         styles.transactionItem,
-        isSelected && { backgroundColor: colors.primaryContainer + '30' },
+        isSelected && styles.transactionItemSelected,
         isVeryLast && styles.lastTransactionItem,
-        isLastInSection && !isVeryLast && { borderBottomWidth: 0 },
+        isLastInSection && !isVeryLast && styles.transactionItemSectionLast,
       ]}
-      onPress={() => onPress(tx.id)}
-      onLongPress={() => onLongPress(tx.id)}
+      onPress={() => onPress(item.id)}
+      onLongPress={() => onLongPress(item.id)}
       delayLongPress={200}
     >
       {hasSelectionMode && (
@@ -113,7 +176,7 @@ const TransactionRowItem = React.memo(function TransactionRowItem({
           <MaterialIcons
             name={isSelected ? 'check-circle' : 'radio-button-unchecked'}
             size={22}
-            color={isSelected ? colors.primary : colors.outline}
+            color={isSelected ? primaryColor : outlineColor}
           />
         </View>
       )}
@@ -121,89 +184,121 @@ const TransactionRowItem = React.memo(function TransactionRowItem({
         <View
           style={[
             styles.transactionIconBox,
-            isCredit ? { backgroundColor: colors.primaryContainer } : undefined,
+            item.isCredit && styles.transactionIconBoxCredit,
           ]}
         >
           <MaterialIcons
-            name={getCategoryIcon(tx.category)}
+            name={item.categoryIcon}
             size={20}
-            color={isCredit ? colors.onPrimaryContainer : colors.onSurfaceVariant}
+            color={item.isCredit ? iconCreditColor : iconDefaultColor}
           />
         </View>
-        <View style={{ flex: 1, justifyContent: 'center' }}>
-          <Text style={styles.transactionName} numberOfLines={1}>
-            {title}
-          </Text>
-          <Text style={styles.transactionMeta} numberOfLines={1}>
-            {subtitle}
-          </Text>
+        <View style={styles.transactionTextCol}>
+          <RNText style={styles.transactionName} numberOfLines={1}>
+            {item.title}
+          </RNText>
+          <RNText style={styles.transactionMeta} numberOfLines={1}>
+            {item.subtitle}
+          </RNText>
         </View>
       </View>
       <View style={styles.transactionRight}>
-        <Text
+        <RNText
           style={[
             styles.transactionAmount,
-            isCredit ? { color: colors.primary } : undefined,
+            item.isCredit && styles.transactionAmountCredit,
           ]}
         >
-          {sign}
-          {formatCurrency(tx.amount)}
-        </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          {tx.splits && tx.splits.length > 0 && (
-            <View
-              style={[
-                styles.categoryBadge,
-                { backgroundColor: colors.secondaryContainer },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.categoryBadgeText,
-                  { color: colors.onSecondaryContainer },
-                ]}
-                numberOfLines={1}
-              >
-                Split ({tx.splits.length})
-              </Text>
+          {item.amountText}
+        </RNText>
+        <View style={styles.badgesRow}>
+          {item.splitCount > 0 && (
+            <View style={[styles.categoryBadge, styles.secondaryBadge]}>
+              <RNText style={[styles.categoryBadgeText, styles.secondaryBadgeText]} numberOfLines={1}>
+                Split ({item.splitCount})
+              </RNText>
             </View>
           )}
           <View style={styles.categoryBadge}>
-            <Text style={styles.categoryBadgeText} numberOfLines={1}>{tx.category}</Text>
+            <RNText style={styles.categoryBadgeText} numberOfLines={1}>
+              {item.category}
+            </RNText>
           </View>
-          {tx.tags && tx.tags.length > 0 && (
-            <View style={[styles.categoryBadge, { backgroundColor: colors.secondaryContainer, paddingHorizontal: 6 }]}>
-              <Text style={[styles.categoryBadgeText, { color: colors.onSecondaryContainer }]} numberOfLines={1}>
-                #{tx.tags[0]}{tx.tags.length > 1 ? ` +${tx.tags.length - 1}` : ''}
-              </Text>
+          {item.tagLabel !== null && (
+            <View style={[styles.categoryBadge, styles.tagBadge]}>
+              <RNText style={[styles.categoryBadgeText, styles.secondaryBadgeText]} numberOfLines={1}>
+                {item.tagLabel}
+              </RNText>
             </View>
           )}
-          {tx.receiptUri ? (
-            <View style={[styles.categoryBadge, { backgroundColor: colors.surfaceContainerHighest, paddingHorizontal: 5 }]}>
-              <MaterialIcons name="receipt" size={12} color={colors.primary} />
+          {item.hasReceipt && (
+            <View style={[styles.categoryBadge, styles.receiptBadge]}>
+              <MaterialIcons name="receipt" size={12} color={primaryColor} />
             </View>
-          ) : null}
+          )}
         </View>
       </View>
     </TouchableOpacity>
   );
 });
 
-export default function TransactionsScreen({ showBack = false }: TransactionsScreenProps = {}) {
+export default function TransactionsScreen({
+  showBack = false,
+  lockedAccountId,
+  initialCategory,
+  initialType,
+  initialDatePreset,
+}: TransactionsScreenProps = {}) {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const insets = useSafeInsets();
+  const bottomInset = insets.bottom;
   const router = useRouter();
+  const currency = useAppStore((state) => state.currency);
 
   const { accounts } = useAccounts();
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
   const reviewQueueCount = useSmsStore((state) => state.reviewQueueCount);
   const refreshReviewQueueCount = useSmsStore((state) => state.refreshReviewQueueCount);
-  const [filters, setFilters] = useState<ActiveFilters>({
-    datePreset: 'all',
-    type: 'all',
-  });
+  const [filters, setFilters] = useState<ActiveFilters>(() => ({
+    accountId: lockedAccountId,
+    category: initialCategory,
+    datePreset: initialDatePreset ?? 'all',
+    type: initialType ?? 'all',
+  }));
+
+  useEffect(() => {
+    if (lockedAccountId) {
+      setFilters((prev) =>
+        prev.accountId === lockedAccountId ? prev : { ...prev, accountId: lockedAccountId }
+      );
+    }
+  }, [lockedAccountId]);
+
+  useEffect(() => {
+    if (!initialCategory && !initialType && !initialDatePreset) return;
+    setFilters((prev) => {
+      const nextCategory = initialCategory;
+      const nextType = initialType ?? prev.type;
+      const nextPreset = initialDatePreset ?? prev.datePreset;
+      if (
+        prev.category === nextCategory &&
+        prev.type === nextType &&
+        prev.datePreset === nextPreset
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        category: nextCategory,
+        type: nextType,
+        datePreset: nextPreset,
+      };
+    });
+  }, [initialCategory, initialType, initialDatePreset]);
+
+  const effectiveAccountId = lockedAccountId ?? filters.accountId;
 
   const { showToast } = useToast();
   const { showAlert } = useAlert();
@@ -246,21 +341,48 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
   const queryFilters = useMemo<TransactionFilters>(() => {
     return {
       type: filters.type === 'all' ? undefined : filters.type,
-      accountId: filters.accountId,
+      accountId: effectiveAccountId,
       category: filters.category,
       tag: filters.tag,
       dateFrom: dateRange.dateFrom,
       dateTo: dateRange.dateTo,
     };
-  }, [filters, dateRange]);
+  }, [filters, dateRange, effectiveAccountId]);
 
   const { transactions, isLoading, refetch } = useTransactions(queryFilters);
+  const hasFocusedOnceRef = useRef(false);
 
   useFocusEffect(
     useCallback(() => {
-      refetch();
-      refreshReviewQueueCount();
-    }, [refetch, refreshReviewQueueCount])
+      const runFocusRefresh = () => {
+        if (hasFocusedOnceRef.current) {
+          refetch();
+        } else {
+          hasFocusedOnceRef.current = true;
+        }
+        if (!lockedAccountId) {
+          refreshReviewQueueCount();
+        }
+      };
+
+      if (typeof globalThis.requestIdleCallback === 'function') {
+        try {
+          const idleId = globalThis.requestIdleCallback(runFocusRefresh);
+          return () => {
+            if (typeof globalThis.cancelIdleCallback === 'function') {
+              globalThis.cancelIdleCallback(idleId);
+            }
+          };
+        } catch {
+          // Fallback when runtime scheduler does not support idle callbacks
+        }
+      }
+
+      const timer = setTimeout(runFocusRefresh, 0);
+      return () => {
+        clearTimeout(timer);
+      };
+    }, [refetch, refreshReviewQueueCount, lockedAccountId])
   );
 
   const toggleSelect = useCallback((id: string) => {
@@ -388,38 +510,36 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
 
   const sections = useMemo(() => {
     if (isLoading) return [];
+    const lastGroupIdx = groupedTransactions.length - 1;
     return groupedTransactions.map((group, groupIndex) => ({
       title: group.label,
       date: group.date,
-      data: group.items,
+      data: group.items.map((tx) => prepareTransactionRow(tx, effectiveAccountId)),
       isFirst: groupIndex === 0,
-      isLast: groupIndex === groupedTransactions.length - 1,
+      isLast: groupIndex === lastGroupIdx,
     }));
-  }, [groupedTransactions, isLoading]);
+  }, [groupedTransactions, isLoading, effectiveAccountId, currency]);
 
   const renderSectionHeader = useCallback(
     ({ section }: any) => (
-      <View
-        style={[
-          styles.dateGroupHeader,
-          section.isFirst && styles.firstSectionHeader,
-        ]}
-      >
-        <Text style={styles.dateGroupText}>{section.title}</Text>
-      </View>
+      <SectionHeaderItem title={section.title} isFirst={section.isFirst} styles={styles} />
     ),
     [styles]
   );
 
+  const hasSelectionMode = selectedIds.size > 0;
+  const hasSelectionModeRef = useRef(false);
+  hasSelectionModeRef.current = hasSelectionMode;
+
   const handleItemPress = useCallback(
     (id: string) => {
-      if (selectedIds.size > 0) {
+      if (hasSelectionModeRef.current) {
         toggleSelect(id);
       } else {
         router.navigate(`/(app)/add-transaction?id=${id}`);
       }
     },
-    [selectedIds.size, toggleSelect, router]
+    [toggleSelect, router]
   );
 
   const handleItemLongPress = useCallback(
@@ -429,43 +549,52 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
     [toggleSelect]
   );
 
+  const keyExtractor = useCallback((item: PreparedTransactionRow) => item.id, []);
+
+  const listContentContainerStyle = useMemo(
+    () => [styles.scrollContent, { paddingBottom: bottomInset + (showBack ? 32 : 120) }],
+    [styles.scrollContent, bottomInset, showBack]
+  );
+
   const renderItem = useCallback(
-    ({ item: tx, index, section }: any) => {
+    ({ item, index, section }: any) => {
       const isLastInSection = index === section.data.length - 1;
       const isVeryLast = section.isLast && isLastInSection;
       return (
         <TransactionRowItem
-          tx={tx}
+          item={item}
           isLastInSection={isLastInSection}
           isVeryLast={isVeryLast}
-          isSelected={selectedIds.has(tx.id)}
-          hasSelectionMode={selectedIds.size > 0}
-          filterAccountId={filters.accountId}
-          colors={colors}
+          isSelected={hasSelectionMode && selectedIds.has(item.id)}
+          hasSelectionMode={hasSelectionMode}
+          iconDefaultColor={colors.onSurfaceVariant}
+          iconCreditColor={colors.onPrimaryContainer}
+          primaryColor={colors.primary}
+          outlineColor={colors.outline}
           styles={styles}
           onPress={handleItemPress}
           onLongPress={handleItemLongPress}
         />
       );
     },
-    [colors, styles, selectedIds, filters.accountId, handleItemPress, handleItemLongPress]
+    [colors, styles, selectedIds, hasSelectionMode, handleItemPress, handleItemLongPress]
   );
 
   const activeCount =
     (filters.type && filters.type !== 'all' ? 1 : 0) +
     (filters.datePreset !== 'all' ? 1 : 0) +
-    (filters.accountId ? 1 : 0) +
+    (!lockedAccountId && filters.accountId ? 1 : 0) +
     (filters.category ? 1 : 0) +
     (filters.tag ? 1 : 0);
 
   const selectedAccount = useMemo(() => {
-    if (!filters.accountId) return null;
-    return accounts.find((a) => a.id === filters.accountId);
-  }, [accounts, filters.accountId]);
+    if (!effectiveAccountId) return null;
+    return accounts.find((a) => a.id === effectiveAccountId);
+  }, [accounts, effectiveAccountId]);
 
   const activeBadges = useMemo(() => {
     const list: { id: string; label: string; onRemove: () => void }[] = [];
-    if (filters.accountId && selectedAccount) {
+    if (!lockedAccountId && filters.accountId && selectedAccount) {
       list.push({
         id: 'account',
         label: `Account: ${selectedAccount.name}`,
@@ -502,11 +631,29 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
     return list;
   }, [filters, selectedAccount]);
 
+  const navigateToSearch = useCallback(() => {
+    router.navigate(lockedAccountId ? `/(app)/search?accountId=${lockedAccountId}` : '/search');
+  }, [router, lockedAccountId]);
+
+  const navigateToAddTransaction = useCallback(() => {
+    router.navigate(
+      lockedAccountId ? `/(app)/add-transaction?accountId=${lockedAccountId}` : '/add-transaction'
+    );
+  }, [router, lockedAccountId]);
+
+  const clearFilters = useCallback(() => {
+    setFilters({
+      datePreset: 'all',
+      type: 'all',
+      ...(lockedAccountId ? { accountId: lockedAccountId } : {}),
+    });
+  }, [lockedAccountId]);
+
   const renderListHeader = useMemo(
     () => (
       <View>
         <View style={styles.searchRow}>
-          <TouchableOpacity style={styles.searchBar} onPress={() => router.navigate('/search')}>
+          <TouchableOpacity style={styles.searchBar} onPress={navigateToSearch}>
             <MaterialIcons name="search" size={20} color={colors.primary} />
             <Text style={styles.searchPlaceholder}>Search transactions...</Text>
           </TouchableOpacity>
@@ -579,12 +726,7 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
                 </View>
               ))}
               <TouchableOpacity
-                onPress={() =>
-                  setFilters({
-                    datePreset: 'all',
-                    type: 'all',
-                  })
-                }
+                onPress={clearFilters}
                 style={styles.clearAllBtn}
               >
                 <Text style={styles.clearAllText}>Clear All</Text>
@@ -593,7 +735,7 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
           </View>
         )}
 
-        {reviewQueueCount > 0 && (
+        {!lockedAccountId && reviewQueueCount > 0 && (
           <TouchableOpacity
             style={styles.reviewQueueBanner}
             onPress={() => setReviewModalVisible(true)}
@@ -607,7 +749,7 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
                 {reviewQueueCount} {reviewQueueCount === 1 ? 'transaction needs' : 'transactions need'} review
               </Text>
               <Text style={styles.reviewQueueSubtitle}>
-                Tap to verify details from parsed SMS
+                Tap to verify auto-detected alert details
               </Text>
             </View>
             <MaterialIcons name="chevron-right" size={22} color={colors.onPrimaryContainer} />
@@ -620,7 +762,18 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
         </View>
       </View>
     ),
-    [colors, styles, router, filters, activeCount, activeBadges, transactions.length, reviewQueueCount]
+    [
+      colors,
+      styles,
+      filters,
+      activeCount,
+      activeBadges,
+      transactions.length,
+      reviewQueueCount,
+      lockedAccountId,
+      navigateToSearch,
+      clearFilters,
+    ]
   );
 
   const renderListEmpty = useCallback(() => {
@@ -643,24 +796,21 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
         <Text style={styles.emptyDescription}>
           {hasActiveFilters
             ? 'Try resetting your search or filter criteria to see all activity.'
-            : 'Track expenses automatically via bank SMS or record your first cash spend manually.'}
+            : lockedAccountId
+            ? 'No transactions found for this account yet.'
+            : 'Track expenses automatically via bank alerts or record your first cash spend manually.'}
         </Text>
         {hasActiveFilters ? (
           <TouchableOpacity
             style={styles.emptyActionBtn}
-            onPress={() =>
-              setFilters({
-                datePreset: 'all',
-                type: 'all',
-              })
-            }
+            onPress={clearFilters}
           >
             <Text style={styles.emptyActionBtnText}>Clear Filters</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
             style={styles.emptyActionBtn}
-            onPress={() => router.navigate('/add-transaction')}
+            onPress={navigateToAddTransaction}
           >
             <MaterialIcons name="add" size={18} color={colors.onPrimary} />
             <Text style={styles.emptyActionBtnText}>Add First Transaction</Text>
@@ -668,7 +818,7 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
         )}
       </View>
     );
-  }, [isLoading, activeCount, styles, colors, router]);
+  }, [isLoading, activeCount, styles, colors, lockedAccountId, clearFilters, navigateToAddTransaction]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: showBack ? insets.bottom : 0 }]}>
@@ -676,7 +826,13 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
         isMainTab={selectedIds.size === 0 && !showBack}
         showBack={selectedIds.size > 0 || showBack}
         onBack={selectedIds.size > 0 ? () => setSelectedIds(new Set()) : undefined}
-        title={selectedIds.size > 0 ? `${selectedIds.size} Selected` : 'Activity'}
+        title={
+          selectedIds.size > 0
+            ? `${selectedIds.size} Selected`
+            : lockedAccountId
+            ? selectedAccount?.name || 'Account Activity'
+            : 'Activity'
+        }
         leftNode={
           selectedIds.size > 0 ? (
             <TouchableOpacity
@@ -705,12 +861,12 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
             </TouchableOpacity>
           ) : (
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <TouchableOpacity style={styles.iconButton} onPress={() => router.navigate('/search')}>
+              <TouchableOpacity style={styles.iconButton} onPress={navigateToSearch}>
                 <MaterialIcons name="search" size={24} color={colors.onSurface} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.iconButton}
-                onPress={() => router.navigate('/add-transaction')}
+                onPress={navigateToAddTransaction}
               >
                 <MaterialIcons name="add" size={24} color={colors.onSurface} />
               </TouchableOpacity>
@@ -721,33 +877,37 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
 
       <SectionList
         sections={sections}
-        keyExtractor={(item) => item.id}
+        keyExtractor={keyExtractor}
         renderSectionHeader={renderSectionHeader}
         renderItem={renderItem}
         ListHeaderComponent={renderListHeader}
         ListEmptyComponent={renderListEmpty}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+        contentContainerStyle={listContentContainerStyle}
         showsVerticalScrollIndicator={false}
         stickySectionHeadersEnabled={false}
-        initialNumToRender={10}
-        maxToRenderPerBatch={10}
+        initialNumToRender={8}
+        maxToRenderPerBatch={5}
         windowSize={5}
-        updateCellsBatchingPeriod={50}
-        removeClippedSubviews={Platform.OS === 'android'}
+        updateCellsBatchingPeriod={30}
         extraData={selectedIds}
       />
 
-      <TransactionFilterModal
-        visible={filterModalVisible}
-        filters={filters}
-        onClose={() => setFilterModalVisible(false)}
-        onApply={setFilters}
-      />
+      {filterModalVisible && (
+        <TransactionFilterModal
+          visible={filterModalVisible}
+          filters={filters}
+          lockedAccountId={lockedAccountId}
+          onClose={() => setFilterModalVisible(false)}
+          onApply={setFilters}
+        />
+      )}
 
-      <ReviewQueueModal
-        visible={reviewModalVisible}
-        onClose={() => setReviewModalVisible(false)}
-      />
+      {reviewModalVisible && (
+        <ReviewQueueModal
+          visible={reviewModalVisible}
+          onClose={() => setReviewModalVisible(false)}
+        />
+      )}
 
       {/* Floating Bulk Action Drawer */}
       {selectedIds.size > 0 && (
@@ -785,83 +945,87 @@ export default function TransactionsScreen({ showBack = false }: TransactionsScr
       )}
 
       {/* Bulk Category Picker Modal */}
-      <Modal
-        visible={bulkCategoryModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setBulkCategoryModalVisible(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalBackdrop}
-          activeOpacity={1}
-          onPress={() => setBulkCategoryModalVisible(false)}
+      {bulkCategoryModalVisible && (
+        <Modal
+          visible={bulkCategoryModalVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setBulkCategoryModalVisible(false)}
         >
-          <View style={[styles.bulkModalSheet, { backgroundColor: colors.surfaceContainerLowest, paddingBottom: Math.max(insets.bottom, 24) + 16 }]}>
-            <View style={styles.bulkModalHeader}>
-              <Text style={[styles.bulkModalTitle, { color: colors.onSurface }]}>Change Category</Text>
-              <TouchableOpacity onPress={() => setBulkCategoryModalVisible(false)}>
-                <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
-              {categories.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[styles.bulkOptionItem, { borderBottomColor: colors.surfaceVariant }]}
-                  onPress={() => handleSelectBulkCategory(cat.name)}
-                >
-                  <View style={[styles.bulkOptionIcon, { backgroundColor: colors.surfaceContainerLow }]}>
-                    <MaterialIcons name={getCategoryIcon(cat.name) as any} size={20} color={colors.primary} />
-                  </View>
-                  <Text style={[styles.bulkOptionText, { color: colors.onSurface }]}>{cat.name}</Text>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setBulkCategoryModalVisible(false)}
+          >
+            <View style={[styles.bulkModalSheet, { backgroundColor: colors.surfaceContainerLowest, paddingBottom: Math.max(insets.bottom, 24) + 16 }]}>
+              <View style={styles.bulkModalHeader}>
+                <Text style={[styles.bulkModalTitle, { color: colors.onSurface }]}>Change Category</Text>
+                <TouchableOpacity onPress={() => setBulkCategoryModalVisible(false)}>
+                  <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+              </View>
+              <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+                {categories.map((cat) => (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[styles.bulkOptionItem, { borderBottomColor: colors.surfaceVariant }]}
+                    onPress={() => handleSelectBulkCategory(cat.name)}
+                  >
+                    <View style={[styles.bulkOptionIcon, { backgroundColor: colors.surfaceContainerLow }]}>
+                      <MaterialIcons name={getCategoryIcon(cat.name) as any} size={20} color={colors.primary} />
+                    </View>
+                    <Text style={[styles.bulkOptionText, { color: colors.onSurface }]}>{cat.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
 
       {/* Bulk Account Picker Modal */}
-      <Modal
-        visible={bulkAccountModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setBulkAccountModalVisible(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalBackdrop}
-          activeOpacity={1}
-          onPress={() => setBulkAccountModalVisible(false)}
+      {bulkAccountModalVisible && (
+        <Modal
+          visible={bulkAccountModalVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setBulkAccountModalVisible(false)}
         >
-          <View style={[styles.bulkModalSheet, { backgroundColor: colors.surfaceContainerLowest, paddingBottom: Math.max(insets.bottom, 24) + 16 }]}>
-            <View style={styles.bulkModalHeader}>
-              <Text style={[styles.bulkModalTitle, { color: colors.onSurface }]}>Move to Account</Text>
-              <TouchableOpacity onPress={() => setBulkAccountModalVisible(false)}>
-                <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
-              {accounts.map((acc) => (
-                <TouchableOpacity
-                  key={acc.id}
-                  style={[styles.bulkOptionItem, { borderBottomColor: colors.surfaceVariant }]}
-                  onPress={() => handleSelectBulkAccount(acc.id)}
-                >
-                  <View style={[styles.bulkOptionIcon, { backgroundColor: colors.surfaceContainerLow }]}>
-                    <MaterialIcons name="account-balance" size={20} color={colors.primary} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.bulkOptionText, { color: colors.onSurface }]}>{acc.name}</Text>
-                    <Text style={[styles.bulkOptionSubtext, { color: colors.onSurfaceVariant }]}>
-                      {formatCurrency(acc.balance)}
-                    </Text>
-                  </View>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setBulkAccountModalVisible(false)}
+          >
+            <View style={[styles.bulkModalSheet, { backgroundColor: colors.surfaceContainerLowest, paddingBottom: Math.max(insets.bottom, 24) + 16 }]}>
+              <View style={styles.bulkModalHeader}>
+                <Text style={[styles.bulkModalTitle, { color: colors.onSurface }]}>Move to Account</Text>
+                <TouchableOpacity onPress={() => setBulkAccountModalVisible(false)}>
+                  <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+              </View>
+              <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+                {accounts.map((acc) => (
+                  <TouchableOpacity
+                    key={acc.id}
+                    style={[styles.bulkOptionItem, { borderBottomColor: colors.surfaceVariant }]}
+                    onPress={() => handleSelectBulkAccount(acc.id)}
+                  >
+                    <View style={[styles.bulkOptionIcon, { backgroundColor: colors.surfaceContainerLow }]}>
+                      <MaterialIcons name="account-balance" size={20} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.bulkOptionText, { color: colors.onSurface }]}>{acc.name}</Text>
+                      <Text style={[styles.bulkOptionSubtext, { color: colors.onSurfaceVariant }]}>
+                        {formatCurrency(acc.balance)}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -1149,6 +1313,12 @@ const getStyles = (colors: ThemeColors) => {
       borderColor: colors.outlineVariant,
       backgroundColor: colors.surfaceContainerLowest,
     },
+    transactionItemSelected: {
+      backgroundColor: colors.primaryContainer + '30',
+    },
+    transactionItemSectionLast: {
+      borderBottomWidth: 0,
+    },
     lastTransactionItem: {
       borderBottomLeftRadius: 16,
       borderBottomRightRadius: 16,
@@ -1169,9 +1339,17 @@ const getStyles = (colors: ThemeColors) => {
       alignItems: 'center',
       justifyContent: 'center',
     },
+    transactionIconBoxCredit: {
+      backgroundColor: colors.primaryContainer,
+    },
+    transactionTextCol: {
+      flex: 1,
+      justifyContent: 'center',
+    },
     transactionName: {
       ...typography.bodyLg,
-      fontWeight: '500',
+      fontFamily: fontFamilies.medium,
+      ...(Platform.OS === 'ios' ? { fontWeight: '500' as const } : {}),
       color: colors.onSurface,
     },
     transactionMeta: {
@@ -1183,10 +1361,19 @@ const getStyles = (colors: ThemeColors) => {
       flexShrink: 0,
     },
     transactionAmount: {
-      fontFamily: 'Manrope_500Medium',
+      fontFamily: fontFamilies.medium,
       fontSize: 20,
       lineHeight: 28,
       color: colors.onSurface,
+      ...(Platform.OS === 'android' ? { includeFontPadding: false as const } : {}),
+    },
+    transactionAmountCredit: {
+      color: colors.primary,
+    },
+    badgesRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
     },
     categoryBadge: {
       backgroundColor: colors.primary + '1A', // primary/10
@@ -1196,12 +1383,27 @@ const getStyles = (colors: ThemeColors) => {
       marginTop: 4,
       flexShrink: 0,
     },
+    secondaryBadge: {
+      backgroundColor: colors.secondaryContainer,
+    },
+    tagBadge: {
+      backgroundColor: colors.secondaryContainer,
+      paddingHorizontal: 6,
+    },
+    receiptBadge: {
+      backgroundColor: colors.surfaceContainerHighest,
+      paddingHorizontal: 5,
+    },
     categoryBadgeText: {
-      fontFamily: 'Manrope_600SemiBold',
+      fontFamily: fontFamilies.semiBold,
       fontSize: 11,
       lineHeight: 15,
       color: colors.primary,
       textTransform: 'uppercase',
+      ...(Platform.OS === 'android' ? { includeFontPadding: false as const } : {}),
+    },
+    secondaryBadgeText: {
+      color: colors.onSecondaryContainer,
     },
     selectionCheckbox: {
       marginRight: 10,

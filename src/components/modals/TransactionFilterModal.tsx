@@ -28,6 +28,7 @@ export interface ActiveFilters {
 interface Props {
   visible: boolean;
   filters: ActiveFilters;
+  lockedAccountId?: string;
   onClose: () => void;
   onApply: (filters: ActiveFilters) => void;
 }
@@ -46,9 +47,16 @@ const TYPE_OPTIONS: { id: 'all' | 'expense' | 'income' | 'transfer'; label: stri
   { id: 'transfer', label: 'Transfers' },
 ];
 
-export function TransactionFilterModal({ visible, filters, onClose, onApply }: Props) {
+export function TransactionFilterModal({
+  visible,
+  filters,
+  lockedAccountId,
+  onClose,
+  onApply,
+}: Props) {
   const { colors } = useTheme();
   const styles = getStyles(colors);
+  const insets = useSafeInsets();
   const { accounts } = useAccounts();
   const { categories } = useCategories();
   const { tags } = useTags();
@@ -60,7 +68,7 @@ export function TransactionFilterModal({ visible, filters, onClose, onApply }: P
     filters.datePreset || 'all'
   );
   const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>(
-    filters.accountId
+    lockedAccountId ?? filters.accountId
   );
   const [selectedCategory, setSelectedCategory] = useState<string | undefined>(
     filters.category
@@ -73,18 +81,18 @@ export function TransactionFilterModal({ visible, filters, onClose, onApply }: P
     if (visible) {
       setSelectedType(filters.type || 'all');
       setSelectedDatePreset(filters.datePreset || 'all');
-      setSelectedAccountId(filters.accountId);
+      setSelectedAccountId(lockedAccountId ?? filters.accountId);
       setSelectedCategory(filters.category);
       setSelectedTag(filters.tag);
     }
-  }, [visible, filters]);
+  }, [visible, filters, lockedAccountId]);
 
   if (!visible) return null;
 
   const handleReset = () => {
     setSelectedType('all');
     setSelectedDatePreset('all');
-    setSelectedAccountId(undefined);
+    setSelectedAccountId(lockedAccountId);
     setSelectedCategory(undefined);
     setSelectedTag(undefined);
   };
@@ -93,7 +101,7 @@ export function TransactionFilterModal({ visible, filters, onClose, onApply }: P
     onApply({
       type: selectedType,
       datePreset: selectedDatePreset,
-      accountId: selectedAccountId,
+      accountId: lockedAccountId ?? selectedAccountId,
       category: selectedCategory,
       tag: selectedTag,
     });
@@ -103,11 +111,9 @@ export function TransactionFilterModal({ visible, filters, onClose, onApply }: P
   const activeCount =
     (selectedType !== 'all' ? 1 : 0) +
     (selectedDatePreset !== 'all' ? 1 : 0) +
-    (selectedAccountId ? 1 : 0) +
+    (!lockedAccountId && selectedAccountId ? 1 : 0) +
     (selectedCategory ? 1 : 0) +
     (selectedTag ? 1 : 0);
-
-  const insets = useSafeInsets();
 
   return (
     <Modal
@@ -190,33 +196,35 @@ export function TransactionFilterModal({ visible, filters, onClose, onApply }: P
           </View>
 
           {/* Section: Account */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Account</Text>
-            <View style={styles.chipRow}>
-              <TouchableOpacity
-                style={[styles.chip, !selectedAccountId && styles.chipSelected]}
-                onPress={() => setSelectedAccountId(undefined)}
-              >
-                <Text style={[styles.chipText, !selectedAccountId && styles.chipTextSelected]}>
-                  All Accounts
-                </Text>
-              </TouchableOpacity>
-              {accounts.map((acc) => {
-                const isSelected = selectedAccountId === acc.id;
-                return (
-                  <TouchableOpacity
-                    key={acc.id}
-                    style={[styles.chip, isSelected && styles.chipSelected]}
-                    onPress={() => setSelectedAccountId(isSelected ? undefined : acc.id)}
-                  >
-                    <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
-                      {acc.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+          {!lockedAccountId && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Account</Text>
+              <View style={styles.chipRow}>
+                <TouchableOpacity
+                  style={[styles.chip, !selectedAccountId && styles.chipSelected]}
+                  onPress={() => setSelectedAccountId(undefined)}
+                >
+                  <Text style={[styles.chipText, !selectedAccountId && styles.chipTextSelected]}>
+                    All Accounts
+                  </Text>
+                </TouchableOpacity>
+                {accounts.map((acc) => {
+                  const isSelected = selectedAccountId === acc.id;
+                  return (
+                    <TouchableOpacity
+                      key={acc.id}
+                      style={[styles.chip, isSelected && styles.chipSelected]}
+                      onPress={() => setSelectedAccountId(isSelected ? undefined : acc.id)}
+                    >
+                      <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                        {acc.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Section: Category */}
           <View style={styles.section}>

@@ -65,6 +65,7 @@ export default function RootLayout() {
   const hasHydrated = useAppStore((state) => state._hasHydrated);
   const hasSeenDrivePrompt = useAppStore((state) => state.hasSeenDrivePrompt);
   const hasSeenNotificationPrompt = useAppStore((state) => state.hasSeenNotificationPrompt);
+  const notificationPermissionStatus = useNotificationStore((state) => state.permissionStatus);
   const googleDriveConnected = useAppStore((state) => state.googleDriveConnected);
   const canRequestPushPermissions =
     hasHydrated &&
@@ -108,14 +109,15 @@ export default function RootLayout() {
       Platform.OS === 'android' &&
       hasHydrated &&
       dbReady &&
-      !hasSeenNotificationPrompt
+      !hasSeenNotificationPrompt &&
+      notificationPermissionStatus !== 'granted'
     ) {
       const timer = setTimeout(() => {
         setShowNotificationPrompt(true);
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [hasHydrated, dbReady, hasSeenNotificationPrompt]);
+  }, [hasHydrated, dbReady, hasSeenNotificationPrompt, notificationPermissionStatus]);
 
   // First-time launch Google Drive backup prompt (staggered after notification prompt)
   useEffect(() => {

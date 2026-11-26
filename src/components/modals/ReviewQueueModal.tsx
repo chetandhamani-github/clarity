@@ -140,7 +140,7 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
     try {
       await ReviewQueueService.dismissItem(currentItem.id);
       await refreshReviewQueueCount();
-      showToast('SMS dismissed as non-financial', 'info');
+      showToast('Alert dismissed as non-financial', 'info');
 
       const nextList = items.filter((_, idx) => idx !== activeItemIndex);
       setItems(nextList);
@@ -181,7 +181,7 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
           <View style={styles.headerRow}>
             <View style={styles.headerTitleCol}>
               <Text variant="headlineSm" style={styles.headerTitle}>
-                Review SMS Transactions
+                Review Pending Transactions
               </Text>
               {items.length > 0 && (
                 <Text variant="bodyMd" style={styles.headerSubtitle}>
@@ -224,7 +224,7 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
                 All Caught Up!
               </Text>
               <Text variant="bodyMd" style={styles.emptySubtitle}>
-                No unparsed or ambiguous SMS messages pending your review.
+                No unparsed or ambiguous alerts pending your review.
               </Text>
               <TouchableOpacity style={styles.doneBtn} onPress={onClose} activeOpacity={0.8}>
                 <Text style={styles.doneBtnText}>Close</Text>

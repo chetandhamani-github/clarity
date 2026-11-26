@@ -95,7 +95,7 @@ export default function LoginScreen() {
           </View>
           <Text style={[styles.title, { color: colors.onSurface }]}>Clarity</Text>
           <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
-            Personal finances, SMS tracking & collaborative Splitwise.
+            Personal finances, auto-tracked alerts & collaborative Splitwise.
           </Text>
         </View>
 

@@ -20,40 +20,134 @@ export interface CsvParseResult {
   statementDate?: string;
 }
 
-/**
- * Parses raw CSV content into an array of rows, properly handling
- * quoted strings with commas and escaped quotes.
- */
-export function parseCsvRows(csvText: string): string[][] {
+const HTML_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+};
+
+function decodeHtmlText(raw: string): string {
+  return raw
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&([a-zA-Z]+);/g, (_, name: string) => HTML_ENTITIES[name.toLowerCase()] ?? ' ')
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(parseInt(code, 10)))
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseHtmlTableRows(html: string): string[][] {
   const rows: string[][] = [];
-  const lines = csvText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  const trMatches = html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi);
+  for (const tr of trMatches) {
+    const cells: string[] = [];
+    const tdMatches = tr[1].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi);
+    for (const td of tdMatches) {
+      cells.push(decodeHtmlText(td[1]));
+    }
+    if (cells.some((c) => c.length > 0)) {
+      rows.push(cells);
+    }
+  }
+  return rows;
+}
 
-  for (let line of lines) {
-    line = line.trim();
-    if (!line) continue;
+function detectCsvDelimiter(text: string): string {
+  const candidates = [',', '\t', ';', '|'];
+  const sampleLines = text
+    .split('\n')
+    .filter((l) => l.trim().length > 0)
+    .slice(0, 30);
 
-    const values: string[] = [];
-    let insideQuotes = false;
-    let currentValue = '';
+  let bestDelimiter = ',';
+  let bestScore = -1;
 
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-      if (char === '"') {
-        if (insideQuotes && line[i + 1] === '"') {
-          currentValue += '"';
-          i++; // skip next quote
-        } else {
-          insideQuotes = !insideQuotes;
+  for (const delim of candidates) {
+    let multiColLines = 0;
+    let totalSplits = 0;
+    for (const line of sampleLines) {
+      let inQuotes = false;
+      let count = 0;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') i++;
+          else inQuotes = !inQuotes;
+        } else if (ch === delim && !inQuotes) {
+          count++;
         }
-      } else if (char === ',' && !insideQuotes) {
-        values.push(currentValue.trim());
-        currentValue = '';
-      } else {
-        currentValue += char;
+      }
+      if (count >= 2) {
+        multiColLines++;
+        totalSplits += count;
       }
     }
+    const score = multiColLines * 100 + totalSplits;
+    if (multiColLines > 0 && score > bestScore) {
+      bestScore = score;
+      bestDelimiter = delim;
+    }
+  }
+
+  return bestDelimiter;
+}
+
+/**
+ * Parses raw CSV/TSV/HTML-table content into an array of rows, properly handling
+ * UTF-8 BOM, quoted delimiters, multiline quoted fields, and escaped quotes.
+ */
+export function parseCsvRows(csvText: string): string[][] {
+  const normalized = csvText
+    .replace(/^\uFEFF/, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n');
+
+  const trimmed = normalized.trimStart();
+  if (trimmed.startsWith('<') && /<tr\b/i.test(trimmed) && /<t[dh]\b/i.test(trimmed)) {
+    const htmlRows = parseHtmlTableRows(normalized);
+    if (htmlRows.length > 0) {
+      return htmlRows;
+    }
+  }
+
+  const delimiter = detectCsvDelimiter(normalized);
+  const rows: string[][] = [];
+  let values: string[] = [];
+  let currentValue = '';
+  let insideQuotes = false;
+
+  for (let i = 0; i < normalized.length; i++) {
+    const char = normalized[i];
+    if (char === '"') {
+      if (insideQuotes && normalized[i + 1] === '"') {
+        currentValue += '"';
+        i++;
+      } else {
+        insideQuotes = !insideQuotes;
+      }
+    } else if (char === delimiter && !insideQuotes) {
+      values.push(currentValue.trim());
+      currentValue = '';
+    } else if (char === '\n' && !insideQuotes) {
+      values.push(currentValue.trim());
+      if (values.some((v) => v.length > 0)) {
+        rows.push(values);
+      }
+      values = [];
+      currentValue = '';
+    } else {
+      currentValue += char;
+    }
+  }
+
+  if (currentValue.length > 0 || values.length > 0) {
     values.push(currentValue.trim());
-    rows.push(values);
+    if (values.some((v) => v.length > 0)) {
+      rows.push(values);
+    }
   }
 
   return rows;
@@ -65,16 +159,30 @@ export function parseCsvRows(csvText: string): string[][] {
  */
 export function parseDate(dateStr: string): string | null {
   if (!dateStr) return null;
-  const clean = dateStr.trim();
+  const clean = dateStr
+    .trim()
+    .replace(/\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?$/i, '')
+    .replace(/,/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 
-  // YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
-    return clean;
+  // YYYY-MM-DD or YYYY/MM/DD
+  const ymdMatch = clean.match(/^(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})$/);
+  if (ymdMatch) {
+    const m = parseInt(ymdMatch[2], 10);
+    const d = parseInt(ymdMatch[3], 10);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return `${ymdMatch[1]}-${ymdMatch[2].padStart(2, '0')}-${ymdMatch[3].padStart(2, '0')}`;
+    }
+    return null;
   }
 
   // DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
   const dmyMatch = clean.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
   if (dmyMatch) {
+    const dayNum = parseInt(dmyMatch[1], 10);
+    const monNum = parseInt(dmyMatch[2], 10);
+    if (dayNum < 1 || dayNum > 31 || monNum < 1 || monNum > 12) return null;
     const day = dmyMatch[1].padStart(2, '0');
     const month = dmyMatch[2].padStart(2, '0');
     const year = dmyMatch[3];
@@ -84,35 +192,30 @@ export function parseDate(dateStr: string): string | null {
   // DD/MM/YY
   const dmyShortMatch = clean.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2})$/);
   if (dmyShortMatch) {
+    const dayNum = parseInt(dmyShortMatch[1], 10);
+    const monNum = parseInt(dmyShortMatch[2], 10);
+    if (dayNum < 1 || dayNum > 31 || monNum < 1 || monNum > 12) return null;
     const day = dmyShortMatch[1].padStart(2, '0');
     const month = dmyShortMatch[2].padStart(2, '0');
     const year = `20${dmyShortMatch[3]}`;
     return `${year}-${month}-${day}`;
   }
 
-  // DD Mon YYYY (e.g., 15 Nov 2026 or 15-Nov-2026)
+  // DD Mon YYYY / DD-Mon-YY (e.g., 15 Nov 2026, 15-Nov-26, 01 September 2026)
   const months: Record<string, string> = {
     jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
     jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
   };
-  const dMonYMatch = clean.match(/^(\d{1,2})[/\-\s]([A-Za-z]{3})[/\-\s](\d{4})$/);
+  const dMonYMatch = clean.match(/^(\d{1,2})[/\-\s]([A-Za-z]{3,9})[/\-\s](\d{2,4})$/);
   if (dMonYMatch) {
-    const day = dMonYMatch[1].padStart(2, '0');
-    const mon = dMonYMatch[2].toLowerCase();
+    const dayNum = parseInt(dMonYMatch[1], 10);
+    const mon = dMonYMatch[2].toLowerCase().substring(0, 3);
     const month = months[mon];
-    const year = dMonYMatch[3];
-    if (month) {
-      return `${year}-${month}-${day}`;
+    let year = dMonYMatch[3];
+    if (year.length === 2) year = `20${year}`;
+    if (month && dayNum >= 1 && dayNum <= 31) {
+      return `${year}-${month}-${dMonYMatch[1].padStart(2, '0')}`;
     }
-  }
-
-  // Fallback to JS Date parse
-  const parsed = new Date(clean);
-  if (!isNaN(parsed.getTime())) {
-    const y = parsed.getFullYear();
-    const m = (parsed.getMonth() + 1).toString().padStart(2, '0');
-    const d = parsed.getDate().toString().padStart(2, '0');
-    return `${y}-${m}-${d}`;
   }
 
   return null;
@@ -175,6 +278,138 @@ function cleanMerchantName(narration: string): string {
   return clean.slice(0, 50) || 'Statement Transaction';
 }
 
+interface CsvColumnMap {
+  headerIndex: number;
+  colDate: number;
+  colDesc: number;
+  colDebit: number;
+  colCredit: number;
+  colAmount: number;
+  colType: number;
+  colBalance: number;
+}
+
+function detectHeaderColumns(rows: string[][]): CsvColumnMap | null {
+  let fallbackCandidate: CsvColumnMap | null = null;
+  const maxScanRows = Math.min(rows.length, 60);
+
+  for (let r = 0; r < maxScanRows; r++) {
+    const headers = rows[r].map((h) =>
+      h
+        .replace(/[\uFEFF\s_]+/g, ' ')
+        .replace(/[:*#]+$/g, '')
+        .trim()
+        .toLowerCase()
+    );
+
+    let colDate = -1;
+    let colValueDate = -1;
+    let colDesc = -1;
+    let colDebit = -1;
+    let colCredit = -1;
+    let colAmount = -1;
+    let colType = -1;
+    let colBalance = -1;
+
+    for (let c = 0; c < headers.length; c++) {
+      const h = headers[c];
+      if (!h) continue;
+
+      if (/\b(?:txn|trans(?:action)?|tran|posting|post|book|entry)\s*(?:date|dt\.?)\b/.test(h)) {
+        if (colDate === -1) colDate = c;
+      } else if (/\b(?:value|val)\s*(?:date|dt\.?)\b/.test(h)) {
+        if (colValueDate === -1) colValueDate = c;
+      } else if (/(?:^|\b)(?:date|dt\.?)(?:\b|$)/.test(h) && colDate === -1) {
+        colDate = c;
+      }
+
+      if (
+        /narration|description|particulars|remarks|details|merchant|summary|memo|payee|recipient/.test(
+          h
+        ) &&
+        colDesc === -1
+      ) {
+        colDesc = c;
+      }
+      const isTypeHeader =
+        /^(?:txn\s*|trans(?:action)?\s*)?type$|cr\s*\/\s*dr|dr\s*\/\s*cr|d\s*\/\s*c|debit\s*\/\s*credit/.test(
+          h
+        );
+      if (isTypeHeader) {
+        if (colType === -1) colType = c;
+        continue;
+      }
+
+      if (
+        /withdrawal|debit|dr\.?\b|dr\s*amt|dr\s*amount|debit\s*amt|paid\s*out|outflow|withdrawn/.test(
+          h
+        ) &&
+        colDebit === -1
+      ) {
+        colDebit = c;
+      }
+      if (
+        /deposit|credit|cr\.?\b|cr\s*amt|cr\s*amount|credit\s*amt|paid\s*in|inflow|deposited/.test(
+          h
+        ) &&
+        colCredit === -1
+      ) {
+        colCredit = c;
+      }
+      if (
+        /^(?:txn\s*|trans(?:action)?\s*|tran\s*|net\s*)?(?:amount|amt\.?)(?:\s*\(.*\))?$/.test(h) &&
+        colAmount === -1
+      ) {
+        colAmount = c;
+      }
+      if (
+        /(?:closing|available|clear|net|running|led(?:ger)?)\s*bal(?:ance)?|^bal(?:ance)?(?:\s*\(.*\))?\.?$/.test(
+          h
+        ) &&
+        colBalance === -1
+      ) {
+        colBalance = c;
+      }
+    }
+
+    const resolvedDate = colDate !== -1 ? colDate : colValueDate;
+    if (resolvedDate === -1) continue;
+
+    const hasAmountCol =
+      (colDebit !== -1 && colDebit !== resolvedDate) ||
+      (colCredit !== -1 && colCredit !== resolvedDate) ||
+      (colAmount !== -1 && colAmount !== resolvedDate);
+
+    if (hasAmountCol) {
+      return {
+        headerIndex: r,
+        colDate: resolvedDate,
+        colDesc: colDesc === resolvedDate ? -1 : colDesc,
+        colDebit,
+        colCredit,
+        colAmount,
+        colType,
+        colBalance,
+      };
+    }
+
+    if (!fallbackCandidate && colDesc !== -1 && colDesc !== resolvedDate && rows[r].length >= 3) {
+      fallbackCandidate = {
+        headerIndex: r,
+        colDate: resolvedDate,
+        colDesc,
+        colDebit,
+        colCredit,
+        colAmount,
+        colType,
+        colBalance,
+      };
+    }
+  }
+
+  return fallbackCandidate;
+}
+
 /**
  * Analyzes CSV header columns and parses statements into normalized transactions.
  */
@@ -184,46 +419,20 @@ export function parseBankStatementCsv(csvText: string): CsvParseResult {
     return { transactions: [], totalRows: 0, ignoredRows: 0, errors: ['CSV contains no data rows'] };
   }
 
-  // Find header row (usually row 0, but some bank statements have intro text)
-  let headerIndex = -1;
-  let colDate = -1;
-  let colDesc = -1;
-  let colDebit = -1;
-  let colCredit = -1;
-  let colAmount = -1;
-  let colType = -1;
-  let colBalance = -1;
-
-  for (let r = 0; r < Math.min(rows.length, 10); r++) {
-    const headers = rows[r].map((h) => h.toLowerCase().trim());
-
-    for (let c = 0; c < headers.length; c++) {
-      const h = headers[c];
-      if (/date|value\s*date|txn\s*date/.test(h) && colDate === -1) colDate = c;
-      if (/narration|description|particulars|remarks|details|merchant/.test(h) && colDesc === -1) colDesc = c;
-      if (/withdrawal|debit|dr(\.|\b)|dr\s*amount/.test(h) && colDebit === -1) colDebit = c;
-      if (/deposit|credit|cr(\.|\b)|cr\s*amount/.test(h) && colCredit === -1) colCredit = c;
-      if (/^amount$|^txn\s*amount$/.test(h) && colAmount === -1) colAmount = c;
-      if (/^type$|cr\/dr|d\/c/.test(h) && colType === -1) colType = c;
-      if (/(?:closing\s*bal(?:ance)?|available\s*bal(?:ance)?|clear\s*bal(?:ance)?|net\s*bal(?:ance)?|^balance$|^bal\.?$)/.test(h) && colBalance === -1) {
-        colBalance = c;
-      }
-    }
-
-    if (colDate !== -1 && (colDesc !== -1 || colDebit !== -1 || colAmount !== -1)) {
-      headerIndex = r;
-      break;
-    }
-  }
-
-  if (headerIndex === -1 || colDate === -1) {
+  const columnMap = detectHeaderColumns(rows);
+  if (!columnMap) {
     return {
       transactions: [],
       totalRows: rows.length,
       ignoredRows: rows.length,
-      errors: ['Could not detect date and transaction columns in CSV header'],
+      errors: [
+        `Could not detect date and transaction columns in CSV header (rows=${rows.length}, maxCols=${Math.max(...rows.map((r) => r.length))})`,
+      ],
     };
   }
+
+  const { headerIndex, colDate, colDesc, colDebit, colCredit, colAmount, colType, colBalance } =
+    columnMap;
 
   const transactions: ParsedCsvTransaction[] = [];
   let ignoredRows = 0;
@@ -261,6 +470,22 @@ export function parseBankStatementCsv(csvText: string): CsvParseResult {
         ignoredRows++;
         continue;
       }
+    } else if (colDebit !== -1) {
+      const debitVal = cleanAmount(row[colDebit]);
+      if (debitVal === 0) {
+        ignoredRows++;
+        continue;
+      }
+      amount = debitVal;
+      type = 'expense';
+    } else if (colCredit !== -1) {
+      const creditVal = cleanAmount(row[colCredit]);
+      if (creditVal === 0) {
+        ignoredRows++;
+        continue;
+      }
+      amount = creditVal;
+      type = 'income';
     } else if (colAmount !== -1) {
       const rawAmtStr = (row[colAmount] || '').trim();
       const isNegativeOrParen = rawAmtStr.includes('-') || /^\(.*\)$/.test(rawAmtStr);
@@ -273,15 +498,15 @@ export function parseBankStatementCsv(csvText: string): CsvParseResult {
 
       if (colType !== -1) {
         const typeStr = (row[colType] || '').toUpperCase();
-        if (typeStr.includes('CR') || typeStr.includes('CREDIT') || typeStr.includes('DEP')) {
+        if (/\b(?:CR|CREDIT|DEP|DEPOSIT|C)\b/.test(typeStr)) {
           type = 'income';
         } else {
           type = 'expense';
         }
-      } else if (isNegativeOrParen) {
-        type = 'expense';
-      } else if (rawAmtStr.includes('+')) {
+      } else if (/\b(?:CR|CREDIT|C)\.?\s*\)?$/i.test(rawAmtStr) || rawAmtStr.includes('+')) {
         type = 'income';
+      } else if (/\b(?:DR|DEBIT|D)\.?\s*\)?$/i.test(rawAmtStr) || isNegativeOrParen) {
+        type = 'expense';
       } else {
         type = 'expense';
       }

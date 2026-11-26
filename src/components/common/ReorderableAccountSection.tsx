@@ -2,7 +2,7 @@ import { Text } from '@/components/ui';
 import { useReorderAccounts } from '@/hooks/use-accounts';
 import { ThemeColors, typography, useTheme } from '@/theme';
 import type { Account } from '@/types';
-import { formatCurrencyWholePrivacy } from '@/utils/format';
+import { formatCurrencyPrivacy } from '@/utils/format';
 import { getAccountTypeIcon, getBankBranding } from '@/utils/icons';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
@@ -404,7 +404,7 @@ export function ReorderableAccountSection({
                     adjustsFontSizeToFit
                     minimumFontScale={0.75}
                   >
-                    {formatCurrencyWholePrivacy(account.balance, hideBalances)}
+                    {formatCurrencyPrivacy(account.balance, false, hideBalances)}
                   </Text>
                   {isDebt && (
                     <Text style={[styles.owedBadge, { color: colors.error }]}>

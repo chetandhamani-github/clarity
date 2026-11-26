@@ -448,3 +448,39 @@ export async function exportCustomStatement(options: StatementExportOptions): Pr
     return { success: false, message: error?.message || 'Failed to export statement' };
   }
 }
+
+const EXPORT_CACHE_FILE_PREFIX = 'clarity_';
+
+/**
+ * Deletes temporary exported CSV/JSON/report/PDF statement files created in cache storage.
+ */
+export async function clearCachedExportFiles(): Promise<void> {
+  const cacheDir = FileSystem.cacheDirectory;
+  if (!cacheDir) return;
+
+  try {
+    const entries = await FileSystem.readDirectoryAsync(cacheDir);
+    await Promise.all(
+      entries
+        .filter((name) => name.startsWith(EXPORT_CACHE_FILE_PREFIX))
+        .map((name) =>
+          FileSystem.deleteAsync(`${cacheDir}${name}`, { idempotent: true }).catch(() => {})
+        )
+    );
+
+    const printDir = `${cacheDir}Print/`;
+    const printInfo = await FileSystem.getInfoAsync(printDir).catch(() => ({ exists: false }));
+    if (printInfo.exists) {
+      const printFiles = await FileSystem.readDirectoryAsync(printDir).catch(() => []);
+      await Promise.all(
+        printFiles
+          .filter((name) => name.toLowerCase().endsWith('.pdf'))
+          .map((name) =>
+            FileSystem.deleteAsync(`${printDir}${name}`, { idempotent: true }).catch(() => {})
+          )
+      );
+    }
+  } catch {
+    // Ignore cache cleanup errors in headless/test environments
+  }
+}

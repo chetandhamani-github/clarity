@@ -9,7 +9,8 @@ import type {
     TransactionWithAccount,
 } from '@/types';
 import { DeviceEventEmitter } from 'react-native';
-import { getLocalTodayYmd } from '@/utils/date';
+import { getLocalTodayYmd, shiftYmdDays } from '@/utils/date';
+import { formatLocalDate, parseDateSafely } from '@/utils/format';
 import { getAccountById } from './account-dao';
 import { getDatabase } from './index';
 import {
@@ -929,16 +930,25 @@ export interface HistoryPoint {
 export async function getNetWorthHistory(days: number = 30): Promise<HistoryPoint[]> {
   const db = getDatabase();
 
-  // 1. Get current total net worth
+  // 1. Get current total net worth (accounts + investment holdings)
   const currentResult = await db.getFirstAsync<{ total: number }>(
     'SELECT COALESCE(SUM(balance), 0) as total FROM accounts'
   );
-  const currentBalance = currentResult?.total ?? 0;
+  let holdingsTotal = 0;
+  try {
+    const holdingsResult = await db.getFirstAsync<{ total: number }>(
+      'SELECT COALESCE(SUM(current_value), 0) as total FROM investment_holdings'
+    );
+    holdingsTotal = holdingsResult?.total ?? 0;
+  } catch {
+    // Table may not exist before migrations
+  }
+  const currentBalance = (currentResult?.total ?? 0) + holdingsTotal;
 
-  // 2. Get all transactions from the last `days` days
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days);
-  const startDateStr = startDate.toISOString().split('T')[0];
+  // 2. Get all transactions from the last `days` days (1-day buffer for UTC-stored timestamps)
+  const safeDays = Math.max(1, Math.floor(days));
+  const todayStr = getLocalTodayYmd();
+  const startDateStr = shiftYmdDays(todayStr, -(safeDays + 1));
 
   const transactions = await db.getAllAsync<{ amount: number; type: string; date: string }>(
     `SELECT amount, type, date 
@@ -950,12 +960,11 @@ export async function getNetWorthHistory(days: number = 30): Promise<HistoryPoin
 
   // 3. Build the timeseries backward
   const history: HistoryPoint[] = [];
-  const today = new Date();
 
-  // Group transactions by date string (YYYY-MM-DD)
+  // Group transactions by local calendar date string (YYYY-MM-DD)
   const txByDate = transactions.reduce(
     (acc, tx) => {
-      const d = tx.date.split('T')[0];
+      const d = formatLocalDate(parseDateSafely(tx.date));
       if (!acc[d]) acc[d] = 0;
       // To reverse a transaction: if it was income (added to balance), subtract it.
       // If it was expense (subtracted from balance), add it back.
@@ -968,13 +977,11 @@ export async function getNetWorthHistory(days: number = 30): Promise<HistoryPoin
 
   let runningBalance = currentBalance;
 
-  for (let i = 0; i < days; i++) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
+  for (let i = 0; i < safeDays; i++) {
+    const dateStr = shiftYmdDays(todayStr, -i);
 
     // Push the balance for the current day being processed
-    history.unshift({ date: dateStr, value: runningBalance });
+    history.unshift({ date: dateStr, value: Math.round(runningBalance * 100) / 100 });
 
     // Apply the reverse of transactions that happened on this day to get the balance at the end of the previous day
     if (txByDate[dateStr]) {
@@ -995,10 +1002,10 @@ export async function getAccountHistory(
   const account = await getAccountById(accountId);
   const currentBalance = account?.balance ?? 0;
 
-  // 2. Get transactions for this account in the last `days` days
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days);
-  const startDateStr = startDate.toISOString().split('T')[0];
+  // 2. Get transactions for this account in the last `days` days (1-day buffer for UTC-stored timestamps)
+  const safeDays = Math.max(1, Math.floor(days));
+  const todayStr = getLocalTodayYmd();
+  const startDateStr = shiftYmdDays(todayStr, -(safeDays + 1));
 
   const transactions = await db.getAllAsync<{
     account_id: string;
@@ -1014,13 +1021,12 @@ export async function getAccountHistory(
     [accountId, accountId, startDateStr]
   );
 
-  // 3. Build timeseries backward
+  // 3. Build timeseries backward using local calendar dates
   const history: HistoryPoint[] = [];
-  const today = new Date();
 
   const txByDate = transactions.reduce(
     (acc, tx) => {
-      const d = tx.date.split('T')[0];
+      const d = formatLocalDate(parseDateSafely(tx.date));
       if (!acc[d]) acc[d] = 0;
 
       if (tx.type === 'income') {
@@ -1043,12 +1049,10 @@ export async function getAccountHistory(
 
   let runningBalance = currentBalance;
 
-  for (let i = 0; i < days; i++) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
+  for (let i = 0; i < safeDays; i++) {
+    const dateStr = shiftYmdDays(todayStr, -i);
 
-    history.unshift({ date: dateStr, value: runningBalance });
+    history.unshift({ date: dateStr, value: Math.round(runningBalance * 100) / 100 });
 
     if (txByDate[dateStr]) {
       runningBalance += txByDate[dateStr];

@@ -81,6 +81,27 @@ function invalidateLedgerQueries(): void {
 
 export class NotificationParsingService {
   private static processingQueue: Promise<void> = Promise.resolve();
+  private static isResetInProgress = false;
+
+  public static setResetInProgress(inProgress: boolean): void {
+    this.isResetInProgress = inProgress;
+  }
+
+  public static async flushPendingWork(timeoutMs: number = 1500): Promise<void> {
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+    try {
+      await Promise.race([
+        this.processingQueue.catch(() => undefined),
+        new Promise<void>((resolve) => {
+          timeoutHandle = setTimeout(resolve, timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+    }
+  }
 
   /**
    * Process an incoming notification payload through Clarity's intelligence engine.
@@ -93,6 +114,10 @@ export class NotificationParsingService {
       parseBills?: boolean;
     } = {}
   ): Promise<NotificationParseResult> {
+    if (this.isResetInProgress) {
+      return Promise.resolve({ type: 'IGNORED', reason: 'APP_RESET_IN_PROGRESS' });
+    }
+
     const run = this.processingQueue.then(() =>
       this.processNotificationInternal(notification, options)
     );

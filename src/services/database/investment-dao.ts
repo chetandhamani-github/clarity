@@ -1,4 +1,5 @@
 import { getDatabase } from './index';
+import { summarizeAccounts } from '@/utils/account-metrics';
 import type {
   InvestmentHolding,
   PortfolioSummary,
@@ -242,12 +243,9 @@ export async function getPortfolioSummary(accounts: Account[] = []): Promise<Por
   const gainLossPercentage =
     totalHoldingsInvested > 0 ? (unrealizedGainLoss / totalHoldingsInvested) * 100 : 0;
 
-  // Calculate liabilities to determine comprehensive net worth
-  const totalLiabilities = safeAccounts
-    .filter((a) => ['credit', 'loan', 'borrowed', 'lent'].includes(a.type))
-    .reduce((sum, a) => sum + Math.abs(a.balance < 0 ? a.balance : a.balance), 0);
-
-  const totalNetWorthWithInvestments = totalPortfolioValue - totalLiabilities;
+  // Calculate comprehensive net worth across all accounts + investment holdings
+  const { netBalance: accountsNetBalance } = summarizeAccounts(safeAccounts);
+  const totalNetWorthWithInvestments = accountsNetBalance + totalHoldingsValue;
 
   // Build allocation items
   const allocationConfigs: {
@@ -286,6 +284,7 @@ export async function getPortfolioSummary(accounts: Account[] = []): Promise<Por
 
   return {
     totalPortfolioValue: Math.round(totalPortfolioValue * 100) / 100,
+    totalHoldingsValue: Math.round(totalHoldingsValue * 100) / 100,
     totalInvestedAmount: Math.round(totalInvestedAmount * 100) / 100,
     unrealizedGainLoss: Math.round(unrealizedGainLoss * 100) / 100,
     gainLossPercentage: Math.round(gainLossPercentage * 100) / 100,

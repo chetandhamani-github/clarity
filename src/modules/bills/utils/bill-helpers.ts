@@ -1,4 +1,4 @@
-import type { BillCategory } from '../types/bill.types';
+import type { BillCategory, BillSource } from '../types/bill.types';
 
 const EXTERNAL_BILLER_CATEGORY_MAP: Record<string, BillCategory> = {
   electricity: 'electricity',
@@ -26,4 +26,18 @@ const EXTERNAL_BILLER_CATEGORY_MAP: Record<string, BillCategory> = {
  */
 export function mapExternalBillerCategory(billerCategory: string): BillCategory {
   return EXTERNAL_BILLER_CATEGORY_MAP[billerCategory] ?? 'other';
+}
+
+const BILL_SOURCE_LABELS: Record<BillSource, string> = {
+  manual: 'MANUAL',
+  sms: 'AUTO',
+  email: 'EMAIL',
+  future_api: 'API',
+};
+
+/**
+ * Formats an internal bill source into a user-facing UI badge/label.
+ */
+export function getBillSourceLabel(source: BillSource | string): string {
+  return BILL_SOURCE_LABELS[source as BillSource] ?? String(source || 'manual').toUpperCase();
 }

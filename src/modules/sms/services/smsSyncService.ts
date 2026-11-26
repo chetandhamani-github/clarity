@@ -419,7 +419,7 @@ export class SmsSyncService {
             paymentUrl: extractedBill.paymentUrl,
             smsId: message.id,
             source: 'sms',
-            notes: `Auto-detected from SMS: ${extractedBill.billerName}`,
+            notes: `Auto-detected bill: ${extractedBill.billerName}`,
           });
         }
       } catch {
@@ -798,7 +798,7 @@ export class SmsSyncService {
             txType === 'income' &&
             /\b(?:revers(?:ed|al)|refund(?:ed)?|credited\s+back)\b/i.test(transaction.rawBody || '');
           let finalCategory = transaction.category;
-          let finalNote = 'Imported via SMS (' + bankName + ')';
+          let finalNote = 'Auto-tracked (' + bankName + ')';
 
           if (isReversal) {
             try {
@@ -879,7 +879,7 @@ export class SmsSyncService {
             category: transaction.category,
             date: new Date(transaction.timestamp).toISOString(),
             isRecurring: false,
-            note: 'Imported via SMS (' + bankName + ')',
+            note: 'Auto-tracked (' + bankName + ')',
             source: 'SMS',
           }).catch(() => {});
 

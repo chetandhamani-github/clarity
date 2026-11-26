@@ -5,8 +5,8 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  Dimensions,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { Text, Header, AccountsSkeleton, SkeletonBox, WealthCardSkeleton } from '@/components/ui';
 import { spacing, typography, useTheme, radius, ThemeColors } from '@/theme';
@@ -19,10 +19,11 @@ import { useAccountHistory } from '@/hooks/use-transactions';
 import { usePortfolioSummary } from '@/hooks/use-investments';
 import {
   formatCurrency,
-  formatCurrencyWhole,
   formatCurrencyPrivacy,
-  formatCurrencyWholePrivacy,
 } from '@/utils/format';
+import { summarizeAccounts } from '@/utils/account-metrics';
+import { normalizeLineChartValues, padChartHistory } from '@/utils/chart-utils';
+import { getLocalTodayYmd } from '@/utils/date';
 import { getBankBranding } from '@/utils/icons';
 import type { Account, PortfolioSummary } from '@/types';
 import { useAppStore } from '@/store/use-app-store';
@@ -40,7 +41,11 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
   const router = useRouter();
 
   const { accounts, isLoading, refetch } = useAccounts();
-  const { summary: portfolioSummary, isLoading: isPortfolioLoading } = usePortfolioSummary();
+  const {
+    summary: portfolioSummary,
+    isLoading: isPortfolioLoading,
+    refetch: refetchPortfolio,
+  } = usePortfolioSummary();
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [isDraggingAccounts, setIsDraggingAccounts] = useState(false);
   const { hideBalances, toggleHideBalances } = useAppStore();
@@ -48,21 +53,20 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
   useFocusEffect(
     useCallback(() => {
       refetch();
-    }, [refetch])
+      refetchPortfolio();
+    }, [refetch, refetchPortfolio])
   );
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId) ?? accounts[0] ?? null;
-  const isLiabilityType = (type: string) => ['credit', 'loan', 'borrowed', 'lent'].includes(type);
-
-  const assetAccounts = accounts.filter((a) => !isLiabilityType(a.type));
-  const liabilityAccounts = accounts.filter((a) => isLiabilityType(a.type));
-
-  const totalAssets = accounts.reduce((sum, a) => sum + (a.balance > 0 ? a.balance : 0), 0);
-  const totalLiabilities = liabilityAccounts.reduce(
-    (sum, a) => sum + (a.balance < 0 ? Math.abs(a.balance) : a.type !== 'lent' ? Math.abs(a.balance) : 0),
-    0
-  );
-  const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
+  const {
+    assetAccounts,
+    liabilityAccounts,
+    totalAssets,
+    totalLiabilities,
+    netBalance: totalBalance,
+    assetSectionTotal,
+    liabilitySectionTotal,
+  } = summarizeAccounts(accounts);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: showBack ? insets.bottom : 0 }]}>
@@ -163,7 +167,7 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
                 <View style={styles.contentPadding}>
                   <View style={styles.totalCard}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={styles.totalLabel}>TOTAL NET WORTH</Text>
+                      <Text style={styles.totalLabel}>NET ACCOUNT BALANCE</Text>
                       <TouchableOpacity
                         onPress={toggleHideBalances}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -193,7 +197,7 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
                           style={[styles.summaryPillLabel, { color: colors.primary }]}
                           numberOfLines={1}
                         >
-                          Assets: {formatCurrencyWholePrivacy(totalAssets, hideBalances)}
+                          Assets: {formatCurrencyPrivacy(totalAssets, false, hideBalances)}
                         </Text>
                       </View>
                       {totalLiabilities > 0 && (
@@ -207,7 +211,7 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
                             style={[styles.summaryPillLabel, { color: colors.onErrorContainer }]}
                             numberOfLines={1}
                           >
-                            Liabilities: -{formatCurrencyWholePrivacy(totalLiabilities, hideBalances)}
+                            Liabilities: -{formatCurrencyPrivacy(totalLiabilities, false, hideBalances)}
                           </Text>
                         </View>
                       )}
@@ -231,7 +235,7 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
                   {assetAccounts.length > 0 && (
                     <ReorderableAccountSection
                       title="ASSETS"
-                      subtotalText={formatCurrencyWholePrivacy(totalAssets, hideBalances)}
+                      subtotalText={formatCurrencyPrivacy(assetSectionTotal, false, hideBalances)}
                       accounts={assetAccounts}
                       allAccounts={accounts}
                       selectedAccountId={selectedAccountId}
@@ -246,7 +250,7 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
                     <View style={{ marginTop: assetAccounts.length > 0 ? 16 : 0 }}>
                       <ReorderableAccountSection
                         title="LIABILITIES & DEBT"
-                        subtotalText={`-${formatCurrencyWholePrivacy(totalLiabilities, hideBalances)}`}
+                        subtotalText={formatCurrencyPrivacy(liabilitySectionTotal, false, hideBalances)}
                         isLiability
                         accounts={liabilityAccounts}
                         allAccounts={accounts}
@@ -442,46 +446,28 @@ function AccountDetailCard({
   const hasOutstandingDebt = isLiability && account.balance < 0;
   const { history, isLoading } = useAccountHistory(account.id, 30);
 
-  const chartData = React.useMemo(() => {
-    let data = history;
-    if (!data || data.length === 0) {
-      data = [
-        { date: new Date().toISOString().split('T')[0], value: account.balance },
-        { date: new Date().toISOString().split('T')[0], value: account.balance },
-      ];
-    } else if (data.length === 1) {
-      data = [data[0], data[0]];
-    }
+  const paddedHistory = React.useMemo(
+    () => padChartHistory(history, account.balance, getLocalTodayYmd()),
+    [history, account.balance]
+  );
 
-    return data.map((point) => ({
-      value: point.value,
-      dataPointText: formatCurrency(point.value),
-    }));
-  }, [history, account.balance]);
+  const chartConfig = React.useMemo(
+    () => normalizeLineChartValues(paddedHistory.map((point) => point.value)),
+    [paddedHistory]
+  );
 
-  const chartConfig = React.useMemo(() => {
-    const vals = chartData.map((d) => d.value);
-    const min = Math.min(...vals);
-    const max = Math.max(...vals);
-    const range = max - min;
+  const chartData = React.useMemo(
+    () =>
+      paddedHistory.map((point, index) => ({
+        value: chartConfig.values[index] ?? 0,
+        dataPointText: formatCurrencyPrivacy(point.value, false, hideBalances),
+      })),
+    [paddedHistory, chartConfig.values, hideBalances]
+  );
 
-    if (range === 0) {
-      return {
-        yAxisOffset: 0,
-        maxValue: max === 0 ? 100 : Math.abs(max) * 1.3,
-      };
-    }
-
-    const padding = range * 0.15;
-    return {
-      yAxisOffset: Math.max(0, min - padding),
-      maxValue: max + padding,
-    };
-  }, [chartData]);
-
-  const screenWidth = Dimensions.get('window').width;
-  // screen padding 20x2 = 40, card padding 20x2 = 40 -> total 80
-  const chartWidth = screenWidth - 80;
+  const { width: screenWidth } = useWindowDimensions();
+  // screen padding 20x2 = 40, card padding 16x2 = 32, borders 4 -> total 76
+  const chartWidth = Math.max(160, screenWidth - 76);
 
   const branding = getBankBranding(account.institution || account.name);
 
@@ -600,8 +586,12 @@ function AccountDetailCard({
                 chartData.length > 1 ? chartWidth / (chartData.length - 1) : chartWidth
               }
               adjustToWidth={true}
-              yAxisOffset={chartConfig.yAxisOffset}
               maxValue={chartConfig.maxValue}
+              yAxisLabelWidth={0}
+              yAxisThickness={0}
+              xAxisThickness={0}
+              xAxisLabelsHeight={0}
+              labelsExtraHeight={0}
               hideDataPoints
               hideRules
               hideYAxisText
@@ -615,25 +605,29 @@ function AccountDetailCard({
               startOpacity={0.25}
               endFillColor={colors.primary}
               endOpacity={0.02}
-              curved
+              curved={chartConfig.hasVariance && chartData.length > 2}
               pointerConfig={{
                 pointerStripHeight: 140,
                 pointerStripColor: colors.outline,
                 pointerStripWidth: 2,
                 pointerColor: colors.primary,
                 radius: 4,
+                pointerLabelWidth: 116,
+                pointerLabelHeight: 32,
                 activatePointersOnLongPress: true,
                 autoAdjustPointerLabelPosition: true,
-                pointerLabelComponent: (items: any) => {
+                pointerLabelComponent: (items: { dataPointText?: string }[]) => {
+                  const label = items?.[0]?.dataPointText;
+                  if (!label) return null;
                   return (
                     <View
                       style={{
-                        height: 30,
-                        width: 90,
+                        height: 32,
+                        width: 116,
                         justifyContent: 'center',
                         backgroundColor: colors.surfaceContainerHighest,
                         borderRadius: 8,
-                        padding: 4,
+                        paddingHorizontal: 8,
                       }}
                     >
                       <Text
@@ -643,8 +637,10 @@ function AccountDetailCard({
                           fontWeight: 'bold',
                           textAlign: 'center',
                         }}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
                       >
-                        {items[0].dataPointText}
+                        {label}
                       </Text>
                     </View>
                   );

@@ -23,6 +23,7 @@ export default function AppLayout() {
         <Stack.Screen name="plan" />
         <Stack.Screen name="accounts" />
         <Stack.Screen name="transactions" />
+        <Stack.Screen name="account-transactions" />
         <Stack.Screen name="bills" />
         <Stack.Screen name="bill-details" />
         <Stack.Screen name="splitwise" />
