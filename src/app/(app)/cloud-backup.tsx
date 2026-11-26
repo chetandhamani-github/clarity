@@ -260,7 +260,7 @@ export default function CloudBackupScreen() {
       <Header showBack title="Cloud Backup & Restore" />
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 }]}
+        contentContainerStyle={[styles.scrollContent, styles.scrollContentBottom]}
         showsVerticalScrollIndicator={false}
       >
         {/* Connection Status Card */}
@@ -357,7 +357,7 @@ export default function CloudBackupScreen() {
             {isPostResetLocked && (
               <View style={styles.lockedBanner}>
                 <MaterialIcons name="shield" size={22} color={colors.onErrorContainer} />
-                <View style={{ flex: 1 }}>
+                <View style={styles.flex1}>
                   <Text style={styles.lockedBannerTitle}>Cloud Sync Paused</Text>
                   <Text style={styles.lockedBannerText}>
                     Cloud sync was paused after app reset to protect existing cloud backups. Tap "Backup Now" or restore an older version to resume.
@@ -371,7 +371,7 @@ export default function CloudBackupScreen() {
               <Text style={styles.sectionTitle}>Sync Preferences</Text>
 
               <View style={styles.settingRow}>
-                <View style={{ flex: 1, paddingRight: 12 }}>
+                <View style={styles.settingRowText}>
                   <Text style={styles.rowTitle}>Automatic Cloud Sync</Text>
                   <Text style={styles.rowSub}>
                     {hasCustomBackupPassphrase
@@ -387,8 +387,8 @@ export default function CloudBackupScreen() {
                 />
               </View>
 
-              <View style={[styles.settingRow, { borderBottomWidth: 0 }]}>
-                <View style={{ flex: 1, paddingRight: 12 }}>
+              <View style={[styles.settingRow, styles.settingRowLast]}>
+                <View style={styles.settingRowText}>
                   <Text style={styles.rowTitle}>Wi-Fi Only</Text>
                   <Text style={styles.rowSub}>Only perform automatic backups when connected to Wi-Fi</Text>
                 </View>
@@ -413,7 +413,7 @@ export default function CloudBackupScreen() {
             <View style={styles.sectionCard}>
               <Text style={styles.sectionTitle}>Backup & Restore Operations</Text>
 
-              <View style={{ gap: 10, marginTop: 4 }}>
+              <View style={styles.actionsList}>
                 {/* Backup Now */}
                 <TouchableOpacity
                   style={styles.btnPrimary}
@@ -497,7 +497,7 @@ export default function CloudBackupScreen() {
 
                 {/* Delete Cloud Backups */}
                 <TouchableOpacity
-                  style={[styles.btnSecondary, { borderColor: colors.error, borderWidth: 1 }]}
+                  style={[styles.btnSecondary, styles.btnDeleteCloud]}
                   onPress={handleDeleteDriveBackups}
                   disabled={isBackingUpDrive || isRestoringDrive || isDeletingDriveBackups}
                 >
@@ -591,6 +591,27 @@ export default function CloudBackupScreen() {
 
 const getStyles = (colors: ThemeColors) => {
   const styles = StyleSheet.create({
+    flex1: {
+      flex: 1,
+    },
+    scrollContentBottom: {
+      paddingBottom: 40,
+    },
+    settingRowText: {
+      flex: 1,
+      paddingRight: 12,
+    },
+    settingRowLast: {
+      borderBottomWidth: 0,
+    },
+    actionsList: {
+      gap: 10,
+      marginTop: 4,
+    },
+    btnDeleteCloud: {
+      borderColor: colors.error,
+      borderWidth: 1,
+    },
     container: {
       flex: 1,
       backgroundColor: colors.background,

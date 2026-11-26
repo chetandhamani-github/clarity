@@ -112,7 +112,7 @@ export default function ExportStatementScreen() {
       <Header showBack title="Export Statement" />
 
       <KeyboardAwareScrollView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         contentContainerStyle={StyleSheet.flatten([styles.scrollContent, { paddingBottom: 40 }])}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -150,7 +150,7 @@ export default function ExportStatementScreen() {
                 style={[
                   styles.formatCardTitle,
                   { color: colors.onSurface },
-                  format === 'pdf' && { color: colors.primary, fontWeight: '700' },
+                  format === 'pdf' && [styles.fontBold, { color: colors.primary }],
                 ]}
               >
                 PDF Statement
@@ -181,7 +181,7 @@ export default function ExportStatementScreen() {
                 style={[
                   styles.formatCardTitle,
                   { color: colors.onSurface },
-                  format === 'csv' && { color: colors.primary, fontWeight: '700' },
+                  format === 'csv' && [styles.fontBold, { color: colors.primary }],
                 ]}
               >
                 CSV Spreadsheet
@@ -217,7 +217,7 @@ export default function ExportStatementScreen() {
                     style={[
                       styles.presetChipText,
                       { color: colors.onSurface },
-                      isSelected && { color: colors.onPrimary, fontWeight: '700' },
+                      isSelected && [styles.fontBold, { color: colors.onPrimary }],
                     ]}
                     numberOfLines={1}
                   >
@@ -230,7 +230,7 @@ export default function ExportStatementScreen() {
 
           {preset === 'custom' && (
             <View style={styles.customDateRow}>
-              <View style={{ flex: 1 }}>
+              <View style={styles.flex1}>
                 <Text style={[styles.inputLabel, { color: colors.onSurfaceVariant }]}>From Date (YYYY-MM-DD)</Text>
                 <TextInput
                   style={[
@@ -247,7 +247,7 @@ export default function ExportStatementScreen() {
                   placeholderTextColor={colors.onSurfaceVariant}
                 />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={styles.flex1}>
                 <Text style={[styles.inputLabel, { color: colors.onSurfaceVariant }]}>To Date (YYYY-MM-DD)</Text>
                 <TextInput
                   style={[
@@ -271,7 +271,7 @@ export default function ExportStatementScreen() {
         {/* Account Filter */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.onSurfaceVariant }]}>3. ACCOUNT FILTER</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.gap8}>
             <TouchableOpacity
               style={[
                 styles.accountChip,
@@ -290,7 +290,7 @@ export default function ExportStatementScreen() {
                 style={[
                   styles.accountChipText,
                   { color: colors.onSurface },
-                  selectedAccountId === 'all' && { color: colors.onPrimary, fontWeight: '700' },
+                  selectedAccountId === 'all' && [styles.fontBold, { color: colors.onPrimary }],
                 ]}
                 numberOfLines={1}
               >
@@ -320,7 +320,7 @@ export default function ExportStatementScreen() {
                     style={[
                       styles.accountChipText,
                       { color: colors.onSurface },
-                      isSelected && { color: colors.onPrimary, fontWeight: '700' },
+                      isSelected && [styles.fontBold, { color: colors.onPrimary }],
                     ]}
                     numberOfLines={1}
                   >
@@ -333,7 +333,7 @@ export default function ExportStatementScreen() {
         </View>
 
         {/* Action Buttons */}
-        <View style={{ gap: 12 }}>
+        <View style={styles.gap12}>
           <TouchableOpacity
             style={[styles.exportButton, { backgroundColor: colors.primary }]}
             onPress={handleExport}
@@ -343,7 +343,7 @@ export default function ExportStatementScreen() {
             {isExporting ? (
               <ActivityIndicator color={colors.onPrimary} size="small" />
             ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={styles.exportBtnContent}>
                 <MaterialIcons
                   name={format === 'pdf' ? 'share' : 'file-download'}
                   size={22}
@@ -360,9 +360,9 @@ export default function ExportStatementScreen() {
             <TouchableOpacity
               style={[
                 styles.exportButton,
+                styles.exportButtonOutline,
                 {
                   backgroundColor: colors.surfaceContainerHighest,
-                  borderWidth: 1,
                   borderColor: colors.surfaceVariant,
                 },
               ]}
@@ -388,7 +388,7 @@ export default function ExportStatementScreen() {
               disabled={isExporting}
               activeOpacity={0.8}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={styles.exportBtnContent}>
                 <MaterialIcons name="print" size={22} color={colors.onSurface} />
                 <Text style={[styles.exportButtonText, { color: colors.onSurface }]}>
                   Print / Save as PDF via System
@@ -403,6 +403,26 @@ export default function ExportStatementScreen() {
 }
 
 const styles = StyleSheet.create({
+  flex1: {
+    flex: 1,
+  },
+  fontBold: {
+    fontWeight: '700',
+  },
+  gap8: {
+    gap: 8,
+  },
+  gap12: {
+    gap: 12,
+  },
+  exportBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  exportButtonOutline: {
+    borderWidth: 1,
+  },
   container: {
     flex: 1,
   },

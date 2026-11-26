@@ -166,9 +166,10 @@ export default function GoalsScreen({ showBack = false }: GoalsScreenProps = {})
   };
 
   const todayStr = useMemo(() => getLocalTodayYmd(), []);
+  const containerInsetStyle = { paddingTop: insets.top, paddingBottom: showBack ? insets.bottom : 0 };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: showBack ? insets.bottom : 0 }]}>
+    <View style={[styles.container, containerInsetStyle]}>
       <Header
         isMainTab={!showBack}
         showBack={showBack}
@@ -190,7 +191,7 @@ export default function GoalsScreen({ showBack = false }: GoalsScreenProps = {})
       />
 
       <KeyboardAwareScrollView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         contentContainerStyle={StyleSheet.flatten([
           styles.scrollContent,
           { paddingBottom: insets.bottom + 140 },
@@ -483,11 +484,11 @@ export default function GoalsScreen({ showBack = false }: GoalsScreenProps = {})
                           color={isCompleted ? colors.onPrimaryContainer : colors.primary}
                         />
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View style={styles.flex1}>
+                        <View style={styles.goalTitleRow}>
                           <Text style={styles.goalTitle} numberOfLines={1}>{goal.name}</Text>
                         </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        <View style={styles.goalTitleMetaRow}>
                           {goal.category ? (
                             <View style={styles.categoryBadge}>
                               <Text style={styles.categoryBadgeText}>{goal.category}</Text>
@@ -573,6 +574,20 @@ const getStyles = (colors: ThemeColors) => {
     container: {
       flex: 1,
       backgroundColor: colors.background,
+    },
+    flex1: {
+      flex: 1,
+    },
+    goalTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    goalTitleMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 2,
     },
     avatarButton: {
       width: 40,

@@ -506,7 +506,7 @@ export default function ImportStatementScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <Header title="Import Statement" showBack />
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 64 }]}>
+      <ScrollView contentContainerStyle={[styles.content, styles.scrollBottomPadding]}>
         {/* Step 1: Select Target Account */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
@@ -568,7 +568,7 @@ export default function ImportStatementScreen() {
                   color={selectedAccountBranding ? selectedAccountBranding.color : colors.primary}
                 />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={styles.flex1}>
                 <View style={styles.selectedAccountTitleRow}>
                   <Text style={styles.selectedAccountName}>{selectedAccount.name}</Text>
                   {selectedAccount.lastFour &&
@@ -753,7 +753,7 @@ export default function ImportStatementScreen() {
             {newTransactions.length === 0 ? (
               <View style={styles.upToDateCard}>
                 <MaterialIcons name="check-circle" size={24} color={colors.primary} />
-                <View style={{ flex: 1, gap: 2 }}>
+                <View style={styles.upToDateTextCol}>
                   <Text style={styles.upToDateTitle}>All Transactions Already Recorded</Text>
                   <Text style={styles.upToDateSub}>
                     All {parsedTransactions.length} transactions in this statement already match entries in{' '}
@@ -782,7 +782,7 @@ export default function ImportStatementScreen() {
                   return (
                     <TouchableOpacity
                       key={`${tx.date}-${tx.merchant}-${tx.amount}-${idx}`}
-                      style={[styles.previewItem, !isSelected && { opacity: 0.5 }]}
+                      style={[styles.previewItem, !isSelected && styles.dimmed]}
                       onPress={() => toggleSelectTx(idx)}
                       activeOpacity={0.7}
                     >
@@ -800,7 +800,7 @@ export default function ImportStatementScreen() {
                           color={colors.onSurfaceVariant}
                         />
                       </View>
-                      <View style={{ flex: 1 }}>
+                      <View style={styles.flex1}>
                         <Text style={styles.previewMerchant} numberOfLines={1}>
                           {tx.merchant}
                         </Text>
@@ -838,7 +838,7 @@ export default function ImportStatementScreen() {
 
             {/* Import Button */}
             <TouchableOpacity
-              style={[styles.importBtn, !canSubmitImport && { opacity: 0.5 }]}
+              style={[styles.importBtn, !canSubmitImport && styles.dimmed]}
               onPress={handleImport}
               disabled={!canSubmitImport}
             >
@@ -873,7 +873,7 @@ export default function ImportStatementScreen() {
               <View style={styles.modalIconBox}>
                 <MaterialIcons name="lock-outline" size={24} color={colors.onPrimaryContainer} />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={styles.flex1}>
                 <Text style={styles.modalTitle}>Password Protected PDF</Text>
                 <Text style={styles.modalSub}>This bank statement is encrypted with a password.</Text>
               </View>
@@ -925,7 +925,7 @@ export default function ImportStatementScreen() {
                 name="vpn-key"
                 size={20}
                 color={colors.onSurfaceVariant}
-                style={{ marginRight: 8 }}
+                style={styles.passwordIcon}
               />
               <TextInput
                 style={styles.passwordInput}
@@ -967,7 +967,7 @@ export default function ImportStatementScreen() {
               <TouchableOpacity
                 style={[
                   styles.unlockBtn,
-                  (!pdfPassword.trim() || isParsing) && { opacity: 0.5 },
+                  (!pdfPassword.trim() || isParsing) && styles.dimmed,
                 ]}
                 onPress={handleUnlockPdf}
                 disabled={!pdfPassword.trim() || isParsing}
@@ -1010,6 +1010,22 @@ const getStyles = (colors: ThemeColors) => {
       fontWeight: '700',
       fontSize: 16,
       lineHeight: 24,
+    },
+    flex1: {
+      flex: 1,
+    },
+    scrollBottomPadding: {
+      paddingBottom: 64,
+    },
+    upToDateTextCol: {
+      flex: 1,
+      gap: 2,
+    },
+    dimmed: {
+      opacity: 0.5,
+    },
+    passwordIcon: {
+      marginRight: 8,
     },
     sectionActionLink: {
       ...typography.labelMd,

@@ -1029,7 +1029,7 @@ export default function TransactionsScreen({
   ]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: showBack ? insets.bottom : 0 }]}>
+    <View style={[styles.container, { paddingTop: insets.top }, showBack && { paddingBottom: insets.bottom }]}>
       <Header
         isMainTab={selectedIds.size === 0 && !showBack}
         showBack={selectedIds.size > 0 || showBack}
@@ -1068,7 +1068,7 @@ export default function TransactionsScreen({
               </Text>
             </TouchableOpacity>
           ) : (
-            <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={styles.headerActionsRow}>
               <TouchableOpacity style={styles.iconButton} onPress={navigateToSearch}>
                 <MaterialIcons name="search" size={24} color={colors.onSurface} />
               </TouchableOpacity>
@@ -1228,7 +1228,7 @@ export default function TransactionsScreen({
                   <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
                 </TouchableOpacity>
               </View>
-              <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+              <ScrollView style={styles.bulkModalScroll} showsVerticalScrollIndicator={false}>
                 {categories.map((cat) => (
                   <TouchableOpacity
                     key={cat.id}
@@ -1267,7 +1267,7 @@ export default function TransactionsScreen({
                   <MaterialIcons name="close" size={22} color={colors.onSurfaceVariant} />
                 </TouchableOpacity>
               </View>
-              <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+              <ScrollView style={styles.bulkModalScroll} showsVerticalScrollIndicator={false}>
                 {accounts.map((acc) => (
                   <TouchableOpacity
                     key={acc.id}
@@ -1277,7 +1277,7 @@ export default function TransactionsScreen({
                     <View style={[styles.bulkOptionIcon, { backgroundColor: colors.surfaceContainerLow }]}>
                       <MaterialIcons name="account-balance" size={20} color={colors.primary} />
                     </View>
-                    <View style={{ flex: 1 }}>
+                    <View style={styles.flex1}>
                       <Text style={[styles.bulkOptionText, { color: colors.onSurface }]}>{acc.name}</Text>
                       <Text style={[styles.bulkOptionSubtext, { color: colors.onSurfaceVariant }]}>
                         {formatCurrency(acc.balance)}
@@ -1299,6 +1299,16 @@ const getStyles = (colors: ThemeColors) => {
     container: {
       flex: 1,
       backgroundColor: colors.surfaceContainerLow,
+    },
+    flex1: {
+      flex: 1,
+    },
+    headerActionsRow: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    bulkModalScroll: {
+      maxHeight: 320,
     },
 
     avatarButton: {

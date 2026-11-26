@@ -234,7 +234,7 @@ export function AddDebtScreen() {
       />
 
       <KeyboardAwareScrollView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         contentContainerStyle={StyleSheet.flatten([
           styles.scrollContent,
           { paddingBottom: 32 },
@@ -305,14 +305,9 @@ export function AddDebtScreen() {
                   <Text
                     style={[
                       styles.selectedFriendBalance,
-                      {
-                        color:
-                          personBalance.status === 'OWED_TO_ME'
-                            ? '#10b981'
-                            : personBalance.status === 'YOU_OWE'
-                              ? '#ef4444'
-                              : colors.onSurfaceVariant,
-                      },
+                      { color: colors.onSurfaceVariant },
+                      personBalance.status === 'OWED_TO_ME' && styles.owedToMeText,
+                      personBalance.status === 'YOU_OWE' && styles.youOweText,
                     ]}
                   >
                     {personBalance.statusLabel}: {formatCurrencyPrivacy(Math.abs(personBalance.netBalance), hideBalances)}
@@ -365,11 +360,7 @@ export function AddDebtScreen() {
             <TouchableOpacity
               style={[
                 styles.directionToggleBtn,
-                isOweMe && {
-                  backgroundColor: colors.surfaceContainerLowest,
-                  borderColor: '#10b981',
-                  borderWidth: 1.5,
-                },
+                isOweMe && [{ backgroundColor: colors.surfaceContainerLowest }, styles.oweMeActiveBtn],
               ]}
               onPress={() => setValue('type', DebtType.OWE_ME)}
               activeOpacity={0.8}
@@ -382,10 +373,8 @@ export function AddDebtScreen() {
               <Text
                 style={[
                   styles.directionToggleText,
-                  {
-                    color: isOweMe ? colors.onSurface : colors.onSurfaceVariant,
-                    fontFamily: isOweMe ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                  },
+                  { color: isOweMe ? colors.onSurface : colors.onSurfaceVariant },
+                  isOweMe ? styles.fontBold : styles.fontSemiBold,
                 ]}
               >
                 {oweMeLabel}
@@ -395,11 +384,7 @@ export function AddDebtScreen() {
             <TouchableOpacity
               style={[
                 styles.directionToggleBtn,
-                !isOweMe && {
-                  backgroundColor: colors.surfaceContainerLowest,
-                  borderColor: '#ef4444',
-                  borderWidth: 1.5,
-                },
+                !isOweMe && [{ backgroundColor: colors.surfaceContainerLowest }, styles.iOweActiveBtn],
               ]}
               onPress={() => setValue('type', DebtType.I_OWE)}
               activeOpacity={0.8}
@@ -412,10 +397,8 @@ export function AddDebtScreen() {
               <Text
                 style={[
                   styles.directionToggleText,
-                  {
-                    color: !isOweMe ? colors.onSurface : colors.onSurfaceVariant,
-                    fontFamily: !isOweMe ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                  },
+                  { color: !isOweMe ? colors.onSurface : colors.onSurfaceVariant },
+                  !isOweMe ? styles.fontBold : styles.fontSemiBold,
                 ]}
               >
                 {iOweLabel}
@@ -579,8 +562,8 @@ export function AddDebtScreen() {
                         ? colors.primaryContainer + '30'
                         : colors.surfaceContainerHigh,
                       borderColor: isSelected ? colors.primary : colors.outlineVariant,
-                      borderWidth: isSelected ? 1 : 0,
                     },
+                    isSelected ? styles.borderWidth1 : styles.borderWidth0,
                   ]}
                   onPress={() => setValue('description', cat.label, { shouldValidate: true })}
                 >
@@ -592,10 +575,8 @@ export function AddDebtScreen() {
                   <Text
                     style={[
                       styles.quickTagText,
-                      {
-                        color: isSelected ? colors.primary : colors.onSurfaceVariant,
-                        fontFamily: isSelected ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                      },
+                      { color: isSelected ? colors.primary : colors.onSurfaceVariant },
+                      isSelected ? styles.fontBold : styles.fontSemiBold,
                     ]}
                   >
                     {cat.label}
@@ -638,10 +619,8 @@ export function AddDebtScreen() {
                 <Text
                   style={[
                     styles.quickDateText,
-                    {
-                      color: selectedDate === todayStr ? colors.onPrimary : colors.onSurfaceVariant,
-                      fontFamily: selectedDate === todayStr ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                    },
+                    { color: selectedDate === todayStr ? colors.onPrimary : colors.onSurfaceVariant },
+                    selectedDate === todayStr ? styles.fontBold : styles.fontSemiBold,
                   ]}
                   numberOfLines={1}
                 >
@@ -664,10 +643,8 @@ export function AddDebtScreen() {
                 <Text
                   style={[
                     styles.quickDateText,
-                    {
-                      color: selectedDate === yesterdayStr ? colors.onPrimary : colors.onSurfaceVariant,
-                      fontFamily: selectedDate === yesterdayStr ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                    },
+                    { color: selectedDate === yesterdayStr ? colors.onPrimary : colors.onSurfaceVariant },
+                    selectedDate === yesterdayStr ? styles.fontBold : styles.fontSemiBold,
                   ]}
                   numberOfLines={1}
                 >
@@ -1311,5 +1288,34 @@ const styles = StyleSheet.create({
     ...typography.labelMd,
     fontFamily: 'Manrope_700Bold',
     fontSize: 12,
+  },
+  flex1: {
+    flex: 1,
+  },
+  owedToMeText: {
+    color: '#10b981',
+  },
+  youOweText: {
+    color: '#ef4444',
+  },
+  oweMeActiveBtn: {
+    borderColor: '#10b981',
+    borderWidth: 1.5,
+  },
+  iOweActiveBtn: {
+    borderColor: '#ef4444',
+    borderWidth: 1.5,
+  },
+  fontBold: {
+    fontFamily: 'Manrope_700Bold',
+  },
+  fontSemiBold: {
+    fontFamily: 'Manrope_600SemiBold',
+  },
+  borderWidth1: {
+    borderWidth: 1,
+  },
+  borderWidth0: {
+    borderWidth: 0,
   },
 });

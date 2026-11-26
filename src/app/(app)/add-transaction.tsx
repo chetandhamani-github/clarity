@@ -848,7 +848,7 @@ export default function AddTransactionScreen() {
       />
 
       <KeyboardAwareScrollView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         contentContainerStyle={StyleSheet.flatten([
           styles.scrollContent,
           { paddingBottom: Math.max(insets.bottom, 24) + 40 },
@@ -878,7 +878,7 @@ export default function AddTransactionScreen() {
                 <View style={styles.smartActionIconBox}>
                   <MaterialIcons name="mic" size={18} color={colors.onPrimaryContainer} />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={styles.flex1}>
                   <Text style={styles.smartActionTitle}>Voice Add</Text>
                   <Text style={styles.smartActionSubtitle}>Speak expense</Text>
                 </View>
@@ -913,7 +913,7 @@ export default function AddTransactionScreen() {
                     />
                   )}
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={styles.flex1}>
                   <Text style={styles.smartActionTitle}>
                     {isScanningReceipt ? 'Scanning...' : 'Scan Receipt'}
                   </Text>
@@ -992,7 +992,7 @@ export default function AddTransactionScreen() {
                     {isLoadingAccounts ? (
                       <SkeletonBox height={52} borderRadius={radius.lg} />
                     ) : accounts.length === 0 ? (
-                      <View style={[styles.textInput, { justifyContent: 'center' }]}>
+                      <View style={[styles.textInput, styles.justifyCenter]}>
                         <Text style={{ color: colors.error }}>No accounts available.</Text>
                       </View>
                     ) : (
@@ -1016,11 +1016,10 @@ export default function AddTransactionScreen() {
                         />
                         <View style={[styles.textInput, styles.accountSelectContent]}>
                           <Text
-                            style={{
-                              color: selectedAccount ? colors.onSurface : colors.outline,
-                              flex: 1,
-                              ...typography.bodyMd,
-                            }}
+                            style={[
+                              styles.accountSelectorText,
+                              { color: selectedAccount ? colors.onSurface : colors.outline },
+                            ]}
                             numberOfLines={1}
                           >
                             {selectedAccount
@@ -1081,7 +1080,7 @@ export default function AddTransactionScreen() {
                     {isLoadingAccounts ? (
                       <SkeletonBox height={52} borderRadius={radius.lg} />
                     ) : accounts.length === 0 ? (
-                      <View style={[styles.textInput, { justifyContent: 'center' }]}>
+                      <View style={[styles.textInput, styles.justifyCenter]}>
                         <Text style={{ color: colors.error }}>No accounts available.</Text>
                       </View>
                     ) : (
@@ -1105,11 +1104,10 @@ export default function AddTransactionScreen() {
                         />
                         <View style={[styles.textInput, styles.accountSelectContent]}>
                           <Text
-                            style={{
-                              color: selectedToAccount ? colors.onSurface : colors.outline,
-                              flex: 1,
-                              ...typography.bodyMd,
-                            }}
+                            style={[
+                              styles.accountSelectorText,
+                              { color: selectedToAccount ? colors.onSurface : colors.outline },
+                            ]}
                             numberOfLines={1}
                           >
                             {selectedToAccount
@@ -1193,7 +1191,7 @@ export default function AddTransactionScreen() {
                                     : `+${formatCurrency(transferPreview.toAfter)}`
                                 }`}
                               </Text>
-                              <Text style={[styles.impactDeltaBadge, { color: '#10B981' }]}>
+                              <Text style={[styles.impactDeltaBadge, styles.incomeColor]}>
                                 {transferPreview.debtReduced > 0
                                   ? `Debt -${formatCurrency(transferPreview.debtReduced)}`
                                   : `+${formatCurrency(parsedAmount)}`}
@@ -1204,7 +1202,7 @@ export default function AddTransactionScreen() {
                               <Text style={styles.impactTransitionText} numberOfLines={1}>
                                 {`${formatCurrency(transferPreview.toBefore)} → ${formatCurrency(transferPreview.toAfter)}`}
                               </Text>
-                              <Text style={[styles.impactDeltaBadge, { color: '#10B981' }]}>
+                              <Text style={[styles.impactDeltaBadge, styles.incomeColor]}>
                                 {`+${formatCurrency(parsedAmount)}`}
                               </Text>
                             </>
@@ -1229,7 +1227,7 @@ export default function AddTransactionScreen() {
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>
                     Payment Label{' '}
-                    <Text style={{ color: colors.outline, fontWeight: '400' }}>(Optional)</Text>
+                    <Text style={styles.optionalLabel}>(Optional)</Text>
                   </Text>
                   <View style={styles.textInputWrapper}>
                     <MaterialIcons
@@ -1258,7 +1256,7 @@ export default function AddTransactionScreen() {
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>
                     Merchant / Description{' '}
-                    <Text style={{ color: colors.outline, fontWeight: '400' }}>(Optional)</Text>
+                    <Text style={styles.optionalLabel}>(Optional)</Text>
                   </Text>
                   <View style={styles.textInputWrapper}>
                     <MaterialIcons
@@ -1280,7 +1278,7 @@ export default function AddTransactionScreen() {
                 {/* Category or Split Categories */}
                 {type === 'expense' && (
                   <View style={styles.splitToggleContainer}>
-                    <View style={{ flex: 1 }}>
+                    <View style={styles.flex1}>
                       <Text style={styles.inputLabel}>Split across categories</Text>
                       <Text style={styles.splitToggleSubtitle}>
                         Divide expense into multiple budget buckets
@@ -1312,7 +1310,7 @@ export default function AddTransactionScreen() {
                         color={colors.primary}
                         style={styles.inputIcon}
                       />
-                      <View style={[styles.textInput, { justifyContent: 'center' }]}>
+                      <View style={[styles.textInput, styles.justifyCenter]}>
                         <Text style={{ color: colors.onSurface }}>{category}</Text>
                       </View>
                       <MaterialIcons
@@ -1427,7 +1425,7 @@ export default function AddTransactionScreen() {
               </>
             )}
 
-            <View style={[styles.inputContainer, { zIndex: 1 }]}>
+            <View style={[styles.inputContainer, styles.zIndex1]}>
               <Text style={styles.inputLabel}>Date</Text>
               <TouchableOpacity
                 style={styles.textInputWrapper}
@@ -1443,7 +1441,7 @@ export default function AddTransactionScreen() {
                   color={colors.primary}
                   style={styles.inputIcon}
                 />
-                <View style={[styles.textInput, { justifyContent: 'center' }]}>
+                <View style={[styles.textInput, styles.justifyCenter]}>
                   <Text style={{ color: date ? colors.onSurface : colors.outline }}>
                     {date || 'Select Date'}
                   </Text>
@@ -1474,7 +1472,7 @@ export default function AddTransactionScreen() {
                 {isLoadingAccounts ? (
                   <SkeletonBox height={52} borderRadius={radius.lg} />
                 ) : accounts.length === 0 ? (
-                  <View style={[styles.textInput, { justifyContent: 'center' }]}>
+                  <View style={[styles.textInput, styles.justifyCenter]}>
                     <Text style={{ color: colors.error }}>
                       No accounts available. Please add one first.
                     </Text>
@@ -1500,11 +1498,10 @@ export default function AddTransactionScreen() {
                     />
                     <View style={[styles.textInput, styles.accountSelectContent]}>
                       <Text
-                        style={{
-                          color: selectedAccount ? colors.onSurface : colors.outline,
-                          flex: 1,
-                          ...typography.bodyMd,
-                        }}
+                        style={[
+                          styles.accountSelectorText,
+                          { color: selectedAccount ? colors.onSurface : colors.outline },
+                        ]}
                         numberOfLines={1}
                       >
                         {selectedAccount
@@ -1567,7 +1564,7 @@ export default function AddTransactionScreen() {
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={{ gap: 8, paddingTop: 6 }}
+                      contentContainerStyle={styles.splitGap}
                     >
                       {liabilityAccounts.map((acc) => (
                         <TouchableOpacity
@@ -1615,7 +1612,7 @@ export default function AddTransactionScreen() {
             {/* Receipt / Document Attachment */}
             <View style={styles.attachmentSection}>
               <View style={styles.attachmentHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={styles.rowGap6}>
                   <MaterialIcons name="receipt-long" size={18} color={colors.onSurfaceVariant} />
                   <Text style={styles.attachmentTitle}>Receipt / Document</Text>
                 </View>
@@ -1677,7 +1674,7 @@ export default function AddTransactionScreen() {
 
             {/* Recurring Toggle */}
             <View style={styles.recurringContainer}>
-              <View style={{ flex: 1, paddingRight: 12 }}>
+              <View style={styles.flex1PaddingRight12}>
                 <Text style={styles.recurringLabel}>Recurring Transaction</Text>
                 <Text style={styles.recurringSubtext}>
                   {type === 'transfer' && selectedAccount && selectedToAccount
@@ -1727,7 +1724,7 @@ export default function AddTransactionScreen() {
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>
                 Note{' '}
-                <Text style={{ color: colors.outline, fontWeight: '400' }}>(Optional)</Text>
+                <Text style={styles.optionalLabel}>(Optional)</Text>
               </Text>
               <View style={styles.textInputWrapper}>
                 <MaterialIcons
@@ -1750,7 +1747,7 @@ export default function AddTransactionScreen() {
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>
                 Tags{' '}
-                <Text style={{ color: colors.outline, fontWeight: '400' }}>(Optional)</Text>
+                <Text style={styles.optionalLabel}>(Optional)</Text>
               </Text>
               <View style={styles.textInputWrapper}>
                 <MaterialIcons
@@ -1760,7 +1757,7 @@ export default function AddTransactionScreen() {
                   style={styles.inputIcon}
                 />
                 <TextInput
-                  style={[styles.textInput, { flex: 1 }]}
+                  style={[styles.textInput, styles.flex1]}
                   placeholder="e.g. trip, medical, tax-saving"
                   placeholderTextColor={colors.outline}
                   value={tagInput}
@@ -1802,7 +1799,7 @@ export default function AddTransactionScreen() {
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ gap: 6 }}
+                    contentContainerStyle={styles.gap6}
                   >
                     {availableTags
                       .filter((t) => !tags.includes(t.name))
@@ -1825,7 +1822,7 @@ export default function AddTransactionScreen() {
           <TouchableOpacity
             style={[
               styles.submitButton,
-              (isPending || isLoadingAccounts || accounts.length === 0) && { opacity: 0.5 },
+              (isPending || isLoadingAccounts || accounts.length === 0) && styles.dimmed,
             ]}
             onPress={handleSave}
             disabled={isPending || isLoadingAccounts || accounts.length === 0}
@@ -1841,7 +1838,7 @@ export default function AddTransactionScreen() {
               onPress={handleDuplicate}
               disabled={isPending}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <View style={styles.duplicateButtonContent}>
                 <MaterialIcons name="content-copy" size={18} color={colors.primary} />
                 <Text style={styles.duplicateButtonText}>Duplicate for Today</Text>
               </View>
@@ -1941,7 +1938,7 @@ export default function AddTransactionScreen() {
                       <Text
                         style={[
                           styles.categoryOptionText,
-                          isSelected && { color: colors.primary, fontWeight: '700' },
+                          isSelected && styles.categoryOptionTextSelected,
                         ]}
                       >
                         {cat}
@@ -1953,26 +1950,20 @@ export default function AddTransactionScreen() {
               })}
 
               <TouchableOpacity
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  paddingVertical: 14,
-                  marginTop: 8,
-                  marginBottom: 16,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: colors.primary + '50',
-                  backgroundColor: colors.primaryContainer + '25',
-                }}
+                style={[
+                  styles.manageCategoriesBtn,
+                  {
+                    borderColor: colors.primary + '50',
+                    backgroundColor: colors.primaryContainer + '25',
+                  },
+                ]}
                 onPress={() => {
                   setShowCategoryMenu(false);
                   router.navigate('/manage-categories');
                 }}
               >
                 <MaterialIcons name="add-circle-outline" size={20} color={colors.primary} />
-                <Text style={{ color: colors.primary, fontWeight: '600', fontSize: 14 }}>
+                <Text style={styles.manageCategoriesText}>
                   Manage / Add Custom Categories
                 </Text>
               </TouchableOpacity>
@@ -2035,7 +2026,7 @@ export default function AddTransactionScreen() {
                     }}
                     activeOpacity={0.7}
                   >
-                    <View style={[styles.categoryOptionLeft, { flex: 1 }]}>
+                    <View style={[styles.categoryOptionLeft, styles.flex1]}>
                       <View
                         style={[
                           styles.categoryIconBox,
@@ -2048,22 +2039,18 @@ export default function AddTransactionScreen() {
                           color={isSelected ? colors.onPrimary : colors.onSurfaceVariant}
                         />
                       </View>
-                      <View style={{ flex: 1 }}>
+                      <View style={styles.flex1}>
                         <Text
                           style={[
                             styles.categoryOptionText,
-                            isSelected && { color: colors.primary, fontWeight: '700' },
+                            isSelected && styles.categoryOptionTextSelected,
                           ]}
                           numberOfLines={1}
                         >
                           {acc.name}
                         </Text>
                         <Text
-                          style={{
-                            ...typography.labelMd,
-                            color: colors.onSurfaceVariant,
-                            fontSize: 11,
-                          }}
+                          style={styles.accountSubtext}
                           numberOfLines={1}
                         >
                           {getAccountTypeShortLabel(acc.type)}
@@ -2071,16 +2058,17 @@ export default function AddTransactionScreen() {
                         </Text>
                       </View>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={styles.rowGap8}>
                       <Text
-                        style={{
-                          ...typography.labelMd,
-                          fontSize: 12,
-                          color:
+                        style={[
+                          styles.accountBalanceText,
+                          {
+                            color:
                             isLiabilityAccountType(acc.type) && acc.balance < 0
                               ? colors.error
                               : colors.onSurfaceVariant,
-                        }}
+                          },
+                        ]}
                       >
                         {formatAccountBalanceLabel(acc)}
                       </Text>
@@ -2117,7 +2105,7 @@ export default function AddTransactionScreen() {
                 </View>
                 <View>
                   <Text style={styles.modalTitle}>Select Recipient Account</Text>
-                  <Text style={{ ...typography.labelMd, fontSize: 11, color: colors.onSurfaceVariant }}>
+                  <Text style={styles.accountSubtext}>
                     Loan, credit card, or destination account
                   </Text>
                 </View>
@@ -2146,7 +2134,7 @@ export default function AddTransactionScreen() {
                     style={[
                       styles.categoryOption,
                       isSelected && styles.categoryOptionSelected,
-                      isSameAsSource && { opacity: 0.5 },
+                      isSameAsSource && styles.dimmed,
                     ]}
                     onPress={() => {
                       if (isSameAsSource) {
@@ -2162,7 +2150,7 @@ export default function AddTransactionScreen() {
                     }}
                     activeOpacity={0.7}
                   >
-                    <View style={[styles.categoryOptionLeft, { flex: 1 }]}>
+                    <View style={[styles.categoryOptionLeft, styles.flex1]}>
                       <View
                         style={[
                           styles.categoryIconBox,
@@ -2175,22 +2163,18 @@ export default function AddTransactionScreen() {
                           color={isSelected ? colors.onPrimary : colors.onSurfaceVariant}
                         />
                       </View>
-                      <View style={{ flex: 1 }}>
+                      <View style={styles.flex1}>
                         <Text
                           style={[
                             styles.categoryOptionText,
-                            isSelected && { color: colors.primary, fontWeight: '700' },
+                            isSelected && styles.categoryOptionTextSelected,
                           ]}
                           numberOfLines={1}
                         >
                           {acc.name}
                         </Text>
                         <Text
-                          style={{
-                            ...typography.labelMd,
-                            color: colors.onSurfaceVariant,
-                            fontSize: 11,
-                          }}
+                          style={styles.accountSubtext}
                           numberOfLines={1}
                         >
                           {isSameAsSource
@@ -2201,16 +2185,17 @@ export default function AddTransactionScreen() {
                         </Text>
                       </View>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={styles.rowGap8}>
                       <Text
-                        style={{
-                          ...typography.labelMd,
-                          fontSize: 12,
-                          color:
+                        style={[
+                          styles.accountBalanceText,
+                          {
+                            color:
                             isLiabilityAccountType(acc.type) && acc.balance < 0
                               ? colors.error
                               : colors.onSurfaceVariant,
-                        }}
+                          },
+                        ]}
                       >
                         {formatAccountBalanceLabel(acc)}
                       </Text>
@@ -2268,6 +2253,87 @@ const getStyles = (colors: ThemeColors) => {
     container: {
       flex: 1,
       backgroundColor: colors.surfaceContainerLow,
+    },
+    flex1: {
+      flex: 1,
+    },
+    justifyCenter: {
+      justifyContent: 'center',
+    },
+    incomeColor: {
+      color: '#10B981',
+    },
+    accountSelectorText: {
+      ...typography.bodyMd,
+      flex: 1,
+    },
+    optionalLabel: {
+      color: colors.outline,
+      fontWeight: '400',
+    },
+    duplicateButtonContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+    },
+    categoryOptionTextSelected: {
+      color: colors.primary,
+      fontWeight: '700',
+    },
+    manageCategoriesBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 14,
+      marginTop: 8,
+      marginBottom: 16,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      backgroundColor: colors.surfaceContainerLow,
+    },
+    manageCategoriesText: {
+      color: colors.primary,
+      fontWeight: '600',
+      fontSize: 14,
+    },
+    accountSubtext: {
+      ...typography.labelMd,
+      color: colors.onSurfaceVariant,
+      fontSize: 11,
+    },
+    accountBalanceText: {
+      ...typography.labelMd,
+      fontSize: 12,
+    },
+    zIndex1: {
+      zIndex: 1,
+    },
+    splitGap: {
+      gap: 8,
+      paddingTop: 6,
+    },
+    rowGap6: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    flex1PaddingRight12: {
+      flex: 1,
+      paddingRight: 12,
+    },
+    gap6: {
+      gap: 6,
+    },
+    dimmed: {
+      opacity: 0.5,
+    },
+    rowGap8: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
     },
 
     scrollContent: {

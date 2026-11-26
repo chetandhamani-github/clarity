@@ -1,26 +1,26 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-  RefreshControl,
-  Platform,
-  useWindowDimensions,
-} from 'react-native';
-import { Text, Header, CashflowSkeleton, useToast, renderWideChartPointerLabel } from '@/components/ui';
-import { typography, useTheme, radius, ThemeColors } from '@/theme';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeInsets } from '@/hooks/use-safe-insets';
-import { useFocusEffect } from 'expo-router';
-import { LineChart } from 'react-native-gifted-charts';
-import { useAppStore } from '@/store/use-app-store';
-import { formatCurrency, formatCurrencyPrivacy } from '@/utils/format';
-import { normalizeLineChartValues } from '@/utils/chart-utils';
+import { CashflowSkeleton, Header, renderWideChartPointerLabel, Text, useToast } from '@/components/ui';
 import { useSafeToSpend } from '@/hooks/use-cashflow';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
+import { useAppStore } from '@/store/use-app-store';
+import { radius, ThemeColors, typography, useTheme } from '@/theme';
 import type { CashFlowEvent } from '@/types';
+import { normalizeLineChartValues } from '@/utils/chart-utils';
+import { formatCurrency, formatCurrencyPrivacy } from '@/utils/format';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  Modal,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { LineChart } from 'react-native-gifted-charts';
 
 type EventFilter = 'all' | 'bill' | 'recurring' | 'sip' | 'income';
 
@@ -193,7 +193,7 @@ export default function CashFlowScreen() {
         showBack
         title="Cash Flow & Safe to Spend"
         rightNode={
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={styles.rowGap6}>
             <TouchableOpacity
               onPress={toggleHideBalances}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -218,7 +218,7 @@ export default function CashFlowScreen() {
       />
 
       <ScrollView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 80 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -237,7 +237,7 @@ export default function CashFlowScreen() {
             {/* HERO CARD: SAFE-TO-SPEND GAUGE */}
             <View style={styles.heroCard}>
               <View style={styles.heroHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 8 }}>
+                <View style={styles.heroLabelRow}>
                   <MaterialIcons name="speed" size={16} color={statusColor} />
                   <Text style={styles.heroLabel} numberOfLines={1}>DAILY SAFE-TO-SPEND ALLOWANCE</Text>
                 </View>
@@ -272,7 +272,7 @@ export default function CashFlowScreen() {
               {summary.hasCashCrunch && summary.cashCrunchDate && (
                 <View style={styles.deficitCard}>
                   <MaterialIcons name="warning" size={18} color="#EF4444" />
-                  <View style={{ flex: 1 }}>
+                  <View style={styles.flex1}>
                     <Text style={styles.deficitTitle}>Projected Cash Crunch</Text>
                     <Text style={styles.deficitText}>
                       Deficit of {formatCurrency(summary.cashCrunchShortfall || 0)} expected on {summary.cashCrunchDate}. Reduce discretionary spending or prepare funds.
@@ -285,7 +285,7 @@ export default function CashFlowScreen() {
               <View style={styles.breakdownGrid}>
                 <View style={styles.breakdownCol}>
                   <Text style={styles.breakdownLabel} numberOfLines={1}>Liquid Cash</Text>
-                  <Text style={[styles.breakdownVal, { color: '#10B981' }]} numberOfLines={1} adjustsFontSizeToFit>
+                  <Text style={[styles.breakdownVal, styles.liquidCashVal]} numberOfLines={1} adjustsFontSizeToFit>
                     {formatCurrencyPrivacy(summary.currentLiquidCash, false, hideBalances)}
                   </Text>
                 </View>
@@ -294,7 +294,7 @@ export default function CashFlowScreen() {
 
                 <View style={styles.breakdownCol}>
                   <Text style={styles.breakdownLabel} numberOfLines={1}>Bills & SIPs</Text>
-                  <Text style={[styles.breakdownVal, { color: '#3B82F6' }]} numberOfLines={1} adjustsFontSizeToFit>
+                  <Text style={[styles.breakdownVal, styles.billsVal]} numberOfLines={1} adjustsFontSizeToFit>
                     -{formatCurrencyPrivacy(summary.totalCommittedObligations, false, hideBalances)}
                   </Text>
                 </View>
@@ -313,7 +313,7 @@ export default function CashFlowScreen() {
             {/* CARD 2: 30-DAY FORWARD RUNWAY CHART */}
             <View style={styles.chartCard}>
               <View style={styles.chartHeaderRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                <View style={styles.chartTitleRow}>
                   <MaterialIcons name="insights" size={18} color={colors.primary} />
                   <Text style={styles.cardTitle}>30-Day Runway</Text>
                 </View>
@@ -419,7 +419,7 @@ export default function CashFlowScreen() {
             {/* CARD 3: SCHEDULED CASH FLOW OBLIGATIONS & INFLOWS */}
             <View style={styles.timelineSection}>
               <View style={styles.timelineHeaderRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={styles.rowGap6}>
                   <MaterialIcons name="calendar-month" size={18} color={colors.primary} />
                   <Text style={styles.cardTitle}>Scheduled Inflows & Deductions</Text>
                 </View>
@@ -450,10 +450,8 @@ export default function CashFlowScreen() {
                       <Text
                         style={[
                           styles.filterTabText,
-                          {
-                            color: isActive ? colors.onPrimary : colors.onSurfaceVariant,
-                            fontFamily: isActive ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                          },
+                          { color: isActive ? colors.onPrimary : colors.onSurfaceVariant },
+                          isActive ? styles.filterTabTextActive : styles.filterTabTextInactive,
                         ]}
                       >
                         {tab.label}
@@ -500,7 +498,7 @@ export default function CashFlowScreen() {
                           <View style={[styles.eventIconCircle, { backgroundColor: `${iconColor}15` }]}>
                             <MaterialIcons name={icon} size={18} color={iconColor} />
                           </View>
-                          <View style={{ flex: 1 }}>
+                          <View style={styles.flex1}>
                             <Text style={styles.eventName} numberOfLines={1}>
                               {ev.name?.trim() ? ev.name : (ev.type === 'bill' ? 'Upcoming Bill' : ev.type === 'sip' ? 'Investment SIP' : 'Scheduled Charge')}
                             </Text>
@@ -519,7 +517,7 @@ export default function CashFlowScreen() {
                         <Text
                           style={[
                             styles.eventAmount,
-                            { color: isIncome ? '#10B981' : colors.onSurface },
+                            isIncome ? styles.incomeAmount : { color: colors.onSurface },
                           ]}
                           numberOfLines={1}
                           adjustsFontSizeToFit
@@ -547,7 +545,7 @@ export default function CashFlowScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalBox, { backgroundColor: colors.surfaceContainerLowest }]}>
             <View style={styles.modalHeaderRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={styles.modalTitleRow}>
                 <MaterialIcons name="tune" size={20} color={colors.primary} />
                 <Text style={styles.modalTitle}>Cash Flow Settings</Text>
               </View>
@@ -628,6 +626,47 @@ const getStyles = (colors: ThemeColors) => {
     container: {
       flex: 1,
       backgroundColor: colors.background,
+    },
+    flex1: {
+      flex: 1,
+    },
+    rowGap6: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    heroLabelRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      flex: 1,
+      marginRight: 8,
+    },
+    liquidCashVal: {
+      color: '#10B981',
+    },
+    billsVal: {
+      color: '#3B82F6',
+    },
+    chartTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      flex: 1,
+    },
+    filterTabTextActive: {
+      fontFamily: 'Manrope_700Bold',
+    },
+    filterTabTextInactive: {
+      fontFamily: 'Manrope_600SemiBold',
+    },
+    incomeAmount: {
+      color: '#10B981',
+    },
+    modalTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
     },
     headerIconBtn: {
       padding: 6,

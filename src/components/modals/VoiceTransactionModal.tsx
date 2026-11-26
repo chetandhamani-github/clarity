@@ -476,7 +476,7 @@ export function VoiceTransactionModal({
 
             {/* Live Transcript / Input Box */}
             <View style={styles.inputContainer}>
-              <MaterialIcons name="record-voice-over" size={18} color={colors.onSurfaceVariant} style={{ marginRight: 6 }} />
+              <MaterialIcons name="record-voice-over" size={18} color={colors.onSurfaceVariant} style={styles.iconMr6} />
               <TextInput
                 ref={textInputRef}
                 style={styles.textInput}
@@ -601,7 +601,7 @@ export function VoiceTransactionModal({
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Account</Text>
                     <View style={styles.accountDetailValueBox}>
-                      <MaterialIcons name="account-balance" size={15} color={colors.primary} style={{ marginRight: 6 }} />
+                      <MaterialIcons name="account-balance" size={15} color={colors.primary} style={styles.iconMr6} />
                       <Text style={styles.detailValue} numberOfLines={1}>
                         {selectedAccount?.name || 'Default Account'}
                         {selectedAccount?.lastFour ? ` (•••• ${selectedAccount.lastFour})` : ''}
@@ -666,7 +666,7 @@ export function VoiceTransactionModal({
                       handleStartListening();
                     }}
                   >
-                    <MaterialIcons name="refresh" size={16} color={colors.onSurfaceVariant} style={{ marginRight: 4 }} />
+                    <MaterialIcons name="refresh" size={16} color={colors.onSurfaceVariant} style={styles.iconMr4} />
                     <Text style={styles.retryBtnText}>Re-record</Text>
                   </TouchableOpacity>
 
@@ -734,6 +734,12 @@ const getStyles = (colors: ThemeColors) => {
       alignItems: 'center',
       justifyContent: 'space-between',
       marginBottom: 14,
+    },
+    iconMr6: {
+      marginRight: 6,
+    },
+    iconMr4: {
+      marginRight: 4,
     },
     headerTitleRow: {
       flexDirection: 'row',

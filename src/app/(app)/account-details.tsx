@@ -292,7 +292,7 @@ export default function AccountDetailsScreen() {
 
       {isLoading || !account ? (
         <ScrollView
-          style={{ flex: 1 }}
+          style={styles.flex1}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
           showsVerticalScrollIndicator={false}
         >
@@ -300,15 +300,15 @@ export default function AccountDetailsScreen() {
         </ScrollView>
       ) : (
         <ScrollView
-          style={{ flex: 1 }}
+          style={styles.flex1}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
           showsVerticalScrollIndicator={false}
         >
-          <View style={{ gap: 24 }}>
+          <View style={styles.contentGap24}>
             {/* Account Overview Card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <View style={{ flex: 1 }}>
+                <View style={styles.flex1}>
                   <Text style={styles.accountLabel}>{account.name.toUpperCase()}</Text>
                   <Text style={styles.balanceText}>{formatCurrency(account.balance)}</Text>
                   {account.institution && (
@@ -369,15 +369,7 @@ export default function AccountDetailsScreen() {
               )}
 
               {/* Balance Trend LineChart */}
-              <View
-                style={{
-                  marginTop: 12,
-                  height: 142,
-                  overflow: 'visible',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
+              <View style={styles.chartContainer}>
                 <LineChart
                   data={chartData}
                   width={chartWidth}
@@ -435,7 +427,7 @@ export default function AccountDetailsScreen() {
             {account.type === 'credit' && (
               <View style={styles.billingCycleCard}>
                 <View style={styles.billingCycleHeader}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={styles.billingCycleHeaderLeft}>
                     <MaterialIcons name="credit-score" size={20} color={colors.primary} />
                     <Text style={styles.billingCycleTitle}>Billing Cycle & Due Date</Text>
                   </View>
@@ -448,7 +440,7 @@ export default function AccountDetailsScreen() {
                 </View>
 
                 {billingCycleInfo ? (
-                  <View style={{ gap: 12 }}>
+                  <View style={styles.gap12}>
                     <View style={styles.billingCycleGrid}>
                       <View style={styles.billingStatBox}>
                         <Text style={styles.billingStatLabel}>Next Statement</Text>
@@ -497,8 +489,8 @@ export default function AccountDetailsScreen() {
                           style={[
                             styles.dueAlertText,
                             billingCycleInfo.daysUntilDue <= 3
-                              ? { color: colors.onErrorContainer, fontWeight: '700' }
-                              : { color: colors.onSurface },
+                              ? styles.dueAlertTextUrgent
+                              : styles.dueAlertTextNormal,
                           ]}
                         >
                           {billingCycleInfo.daysUntilDue === 0
@@ -523,53 +515,37 @@ export default function AccountDetailsScreen() {
                 )}
 
                 {/* Credit Limit & Utilization */}
-                <View
-                  style={{
-                    marginTop: 8,
-                    paddingTop: 12,
-                    borderTopWidth: 1,
-                    borderTopColor: colors.outlineVariant,
-                    gap: 8,
-                  }}
-                >
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <Text style={{ ...typography.labelMd, color: colors.onSurface, fontWeight: '600' }}>
+                <View style={styles.creditUtilizationSection}>
+                  <View style={styles.creditUtilizationHeader}>
+                    <Text style={styles.creditUtilizationTitle}>
                       Credit Utilization
                     </Text>
                     {creditUtilizationInfo?.hasLimit && (
                       <View
-                        style={{
-                          paddingHorizontal: 8,
-                          paddingVertical: 2,
-                          borderRadius: 12,
-                          flexShrink: 0,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          backgroundColor:
-                            creditUtilizationInfo.status === 'danger'
-                              ? colors.errorContainer
-                              : creditUtilizationInfo.status === 'warning'
-                              ? colors.surfaceContainerHighest
-                              : colors.primaryContainer,
-                        }}
+                        style={[
+                          styles.utilizationBadge,
+                          {
+                            backgroundColor:
+                              creditUtilizationInfo.status === 'danger'
+                                ? colors.errorContainer
+                                : creditUtilizationInfo.status === 'warning'
+                                ? colors.surfaceContainerHighest
+                                : colors.primaryContainer,
+                          },
+                        ]}
                       >
                         <Text
-                          style={{
-                            ...typography.labelMd,
-                            fontFamily: 'Manrope_700Bold',
-                            color:
-                              creditUtilizationInfo.status === 'danger'
-                                ? colors.onErrorContainer
-                                : creditUtilizationInfo.status === 'warning'
-                                ? colors.onSurface
-                                : colors.onPrimaryContainer,
-                          }}
+                          style={[
+                            styles.utilizationBadgeText,
+                            {
+                              color:
+                                creditUtilizationInfo.status === 'danger'
+                                  ? colors.onErrorContainer
+                                  : creditUtilizationInfo.status === 'warning'
+                                  ? colors.onSurface
+                                  : colors.onPrimaryContainer,
+                            },
+                          ]}
                           numberOfLines={1}
                         >
                           {Math.round(creditUtilizationInfo.utilizationPercent)}% Used
@@ -579,71 +555,50 @@ export default function AccountDetailsScreen() {
                   </View>
 
                   {creditUtilizationInfo?.hasLimit ? (
-                    <View style={{ gap: 8 }}>
+                    <View style={styles.gap8}>
                       {/* Utilization Progress Bar */}
-                      <View
-                        style={{
-                          height: 6,
-                          backgroundColor: colors.surfaceContainerHighest,
-                          borderRadius: 3,
-                          overflow: 'hidden',
-                        }}
-                      >
+                      <View style={styles.utilizationTrack}>
                         <View
-                          style={{
-                            height: '100%',
-                            width: `${creditUtilizationInfo.utilizationPercent}%`,
-                            backgroundColor:
-                              creditUtilizationInfo.status === 'danger'
-                                ? colors.error
-                                : creditUtilizationInfo.status === 'warning'
-                                ? colors.tertiary || colors.primary
-                                : colors.primary,
-                            borderRadius: 3,
-                          }}
+                          style={[
+                            styles.utilizationFill,
+                            {
+                              width: `${creditUtilizationInfo.utilizationPercent}%`,
+                              backgroundColor:
+                                creditUtilizationInfo.status === 'danger'
+                                  ? colors.error
+                                  : creditUtilizationInfo.status === 'warning'
+                                  ? colors.tertiary || colors.primary
+                                  : colors.primary,
+                            },
+                          ]}
                         />
                       </View>
 
-                      <View
-                        style={{
-                          flexDirection: 'row',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <Text style={{ ...typography.bodyMd, fontSize: 12, color: colors.onSurfaceVariant }}>
+                      <View style={styles.utilizationStatsRow}>
+                        <Text style={styles.utilizationStatText}>
                           Spent:{' '}
-                          <Text style={{ fontWeight: '600', color: colors.onSurface }}>
+                          <Text style={styles.utilizationStatValue}>
                             {formatCurrency(creditUtilizationInfo.spent)}
                           </Text>
                         </Text>
-                        <Text style={{ ...typography.bodyMd, fontSize: 12, color: colors.onSurfaceVariant }}>
+                        <Text style={styles.utilizationStatText}>
                           Available:{' '}
-                          <Text style={{ fontWeight: '600', color: colors.onSurface }}>
+                          <Text style={styles.utilizationStatValue}>
                             {formatCurrency(creditUtilizationInfo.available)}
                           </Text>
                         </Text>
-                        <Text style={{ ...typography.bodyMd, fontSize: 12, color: colors.onSurfaceVariant }}>
+                        <Text style={styles.utilizationStatText}>
                           Limit:{' '}
-                          <Text style={{ fontWeight: '600', color: colors.onSurface }}>
+                          <Text style={styles.utilizationStatValue}>
                             {formatCurrency(creditUtilizationInfo.limit)}
                           </Text>
                         </Text>
                       </View>
 
                       {creditUtilizationInfo.status === 'danger' && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        <View style={styles.utilizationDangerRow}>
                           <MaterialIcons name="warning" size={14} color={colors.error} />
-                          <Text
-                            style={{
-                              ...typography.bodyMd,
-                              fontSize: 11,
-                              color: colors.error,
-                              fontWeight: '500',
-                              flex: 1,
-                              flexShrink: 1,
-                            }}
-                          >
+                          <Text style={styles.utilizationDangerText}>
                             Utilization is above 80%. Pay down balance to safeguard your credit score.
                           </Text>
                         </View>
@@ -651,19 +606,11 @@ export default function AccountDetailsScreen() {
                     </View>
                   ) : (
                     <TouchableOpacity
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 }}
+                      style={styles.setLimitPromptRow}
                       onPress={() => router.navigate(`/(app)/add-account?id=${account.id}`)}
                     >
                       <MaterialIcons name="tune" size={16} color={colors.primary} />
-                      <Text
-                        style={{
-                          ...typography.bodyMd,
-                          fontSize: 12,
-                          color: colors.primary,
-                          fontWeight: '500',
-                          flex: 1,
-                          flexShrink: 1,
-                        }}
+                      <Text style={styles.setLimitPromptText}
                       >
                         Set card limit to track credit utilization & score safety
                       </Text>
@@ -697,7 +644,7 @@ export default function AccountDetailsScreen() {
                 <View style={styles.importStatementIconBox}>
                   <MaterialIcons name="upload-file" size={22} color={colors.onPrimaryContainer} />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={styles.flex1}>
                   <Text style={styles.importStatementTitle}>
                     {account.type === 'credit' ? 'Import Card Statement' : 'Import Bank Statement'}
                   </Text>
@@ -720,11 +667,11 @@ export default function AccountDetailsScreen() {
                             key={i}
                             style={[
                               styles.transactionItem,
-                              index === 2 && { borderBottomWidth: 0 },
+                              index === 2 && styles.noBorderBottom,
                             ]}
                           >
                             <SkeletonCircle size={40} />
-                            <View style={{ flex: 1, gap: 6, marginLeft: 12 }}>
+                            <View style={styles.txSkeletonTextCol}>
                               <SkeletonText width="60%" height={14} />
                               <SkeletonText width="40%" height={11} />
                             </View>
@@ -759,7 +706,7 @@ export default function AccountDetailsScreen() {
                           return (
                             <TouchableOpacity
                               key={tx.id}
-                              style={[styles.transactionItem, isLast && { borderBottomWidth: 0 }]}
+                              style={[styles.transactionItem, isLast && styles.noBorderBottom]}
                               onPress={() => router.navigate(`/(app)/add-transaction?id=${tx.id}`)}
                             >
                               <View style={styles.txLeft}>
@@ -781,7 +728,7 @@ export default function AccountDetailsScreen() {
                                     }
                                   />
                                 </View>
-                                <View style={{ flex: 1, justifyContent: 'center' }}>
+                                <View style={styles.txTitleCol}>
                                   <Text style={styles.txTitle} numberOfLines={1}>
                                     {tx.type === 'transfer'
                                       ? isOutgoingTransfer
@@ -826,7 +773,7 @@ export default function AccountDetailsScreen() {
                               });
                             }}
                           >
-                            <Text style={{ color: colors.primary, fontWeight: '500' }}>
+                            <Text style={styles.viewAllText}>
                               View All
                             </Text>
                           </TouchableOpacity>
@@ -890,6 +837,134 @@ const getStyles = (colors: ThemeColors) => {
     container: {
       flex: 1,
       backgroundColor: colors.background,
+    },
+    flex1: {
+      flex: 1,
+    },
+    chartContainer: {
+      marginTop: 12,
+      height: 142,
+      overflow: 'visible',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    setLimitPromptRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingVertical: 4,
+    },
+    contentGap24: {
+      gap: 24,
+    },
+    gap12: {
+      gap: 12,
+    },
+    gap8: {
+      gap: 8,
+    },
+    billingCycleHeaderLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    dueAlertTextUrgent: {
+      color: colors.onErrorContainer,
+      fontWeight: '700',
+    },
+    dueAlertTextNormal: {
+      color: colors.onSurface,
+    },
+    creditUtilizationSection: {
+      marginTop: 8,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.outlineVariant,
+      gap: 8,
+    },
+    creditUtilizationHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    creditUtilizationTitle: {
+      ...typography.labelMd,
+      color: colors.onSurface,
+      fontWeight: '600',
+    },
+    utilizationBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 12,
+      flexShrink: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    utilizationBadgeText: {
+      ...typography.labelMd,
+      fontFamily: 'Manrope_700Bold',
+    },
+    utilizationTrack: {
+      height: 6,
+      backgroundColor: colors.surfaceContainerHighest,
+      borderRadius: 3,
+      overflow: 'hidden',
+    },
+    utilizationFill: {
+      height: '100%',
+      borderRadius: 3,
+    },
+    utilizationStatsRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    utilizationStatText: {
+      ...typography.bodyMd,
+      fontSize: 12,
+      color: colors.onSurfaceVariant,
+    },
+    utilizationStatValue: {
+      fontWeight: '600',
+      color: colors.onSurface,
+    },
+    utilizationDangerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 2,
+    },
+    utilizationDangerText: {
+      ...typography.bodyMd,
+      fontSize: 11,
+      color: colors.error,
+      fontWeight: '500',
+      flex: 1,
+      flexShrink: 1,
+    },
+    setLimitPromptText: {
+      ...typography.bodyMd,
+      fontSize: 12,
+      color: colors.primary,
+      fontWeight: '500',
+      flex: 1,
+      flexShrink: 1,
+    },
+    noBorderBottom: {
+      borderBottomWidth: 0,
+    },
+    txSkeletonTextCol: {
+      flex: 1,
+      gap: 6,
+      marginLeft: 12,
+    },
+    txTitleCol: {
+      flex: 1,
+      justifyContent: 'center',
+    },
+    viewAllText: {
+      color: colors.primary,
+      fontWeight: '500',
     },
 
     headerRightActions: {

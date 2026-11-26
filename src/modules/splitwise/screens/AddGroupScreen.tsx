@@ -152,7 +152,7 @@ export function AddGroupScreen() {
       />
 
       <KeyboardAwareScrollView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         contentContainerStyle={StyleSheet.flatten([
           styles.scrollContent,
           { paddingBottom: 32 },
@@ -223,7 +223,7 @@ export function AddGroupScreen() {
           )}
 
           {/* Description Input */}
-          <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant, marginTop: 14 }]}>
+          <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }, styles.mt14]}>
             DESCRIPTION (OPTIONAL)
           </Text>
           <Controller
@@ -295,10 +295,8 @@ export function AddGroupScreen() {
                   <Text
                     style={[
                       styles.categoryChipText,
-                      {
-                        color: isSelected ? colors.onPrimaryContainer : colors.onSurface,
-                        fontFamily: isSelected ? 'Manrope_700Bold' : 'Manrope_500Medium',
-                      },
+                      { color: isSelected ? colors.onPrimaryContainer : colors.onSurface },
+                      isSelected ? styles.fontBold : styles.fontMedium,
                     ]}
                   >
                     {cat.label}
@@ -333,7 +331,7 @@ export function AddGroupScreen() {
                   All
                 </Text>
               </TouchableOpacity>
-              <Text style={{ color: colors.outlineVariant, marginHorizontal: 4 }}>|</Text>
+              <Text style={[{ color: colors.outlineVariant }, styles.mh4]}>|</Text>
               <TouchableOpacity onPress={deselectAll} style={styles.actionBtnText}>
                 <Text style={[styles.actionBtnLabel, { color: colors.onSurfaceVariant }]}>
                   Clear
@@ -342,7 +340,7 @@ export function AddGroupScreen() {
             </View>
           </View>
 
-          <Text style={[styles.memberPhone, { color: colors.onSurfaceVariant, marginBottom: 10 }]}>
+          <Text style={[styles.memberPhone, { color: colors.onSurfaceVariant }, styles.mb10]}>
             Friends with a Google email automatically see this group &amp; its expenses.
           </Text>
 
@@ -411,24 +409,21 @@ export function AddGroupScreen() {
                 </View>
 
                 <View style={styles.memberInfo}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={styles.adminNameRow}>
                     <Text style={[styles.memberName, { color: colors.onSurface }]}>
                       You
                     </Text>
                     <View
-                      style={{
-                        backgroundColor: colors.primary,
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
-                        borderRadius: 4,
-                      }}
+                      style={[
+                        styles.adminBadge,
+                        { backgroundColor: colors.primary },
+                      ]}
                     >
                       <Text
-                        style={{
-                          color: colors.onPrimary,
-                          fontSize: 10,
-                          fontFamily: 'Manrope_700Bold',
-                        }}
+                        style={[
+                          styles.adminBadgeText,
+                          { color: colors.onPrimary },
+                        ]}
                       >
                         ADMIN
                       </Text>
@@ -734,6 +729,38 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     fontSize: 16,
+    fontFamily: 'Manrope_700Bold',
+  },
+  flex1: {
+    flex: 1,
+  },
+  mt14: {
+    marginTop: 14,
+  },
+  mh4: {
+    marginHorizontal: 4,
+  },
+  mb10: {
+    marginBottom: 10,
+  },
+  fontBold: {
+    fontFamily: 'Manrope_700Bold',
+  },
+  fontMedium: {
+    fontFamily: 'Manrope_500Medium',
+  },
+  adminNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  adminBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  adminBadgeText: {
+    fontSize: 10,
     fontFamily: 'Manrope_700Bold',
   },
 });

@@ -114,7 +114,7 @@ export function BillDetailsScreen() {
         title="Bill Details"
         showBack
         rightNode={
-          <View style={{ flexDirection: 'row', gap: 6 }}>
+          <View style={styles.headerActions}>
             <TouchableOpacity
               style={styles.headerIconButton}
               onPress={() => router.navigate({ pathname: '/(app)/add-bill', params: { billId: bill.id } })}
@@ -134,7 +134,7 @@ export function BillDetailsScreen() {
       />
 
       <ScrollView
-        style={{ flex: 1 }}
+        style={styles.container}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
@@ -250,7 +250,7 @@ export function BillDetailsScreen() {
               <View style={[styles.divider, { backgroundColor: colors.outlineVariant }]} />
               <View style={styles.infoRow}>
                 <Text style={[styles.infoLabel, { color: colors.onSurfaceVariant }]}>Last Paid Date</Text>
-                <Text style={[styles.infoValue, { color: '#10b981' }]}>
+                <Text style={[styles.infoValue, styles.lastPaidValue]}>
                   {bill.lastPaidDate}
                 </Text>
               </View>
@@ -340,7 +340,7 @@ export function BillDetailsScreen() {
             style={[
               styles.primaryActionBtn,
               { backgroundColor: colors.primary },
-              bill.paymentUrl && { flex: 1.2 },
+              bill.paymentUrl && styles.primaryActionBtnWide,
             ]}
             onPress={handleMarkPaid}
             activeOpacity={0.85}
@@ -376,6 +376,16 @@ const styles = StyleSheet.create({
   headerIconButton: {
     padding: 6,
     borderRadius: 8,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  lastPaidValue: {
+    color: '#10b981',
+  },
+  primaryActionBtnWide: {
+    flex: 1.2,
   },
   scrollContent: {
     paddingHorizontal: 16,

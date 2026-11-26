@@ -67,8 +67,10 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
     liabilitySectionTotal,
   } = summarizeAccounts(accounts);
 
+  const containerInsetStyle = { paddingTop: insets.top, paddingBottom: showBack ? insets.bottom : 0 };
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: showBack ? insets.bottom : 0 }]}>
+    <View style={[styles.container, containerInsetStyle]}>
       <Header
         isMainTab={!showBack}
         showBack={showBack}
@@ -152,7 +154,7 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
         </View>
       ) : (
         <ScrollView
-          style={{ flex: 1 }}
+          style={styles.flex1}
           scrollEnabled={!isDraggingAccounts}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
           showsVerticalScrollIndicator={false}
@@ -161,22 +163,22 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
             <AccountsSkeleton />
           ) : (
             <>
-              <View style={{ gap: 24 }}>
+              <View style={styles.sectionsGap}>
                 {/* Total Balance / Net Worth Card */}
                 <View style={styles.contentPadding}>
                   <View style={styles.totalCard}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={styles.rowCenterGap6}>
                       <Text style={styles.totalLabel}>NET ACCOUNT BALANCE</Text>
                       <TouchableOpacity
                         onPress={toggleHideBalances}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        style={{ padding: 2 }}
+                        style={styles.eyeButton}
                       >
                         <MaterialIcons
                           name={hideBalances ? 'visibility-off' : 'visibility'}
                           size={16}
                           color={colors.onPrimary}
-                          style={{ opacity: 0.8 }}
+                          style={styles.eyeIcon}
                         />
                       </TouchableOpacity>
                     </View>
@@ -246,7 +248,7 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
 
                   {/* Liabilities & Debt Section */}
                   {liabilityAccounts.length > 0 && (
-                    <View style={{ marginTop: assetAccounts.length > 0 ? 16 : 0 }}>
+                    <View style={assetAccounts.length > 0 ? styles.liabilitySectionWithAssets : undefined}>
                       <ReorderableAccountSection
                         title="LIABILITIES & DEBT"
                         subtotalText={formatCurrencyPrivacy(liabilitySectionTotal, false, hideBalances)}
@@ -265,11 +267,11 @@ export default function AccountsScreen({ showBack = false }: AccountsScreenProps
                           onPress={() => router.push('/(app)/debt-payoff')}
                           activeOpacity={0.8}
                         >
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                            <View style={[styles.debtStrategistIcon, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
+                          <View style={styles.rowCenterGap10Flex1}>
+                            <View style={[styles.debtStrategistIcon, styles.debtStrategistIconBg]}>
                               <MaterialIcons name="trending-down" size={18} color="#EF4444" />
                             </View>
-                            <View style={{ flex: 1 }}>
+                            <View style={styles.flex1}>
                               <Text style={styles.debtStrategistTitle}>Debt Payoff Strategist</Text>
                               <Text style={styles.debtStrategistSub}>Snowball vs. Avalanche roadmap</Text>
                             </View>
@@ -342,39 +344,33 @@ function WealthPortfolioCardComponent({
       activeOpacity={0.88}
     >
       <View style={styles.portfolioHeaderRow}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+        <View style={styles.rowCenterGap10Flex1}>
           <View
             style={[
               styles.portfolioIconCircle,
-              { backgroundColor: 'rgba(59, 130, 246, 0.12)' },
+              styles.portfolioIconBg,
             ]}
           >
             <MaterialIcons name="insights" size={20} color="#3B82F6" />
           </View>
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={styles.flex1}>
+            <View style={styles.rowCenterGap6}>
               <Text style={styles.portfolioCardTitle}>Wealth & Portfolio</Text>
               {portfolioSummary && portfolioSummary.unrealizedGainLoss !== 0 && (
                 <View
                   style={[
                     styles.miniPnlBadge,
-                    {
-                      backgroundColor:
-                        portfolioSummary.unrealizedGainLoss >= 0
-                          ? 'rgba(16, 185, 129, 0.12)'
-                          : 'rgba(239, 68, 68, 0.12)',
-                    },
+                    portfolioSummary.unrealizedGainLoss >= 0
+                      ? styles.miniPnlPositiveBg
+                      : styles.miniPnlNegativeBg,
                   ]}
                 >
                   <Text
                     style={[
                       styles.miniPnlText,
-                      {
-                        color:
-                          portfolioSummary.unrealizedGainLoss >= 0
-                            ? '#10B981'
-                            : '#EF4444',
-                      },
+                      portfolioSummary.unrealizedGainLoss >= 0
+                        ? styles.miniPnlPositiveText
+                        : styles.miniPnlNegativeText,
                     ]}
                     numberOfLines={1}
                   >
@@ -401,11 +397,13 @@ function WealthPortfolioCardComponent({
             {portfolioSummary.allocations.map((alloc) => (
               <View
                 key={alloc.assetClass}
-                style={{
-                  flex: Math.max(alloc.percentage, 2),
-                  backgroundColor: alloc.color,
-                  height: 6,
-                }}
+                style={[
+                  styles.allocationSegment,
+                  {
+                    flex: Math.max(alloc.percentage, 2),
+                    backgroundColor: alloc.color,
+                  },
+                ]}
               />
             ))}
           </View>
@@ -521,7 +519,7 @@ function AccountDetailCard({
     <View style={styles.sectionCard}>
       <View style={styles.detailsHeader}>
         <View style={styles.detailsHeaderLeft}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+          <View style={styles.detailsLabelRow}>
             <Text style={styles.detailsLabel} numberOfLines={1}>{account.name.toUpperCase()}</Text>
             {account.institution ? (
               <View style={[styles.bankBadge, { backgroundColor: branding.backgroundColor }]}>
@@ -564,21 +562,11 @@ function AccountDetailCard({
       <View style={styles.chartArea}>
         <View style={styles.chartBg} />
         {isLoading ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 }}>
+          <View style={styles.chartSkeletonWrap}>
             <SkeletonBox width="100%" height={120} borderRadius={radius.md} />
           </View>
         ) : (
-          <View
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              overflow: 'hidden',
-              justifyContent: 'flex-end',
-            }}
-          >
+          <View style={styles.chartOverlay}>
             <LineChart
               data={chartData}
               width={chartWidth}
@@ -646,9 +634,9 @@ function AccountDetailCard({
           {creditDetails.limit > 0 ? (
             <View style={styles.utilizationContainer}>
               <View style={styles.utilizationHeaderRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={styles.rowGap6}>
                   <MaterialIcons name="credit-card" size={16} color={colors.onSurfaceVariant} />
-                  <Text style={[styles.statLabel, { marginBottom: 0 }]}>Credit Utilization</Text>
+                  <Text style={[styles.statLabel, styles.noMarginBottom]}>Credit Utilization</Text>
                 </View>
                 <View
                   style={[
@@ -703,7 +691,7 @@ function AccountDetailCard({
                 <Text style={styles.utilizationSubtext} numberOfLines={1}>
                   Used: {formatCurrency(creditDetails.spent)} / Limit: {formatCurrency(creditDetails.limit)}
                 </Text>
-                <Text style={[styles.utilizationSubtext, { color: colors.primary, fontFamily: 'Manrope_700Bold' }]} numberOfLines={1}>
+                <Text style={[styles.utilizationSubtext, { color: colors.primary }, styles.boldFont]} numberOfLines={1}>
                   {formatCurrency(creditDetails.available)} available
                 </Text>
               </View>
@@ -732,7 +720,7 @@ function AccountDetailCard({
               {account.dueDay ? (
                 <View style={styles.cycleBox}>
                   <Text style={styles.cycleLabel}>Payment Due Date</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={styles.rowGap6}>
                     <Text style={styles.cycleValue}>{creditDetails.nextDueDateText}</Text>
                     {creditDetails.daysUntilDue !== null && (
                       <View
@@ -777,7 +765,9 @@ function AccountDetailCard({
         <TouchableOpacity
           style={[
             styles.importStatementButton,
-            { marginTop: hasOutstandingDebt && onSettleDebt ? 10 : 16 },
+            hasOutstandingDebt && onSettleDebt
+              ? styles.importStatementMarginCompact
+              : styles.importStatementMarginDefault,
           ]}
           onPress={() =>
             router.navigate({
@@ -802,6 +792,91 @@ const getStyles = (colors: ThemeColors) => {
     container: {
       flex: 1,
       backgroundColor: colors.surfaceContainerLow,
+    },
+    flex1: {
+      flex: 1,
+    },
+    rowGap6: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    noMarginBottom: {
+      marginBottom: 0,
+    },
+    boldFont: {
+      fontFamily: 'Manrope_700Bold',
+    },
+    importStatementMarginCompact: {
+      marginTop: 10,
+    },
+    importStatementMarginDefault: {
+      marginTop: 16,
+    },
+    sectionsGap: {
+      gap: 24,
+    },
+    rowCenterGap6: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    rowCenterGap10Flex1: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      flex: 1,
+    },
+    eyeButton: {
+      padding: 2,
+    },
+    eyeIcon: {
+      opacity: 0.8,
+    },
+    liabilitySectionWithAssets: {
+      marginTop: 16,
+    },
+    debtStrategistIconBg: {
+      backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    },
+    portfolioIconBg: {
+      backgroundColor: 'rgba(59, 130, 246, 0.12)',
+    },
+    miniPnlPositiveBg: {
+      backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    },
+    miniPnlNegativeBg: {
+      backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    },
+    miniPnlPositiveText: {
+      color: '#10B981',
+    },
+    miniPnlNegativeText: {
+      color: '#EF4444',
+    },
+    allocationSegment: {
+      height: 6,
+    },
+    detailsLabelRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 4,
+    },
+    chartSkeletonWrap: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+    },
+    chartOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      overflow: 'hidden',
+      justifyContent: 'flex-end',
     },
 
     avatarButton: {

@@ -626,7 +626,7 @@ export default function SettingsScreen() {
                       }}
                       activeOpacity={0.7}
                     >
-                      <View style={{ flex: 1, paddingRight: 8 }}>
+                      <View style={styles.batteryTextCol}>
                         <Text style={styles.batteryTitle}>
                           Background Auto-Tracking Reliability
                           {notificationHealth?.isBatteryOptimizationIgnored ? ' (Unrestricted)' : ''}
@@ -645,7 +645,7 @@ export default function SettingsScreen() {
             ) : (
               <View style={styles.platformNoticeCard}>
                 <MaterialIcons name="info-outline" size={20} color={colors.primary} />
-                <View style={{ flex: 1, gap: 2 }}>
+                <View style={styles.platformNoticeTextCol}>
                   <Text style={styles.settingTitle}>iOS Notification Sandboxing</Text>
                   <Text style={styles.settingSub}>
                     iOS prevents apps from reading notifications from other banking apps. You can import statements via PDF / CSV above or log transactions directly.
@@ -680,7 +680,7 @@ export default function SettingsScreen() {
           {/* Privacy Banner */}
           <View style={styles.privacyBanner}>
             <MaterialIcons name="verified-user" size={24} color={colors.primary} />
-            <View style={{ flex: 1 }}>
+            <View style={styles.flex1}>
               <Text style={styles.privacyTitle}>100% Private & On-Device</Text>
               <Text style={styles.privacyBody}>
                 All financial calculations, notification analysis, and transaction logs are stored strictly on your phone. Clarity never sells or shares your personal data.
@@ -809,7 +809,7 @@ export default function SettingsScreen() {
                             color={isSelected ? colors.onPrimaryContainer : colors.onSurface}
                           />
                         </View>
-                        <View style={{ flex: 1 }}>
+                        <View style={styles.flex1}>
                           <Text
                             style={[
                               styles.modalOptionLabel,
@@ -860,7 +860,7 @@ export default function SettingsScreen() {
             </View>
 
             <ScrollView
-              style={{ maxHeight: 380 }}
+              style={styles.currencyScroll}
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.modalOptionList}>
@@ -902,7 +902,7 @@ export default function SettingsScreen() {
                               {item.symbol}
                             </Text>
                           </View>
-                          <View style={{ flex: 1 }}>
+                          <View style={styles.flex1}>
                             <Text
                               style={[
                                 styles.modalOptionLabel,
@@ -940,6 +940,20 @@ export default function SettingsScreen() {
 
 const getStyles = (colors: ThemeColors) => {
   const styles = StyleSheet.create({
+    flex1: {
+      flex: 1,
+    },
+    batteryTextCol: {
+      flex: 1,
+      paddingRight: 8,
+    },
+    platformNoticeTextCol: {
+      flex: 1,
+      gap: 2,
+    },
+    currencyScroll: {
+      maxHeight: 380,
+    },
     container: {
       flex: 1,
       backgroundColor: colors.background,

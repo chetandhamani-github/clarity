@@ -255,7 +255,7 @@ export default function AddInvestmentScreen() {
       />
 
       <KeyboardAwareScrollView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         contentContainerStyle={StyleSheet.flatten([
           styles.scrollContent,
           { paddingBottom: 64 },
@@ -285,8 +285,8 @@ export default function AddInvestmentScreen() {
                         ? colors.primaryContainer + '30'
                         : colors.surfaceContainerLow,
                       borderColor: isSelected ? colors.primary : colors.outlineVariant,
-                      borderWidth: isSelected ? 1.5 : 1,
                     },
+                    isSelected ? styles.assetClassChipSelected : styles.assetClassChipUnselected,
                   ]}
                   onPress={() => handleSelectClass(cls.value)}
                   activeOpacity={0.8}
@@ -299,10 +299,8 @@ export default function AddInvestmentScreen() {
                   <Text
                     style={[
                       styles.assetClassText,
-                      {
-                        color: isSelected ? colors.primary : colors.onSurface,
-                        fontFamily: isSelected ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                      },
+                      { color: isSelected ? colors.primary : colors.onSurface },
+                      isSelected ? styles.fontBold : styles.fontSemiBold,
                     ]}
                     numberOfLines={1}
                   >
@@ -314,7 +312,7 @@ export default function AddInvestmentScreen() {
           </View>
 
           {/* Subtype Selector */}
-          <Text style={[styles.subLabel, { marginTop: 14 }]}>Investment Subtype</Text>
+          <Text style={[styles.subLabel, styles.marginTop14]}>Investment Subtype</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subTypeScroll}>
             {SUBTYPES_BY_CLASS[assetClass]?.map((sub) => {
               const isSubSelected = subType === sub.value;
@@ -363,7 +361,7 @@ export default function AddInvestmentScreen() {
           </View>
 
           <View style={styles.rowInputs}>
-            <View style={[styles.inputGroup, { flex: 1 }]}>
+            <View style={[styles.inputGroup, styles.flex1]}>
               <Text style={styles.inputLabel}>Invested (Principal)*</Text>
               <TextInput
                 style={styles.input}
@@ -375,7 +373,7 @@ export default function AddInvestmentScreen() {
               />
             </View>
 
-            <View style={[styles.inputGroup, { flex: 1 }]}>
+            <View style={[styles.inputGroup, styles.flex1]}>
               <Text style={styles.inputLabel}>Current Market Value*</Text>
               <TextInput
                 style={styles.input}
@@ -399,12 +397,9 @@ export default function AddInvestmentScreen() {
                 <Text
                   style={[
                     styles.pnlValue,
-                    {
-                      color:
-                        parseFloat(currentValueStr) >= parseFloat(investedAmountStr)
-                          ? '#10b981'
-                          : '#ef4444',
-                    },
+                    parseFloat(currentValueStr) >= parseFloat(investedAmountStr)
+                      ? styles.pnlGain
+                      : styles.pnlLoss,
                   ]}
                 >
                   {parseFloat(currentValueStr) >= parseFloat(investedAmountStr) ? '+' : ''}
@@ -425,7 +420,7 @@ export default function AddInvestmentScreen() {
 
           {/* Linked Account Selector */}
           {accounts.length > 0 && (
-            <View style={[styles.inputGroup, { marginTop: 14 }]}>
+            <View style={[styles.inputGroup, styles.marginTop14]}>
               <Text style={styles.inputLabel}>Linked Account / Demat (Optional)</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subTypeScroll}>
                 <TouchableOpacity
@@ -469,10 +464,8 @@ export default function AddInvestmentScreen() {
                       <Text
                         style={[
                           styles.subTypeText,
-                          {
-                            color: isAccSelected ? colors.onPrimary : colors.onSurfaceVariant,
-                            fontFamily: isAccSelected ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                          },
+                          { color: isAccSelected ? colors.onPrimary : colors.onSurfaceVariant },
+                          isAccSelected ? styles.fontBold : styles.fontSemiBold,
                         ]}
                       >
                         {acc.name}
@@ -540,7 +533,7 @@ export default function AddInvestmentScreen() {
 
               {/* Recurring SIP Setup */}
               <View style={styles.rowInputs}>
-                <View style={[styles.inputGroup, { flex: 1.2 }]}>
+                <View style={[styles.inputGroup, styles.sipAmountCol]}>
                   <Text style={styles.inputLabel}>Monthly SIP Amount</Text>
                   <TextInput
                     style={styles.input}
@@ -552,7 +545,7 @@ export default function AddInvestmentScreen() {
                   />
                 </View>
 
-                <View style={[styles.inputGroup, { flex: 0.8 }]}>
+                <View style={[styles.inputGroup, styles.sipDayCol]}>
                   <Text style={styles.inputLabel}>SIP Day (1-31)</Text>
                   <TextInput
                     style={styles.input}
@@ -581,7 +574,7 @@ export default function AddInvestmentScreen() {
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Notes</Text>
                 <TextInput
-                  style={[styles.input, { minHeight: 60 }]}
+                  style={[styles.input, styles.notesInput]}
                   placeholder="e.g. Tax saving ELSS 3-year lock-in"
                   placeholderTextColor={colors.outline}
                   multiline
@@ -626,6 +619,39 @@ const getStyles = (colors: ThemeColors) => {
     container: {
       flex: 1,
       backgroundColor: colors.background,
+    },
+    flex1: {
+      flex: 1,
+    },
+    fontBold: {
+      fontFamily: 'Manrope_700Bold',
+    },
+    fontSemiBold: {
+      fontFamily: 'Manrope_600SemiBold',
+    },
+    pnlGain: {
+      color: '#10b981',
+    },
+    pnlLoss: {
+      color: '#ef4444',
+    },
+    assetClassChipSelected: {
+      borderWidth: 1.5,
+    },
+    assetClassChipUnselected: {
+      borderWidth: 1,
+    },
+    marginTop14: {
+      marginTop: 14,
+    },
+    sipAmountCol: {
+      flex: 1.2,
+    },
+    sipDayCol: {
+      flex: 0.8,
+    },
+    notesInput: {
+      minHeight: 60,
     },
     headerSaveBtn: {
       paddingHorizontal: 16,

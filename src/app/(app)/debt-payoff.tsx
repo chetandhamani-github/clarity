@@ -79,7 +79,7 @@ export default function DebtPayoffScreen() {
       <Header showBack title="Debt Freedom Strategist" />
 
       <ScrollView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 80 }]}
         showsVerticalScrollIndicator={false}
       >
@@ -88,7 +88,7 @@ export default function DebtPayoffScreen() {
         ) : !comparison || debts.length === 0 ? (
           /* DEBT FREE EMPTY STATE */
           <View style={styles.emptyCard}>
-            <View style={[styles.emptyIconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
+            <View style={[styles.emptyIconCircle, styles.emptyIconBg]}>
               <MaterialIcons name="verified" size={40} color="#10B981" />
             </View>
             <Text style={styles.emptyTitle}>You're Completely Debt-Free!</Text>
@@ -187,7 +187,7 @@ export default function DebtPayoffScreen() {
 
                 <View style={styles.metricCol}>
                   <Text style={styles.metricLabel}>Total Interest</Text>
-                  <Text style={[styles.metricValue, { color: '#EF4444' }]}>
+                  <Text style={[styles.metricValue, styles.textDanger]}>
                     {formatCurrency(activeResult?.totalInterestPaid || 0)}
                   </Text>
                 </View>
@@ -196,7 +196,7 @@ export default function DebtPayoffScreen() {
 
                 <View style={styles.metricCol}>
                   <Text style={styles.metricLabel}>Interest Saved</Text>
-                  <Text style={[styles.metricValue, { color: '#10B981' }]}>
+                  <Text style={[styles.metricValue, styles.textSuccess]}>
                     {interestSaved > 0 ? formatCurrency(interestSaved) : formatCurrency(0)}
                   </Text>
                 </View>
@@ -206,7 +206,7 @@ export default function DebtPayoffScreen() {
             {/* INTERACTIVE EXTRA PAYMENT SIMULATOR */}
             <View style={styles.simulatorCard}>
               <View style={styles.simHeaderRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={styles.rowCenterGap6}>
                   <MaterialIcons name="tune" size={16} color={colors.primary} />
                   <Text style={styles.simTitle}>Extra Monthly Payment</Text>
                 </View>
@@ -250,7 +250,7 @@ export default function DebtPayoffScreen() {
             {/* PAYOFF ORDER & TIMELINE */}
             <View style={styles.payoffSection}>
               <View style={styles.sectionHeaderRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={styles.rowCenterGap6}>
                   <MaterialIcons name="format-list-numbered" size={18} color={colors.primary} />
                   <Text style={styles.sectionTitle}>
                     {strategy === 'avalanche' ? 'Avalanche Payoff Order' : 'Snowball Payoff Order'}
@@ -283,7 +283,7 @@ export default function DebtPayoffScreen() {
                               #{idx + 1}
                             </Text>
                           </View>
-                          <View style={{ flex: 1, marginRight: 8 }}>
+                          <View style={styles.debtNameCol}>
                             <Text style={styles.debtName} numberOfLines={1}>
                               {item.name}
                             </Text>
@@ -307,7 +307,7 @@ export default function DebtPayoffScreen() {
                           <Text style={styles.debtBalanceVal}>{formatCurrency(item.balance)}</Text>
                         </View>
 
-                        <View style={{ alignItems: 'flex-end' }}>
+                        <View style={styles.alignEnd}>
                           <Text style={styles.debtPayoffDateLabel}>Target Payoff Date</Text>
                           <View style={styles.payoffDateRow}>
                             <MaterialIcons name="event-available" size={14} color="#10B981" />
@@ -346,7 +346,7 @@ export default function DebtPayoffScreen() {
               onChangeText={setTempApr}
             />
 
-            <Text style={[styles.inputLabel, { marginTop: 12 }]}>MINIMUM MONTHLY PAYMENT ({getCurrencySymbol()})</Text>
+            <Text style={[styles.inputLabel, styles.inputLabelSpaced]}>MINIMUM MONTHLY PAYMENT ({getCurrencySymbol()})</Text>
             <TextInput
               style={[styles.modalInput, { color: colors.onSurface, borderColor: colors.surfaceVariant }]}
               keyboardType="numeric"
@@ -358,7 +358,7 @@ export default function DebtPayoffScreen() {
 
             <View style={styles.modalActions}>
               <TouchableOpacity
-                style={[styles.modalBtn, { borderColor: colors.outlineVariant, borderWidth: 1 }]}
+                style={[styles.modalBtn, styles.modalBtnCancel, { borderColor: colors.outlineVariant }]}
                 onPress={() => setEditingDebt(null)}
               >
                 <Text style={[styles.modalBtnText, { color: colors.onSurface }]}>Cancel</Text>
@@ -379,6 +379,36 @@ export default function DebtPayoffScreen() {
 
 const getStyles = (colors: ThemeColors) => {
   const styles = StyleSheet.create({
+    flex1: {
+      flex: 1,
+    },
+    emptyIconBg: {
+      backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    },
+    textDanger: {
+      color: '#EF4444',
+    },
+    textSuccess: {
+      color: '#10B981',
+    },
+    rowCenterGap6: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    debtNameCol: {
+      flex: 1,
+      marginRight: 8,
+    },
+    alignEnd: {
+      alignItems: 'flex-end',
+    },
+    inputLabelSpaced: {
+      marginTop: 12,
+    },
+    modalBtnCancel: {
+      borderWidth: 1,
+    },
     container: {
       flex: 1,
       backgroundColor: colors.background,

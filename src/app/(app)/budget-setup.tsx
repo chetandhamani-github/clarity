@@ -87,7 +87,7 @@ export default function BudgetSetupScreen() {
       />
 
       <KeyboardAwareScrollView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         contentContainerStyle={StyleSheet.flatten([
           styles.scrollContent,
           { paddingBottom: insets.bottom + 120 },
@@ -177,14 +177,14 @@ export default function BudgetSetupScreen() {
                       name="home"
                       size={18}
                       color={colors.onSurfaceVariant}
-                      style={{ opacity: 0.5 }}
+                      style={styles.dimmed}
                     />
                   </View>
                   <Text style={styles.bentoAmount}>{formatCurrencyWhole(needsAmt)}</Text>
 
                   <View style={styles.inputControlsRow}>
                     <Slider
-                      style={{ flex: 1, height: 40, marginHorizontal: -8 }}
+                      style={styles.slider}
                       minimumValue={0}
                       maximumValue={100}
                       step={1}
@@ -218,14 +218,14 @@ export default function BudgetSetupScreen() {
                       name="local-cafe"
                       size={18}
                       color={colors.onSurfaceVariant}
-                      style={{ opacity: 0.5 }}
+                      style={styles.dimmed}
                     />
                   </View>
                   <Text style={styles.bentoAmount}>{formatCurrencyWhole(wantsAmt)}</Text>
 
                   <View style={styles.inputControlsRow}>
                     <Slider
-                      style={{ flex: 1, height: 40, marginHorizontal: -8 }}
+                      style={styles.slider}
                       minimumValue={0}
                       maximumValue={100}
                       step={1}
@@ -259,14 +259,14 @@ export default function BudgetSetupScreen() {
                       name="account-balance"
                       size={18}
                       color={colors.onSurfaceVariant}
-                      style={{ opacity: 0.5 }}
+                      style={styles.dimmed}
                     />
                   </View>
                   <Text style={styles.bentoAmount}>{formatCurrencyWhole(savingsAmt)}</Text>
 
                   <View style={styles.inputControlsRow}>
                     <Slider
-                      style={{ flex: 1, height: 40, marginHorizontal: -8 }}
+                      style={styles.slider}
                       minimumValue={0}
                       maximumValue={100}
                       step={1}
@@ -297,7 +297,7 @@ export default function BudgetSetupScreen() {
       {/* Fixed Bottom Action Area */}
       <View style={[styles.bottomActionArea, { paddingBottom: Math.max(insets.bottom, 28) + 16 }]}>
         <TouchableOpacity
-          style={[styles.confirmButton, (isPending || totalPct !== 100) && { opacity: 0.5 }]}
+          style={[styles.confirmButton, (isPending || totalPct !== 100) && styles.dimmed]}
           onPress={handleSave}
           disabled={isPending || totalPct !== 100}
         >
@@ -316,6 +316,17 @@ const getStyles = (colors: ThemeColors) => {
     container: {
       flex: 1,
       backgroundColor: colors.background,
+    },
+    flex1: {
+      flex: 1,
+    },
+    dimmed: {
+      opacity: 0.5,
+    },
+    slider: {
+      flex: 1,
+      height: 40,
+      marginHorizontal: -8,
     },
 
     skipButton: {

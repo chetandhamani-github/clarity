@@ -221,7 +221,7 @@ export function DatePickerModal({
                     style={[
                       styles.shortcutText,
                       { color: colors.onSurfaceVariant },
-                      isSelected && { color: colors.onPrimary, fontWeight: '700' },
+                      isSelected && [styles.boldText, { color: colors.onPrimary }],
                     ]}
                     numberOfLines={1}
                   >
@@ -283,20 +283,20 @@ export function DatePickerModal({
                         backgroundColor: colors.primary,
                         borderColor: colors.primary,
                       },
-                      isToday && !isSelected && {
-                        borderColor: colors.primary,
-                        borderWidth: 1.5,
-                      },
+                      isToday && !isSelected && [
+                        styles.todayBorder,
+                        { borderColor: colors.primary },
+                      ],
                     ]}
                   >
                     <Text
                       style={[
                         styles.dayNumberText,
                         { color: colors.onSurface },
-                        !item.isCurrentMonth && { color: colors.outline, opacity: 0.4 },
-                        isSelected && { color: colors.onPrimary, fontWeight: '700' },
-                        isToday && !isSelected && { color: colors.primary, fontWeight: '700' },
-                        item.isDisabled && { color: colors.outline, opacity: 0.3 },
+                        !item.isCurrentMonth && [styles.outsideMonthText, { color: colors.outline }],
+                        isSelected && [styles.boldText, { color: colors.onPrimary }],
+                        isToday && !isSelected && [styles.boldText, { color: colors.primary }],
+                        item.isDisabled && [styles.disabledDayText, { color: colors.outline }],
                       ]}
                     >
                       {item.day}
@@ -352,6 +352,18 @@ const styles = StyleSheet.create({
   },
   closeBtn: {
     padding: 4,
+  },
+  boldText: {
+    fontWeight: '700',
+  },
+  todayBorder: {
+    borderWidth: 1.5,
+  },
+  outsideMonthText: {
+    opacity: 0.4,
+  },
+  disabledDayText: {
+    opacity: 0.3,
   },
   quickShortcutsRow: {
     flexDirection: 'row',

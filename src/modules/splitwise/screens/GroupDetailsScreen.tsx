@@ -258,14 +258,9 @@ export function GroupDetailsScreen() {
               <Text
                 style={[
                   styles.statValue,
-                  {
-                    color:
-                      myBalance > 0.009
-                        ? '#10b981'
-                        : myBalance < -0.009
-                          ? '#ef4444'
-                          : colors.onSurfaceVariant,
-                  },
+                  { color: colors.onSurfaceVariant },
+                  myBalance > 0.009 && styles.positiveText,
+                  myBalance < -0.009 && styles.negativeText,
                 ]}
                 numberOfLines={1}
                 adjustsFontSizeToFit
@@ -308,10 +303,8 @@ export function GroupDetailsScreen() {
             <Text
               style={[
                 styles.tabBtnText,
-                {
-                  color: activeTab === 'EXPENSES' ? colors.onSurface : colors.onSurfaceVariant,
-                  fontFamily: activeTab === 'EXPENSES' ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                },
+                { color: activeTab === 'EXPENSES' ? colors.onSurface : colors.onSurfaceVariant },
+                activeTab === 'EXPENSES' ? styles.fontBold : styles.fontSemiBold,
               ]}
             >
               Expenses ({activeGroupExpenses.length})
@@ -336,10 +329,8 @@ export function GroupDetailsScreen() {
             <Text
               style={[
                 styles.tabBtnText,
-                {
-                  color: activeTab === 'BALANCES' ? colors.onSurface : colors.onSurfaceVariant,
-                  fontFamily: activeTab === 'BALANCES' ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                },
+                { color: activeTab === 'BALANCES' ? colors.onSurface : colors.onSurfaceVariant },
+                activeTab === 'BALANCES' ? styles.fontBold : styles.fontSemiBold,
               ]}
             >
               Balances & Settle
@@ -418,7 +409,7 @@ export function GroupDetailsScreen() {
                             {expense.description}
                           </Text>
                           <Text style={[styles.expenseMeta, { color: colors.onSurfaceVariant }]}>
-                            Paid by <Text style={{ fontFamily: 'Manrope_700Bold' }}>{payerName}</Text> • {dateStr}
+                            Paid by <Text style={styles.fontBold}>{payerName}</Text> • {dateStr}
                           </Text>
                         </View>
 
@@ -449,7 +440,7 @@ export function GroupDetailsScreen() {
                         <TouchableOpacity
                           onPress={() => handleDeleteExpense(expense)}
                           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                          style={{ marginLeft: 'auto' }}
+                          style={styles.mlAuto}
                         >
                           <MaterialIcons name="delete-outline" size={18} color={colors.error} />
                         </TouchableOpacity>
@@ -487,7 +478,7 @@ export function GroupDetailsScreen() {
               {simplifiedDebts.length === 0 ? (
                 <View style={styles.allSettledRow}>
                   <MaterialIcons name="check-circle" size={24} color="#10b981" />
-                  <Text style={[styles.allSettledText, { color: '#10b981' }]}>
+                  <Text style={[styles.allSettledText, styles.positiveText]}>
                     All settled up! No outstanding balances.
                   </Text>
                 </View>
@@ -513,10 +504,8 @@ export function GroupDetailsScreen() {
                             <Text
                               style={[
                                 styles.debtorName,
-                                {
-                                  color: '#ef4444',
-                                  fontFamily: isYouDebtor ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                                },
+                                styles.negativeText,
+                                isYouDebtor ? styles.fontBold : styles.fontSemiBold,
                               ]}
                             >
                               {isYouDebtor ? 'You' : item.fromPersonName || 'Member'}
@@ -529,10 +518,8 @@ export function GroupDetailsScreen() {
                             <Text
                               style={[
                                 styles.creditorName,
-                                {
-                                  color: '#10b981',
-                                  fontFamily: isYouCreditor ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                                },
+                                styles.positiveText,
+                                isYouCreditor ? styles.fontBold : styles.fontSemiBold,
                               ]}
                             >
                               {isYouCreditor ? 'You' : item.toPersonName || 'Member'}
@@ -546,7 +533,7 @@ export function GroupDetailsScreen() {
                         {/* Direct Action Button if Current User is Involved */}
                         {isYouDebtor && (
                           <TouchableOpacity
-                            style={[styles.settleInGroupBtn, { backgroundColor: '#ef4444' }]}
+                            style={[styles.settleInGroupBtn, styles.negativeBg]}
                             onPress={() => {
                               router.navigate(
                                 `/(app)/add-splitwise-settlement?personId=${item.toPersonId}&groupId=${groupId}&amount=${item.amount}&type=YOU_PAID`
@@ -563,7 +550,7 @@ export function GroupDetailsScreen() {
 
                         {isYouCreditor && (
                           <TouchableOpacity
-                            style={[styles.settleInGroupBtn, { backgroundColor: '#10b981' }]}
+                            style={[styles.settleInGroupBtn, styles.positiveBg]}
                             onPress={() => {
                               router.navigate(
                                 `/(app)/add-splitwise-settlement?personId=${item.fromPersonId}&groupId=${groupId}&amount=${item.amount}&type=THEY_PAID`
@@ -588,15 +575,15 @@ export function GroupDetailsScreen() {
             <View
               style={[
                 styles.sectionCard,
+                styles.mt16,
                 {
                   backgroundColor: colors.surfaceContainerLow,
                   borderColor: colors.outlineVariant,
-                  marginTop: 16,
                 },
               ]}
             >
               <View style={styles.sectionHeaderRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={styles.memberHeaderLeft}>
                   <MaterialIcons name="people" size={18} color={colors.primary} />
                   <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>
                     Member Net Positions
@@ -606,11 +593,11 @@ export function GroupDetailsScreen() {
                 {candidateFriends.length > 0 && (
                   <TouchableOpacity
                     onPress={() => setShowAddMemberModal(true)}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    style={styles.addMemberBtn}
                     hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                   >
                     <MaterialIcons name="person-add" size={16} color={colors.primary} />
-                    <Text style={{ color: colors.primary, fontSize: 13, fontFamily: 'Manrope_700Bold' }}>
+                    <Text style={[styles.addMemberBtnText, { color: colors.primary }]}>
                       + Add
                     </Text>
                   </TouchableOpacity>
@@ -651,7 +638,8 @@ export function GroupDetailsScreen() {
                       <Text
                         style={[
                           styles.memberNetStatus,
-                          { color: statusColor, fontFamily: 'Manrope_700Bold' },
+                          styles.fontBold,
+                          { color: statusColor },
                         ]}
                       >
                         {statusText}
@@ -722,9 +710,9 @@ export function GroupDetailsScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 300 }}>
+            <ScrollView style={styles.modalScroll}>
               {candidateFriends.length === 0 ? (
-                <Text style={{ color: colors.onSurfaceVariant, padding: 16, textAlign: 'center' }}>
+                <Text style={[styles.emptyCandidateText, { color: colors.onSurfaceVariant }]}>
                   All your friends are already in this group!
                 </Text>
               ) : (
@@ -744,16 +732,15 @@ export function GroupDetailsScreen() {
                       ]}
                       onPress={() => toggleSelectCandidate(friend.id)}
                     >
-                      <View style={{ flex: 1 }}>
+                      <View style={styles.flex1}>
                         <Text style={[styles.candidateName, { color: colors.onSurface }]}>
                           {friend.name}
                         </Text>
                         <Text
-                          style={{
-                            fontSize: 11,
-                            color: friend.email ? colors.primary : colors.onSurfaceVariant,
-                            marginTop: 2,
-                          }}
+                          style={[
+                            styles.candidateEmail,
+                            { color: friend.email ? colors.primary : colors.onSurfaceVariant },
+                          ]}
                         >
                           {friend.email ? `${friend.email} • Syncs` : 'No email (local only)'}
                         </Text>
@@ -781,11 +768,10 @@ export function GroupDetailsScreen() {
               onPress={handleAddMembers}
             >
               <Text
-                style={{
-                  color: selectedAddMemberIds.length > 0 ? colors.onPrimary : colors.outline,
-                  fontFamily: 'Manrope_700Bold',
-                  fontSize: 14,
-                }}
+                style={[
+                  styles.addMemberSubmitText,
+                  { color: selectedAddMemberIds.length > 0 ? colors.onPrimary : colors.outline },
+                ]}
               >
                 Add {selectedAddMemberIds.length > 0 ? `(${selectedAddMemberIds.length}) ` : ''}to Group
               </Text>
@@ -1143,6 +1129,62 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  flex1: {
+    flex: 1,
+  },
+  mt16: {
+    marginTop: 16,
+  },
+  mlAuto: {
+    marginLeft: 'auto',
+  },
+  fontBold: {
+    fontFamily: 'Manrope_700Bold',
+  },
+  fontSemiBold: {
+    fontFamily: 'Manrope_600SemiBold',
+  },
+  positiveText: {
+    color: '#10b981',
+  },
+  negativeText: {
+    color: '#ef4444',
+  },
+  positiveBg: {
+    backgroundColor: '#10b981',
+  },
+  negativeBg: {
+    backgroundColor: '#ef4444',
+  },
+  memberHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  addMemberBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  addMemberBtnText: {
+    fontSize: 13,
+    fontFamily: 'Manrope_700Bold',
+  },
+  modalScroll: {
+    maxHeight: 300,
+  },
+  emptyCandidateText: {
+    padding: 16,
+    textAlign: 'center',
+  },
+  candidateEmail: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  addMemberSubmitText: {
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 14,
   },
 });
 

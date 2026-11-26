@@ -331,7 +331,7 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         }
         rightNode={
-          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+          <View style={styles.headerRightRow}>
             <TouchableOpacity
               style={styles.iconButton}
               onPress={handleOpenCopilot}
@@ -372,7 +372,7 @@ export default function DashboardScreen() {
           />
         }
       >
-        <View style={{ flex: 1 }}>
+        <View style={styles.flex1}>
           {showSkeleton ? (
             <HomeSkeleton />
           ) : (
@@ -399,7 +399,7 @@ export default function DashboardScreen() {
                     <View style={styles.welcomeHeroIcon}>
                       <MaterialIcons name="account-balance" size={26} color={colors.primary} />
                     </View>
-                    <View style={{ flex: 1 }}>
+                    <View style={styles.flex1}>
                       <Text style={styles.welcomeHeroTitle}>Welcome to Clarity</Text>
                       <Text style={styles.welcomeHeroSubtitle}>
                         Your private, local-first finance manager. Follow the getting started guide above to add your accounts and configure your budget.
@@ -418,62 +418,29 @@ export default function DashboardScreen() {
                 <>
                   {/* Notification Auto-Tracking Banner */}
                   {Platform.OS === 'android' && notificationPermissionStatus !== 'granted' && (
-                    <View
-                      style={{
-                        marginBottom: 16,
-                        padding: 16,
-                        borderRadius: 16,
-                        backgroundColor: colors.surfaceContainerLow,
-                        borderWidth: 1,
-                        borderColor: colors.outlineVariant,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 12,
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
-                        <View
-                          style={{
-                            width: 40,
-                            height: 40,
-                            borderRadius: 20,
-                            backgroundColor: colors.primaryContainer,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
+                    <View style={styles.autoTrackBanner}>
+                      <View style={styles.autoTrackBannerLeft}>
+                        <View style={styles.autoTrackBannerIcon}>
                           <MaterialIcons
                             name="notifications-active"
                             size={20}
                             color={colors.onPrimaryContainer}
                           />
                         </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ ...typography.bodyLg, color: colors.onSurface, fontWeight: '700' }}>
+                        <View style={styles.flex1}>
+                          <Text style={styles.autoTrackBannerTitle}>
                             Auto-Track UPI & Bank Alerts
                           </Text>
-                          <Text style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, fontSize: 12 }}>
+                          <Text style={styles.autoTrackBannerSubtitle}>
                             Detect UPI, cards & bills 100% offline.
                           </Text>
                         </View>
                       </View>
                       <TouchableOpacity
                         onPress={handleEnableAutoTracking}
-                        style={{
-                          backgroundColor: colors.primary,
-                          paddingHorizontal: 12,
-                          paddingVertical: 8,
-                          borderRadius: 10,
-                        }}
+                        style={styles.autoTrackEnableButton}
                       >
-                        <Text
-                          style={{
-                            ...typography.labelMd,
-                            color: colors.onPrimary,
-                            fontWeight: '700',
-                          }}
-                        >
+                        <Text style={styles.autoTrackEnableButtonText}>
                           ENABLE
                         </Text>
                       </TouchableOpacity>
@@ -482,7 +449,7 @@ export default function DashboardScreen() {
               {/* Main Card: Net Worth */}
               <View style={styles.netWorthCard}>
                 <View style={styles.netWorthHeader}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={styles.rowCenterGap6}>
                     <Text style={styles.netWorthLabel}>TOTAL NET WORTH</Text>
                     <TouchableOpacity
                       onPress={toggleHideBalances}
@@ -656,7 +623,7 @@ export default function DashboardScreen() {
                     <View style={styles.pendingSmsIcon}>
                       <MaterialIcons name="notifications-active" size={20} color={colors.primary} />
                     </View>
-                    <View style={{ flex: 1 }}>
+                    <View style={styles.flex1}>
                       <Text style={styles.pendingSmsTitle} numberOfLines={1}>
                         {pendingSmsTransactions.length} new transaction
                         {pendingSmsTransactions.length > 1 ? 's' : ''} detected
@@ -788,17 +755,11 @@ export default function DashboardScreen() {
                     style={styles.budgetCard}
                     onPress={() => router.navigate('/budget-setup')}
                   >
-                    <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-                      <Text
-                        style={{
-                          ...typography.bodyMd,
-                          color: colors.onSurfaceVariant,
-                          marginBottom: 12,
-                        }}
-                      >
+                    <View style={styles.emptyBudgetWrap}>
+                      <Text style={styles.emptyBudgetText}>
                         No budget plan set up yet.
                       </Text>
-                      <Text style={{ ...typography.labelMd, color: colors.primary }}>
+                      <Text style={styles.emptyBudgetCta}>
                         SET UP BUDGET
                       </Text>
                     </View>
@@ -821,8 +782,8 @@ export default function DashboardScreen() {
 
                 <View style={styles.activityCard}>
                   {transactions.length === 0 ? (
-                    <View style={{ padding: 24, alignItems: 'center' }}>
-                      <Text style={{ color: colors.onSurfaceVariant }}>
+                    <View style={styles.emptyActivityWrap}>
+                      <Text style={styles.emptyActivityText}>
                         No recent transactions.
                       </Text>
                     </View>
@@ -874,7 +835,7 @@ export default function DashboardScreen() {
                               {subtitle}
                             </Text>
                           </View>
-                          <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+                          <View style={styles.activityAmountWrap}>
                             <Text
                               style={
                                 tx.type === 'income'
@@ -933,6 +894,90 @@ const getStyles = (colors: ThemeColors) => {
     container: {
       flex: 1,
       backgroundColor: colors.background,
+    },
+    flex1: {
+      flex: 1,
+    },
+    headerRightRow: {
+      flexDirection: 'row',
+      gap: 6,
+      alignItems: 'center',
+    },
+    rowCenterGap6: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    autoTrackBanner: {
+      marginBottom: 16,
+      padding: 16,
+      borderRadius: 16,
+      backgroundColor: colors.surfaceContainerLow,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    autoTrackBannerLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      flex: 1,
+    },
+    autoTrackBannerIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.primaryContainer,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    autoTrackBannerTitle: {
+      ...typography.bodyLg,
+      color: colors.onSurface,
+      fontWeight: '700',
+    },
+    autoTrackBannerSubtitle: {
+      ...typography.bodyMd,
+      color: colors.onSurfaceVariant,
+      fontSize: 12,
+    },
+    autoTrackEnableButton: {
+      backgroundColor: colors.primary,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 10,
+    },
+    autoTrackEnableButtonText: {
+      ...typography.labelMd,
+      color: colors.onPrimary,
+      fontWeight: '700',
+    },
+    emptyBudgetWrap: {
+      alignItems: 'center',
+      paddingVertical: 16,
+    },
+    emptyBudgetText: {
+      ...typography.bodyMd,
+      color: colors.onSurfaceVariant,
+      marginBottom: 12,
+    },
+    emptyBudgetCta: {
+      ...typography.labelMd,
+      color: colors.primary,
+    },
+    emptyActivityWrap: {
+      padding: 24,
+      alignItems: 'center',
+    },
+    emptyActivityText: {
+      color: colors.onSurfaceVariant,
+    },
+    activityAmountWrap: {
+      alignItems: 'flex-end',
+      flexShrink: 0,
     },
 
     avatarButton: {

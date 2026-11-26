@@ -175,7 +175,7 @@ export default function AnalyticsScreen() {
       />
 
       <ScrollView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
@@ -183,7 +183,7 @@ export default function AnalyticsScreen() {
           <ListSkeleton />
         ) : (
           <>
-            <View style={{ gap: 24 }}>
+            <View style={styles.contentGap24}>
               {/* Month Selector & Export Header */}
               <View style={styles.pageHeader}>
                 <View style={styles.monthSelectorContainer}>
@@ -195,7 +195,7 @@ export default function AnalyticsScreen() {
                     <MaterialIcons name="chevron-right" size={24} color={colors.onSurface} />
                   </TouchableOpacity>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={styles.headerActionsRow}>
                   <TouchableOpacity
                     style={styles.privacyButton}
                     onPress={toggleHideBalances}
@@ -326,7 +326,7 @@ export default function AnalyticsScreen() {
                     {/* Fill remaining with empty bars if less than 6 months of data */}
                     {Array.from({ length: Math.max(0, 6 - reports.length) }).map((_, idx) => (
                       <View style={styles.barColumn} key={`empty-${idx}`}>
-                        <View style={[styles.barValue, { height: '10%' }]} />
+                        <View style={[styles.barValue, styles.emptyBarHeight]} />
                       </View>
                     ))}
                   </View>
@@ -399,12 +399,12 @@ export default function AnalyticsScreen() {
                 </View>
 
                 {loadingDigest ? (
-                  <View style={{ gap: 12, paddingVertical: 4 }}>
+                  <View style={styles.digestSkeletonContainer}>
                     <SkeletonBox width={140} height={24} borderRadius={radius.full} />
                     <SkeletonText width="85%" height={16} />
                     <SkeletonText width="95%" height={14} />
                     <SkeletonText width="65%" height={14} />
-                    <View style={{ gap: 8, marginTop: 4 }}>
+                    <View style={styles.digestSkeletonSubList}>
                       <SkeletonText width="90%" height={13} />
                       <SkeletonText width="80%" height={13} />
                     </View>
@@ -445,7 +445,7 @@ export default function AnalyticsScreen() {
                     </View>
 
                     {digest.headline ? (
-                      <Text style={[styles.digestSummaryText, { fontWeight: '700' }]}>
+                      <Text style={[styles.digestSummaryText, styles.boldText]}>
                         {digest.headline}
                       </Text>
                     ) : null}
@@ -553,13 +553,7 @@ export default function AnalyticsScreen() {
                     })}
 
                   {spending.every((s) => s.spent === 0) && (
-                    <Text
-                      style={{
-                        ...typography.bodyMd,
-                        color: colors.onSurfaceVariant,
-                        textAlign: 'center',
-                      }}
-                    >
+                    <Text style={styles.emptySpendingText}>
                       No spending data for this month.
                     </Text>
                   )}
@@ -597,14 +591,7 @@ export default function AnalyticsScreen() {
                       </View>
                     ))
                   ) : (
-                    <Text
-                      style={{
-                        ...typography.bodyMd,
-                        color: colors.onSurfaceVariant,
-                        textAlign: 'center',
-                        padding: 16,
-                      }}
-                    >
+                    <Text style={styles.emptyListText}>
                       No merchants found.
                     </Text>
                   )}
@@ -613,7 +600,7 @@ export default function AnalyticsScreen() {
                 {/* Recurring */}
                 <View style={styles.card}>
                   <View style={styles.recurringHeader}>
-                    <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Recurring</Text>
+                    <Text style={[styles.cardTitle, styles.noMarginBottom]}>Recurring</Text>
                     <TouchableOpacity
                       style={styles.addRecurringBtn}
                       onPress={() =>
@@ -661,14 +648,7 @@ export default function AnalyticsScreen() {
                       </TouchableOpacity>
                     ))
                   ) : (
-                    <Text
-                      style={{
-                        ...typography.bodyMd,
-                        color: colors.onSurfaceVariant,
-                        textAlign: 'center',
-                        padding: 16,
-                      }}
-                    >
+                    <Text style={styles.emptyListText}>
                       No recurring transactions.
                     </Text>
                   )}
@@ -687,6 +667,45 @@ const getStyles = (colors: ThemeColors) => {
     container: {
       flex: 1,
       backgroundColor: colors.background,
+    },
+    flex1: {
+      flex: 1,
+    },
+    contentGap24: {
+      gap: 24,
+    },
+    headerActionsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    emptyBarHeight: {
+      height: '10%',
+    },
+    digestSkeletonContainer: {
+      gap: 12,
+      paddingVertical: 4,
+    },
+    digestSkeletonSubList: {
+      gap: 8,
+      marginTop: 4,
+    },
+    boldText: {
+      fontWeight: '700',
+    },
+    emptySpendingText: {
+      ...typography.bodyMd,
+      color: colors.onSurfaceVariant,
+      textAlign: 'center',
+    },
+    emptyListText: {
+      ...typography.bodyMd,
+      color: colors.onSurfaceVariant,
+      textAlign: 'center',
+      padding: 16,
+    },
+    noMarginBottom: {
+      marginBottom: 0,
     },
 
     iconButton: {

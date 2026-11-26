@@ -282,7 +282,7 @@ export function AddExpenseScreen() {
       />
 
       <KeyboardAwareScrollView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         contentContainerStyle={StyleSheet.flatten([
           styles.scrollContent,
           { paddingBottom: 32 },
@@ -320,7 +320,7 @@ export function AddExpenseScreen() {
             />
           </View>
 
-          <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant, marginTop: 14 }]}>
+          <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }, styles.mt14]}>
             DESCRIPTION <Text style={{ color: colors.error }}>*</Text>
           </Text>
           <View
@@ -371,10 +371,8 @@ export function AddExpenseScreen() {
                   <Text
                     style={[
                       styles.catChipText,
-                      {
-                        color: isSelected ? colors.onPrimaryContainer : colors.onSurface,
-                        fontFamily: isSelected ? 'Manrope_700Bold' : 'Manrope_500Medium',
-                      },
+                      { color: isSelected ? colors.onPrimaryContainer : colors.onSurface },
+                      isSelected ? styles.fontBold : styles.fontMedium,
                     ]}
                   >
                     {cat.label}
@@ -426,10 +424,8 @@ export function AddExpenseScreen() {
                   <Text
                     style={[
                       styles.groupPillText,
-                      {
-                        color: selectedGroupId === null ? colors.onPrimaryContainer : colors.onSurface,
-                        fontFamily: selectedGroupId === null ? 'Manrope_700Bold' : 'Manrope_500Medium',
-                      },
+                      { color: selectedGroupId === null ? colors.onPrimaryContainer : colors.onSurface },
+                      selectedGroupId === null ? styles.fontBold : styles.fontMedium,
                     ]}
                   >
                     Non-group Split
@@ -460,10 +456,8 @@ export function AddExpenseScreen() {
                       <Text
                         style={[
                           styles.groupPillText,
-                          {
-                            color: isSelected ? colors.onPrimaryContainer : colors.onSurface,
-                            fontFamily: isSelected ? 'Manrope_700Bold' : 'Manrope_500Medium',
-                          },
+                          { color: isSelected ? colors.onPrimaryContainer : colors.onSurface },
+                          isSelected ? styles.fontBold : styles.fontMedium,
                         ]}
                       >
                         {g.name}
@@ -476,7 +470,7 @@ export function AddExpenseScreen() {
           )}
 
           {/* Payer Picker */}
-          <View style={[styles.selectorSection, { marginTop: groups.length > 0 ? 12 : 0 }]}>
+          <View style={[styles.selectorSection, groups.length > 0 && styles.mt12]}>
             <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>
               PAID BY <Text style={{ color: colors.error }}>*</Text>
             </Text>
@@ -504,10 +498,8 @@ export function AddExpenseScreen() {
                     <Text
                       style={[
                         styles.payerPillText,
-                        {
-                          color: isSelected ? colors.onPrimary : colors.onSurface,
-                          fontFamily: isSelected ? 'Manrope_700Bold' : 'Manrope_500Medium',
-                        },
+                        { color: isSelected ? colors.onPrimary : colors.onSurface },
+                        isSelected ? styles.fontBold : styles.fontMedium,
                       ]}
                     >
                       {p.name}
@@ -570,10 +562,8 @@ export function AddExpenseScreen() {
                   <Text
                     style={[
                       styles.modeBtnText,
-                      {
-                        color: isActive ? colors.onSurface : colors.onSurfaceVariant,
-                        fontFamily: isActive ? 'Manrope_700Bold' : 'Manrope_500Medium',
-                      },
+                      { color: isActive ? colors.onSurface : colors.onSurfaceVariant },
+                      isActive ? styles.fontBold : styles.fontMedium,
                     ]}
                   >
                     {mode.label}
@@ -614,10 +604,8 @@ export function AddExpenseScreen() {
                     <Text
                       style={[
                         styles.participantName,
-                        {
-                          color: isIncluded ? colors.onSurface : colors.onSurfaceVariant,
-                          textDecorationLine: isIncluded ? 'none' : 'line-through',
-                        },
+                        { color: isIncluded ? colors.onSurface : colors.onSurfaceVariant },
+                        !isIncluded && styles.lineThrough,
                       ]}
                       numberOfLines={1}
                     >
@@ -972,6 +960,24 @@ const styles = StyleSheet.create({
   submitButtonText: {
     fontSize: 16,
     fontFamily: 'Manrope_700Bold',
+  },
+  flex1: {
+    flex: 1,
+  },
+  mt12: {
+    marginTop: 12,
+  },
+  mt14: {
+    marginTop: 14,
+  },
+  fontBold: {
+    fontFamily: 'Manrope_700Bold',
+  },
+  fontMedium: {
+    fontFamily: 'Manrope_500Medium',
+  },
+  lineThrough: {
+    textDecorationLine: 'line-through',
   },
 });
 

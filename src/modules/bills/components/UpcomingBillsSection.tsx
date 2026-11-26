@@ -122,13 +122,13 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
                 <SkeletonBox width={64} height={20} borderRadius={6} />
               </View>
 
-              <View style={{ marginTop: 10, gap: 6 }}>
+              <View style={styles.skeletonBody}>
                 <SkeletonText width={100} height={14} />
                 <SkeletonText width={70} height={11} />
-                <SkeletonText width={80} height={16} style={{ marginTop: 2 }} />
+                <SkeletonText width={80} height={16} style={styles.skeletonAmount} />
               </View>
 
-              <View style={{ marginTop: 12 }}>
+              <View style={styles.skeletonFooter}>
                 <SkeletonBox width="100%" height={32} borderRadius={8} />
               </View>
             </View>
@@ -309,6 +309,16 @@ export function UpcomingBillsSection({ daysAhead = 30 }: UpcomingBillsSectionPro
 }
 
 const styles = StyleSheet.create({
+  skeletonBody: {
+    marginTop: 10,
+    gap: 6,
+  },
+  skeletonAmount: {
+    marginTop: 2,
+  },
+  skeletonFooter: {
+    marginTop: 12,
+  },
   container: {
     marginBottom: 24,
   },

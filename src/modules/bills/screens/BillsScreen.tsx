@@ -105,7 +105,7 @@ export function BillsScreen() {
               <Text style={[styles.summaryCardLabel, { color: colors.onSurfaceVariant }]}>
                 UPCOMING
               </Text>
-              <View style={[styles.miniIconBox, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
+              <View style={[styles.miniIconBox, styles.upcomingIconBox]}>
                 <MaterialIcons name="schedule" size={16} color="#3b82f6" />
               </View>
             </View>
@@ -132,19 +132,21 @@ export function BillsScreen() {
               <Text
                 style={[
                   styles.summaryCardLabel,
-                  { color: summary.overdueCount > 0 ? '#ef4444' : colors.onSurfaceVariant },
+                  { color: colors.onSurfaceVariant },
+                  summary.overdueCount > 0 && styles.overdueText,
                 ]}
               >
                 OVERDUE
               </Text>
-              <View style={[styles.miniIconBox, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
+              <View style={[styles.miniIconBox, styles.overdueIconBox]}>
                 <MaterialIcons name="warning" size={16} color="#ef4444" />
               </View>
             </View>
             <Text
               style={[
                 styles.summaryCardAmount,
-                { color: summary.overdueCount > 0 ? '#ef4444' : colors.onSurface },
+                { color: colors.onSurface },
+                summary.overdueCount > 0 && styles.overdueText,
               ]}
             >
               {formatCurrencyPrivacy(summary.overdueAmount, hideBalances)}
@@ -168,11 +170,11 @@ export function BillsScreen() {
               <Text style={[styles.summaryCardLabel, { color: colors.onSurfaceVariant }]}>
                 PAID THIS MONTH
               </Text>
-              <View style={[styles.miniIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
+              <View style={[styles.miniIconBox, styles.paidIconBox]}>
                 <MaterialIcons name="check-circle" size={16} color="#10b981" />
               </View>
             </View>
-            <Text style={[styles.summaryCardAmount, { color: '#10b981' }]}>
+            <Text style={[styles.summaryCardAmount, styles.paidAmount]}>
               {formatCurrencyPrivacy(summary.paidThisMonthAmount, hideBalances)}
             </Text>
             <Text style={[styles.summaryCardSubtext, { color: colors.onSurfaceVariant }]}>
@@ -194,7 +196,7 @@ export function BillsScreen() {
               <Text style={[styles.summaryCardLabel, { color: colors.onSurfaceVariant }]}>
                 SUBSCRIPTIONS
               </Text>
-              <View style={[styles.miniIconBox, { backgroundColor: 'rgba(168, 85, 247, 0.12)' }]}>
+              <View style={[styles.miniIconBox, styles.subsIconBox]}>
                 <MaterialIcons name="subscriptions" size={16} color="#a855f7" />
               </View>
             </View>
@@ -659,5 +661,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
     lineHeight: 20,
+  },
+  upcomingIconBox: {
+    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+  },
+  overdueIconBox: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+  },
+  paidIconBox: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  },
+  subsIconBox: {
+    backgroundColor: 'rgba(168, 85, 247, 0.12)',
+  },
+  overdueText: {
+    color: '#ef4444',
+  },
+  paidAmount: {
+    color: '#10b981',
   },
 });

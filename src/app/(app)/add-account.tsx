@@ -146,7 +146,7 @@ export default function AddAccountScreen() {
       <Header showBack title={isEditing ? 'Edit Account' : 'Add Account'} />
 
       <KeyboardAwareScrollView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         contentContainerStyle={StyleSheet.flatten([styles.scrollContent, { paddingBottom: 32 }])}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -266,19 +266,12 @@ export default function AddAccountScreen() {
           </View>
 
           {type === 'credit' && (
-            <View style={{ gap: 16, paddingTop: 4 }}>
-              <View
-                style={{
-                  backgroundColor: colors.surfaceContainer,
-                  padding: 12,
-                  borderRadius: 12,
-                  gap: 4,
-                }}
-              >
-                <Text style={{ ...typography.labelMd, color: colors.primary, fontWeight: '700' }}>
+            <View style={styles.creditSection}>
+              <View style={styles.creditInfoBox}>
+                <Text style={styles.creditInfoTitle}>
                   Billing Cycle & Due Dates (Optional)
                 </Text>
-                <Text style={{ ...typography.bodyMd, fontSize: 12, lineHeight: 16, color: colors.onSurfaceVariant }}>
+                <Text style={styles.creditInfoSubtitle}>
                   Enter the day of the month your statement generates and when payment is due to track billing cycles.
                 </Text>
               </View>
@@ -295,8 +288,8 @@ export default function AddAccountScreen() {
                 />
               </View>
 
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+              <View style={styles.creditRow}>
+                <View style={[styles.inputGroup, styles.flex1]}>
                   <Text style={styles.label}>Statement Day</Text>
                   <TextInput
                     style={styles.input}
@@ -309,7 +302,7 @@ export default function AddAccountScreen() {
                   />
                 </View>
 
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, styles.flex1]}>
                   <Text style={styles.label}>Payment Due Day</Text>
                   <TextInput
                     style={styles.input}
@@ -326,7 +319,7 @@ export default function AddAccountScreen() {
           )}
 
           <TouchableOpacity
-            style={[styles.submitBtn, isPending && { opacity: 0.7 }]}
+            style={[styles.submitBtn, isPending && styles.submitBtnDisabled]}
             onPress={handleSave}
             disabled={isPending}
           >
@@ -345,6 +338,37 @@ const getStyles = (colors: ThemeColors) => {
     container: {
       flex: 1,
       backgroundColor: colors.background,
+    },
+    flex1: {
+      flex: 1,
+    },
+    creditSection: {
+      gap: 16,
+      paddingTop: 4,
+    },
+    creditInfoBox: {
+      backgroundColor: colors.surfaceContainer,
+      padding: 12,
+      borderRadius: 12,
+      gap: 4,
+    },
+    creditInfoTitle: {
+      ...typography.labelMd,
+      color: colors.primary,
+      fontWeight: '700',
+    },
+    creditInfoSubtitle: {
+      ...typography.bodyMd,
+      fontSize: 12,
+      lineHeight: 16,
+      color: colors.onSurfaceVariant,
+    },
+    creditRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    submitBtnDisabled: {
+      opacity: 0.7,
     },
     scrollContent: {
       padding: 20,

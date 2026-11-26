@@ -347,7 +347,7 @@ export function SettlementScreen() {
       />
 
       <KeyboardAwareScrollView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         contentContainerStyle={StyleSheet.flatten([
           styles.scrollContent,
           { paddingBottom: 32 },
@@ -418,14 +418,9 @@ export function SettlementScreen() {
                   <Text
                     style={[
                       styles.selectedFriendBalance,
-                      {
-                        color:
-                          personBalance.status === 'OWED_TO_ME'
-                            ? '#10b981'
-                            : personBalance.status === 'YOU_OWE'
-                              ? '#ef4444'
-                              : colors.onSurfaceVariant,
-                      },
+                      { color: colors.onSurfaceVariant },
+                      personBalance.status === 'OWED_TO_ME' && styles.positiveText,
+                      personBalance.status === 'YOU_OWE' && styles.negativeText,
                     ]}
                   >
                     {personBalance.statusLabel}: {formatCurrencyPrivacy(Math.abs(personBalance.netBalance), hideBalances)}
@@ -478,11 +473,7 @@ export function SettlementScreen() {
             <TouchableOpacity
               style={[
                 styles.directionToggleBtn,
-                isTheyPaid && {
-                  backgroundColor: colors.surfaceContainerLowest,
-                  borderColor: '#10b981',
-                  borderWidth: 1.5,
-                },
+                isTheyPaid && [{ backgroundColor: colors.surfaceContainerLowest }, styles.theyPaidActiveBtn],
               ]}
               onPress={() => {
                 setValue('type', 'THEY_PAID');
@@ -502,10 +493,8 @@ export function SettlementScreen() {
               <Text
                 style={[
                   styles.directionToggleText,
-                  {
-                    color: isTheyPaid ? colors.onSurface : colors.onSurfaceVariant,
-                    fontFamily: isTheyPaid ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                  },
+                  { color: isTheyPaid ? colors.onSurface : colors.onSurfaceVariant },
+                  isTheyPaid ? styles.fontBold : styles.fontSemiBold,
                 ]}
               >
                 {personFirstName} paid me
@@ -515,11 +504,7 @@ export function SettlementScreen() {
             <TouchableOpacity
               style={[
                 styles.directionToggleBtn,
-                !isTheyPaid && {
-                  backgroundColor: colors.surfaceContainerLowest,
-                  borderColor: '#ef4444',
-                  borderWidth: 1.5,
-                },
+                !isTheyPaid && [{ backgroundColor: colors.surfaceContainerLowest }, styles.youPaidActiveBtn],
               ]}
               onPress={() => {
                 setValue('type', 'YOU_PAID');
@@ -541,10 +526,8 @@ export function SettlementScreen() {
               <Text
                 style={[
                   styles.directionToggleText,
-                  {
-                    color: !isTheyPaid ? colors.onSurface : colors.onSurfaceVariant,
-                    fontFamily: !isTheyPaid ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                  },
+                  { color: !isTheyPaid ? colors.onSurface : colors.onSurfaceVariant },
+                  !isTheyPaid ? styles.fontBold : styles.fontSemiBold,
                 ]}
               >
                 I paid {personFirstName}
@@ -735,15 +718,10 @@ export function SettlementScreen() {
                 <Text
                   style={[
                     styles.previewValue,
-                    {
-                      color:
-                        projectedBalance > 0
-                          ? '#10b981'
-                          : projectedBalance < 0
-                            ? '#ef4444'
-                            : colors.primary,
-                      fontFamily: 'Manrope_700Bold',
-                    },
+                    styles.fontBold,
+                    { color: colors.primary },
+                    projectedBalance > 0 && styles.positiveText,
+                    projectedBalance < 0 && styles.negativeText,
                   ]}
                 >
                   {projectedBalance === 0
@@ -811,8 +789,8 @@ export function SettlementScreen() {
                         ? colors.primaryContainer + '30'
                         : colors.surfaceContainerHigh,
                       borderColor: isSelected ? colors.primary : colors.outlineVariant,
-                      borderWidth: isSelected ? 1 : 0,
                     },
+                    isSelected ? styles.borderWidth1 : styles.borderWidth0,
                   ]}
                   onPress={() => setValue('description', method.value, { shouldValidate: true })}
                   activeOpacity={0.75}
@@ -825,10 +803,8 @@ export function SettlementScreen() {
                   <Text
                     style={[
                       styles.quickTagText,
-                      {
-                        color: isSelected ? colors.primary : colors.onSurfaceVariant,
-                        fontFamily: isSelected ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                      },
+                      { color: isSelected ? colors.primary : colors.onSurfaceVariant },
+                      isSelected ? styles.fontBold : styles.fontSemiBold,
                     ]}
                   >
                     {method.label}
@@ -889,11 +865,7 @@ export function SettlementScreen() {
                   <View
                     style={[
                       styles.accountIconBadge,
-                      {
-                        backgroundColor: isTheyPaid
-                          ? 'rgba(16, 185, 129, 0.12)'
-                          : 'rgba(239, 68, 68, 0.12)',
-                      },
+                      isTheyPaid ? styles.theyPaidBadgeBg : styles.youPaidBadgeBg,
                     ]}
                   >
                     <MaterialIcons
@@ -978,10 +950,8 @@ export function SettlementScreen() {
                 <Text
                   style={[
                     styles.quickDateText,
-                    {
-                      color: selectedDate === todayStr ? colors.onPrimary : colors.onSurfaceVariant,
-                      fontFamily: selectedDate === todayStr ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                    },
+                    { color: selectedDate === todayStr ? colors.onPrimary : colors.onSurfaceVariant },
+                    selectedDate === todayStr ? styles.fontBold : styles.fontSemiBold,
                   ]}
                   numberOfLines={1}
                 >
@@ -1004,10 +974,8 @@ export function SettlementScreen() {
                 <Text
                   style={[
                     styles.quickDateText,
-                    {
-                      color: selectedDate === yesterdayStr ? colors.onPrimary : colors.onSurfaceVariant,
-                      fontFamily: selectedDate === yesterdayStr ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                    },
+                    { color: selectedDate === yesterdayStr ? colors.onPrimary : colors.onSurfaceVariant },
+                    selectedDate === yesterdayStr ? styles.fontBold : styles.fontSemiBold,
                   ]}
                   numberOfLines={1}
                 >
@@ -1910,5 +1878,40 @@ const styles = StyleSheet.create({
     ...typography.bodyMd,
     fontSize: 12,
     lineHeight: 17,
+  },
+  flex1: {
+    flex: 1,
+  },
+  positiveText: {
+    color: '#10b981',
+  },
+  negativeText: {
+    color: '#ef4444',
+  },
+  theyPaidActiveBtn: {
+    borderColor: '#10b981',
+    borderWidth: 1.5,
+  },
+  youPaidActiveBtn: {
+    borderColor: '#ef4444',
+    borderWidth: 1.5,
+  },
+  fontBold: {
+    fontFamily: 'Manrope_700Bold',
+  },
+  fontSemiBold: {
+    fontFamily: 'Manrope_600SemiBold',
+  },
+  borderWidth1: {
+    borderWidth: 1,
+  },
+  borderWidth0: {
+    borderWidth: 0,
+  },
+  theyPaidBadgeBg: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  },
+  youPaidBadgeBg: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
   },
 });

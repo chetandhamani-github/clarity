@@ -195,27 +195,14 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
           }
           rightNode={<View style={styles.iconButton} />}
         />
-        <View
-          style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, gap: 16 }}
-        >
-          <View
-            style={{
-              width: 80,
-              height: 80,
-              borderRadius: 40,
-              backgroundColor: colors.surfaceContainerLow,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
+        <View style={styles.emptyPlanContainer}>
+          <View style={styles.emptyPlanIconWrap}>
             <MaterialIcons name="account-balance-wallet" size={44} color={colors.primary} />
           </View>
-          <Text style={{ ...typography.headlineSm, color: colors.onSurface }}>
+          <Text style={styles.emptyPlanTitle}>
             No Budget Plan Set
           </Text>
-          <Text
-            style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, textAlign: 'center' }}
-          >
+          <Text style={styles.emptyPlanSubtitle}>
             Set up your monthly income and allocation to start tracking your budget.
           </Text>
           <TouchableOpacity style={styles.editBtn} onPress={() => router.navigate('/budget-setup')}>
@@ -298,7 +285,7 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: showBack ? insets.bottom : 0 }]}>
+    <View style={[styles.container, { paddingTop: insets.top }, showBack && { paddingBottom: insets.bottom }]}>
       <Header
         isMainTab={!showBack}
         showBack={showBack}
@@ -320,7 +307,7 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
       />
 
       <ScrollView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
@@ -487,8 +474,8 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
                     <View
                       style={[
                         styles.progressBarFill,
+                        styles.needsBarFill,
                         {
-                          backgroundColor: '#3B82F6',
                           width: `${Math.min(100, (totals.needsSpent / Math.max(1, needsLimit)) * 100)}%`,
                         },
                       ]}
@@ -498,24 +485,16 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
 
                 {billSummary && billSummary.totalCommitted > 0 && (
                   <TouchableOpacity
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      marginTop: 10,
-                      paddingTop: 10,
-                      borderTopWidth: 1,
-                      borderTopColor: colors.outlineVariant,
-                    }}
+                    style={styles.committedBillsRow}
                     onPress={() => router.navigate('/(app)/bills')}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={styles.committedBillsLeft}>
                       <MaterialIcons name="receipt-long" size={16} color={colors.onSurfaceVariant} />
-                      <Text style={{ ...typography.bodyMd, color: colors.onSurfaceVariant, fontSize: 12 }}>
+                      <Text style={styles.committedBillsLabel}>
                         Committed Bills & Utilities
                       </Text>
                     </View>
-                    <Text style={{ ...typography.labelMd, color: colors.primary, fontWeight: '700' }}>
+                    <Text style={styles.committedBillsAmount}>
                       {formatCurrency(billSummary.totalCommitted)} →
                     </Text>
                   </TouchableOpacity>
@@ -545,8 +524,8 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
                     <View
                       style={[
                         styles.progressBarFill,
+                        styles.wantsBarFill,
                         {
-                          backgroundColor: '#EC4899',
                           width: `${Math.min(100, (totals.wantsSpent / Math.max(1, wantsLimit)) * 100)}%`,
                         },
                       ]}
@@ -578,8 +557,8 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
                     <View
                       style={[
                         styles.progressBarFill,
+                        styles.savingsBarFill,
                         {
-                          backgroundColor: '#10B981',
                           width: `${Math.min(100, (totals.savingsSpent / Math.max(1, savingsLimit)) * 100)}%`,
                         },
                       ]}
@@ -592,7 +571,7 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
             {/* Category Micro-Budgets Section */}
             <View style={styles.categoryBudgetsSection}>
               <View style={styles.categoryBudgetsHeader}>
-                <View style={{ flex: 1 }}>
+                <View style={styles.flex1}>
                   <Text style={styles.sectionTitle}>Category Budgets</Text>
                   <Text style={styles.sectionSubtitle}>
                     Set spending caps to prevent category overspending
@@ -640,10 +619,8 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
                       <Text
                         style={[
                           styles.filterPillText,
-                          {
-                            color: isActive ? colors.onPrimary : colors.onSurfaceVariant,
-                            fontWeight: isActive ? '700' : '500',
-                          },
+                          { color: isActive ? colors.onPrimary : colors.onSurfaceVariant },
+                          isActive ? styles.filterPillTextActive : styles.filterPillTextInactive,
                         ]}
                       >
                         {label}
@@ -978,7 +955,8 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
                   <TouchableOpacity
                     style={[
                       styles.saveCapBtn,
-                      { backgroundColor: colors.primary, flex: 1 },
+                      styles.flex1,
+                      { backgroundColor: colors.primary },
                     ]}
                     onPress={handleSaveCap}
                   >
@@ -1001,6 +979,72 @@ const getStyles = (colors: ThemeColors) => {
     container: {
       flex: 1,
       backgroundColor: colors.background,
+    },
+    flex1: {
+      flex: 1,
+    },
+    emptyPlanSubtitle: {
+      ...typography.bodyMd,
+      color: colors.onSurfaceVariant,
+      textAlign: 'center',
+    },
+    needsBarFill: {
+      backgroundColor: '#3B82F6',
+    },
+    wantsBarFill: {
+      backgroundColor: '#EC4899',
+    },
+    savingsBarFill: {
+      backgroundColor: '#10B981',
+    },
+    committedBillsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 10,
+      paddingTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: colors.outlineVariant,
+    },
+    committedBillsLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    committedBillsLabel: {
+      ...typography.bodyMd,
+      color: colors.onSurfaceVariant,
+      fontSize: 12,
+    },
+    committedBillsAmount: {
+      ...typography.labelMd,
+      color: colors.primary,
+      fontWeight: '700',
+    },
+    filterPillTextActive: {
+      fontWeight: '700',
+    },
+    filterPillTextInactive: {
+      fontWeight: '500',
+    },
+    emptyPlanContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+      gap: 16,
+    },
+    emptyPlanIconWrap: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: colors.surfaceContainerLow,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emptyPlanTitle: {
+      ...typography.headlineSm,
+      color: colors.onSurface,
     },
 
     avatarButton: {

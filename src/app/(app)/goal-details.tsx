@@ -96,17 +96,7 @@ export default function GoalDetailsScreen() {
 
   if (!goal && !isLoading) {
     return (
-      <View
-        style={[
-          styles.container,
-          {
-            backgroundColor: colors.background,
-            paddingTop: insets.top,
-            justifyContent: 'center',
-            alignItems: 'center',
-          },
-        ]}
-      >
+      <View style={[styles.container, styles.notFoundContainer, { paddingTop: insets.top }]}>
         <Text style={{ color: colors.error }}>Goal not found</Text>
       </View>
     );
@@ -290,7 +280,7 @@ export default function GoalDetailsScreen() {
 
       {goal && (
         <KeyboardAwareScrollView
-          style={{ flex: 1 }}
+          style={styles.flex1}
           contentContainerStyle={StyleSheet.flatten([
             styles.scrollContent,
             { paddingBottom: 32 },
@@ -346,7 +336,7 @@ export default function GoalDetailsScreen() {
                   <View style={styles.currencyInputRow}>
                     <Text style={styles.currencySymbol}>{getCurrencySymbol()}</Text>
                     <TextInput
-                      style={[styles.input, { flex: 1 }]}
+                      style={[styles.input, styles.flex1]}
                       placeholder="Amount"
                       placeholderTextColor={colors.outline}
                       keyboardType="decimal-pad"
@@ -366,7 +356,7 @@ export default function GoalDetailsScreen() {
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={{ gap: 8, paddingVertical: 8 }}
+                      contentContainerStyle={styles.accountChipsScroll}
                     >
                       {accounts.map((acc) => (
                         <TouchableOpacity
@@ -442,7 +432,7 @@ export default function GoalDetailsScreen() {
                       <Text style={styles.amountLabel}>Saved</Text>
                       <Text style={styles.amountCurrent}>{formatCurrency(goal.currentAmount)}</Text>
                     </View>
-                    <View style={{ alignItems: 'flex-end' }}>
+                    <View style={styles.alignEnd}>
                       <Text style={styles.amountLabel}>Target</Text>
                       <Text style={styles.amountTarget}>{formatCurrency(goal.targetAmount)}</Text>
                     </View>
@@ -521,7 +511,7 @@ export default function GoalDetailsScreen() {
 
                 <View style={styles.transactionList}>
                   {contributions.length === 0 ? (
-                    <Text style={{ padding: 16, color: colors.onSurfaceVariant }}>
+                    <Text style={styles.emptyContributions}>
                       No contributions yet. Tap "Add Contribution" above to begin.
                     </Text>
                   ) : (
@@ -809,6 +799,25 @@ export default function GoalDetailsScreen() {
 
 const getStyles = (colors: ThemeColors) => {
   const styles = StyleSheet.create({
+    flex1: {
+      flex: 1,
+    },
+    notFoundContainer: {
+      backgroundColor: colors.background,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    accountChipsScroll: {
+      gap: 8,
+      paddingVertical: 8,
+    },
+    alignEnd: {
+      alignItems: 'flex-end',
+    },
+    emptyContributions: {
+      padding: 16,
+      color: colors.onSurfaceVariant,
+    },
     container: {
       flex: 1,
       backgroundColor: colors.background,

@@ -40,7 +40,7 @@ export function SafeToSpendWidget() {
             />
           </View>
           <View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={styles.titleRow}>
               <Text style={styles.title}>SAFE TO SPEND</Text>
               {streaks && streaks.currentStreak > 0 && (
                 <View style={styles.streakBadge}>
@@ -73,8 +73,8 @@ export function SafeToSpendWidget() {
         activeOpacity={0.88}
       >
         <View style={styles.metricTopRow}>
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+          <View style={styles.flex1}>
+            <View style={styles.dailyAmountRow}>
               <Text style={styles.dailyAmount} numberOfLines={1} adjustsFontSizeToFit>
                 {formatCurrencyPrivacy(summary.safeToSpendDaily, false, hideBalances)}
               </Text>
@@ -118,18 +118,18 @@ export function SafeToSpendWidget() {
               <View
                 style={[
                   styles.barSegment,
+                  styles.barSegmentLiquid,
                   {
                     flex: Math.max(1, summary.safeToSpendTotal),
-                    backgroundColor: '#10B981',
                   },
                 ]}
               />
               <View
                 style={[
                   styles.barSegment,
+                  styles.barSegmentCommitted,
                   {
                     flex: Math.max(1, summary.totalCommittedObligations),
-                    backgroundColor: '#3B82F6',
                   },
                 ]}
               />
@@ -149,14 +149,14 @@ export function SafeToSpendWidget() {
         {/* Obligation Chips */}
         <View style={styles.chipsRow}>
           <View style={styles.chip}>
-            <View style={[styles.chipDot, { backgroundColor: '#10B981' }]} />
+            <View style={[styles.chipDot, styles.barSegmentLiquid]} />
             <Text style={styles.chipText} numberOfLines={1}>
               Liquid: {formatCurrencyPrivacy(summary.currentLiquidCash, false, hideBalances)}
             </Text>
           </View>
 
           <View style={styles.chip}>
-            <View style={[styles.chipDot, { backgroundColor: '#3B82F6' }]} />
+            <View style={[styles.chipDot, styles.barSegmentCommitted]} />
             <Text style={styles.chipText} numberOfLines={1}>
               Committed: {formatCurrencyPrivacy(summary.totalCommittedObligations, false, hideBalances)}
             </Text>
@@ -229,6 +229,25 @@ const getStyles = (colors: ThemeColors) => {
       borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    titleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    flex1: {
+      flex: 1,
+    },
+    dailyAmountRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: 6,
+    },
+    barSegmentLiquid: {
+      backgroundColor: '#10B981',
+    },
+    barSegmentCommitted: {
+      backgroundColor: '#3B82F6',
     },
     title: {
       ...typography.labelMd,

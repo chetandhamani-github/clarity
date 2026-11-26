@@ -185,22 +185,22 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
           </View>
 
           {isLoading ? (
-            <View style={{ gap: 14, padding: 16 }}>
+            <View style={styles.loadingSkeletonContainer}>
               <SkeletonBox width={160} height={26} borderRadius={radius.full} />
               <View
-                style={{
-                  borderRadius: radius.md,
-                  borderWidth: 1,
-                  borderColor: colors.outlineVariant,
-                  padding: 14,
-                  gap: 8,
-                }}
+                style={[
+                  styles.loadingSkeletonCard,
+                  {
+                    borderRadius: radius.md,
+                    borderColor: colors.outlineVariant,
+                  },
+                ]}
               >
                 <SkeletonText width={120} height={12} />
                 <SkeletonText width="95%" height={14} />
                 <SkeletonText width="80%" height={14} />
               </View>
-              <View style={{ gap: 10, marginTop: 4 }}>
+              <View style={styles.loadingSkeletonFields}>
                 <SkeletonText width={100} height={12} />
                 <SkeletonBox height={44} borderRadius={radius.md} />
                 <SkeletonText width={80} height={12} />
@@ -264,7 +264,7 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
                     <Text
                       style={[
                         styles.typeText,
-                        direction === 'DEBIT' && { color: colors.onErrorContainer, fontWeight: '700' },
+                        direction === 'DEBIT' && [styles.typeTextSelected, { color: colors.onErrorContainer }],
                       ]}
                     >
                       Expense (Debit)
@@ -287,7 +287,7 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
                     <Text
                       style={[
                         styles.typeText,
-                        direction === 'CREDIT' && { color: colors.onSuccessContainer, fontWeight: '700' },
+                        direction === 'CREDIT' && [styles.typeTextSelected, { color: colors.onSuccessContainer }],
                       ]}
                     >
                       Income (Credit)
@@ -354,6 +354,22 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
 
 const getStyles = (colors: ThemeColors) => {
   const styles = StyleSheet.create({
+    loadingSkeletonContainer: {
+      gap: 14,
+      padding: 16,
+    },
+    loadingSkeletonCard: {
+      borderWidth: 1,
+      padding: 14,
+      gap: 8,
+    },
+    loadingSkeletonFields: {
+      gap: 10,
+      marginTop: 4,
+    },
+    typeTextSelected: {
+      fontWeight: '700',
+    },
     modalOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0, 0, 0, 0.65)',

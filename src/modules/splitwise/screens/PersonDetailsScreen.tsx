@@ -555,7 +555,7 @@ export function PersonDetailsScreen() {
                   <Text style={[styles.breakdownLabel, { color: colors.onSurfaceVariant }]}>
                     Owed To You
                   </Text>
-                  <Text style={[styles.breakdownValue, { color: '#10b981' }]}>
+                  <Text style={[styles.breakdownValue, styles.positiveText]}>
                     +{formatCurrencyPrivacy(personBalance.remainingReceivable, hideBalances)}
                   </Text>
                 </View>
@@ -566,7 +566,7 @@ export function PersonDetailsScreen() {
                   <Text style={[styles.breakdownLabel, { color: colors.onSurfaceVariant }]}>
                     You Owe
                   </Text>
-                  <Text style={[styles.breakdownValue, { color: '#ef4444' }]}>
+                  <Text style={[styles.breakdownValue, styles.negativeText]}>
                     -{formatCurrencyPrivacy(personBalance.remainingPayable ?? personBalance.totalPayable, hideBalances)}
                   </Text>
                 </View>
@@ -654,10 +654,8 @@ export function PersonDetailsScreen() {
                 <Text
                   style={[
                     styles.tabItemText,
-                    {
-                      color: activeTab === 'ALL' ? colors.onPrimary : colors.onSurfaceVariant,
-                      fontFamily: activeTab === 'ALL' ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                    },
+                    { color: activeTab === 'ALL' ? colors.onPrimary : colors.onSurfaceVariant },
+                    activeTab === 'ALL' ? styles.fontBold : styles.fontSemiBold,
                   ]}
                 >
                   All ({personDebts.length + personSettlements.length})
@@ -675,10 +673,8 @@ export function PersonDetailsScreen() {
                 <Text
                   style={[
                     styles.tabItemText,
-                    {
-                      color: activeTab === 'DEBTS' ? colors.onPrimary : colors.onSurfaceVariant,
-                      fontFamily: activeTab === 'DEBTS' ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                    },
+                    { color: activeTab === 'DEBTS' ? colors.onPrimary : colors.onSurfaceVariant },
+                    activeTab === 'DEBTS' ? styles.fontBold : styles.fontSemiBold,
                   ]}
                 >
                   Debts ({personDebts.length})
@@ -696,12 +692,8 @@ export function PersonDetailsScreen() {
                 <Text
                   style={[
                     styles.tabItemText,
-                    {
-                      color:
-                        activeTab === 'SETTLEMENTS' ? colors.onPrimary : colors.onSurfaceVariant,
-                      fontFamily:
-                        activeTab === 'SETTLEMENTS' ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                    },
+                    { color: activeTab === 'SETTLEMENTS' ? colors.onPrimary : colors.onSurfaceVariant },
+                    activeTab === 'SETTLEMENTS' ? styles.fontBold : styles.fontSemiBold,
                   ]}
                 >
                   Settled ({personSettlements.length})
@@ -796,11 +788,7 @@ export function PersonDetailsScreen() {
                 <View
                   style={[
                     styles.iconCircle,
-                    {
-                      backgroundColor: isYouPaid
-                        ? 'rgba(239, 68, 68, 0.12)'
-                        : 'rgba(16, 185, 129, 0.12)',
-                    },
+                    isYouPaid ? styles.youPaidBg : styles.theyPaidBg,
                   ]}
                 >
                   <MaterialIcons
@@ -912,7 +900,7 @@ export function PersonDetailsScreen() {
               name={activeTab === 'DEBTS' ? 'receipt-long' : 'handshake'}
               size={36}
               color={colors.onSurfaceVariant}
-              style={{ marginBottom: 8 }}
+              style={styles.mb8}
             />
             <Text style={[styles.emptyTitle, { color: colors.onSurface }]}>
               {activeTab === 'DEBTS'
@@ -1549,5 +1537,26 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_700Bold',
     fontSize: 14,
     lineHeight: 18,
+  },
+  positiveText: {
+    color: '#10b981',
+  },
+  negativeText: {
+    color: '#ef4444',
+  },
+  fontBold: {
+    fontFamily: 'Manrope_700Bold',
+  },
+  fontSemiBold: {
+    fontFamily: 'Manrope_600SemiBold',
+  },
+  youPaidBg: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+  },
+  theyPaidBg: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  },
+  mb8: {
+    marginBottom: 8,
   },
 });

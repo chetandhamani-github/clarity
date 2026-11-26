@@ -37,7 +37,7 @@ export default function ReportsScreen() {
       />
 
       <ScrollView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
@@ -118,25 +118,14 @@ export default function ReportsScreen() {
               })}
 
               {reports.length === 0 && (
-                <View style={{ padding: 40, alignItems: 'center' }}>
+                <View style={styles.emptyState}>
                   <MaterialIcons
                     name="insert-chart-outlined"
                     size={64}
                     color={colors.surfaceVariant}
                   />
-                  <Text
-                    style={{ ...typography.headlineSm, color: colors.onSurface, marginTop: 16 }}
-                  >
-                    No Reports Yet
-                  </Text>
-                  <Text
-                    style={{
-                      ...typography.bodyMd,
-                      color: colors.onSurfaceVariant,
-                      textAlign: 'center',
-                      marginTop: 8,
-                    }}
-                  >
+                  <Text style={styles.emptyTitle}>No Reports Yet</Text>
+                  <Text style={styles.emptySubtitle}>
                     Your monthly summaries will appear here as you add transactions.
                   </Text>
                 </View>
@@ -151,6 +140,9 @@ export default function ReportsScreen() {
 
 const getStyles = (colors: ThemeColors) => {
   const styles = StyleSheet.create({
+    flex1: {
+      flex: 1,
+    },
     container: {
       flex: 1,
       backgroundColor: colors.background, // colors.background
@@ -163,6 +155,21 @@ const getStyles = (colors: ThemeColors) => {
     scrollContent: {
       padding: 20,
       paddingBottom: 40,
+    },
+    emptyState: {
+      padding: 40,
+      alignItems: 'center',
+    },
+    emptyTitle: {
+      ...typography.headlineSm,
+      color: colors.onSurface,
+      marginTop: 16,
+    },
+    emptySubtitle: {
+      ...typography.bodyMd,
+      color: colors.onSurfaceVariant,
+      textAlign: 'center',
+      marginTop: 8,
     },
     introSection: {
       marginBottom: 32,

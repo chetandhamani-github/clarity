@@ -115,18 +115,18 @@ export function BackupRevisionsModal({
           <View style={[styles.iconCircle, { backgroundColor: colors.primaryContainer }]}>
             <MaterialIcons name="restore" size={24} color={colors.onPrimaryContainer} />
           </View>
-          <View style={{ flex: 1 }}>
+          <View style={styles.flex1}>
             <Text style={styles.title}>Confirm Restore</Text>
             <Text style={styles.description}>Restore this historical snapshot from Google Drive.</Text>
           </View>
         </View>
 
         <View style={styles.selectedRevCard}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={styles.selectedRevDateRow}>
             <MaterialIcons name="event" size={20} color={colors.primary} />
             <Text style={styles.selectedRevDateText}>{dateStr}</Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+          <View style={styles.selectedRevMetaRow}>
             <Text style={styles.selectedRevTimeText}>Time: {timeStr}</Text>
             <Text style={styles.selectedRevSizeText}>{sizeKb}</Text>
           </View>
@@ -156,7 +156,7 @@ export function BackupRevisionsModal({
             {isRestoring ? (
               <ActivityIndicator size="small" color={colors.onPrimary} />
             ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={styles.restoreBtnContent}>
                 <MaterialIcons name="cloud-download" size={18} color={colors.onPrimary} />
                 <Text style={styles.confirmRestoreButtonText}>Restore Version</Text>
               </View>
@@ -248,6 +248,25 @@ export function BackupRevisionsModal({
 
 const getStyles = (colors: ThemeColors) => {
   const styles = StyleSheet.create({
+    flex1: {
+      flex: 1,
+    },
+    selectedRevDateRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    selectedRevMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 4,
+    },
+    restoreBtnContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
     overlay: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.65)',

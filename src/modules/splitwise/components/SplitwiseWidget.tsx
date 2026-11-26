@@ -103,13 +103,7 @@ export function SplitwiseWidget() {
             <View
               style={[
                 styles.netIconDot,
-                {
-                  backgroundColor: isOwed
-                    ? 'rgba(16, 185, 129, 0.15)'
-                    : isOwe
-                      ? 'rgba(239, 68, 68, 0.15)'
-                      : 'rgba(6, 182, 212, 0.15)',
-                },
+                isOwed ? styles.netIconOwed : isOwe ? styles.netIconOwe : styles.netIconSettled,
               ]}
             >
               <MaterialIcons
@@ -125,9 +119,9 @@ export function SplitwiseWidget() {
               <Text
                 style={[
                   styles.netStandingValue,
-                  {
-                    color: isOwed ? '#10b981' : isOwe ? '#ef4444' : colors.onSurface,
-                  },
+                  { color: colors.onSurface },
+                  isOwed && styles.textOwed,
+                  isOwe && styles.textOwe,
                 ]}
               >
                 {netBalance === 0
@@ -176,28 +170,15 @@ export function SplitwiseWidget() {
           <>
             <View style={styles.metricsRow}>
               {/* Receivables Card */}
-              <View
-                style={[
-                  styles.metricCard,
-                  {
-                    backgroundColor: 'rgba(16, 185, 129, 0.06)',
-                    borderColor: 'rgba(16, 185, 129, 0.2)',
-                  },
-                ]}
-              >
+              <View style={[styles.metricCard, styles.receivableCard]}>
                 <View style={styles.metricHeaderRow}>
-                  <View
-                    style={[
-                      styles.metricIconCircle,
-                      { backgroundColor: 'rgba(16, 185, 129, 0.15)' },
-                    ]}
-                  >
+                  <View style={[styles.metricIconCircle, styles.receivableIconCircle]}>
                     <MaterialIcons name="call-received" size={14} color="#10b981" />
                   </View>
-                  <Text style={[styles.metricLabel, { color: '#059669' }]}>RECEIVABLES</Text>
+                  <Text style={[styles.metricLabel, styles.receivableLabel]}>RECEIVABLES</Text>
                 </View>
 
-                <Text style={[styles.metricAmount, { color: '#10b981' }]} numberOfLines={1} adjustsFontSizeToFit>
+                <Text style={[styles.metricAmount, styles.textOwed]} numberOfLines={1} adjustsFontSizeToFit>
                   +{formatCurrencyPrivacy(summary.remainingReceivable, hideBalances)}
                 </Text>
 
@@ -209,28 +190,15 @@ export function SplitwiseWidget() {
               </View>
 
               {/* Payables Card */}
-              <View
-                style={[
-                  styles.metricCard,
-                  {
-                    backgroundColor: 'rgba(239, 68, 68, 0.06)',
-                    borderColor: 'rgba(239, 68, 68, 0.2)',
-                  },
-                ]}
-              >
+              <View style={[styles.metricCard, styles.payableCard]}>
                 <View style={styles.metricHeaderRow}>
-                  <View
-                    style={[
-                      styles.metricIconCircle,
-                      { backgroundColor: 'rgba(239, 68, 68, 0.15)' },
-                    ]}
-                  >
+                  <View style={[styles.metricIconCircle, styles.payableIconCircle]}>
                     <MaterialIcons name="call-made" size={14} color="#ef4444" />
                   </View>
-                  <Text style={[styles.metricLabel, { color: '#dc2626' }]}>PAYABLES</Text>
+                  <Text style={[styles.metricLabel, styles.payableLabel]}>PAYABLES</Text>
                 </View>
 
-                <Text style={[styles.metricAmount, { color: '#ef4444' }]} numberOfLines={1} adjustsFontSizeToFit>
+                <Text style={[styles.metricAmount, styles.textOwe]} numberOfLines={1} adjustsFontSizeToFit>
                   -{formatCurrencyPrivacy(summary.remainingPayable, hideBalances)}
                 </Text>
 
@@ -464,5 +432,40 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_700Bold',
     fontSize: 12,
     lineHeight: 16,
+  },
+  netIconOwed: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+  },
+  netIconOwe: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+  },
+  netIconSettled: {
+    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+  },
+  textOwed: {
+    color: '#10b981',
+  },
+  textOwe: {
+    color: '#ef4444',
+  },
+  receivableCard: {
+    backgroundColor: 'rgba(16, 185, 129, 0.06)',
+    borderColor: 'rgba(16, 185, 129, 0.2)',
+  },
+  receivableIconCircle: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+  },
+  receivableLabel: {
+    color: '#059669',
+  },
+  payableCard: {
+    backgroundColor: 'rgba(239, 68, 68, 0.06)',
+    borderColor: 'rgba(239, 68, 68, 0.2)',
+  },
+  payableIconCircle: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+  },
+  payableLabel: {
+    color: '#dc2626',
   },
 });

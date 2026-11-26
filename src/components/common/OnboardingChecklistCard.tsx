@@ -100,7 +100,7 @@ export function OnboardingChecklistCard({
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <View style={{ flex: 1 }}>
+        <View style={styles.flex1}>
           <View style={styles.titleRow}>
             <Text style={styles.title} numberOfLines={1}>
               Getting Started
@@ -141,13 +141,10 @@ export function OnboardingChecklistCard({
               size={22}
               color={task.isCompleted ? colors.primary : colors.outline}
             />
-            <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={styles.taskContent}>
               <View style={styles.taskTitleRow}>
                 <Text
-                  style={[
-                    styles.taskTitle,
-                    task.isCompleted && { textDecorationLine: 'line-through', opacity: 0.7 },
-                  ]}
+                  style={[styles.taskTitle, task.isCompleted && styles.taskTitleCompleted]}
                   numberOfLines={1}
                 >
                   {task.title}
@@ -167,6 +164,17 @@ export function OnboardingChecklistCard({
 
 const getStyles = (colors: ThemeColors) => {
   const styles = StyleSheet.create({
+    flex1: {
+      flex: 1,
+    },
+    taskContent: {
+      flex: 1,
+      minWidth: 0,
+    },
+    taskTitleCompleted: {
+      textDecorationLine: 'line-through',
+      opacity: 0.7,
+    },
     card: {
       backgroundColor: colors.surfaceContainerLowest,
       borderRadius: 16,

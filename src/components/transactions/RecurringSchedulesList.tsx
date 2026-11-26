@@ -158,8 +158,8 @@ function RecurringScheduleCardComponent({
                 </Text>
               </View>
             ) : isSettled ? (
-              <View style={[styles.badgePill, { backgroundColor: 'rgba(16, 185, 129, 0.16)' }]}>
-                <Text style={[styles.badgePillText, { color: '#10B981' }]} numberOfLines={1}>
+              <View style={[styles.badgePill, styles.settledBadgePill]}>
+                <Text style={[styles.badgePillText, styles.settledBadgePillText]} numberOfLines={1}>
                   Paid Off
                 </Text>
               </View>
@@ -313,7 +313,7 @@ export function RecurringSchedulesList({
         <View style={styles.summaryWrapper}>
           <View style={styles.summaryCard}>
             <View style={styles.summaryTopRow}>
-              <View style={{ flex: 1 }}>
+              <View style={styles.flex1}>
                 <Text style={styles.summaryEyebrow}>RECURRING SCHEDULES</Text>
                 <Text style={styles.summaryHeadline} numberOfLines={1} adjustsFontSizeToFit>
                   {formatCurrencyPrivacy(summary.monthlyOutflow, false, hideBalances)}
@@ -354,7 +354,7 @@ export function RecurringSchedulesList({
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: 8, paddingTop: 8 }}
+                  contentContainerStyle={styles.debtChipsScrollContent}
                 >
                   {summary.uncoveredDebts.slice(0, 4).map((debtAcc) => (
                     <TouchableOpacity
@@ -419,7 +419,7 @@ export function RecurringSchedulesList({
   const renderEmpty = useCallback(() => {
     if (isLoading) {
       return (
-        <View style={{ paddingHorizontal: 20 }}>
+        <View style={styles.loadingListContainer}>
           <ListSkeleton count={4} />
         </View>
       );
@@ -465,6 +465,22 @@ export function RecurringSchedulesList({
 
 const getStyles = (colors: ThemeColors) => {
   const styles = StyleSheet.create({
+    flex1: {
+      flex: 1,
+    },
+    settledBadgePill: {
+      backgroundColor: 'rgba(16, 185, 129, 0.16)',
+    },
+    settledBadgePillText: {
+      color: '#10B981',
+    },
+    debtChipsScrollContent: {
+      gap: 8,
+      paddingTop: 8,
+    },
+    loadingListContainer: {
+      paddingHorizontal: 20,
+    },
     summaryWrapper: {
       paddingHorizontal: 20,
       marginBottom: 14,

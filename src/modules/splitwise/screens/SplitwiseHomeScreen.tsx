@@ -191,8 +191,9 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
           {
             backgroundColor: colors.background,
             paddingTop: insets.top,
-            paddingBottom: isMainTab ? 0 : insets.bottom,
+            paddingBottom: insets.bottom,
           },
+          isMainTab && styles.pb0,
         ]}
       >
         <Header
@@ -291,8 +292,9 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
         {
           backgroundColor: colors.background,
           paddingTop: insets.top,
-          paddingBottom: isMainTab ? 0 : insets.bottom,
+          paddingBottom: insets.bottom,
         },
+        isMainTab && styles.pb0,
       ]}
     >
       <Header
@@ -383,7 +385,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
           ]}
         >
           <View style={styles.heroTopRow}>
-            <View style={{ flex: 1, marginRight: 8 }}>
+            <View style={styles.heroLeftCol}>
               <Text style={[styles.heroSubLabel, { color: colors.onSurfaceVariant }]}>
                 OVERALL NET BALANCE
               </Text>
@@ -417,13 +419,13 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
             {/* Total Receivable */}
             <View style={styles.metricColumn}>
               <View style={styles.metricLabelRow}>
-                <View style={[styles.miniDot, { backgroundColor: '#10b981' }]} />
+                <View style={[styles.miniDot, styles.positiveBg]} />
                 <Text style={[styles.metricLabel, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
                   Total Receivable
                 </Text>
               </View>
               <Text
-                style={[styles.metricAmount, { color: '#10b981' }]}
+                style={[styles.metricAmount, styles.positiveText]}
                 numberOfLines={1}
                 adjustsFontSizeToFit
               >
@@ -439,13 +441,13 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
             {/* Total Payable */}
             <View style={styles.metricColumn}>
               <View style={styles.metricLabelRow}>
-                <View style={[styles.miniDot, { backgroundColor: '#ef4444' }]} />
+                <View style={[styles.miniDot, styles.negativeBg]} />
                 <Text style={[styles.metricLabel, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
                   Total Payable
                 </Text>
               </View>
               <Text
-                style={[styles.metricAmount, { color: '#ef4444' }]}
+                style={[styles.metricAmount, styles.negativeText]}
                 numberOfLines={1}
                 adjustsFontSizeToFit
               >
@@ -474,10 +476,10 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
           <TouchableOpacity
             style={[
               styles.quickActionBtn,
+              styles.borderWidth1,
               {
                 backgroundColor: colors.surfaceContainerHigh,
                 borderColor: colors.outlineVariant,
-                borderWidth: 1,
               },
             ]}
             onPress={() => openAction('GROUP')}
@@ -492,10 +494,10 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
           <TouchableOpacity
             style={[
               styles.quickActionBtnSmall,
+              styles.borderWidth1,
               {
                 backgroundColor: colors.surfaceContainerLow,
                 borderColor: colors.outlineVariant,
-                borderWidth: 1,
               },
             ]}
             onPress={() => openAction('SETTLEMENT')}
@@ -533,10 +535,8 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
             <Text
               style={[
                 styles.segmentBtnText,
-                {
-                  color: mainView === 'GROUPS' ? colors.onSurface : colors.onSurfaceVariant,
-                  fontFamily: mainView === 'GROUPS' ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                },
+                { color: mainView === 'GROUPS' ? colors.onSurface : colors.onSurfaceVariant },
+                mainView === 'GROUPS' ? styles.fontBold : styles.fontSemiBold,
               ]}
             >
               Groups ({groups.length})
@@ -561,10 +561,8 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
             <Text
               style={[
                 styles.segmentBtnText,
-                {
-                  color: mainView === 'FRIENDS' ? colors.onSurface : colors.onSurfaceVariant,
-                  fontFamily: mainView === 'FRIENDS' ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                },
+                { color: mainView === 'FRIENDS' ? colors.onSurface : colors.onSurfaceVariant },
+                mainView === 'FRIENDS' ? styles.fontBold : styles.fontSemiBold,
               ]}
             >
               Friends ({overallSummary.totalPeopleCount})
@@ -580,7 +578,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
                 Your Groups
               </Text>
               <TouchableOpacity onPress={() => openAction('GROUP')}>
-                <Text style={{ color: colors.primary, fontFamily: 'Manrope_700Bold', fontSize: 13 }}>
+                <Text style={[styles.createGroupLink, { color: colors.primary }]}>
                   + Create Group
                 </Text>
               </TouchableOpacity>
@@ -617,12 +615,11 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
               <View
                 style={[
                   styles.emptyContainer,
+                  styles.emptyGroupsCard,
                   {
                     backgroundColor: colors.surfaceContainerLow,
                     borderColor: colors.outlineVariant,
-                    borderWidth: 1,
                     borderRadius: radius.xl,
-                    padding: 24,
                   },
                 ]}
               >
@@ -757,10 +754,8 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
             <Text
               style={[
                 styles.tabButtonText,
-                {
-                  color: activeTab === 'ALL' ? colors.onPrimary : colors.onSurfaceVariant,
-                  fontFamily: activeTab === 'ALL' ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                },
+                { color: activeTab === 'ALL' ? colors.onPrimary : colors.onSurfaceVariant },
+                activeTab === 'ALL' ? styles.fontBold : styles.fontSemiBold,
               ]}
             >
               All ({allPersonBalances.length})
@@ -778,10 +773,8 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
             <Text
               style={[
                 styles.tabButtonText,
-                {
-                  color: activeTab === 'OWE_ME' ? colors.onPrimary : colors.onSurfaceVariant,
-                  fontFamily: activeTab === 'OWE_ME' ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                },
+                { color: activeTab === 'OWE_ME' ? colors.onPrimary : colors.onSurfaceVariant },
+                activeTab === 'OWE_ME' ? styles.fontBold : styles.fontSemiBold,
               ]}
             >
               Owes You
@@ -799,10 +792,8 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
             <Text
               style={[
                 styles.tabButtonText,
-                {
-                  color: activeTab === 'I_OWE' ? colors.onPrimary : colors.onSurfaceVariant,
-                  fontFamily: activeTab === 'I_OWE' ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                },
+                { color: activeTab === 'I_OWE' ? colors.onPrimary : colors.onSurfaceVariant },
+                activeTab === 'I_OWE' ? styles.fontBold : styles.fontSemiBold,
               ]}
             >
               You Owe
@@ -820,10 +811,8 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
             <Text
               style={[
                 styles.tabButtonText,
-                {
-                  color: activeTab === 'SETTLED' ? colors.onPrimary : colors.onSurfaceVariant,
-                  fontFamily: activeTab === 'SETTLED' ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                },
+                { color: activeTab === 'SETTLED' ? colors.onPrimary : colors.onSurfaceVariant },
+                activeTab === 'SETTLED' ? styles.fontBold : styles.fontSemiBold,
               ]}
             >
               Settled
@@ -894,7 +883,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
     )}
 
         {/* RECENT ACTIVITY STREAM */}
-        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+        <View style={[styles.sectionHeader, styles.mt24]}>
           <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>
             Recent Activity
           </Text>
@@ -922,14 +911,11 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
                   <View
                     style={[
                       styles.activityIconCircle,
-                      {
-                        backgroundColor:
-                          act.activityType === 'settlement'
-                            ? 'rgba(59, 130, 246, 0.12)'
-                            : act.debtType === 'OWE_ME'
-                              ? 'rgba(16, 185, 129, 0.12)'
-                              : 'rgba(239, 68, 68, 0.12)',
-                      },
+                      act.activityType === 'settlement'
+                        ? styles.settlementIconBg
+                        : act.debtType === 'OWE_ME'
+                          ? styles.oweMeIconBg
+                          : styles.iOweIconBg,
                     ]}
                   >
                     <MaterialIcons
@@ -1032,7 +1018,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
                 style={[styles.chooserItem, { backgroundColor: colors.surfaceContainerLow }]}
                 onPress={() => openAction('EXPENSE')}
               >
-                <View style={[styles.chooserIconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
+                <View style={[styles.chooserIconCircle, styles.oweMeIconBg]}>
                   <MaterialIcons name="receipt-long" size={22} color="#10b981" />
                 </View>
                 <View style={styles.chooserTextCol}>
@@ -1050,7 +1036,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
                 style={[styles.chooserItem, { backgroundColor: colors.surfaceContainerLow }]}
                 onPress={() => openAction('GROUP')}
               >
-                <View style={[styles.chooserIconCircle, { backgroundColor: 'rgba(99, 102, 241, 0.12)' }]}>
+                <View style={[styles.chooserIconCircle, styles.groupIconBg]}>
                   <MaterialIcons name="group-add" size={22} color="#6366f1" />
                 </View>
                 <View style={styles.chooserTextCol}>
@@ -1068,7 +1054,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
                 style={[styles.chooserItem, { backgroundColor: colors.surfaceContainerLow }]}
                 onPress={() => openAction('DEBT')}
               >
-                <View style={[styles.chooserIconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+                <View style={[styles.chooserIconCircle, styles.debtIconBg]}>
                   <MaterialIcons name="call-made" size={22} color="#f59e0b" />
                 </View>
                 <View style={styles.chooserTextCol}>
@@ -1086,7 +1072,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
                 style={[styles.chooserItem, { backgroundColor: colors.surfaceContainerLow }]}
                 onPress={() => openAction('SETTLEMENT')}
               >
-                <View style={[styles.chooserIconCircle, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
+                <View style={[styles.chooserIconCircle, styles.settlementIconBg]}>
                   <MaterialIcons name="handshake" size={22} color="#3b82f6" />
                 </View>
                 <View style={styles.chooserTextCol}>
@@ -1104,7 +1090,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
                 style={[styles.chooserItem, { backgroundColor: colors.surfaceContainerLow }]}
                 onPress={() => openAction('PERSON')}
               >
-                <View style={[styles.chooserIconCircle, { backgroundColor: 'rgba(168, 85, 247, 0.12)' }]}>
+                <View style={[styles.chooserIconCircle, styles.personIconBg]}>
                   <MaterialIcons name="person-add" size={22} color="#a855f7" />
                 </View>
                 <View style={styles.chooserTextCol}>
@@ -1175,25 +1161,17 @@ function PersonCard({ balance, hideBalances, onPress, onSettlePress }: PersonCar
         <View
           style={[
             styles.avatarCircle,
-            {
-              backgroundColor: isOwedToMe
-                ? 'rgba(16, 185, 129, 0.12)'
-                : isYouOwe
-                  ? 'rgba(239, 68, 68, 0.12)'
-                  : colors.primaryContainer,
-            },
+            { backgroundColor: colors.primaryContainer },
+            isOwedToMe && styles.oweMeIconBg,
+            isYouOwe && styles.iOweIconBg,
           ]}
         >
           <Text
             style={[
               styles.avatarText,
-              {
-                color: isOwedToMe
-                  ? '#10b981'
-                  : isYouOwe
-                    ? '#ef4444'
-                    : colors.onPrimaryContainer,
-              },
+              { color: colors.onPrimaryContainer },
+              isOwedToMe && styles.positiveText,
+              isYouOwe && styles.negativeText,
             ]}
           >
             {initials}
@@ -1839,5 +1817,62 @@ const styles = StyleSheet.create({
     ...typography.labelMd,
     fontSize: 11,
     fontFamily: 'Manrope_700Bold',
+  },
+  fontBold: {
+    fontFamily: 'Manrope_700Bold',
+  },
+  fontSemiBold: {
+    fontFamily: 'Manrope_600SemiBold',
+  },
+  mt24: {
+    marginTop: 24,
+  },
+  settlementIconBg: {
+    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+  },
+  oweMeIconBg: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  },
+  iOweIconBg: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+  },
+  groupIconBg: {
+    backgroundColor: 'rgba(99, 102, 241, 0.12)',
+  },
+  debtIconBg: {
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+  },
+  personIconBg: {
+    backgroundColor: 'rgba(168, 85, 247, 0.12)',
+  },
+  positiveText: {
+    color: '#10b981',
+  },
+  negativeText: {
+    color: '#ef4444',
+  },
+  pb0: {
+    paddingBottom: 0,
+  },
+  heroLeftCol: {
+    flex: 1,
+    marginRight: 8,
+  },
+  positiveBg: {
+    backgroundColor: '#10b981',
+  },
+  negativeBg: {
+    backgroundColor: '#ef4444',
+  },
+  borderWidth1: {
+    borderWidth: 1,
+  },
+  createGroupLink: {
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 13,
+  },
+  emptyGroupsCard: {
+    borderWidth: 1,
+    padding: 24,
   },
 });

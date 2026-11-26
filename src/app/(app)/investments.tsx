@@ -134,7 +134,7 @@ export default function InvestmentsScreen() {
         showBack
         title="Wealth & Investments"
         rightNode={
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={styles.rowCenterGap6}>
             <TouchableOpacity
               onPress={toggleHideBalances}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -159,7 +159,7 @@ export default function InvestmentsScreen() {
       />
 
       <ScrollView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 80 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -178,19 +178,14 @@ export default function InvestmentsScreen() {
             {/* HERO CARD: PORTFOLIO NET WEALTH */}
             <View style={styles.heroCard}>
               <View style={styles.heroHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={styles.rowCenterGap6}>
                   <Text style={styles.heroLabel}>TOTAL WEALTH PORTFOLIO</Text>
                 </View>
                 {summary && summary.unrealizedGainLoss !== 0 && (
                   <View
                     style={[
                       styles.pnlBadge,
-                      {
-                        backgroundColor:
-                          summary.unrealizedGainLoss >= 0
-                            ? 'rgba(16, 185, 129, 0.15)'
-                            : 'rgba(239, 68, 68, 0.15)',
-                      },
+                      summary.unrealizedGainLoss >= 0 ? styles.pnlBadgePositive : styles.pnlBadgeNegative,
                     ]}
                   >
                     <MaterialIcons
@@ -201,9 +196,7 @@ export default function InvestmentsScreen() {
                     <Text
                       style={[
                         styles.pnlBadgeText,
-                        {
-                          color: summary.unrealizedGainLoss >= 0 ? '#10b981' : '#ef4444',
-                        },
+                        summary.unrealizedGainLoss >= 0 ? styles.pnlPositive : styles.pnlNegative,
                       ]}
                       numberOfLines={1}
                     >
@@ -234,10 +227,7 @@ export default function InvestmentsScreen() {
                   <Text
                     style={[
                       styles.breakdownValue,
-                      {
-                        color:
-                          (summary?.unrealizedGainLoss || 0) >= 0 ? '#10b981' : '#ef4444',
-                      },
+                      (summary?.unrealizedGainLoss || 0) >= 0 ? styles.pnlPositive : styles.pnlNegative,
                     ]}
                   >
                     {(summary?.unrealizedGainLoss || 0) >= 0 ? '+' : ''}
@@ -291,7 +281,7 @@ export default function InvestmentsScreen() {
                     {summary.allocations.map((item) => (
                       <View key={item.assetClass} style={styles.legendItem}>
                         <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-                        <View style={{ flex: 1 }}>
+                        <View style={styles.flex1}>
                           <View style={styles.legendNameRow}>
                             <Text style={styles.legendName} numberOfLines={1}>
                               {item.label}
@@ -313,7 +303,7 @@ export default function InvestmentsScreen() {
             {calendar.length > 0 && (
               <View style={styles.calendarSection}>
                 <View style={styles.sectionHeader}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={styles.rowCenterGap6}>
                     <MaterialIcons name="event-note" size={18} color={colors.primary} />
                     <Text style={styles.sectionTitle}>Maturity & SIP Horizon</Text>
                   </View>
@@ -334,21 +324,19 @@ export default function InvestmentsScreen() {
                         key={item.id}
                         style={[
                           styles.calendarCard,
-                          {
-                            backgroundColor: colors.surfaceContainerLowest,
-                            borderColor: isSip ? '#3B82F644' : isUrgent ? '#10B98188' : colors.surfaceVariant,
-                          },
+                          styles.calendarCardSurface,
+                          isSip
+                            ? styles.calendarCardSipBorder
+                            : isUrgent
+                              ? styles.calendarCardUrgentBorder
+                              : styles.calendarCardDefaultBorder,
                         ]}
                       >
                         <View style={styles.calendarCardHeader}>
                           <View
                             style={[
                               styles.calendarIconCircle,
-                              {
-                                backgroundColor: isSip
-                                  ? 'rgba(59, 130, 246, 0.12)'
-                                  : 'rgba(16, 185, 129, 0.12)',
-                              },
+                              isSip ? styles.sipBg : styles.fdBg,
                             ]}
                           >
                             <MaterialIcons
@@ -361,17 +349,13 @@ export default function InvestmentsScreen() {
                           <View
                             style={[
                               styles.calendarTypeBadge,
-                              {
-                                backgroundColor: isSip
-                                  ? 'rgba(59, 130, 246, 0.12)'
-                                  : 'rgba(16, 185, 129, 0.12)',
-                              },
+                              isSip ? styles.sipBg : styles.fdBg,
                             ]}
                           >
                             <Text
                               style={[
                                 styles.calendarTypeBadgeText,
-                                { color: isSip ? '#3B82F6' : '#10B981' },
+                                isSip ? styles.sipText : styles.fdText,
                               ]}
                               numberOfLines={1}
                             >
@@ -386,7 +370,7 @@ export default function InvestmentsScreen() {
 
                         <Text style={styles.calendarItemAmount}>
                           {formatCurrencyPrivacy(item.amount, false, hideBalances)}
-                          {isSip && <Text style={{ fontSize: 11, color: colors.onSurfaceVariant }}>/mo</Text>}
+                          {isSip && <Text style={styles.calendarSipSuffix}>/mo</Text>}
                         </Text>
 
                         <View style={styles.calendarFooterRow}>
@@ -436,10 +420,8 @@ export default function InvestmentsScreen() {
                     <Text
                       style={[
                         styles.tabText,
-                        {
-                          color: isActive ? colors.onPrimary : colors.onSurfaceVariant,
-                          fontFamily: isActive ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
-                        },
+                        isActive ? styles.tabTextActive : styles.tabTextInactive,
+                        { color: isActive ? colors.onPrimary : colors.onSurfaceVariant },
                       ]}
                     >
                       {tab.label}
@@ -488,16 +470,13 @@ export default function InvestmentsScreen() {
                           <View
                             style={[
                               styles.assetIconCircle,
-                              {
-                                backgroundColor:
-                                  h.assetClass === 'equity'
-                                    ? 'rgba(59, 130, 246, 0.12)'
-                                    : h.assetClass === 'debt_fixed_income'
-                                      ? 'rgba(16, 185, 129, 0.12)'
-                                      : h.assetClass === 'gold'
-                                        ? 'rgba(245, 158, 11, 0.12)'
-                                        : 'rgba(139, 92, 246, 0.12)',
-                              },
+                              h.assetClass === 'equity'
+                                ? styles.assetIconBgEquity
+                                : h.assetClass === 'debt_fixed_income'
+                                  ? styles.assetIconBgDebt
+                                  : h.assetClass === 'gold'
+                                    ? styles.assetIconBgGold
+                                    : styles.assetIconBgOther,
                             ]}
                           >
                             <MaterialIcons
@@ -550,7 +529,7 @@ export default function InvestmentsScreen() {
                           <Text
                             style={[
                               styles.holdingPnl,
-                              { color: isPositive ? '#10b981' : '#ef4444' },
+                              isPositive ? styles.pnlPositive : styles.pnlNegative,
                             ]}
                           >
                             {isPositive ? '+' : ''}
@@ -573,7 +552,7 @@ export default function InvestmentsScreen() {
                           {h.maturityDate && (
                             <View style={styles.tagPill}>
                               <MaterialIcons name="alarm" size={12} color="#10B981" />
-                              <Text style={[styles.tagPillText, { color: '#10B981' }]} numberOfLines={1}>
+                              <Text style={[styles.tagPillText, styles.tagPillTextSuccess]} numberOfLines={1}>
                                 Matures: {h.maturityDate}
                               </Text>
                             </View>
@@ -616,6 +595,75 @@ export default function InvestmentsScreen() {
 
 const getStyles = (colors: ThemeColors) => {
   const styles = StyleSheet.create({
+    flex1: {
+      flex: 1,
+    },
+    rowCenterGap6: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    pnlBadgePositive: {
+      backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    },
+    pnlBadgeNegative: {
+      backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    },
+    calendarCardSurface: {
+      backgroundColor: colors.surfaceContainerLowest,
+    },
+    calendarCardSipBorder: {
+      borderColor: '#3B82F644',
+    },
+    calendarCardUrgentBorder: {
+      borderColor: '#10B98188',
+    },
+    calendarCardDefaultBorder: {
+      borderColor: colors.surfaceVariant,
+    },
+    sipBg: {
+      backgroundColor: 'rgba(59, 130, 246, 0.12)',
+    },
+    fdBg: {
+      backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    },
+    sipText: {
+      color: '#3B82F6',
+    },
+    fdText: {
+      color: '#10B981',
+    },
+    calendarSipSuffix: {
+      fontSize: 11,
+      color: colors.onSurfaceVariant,
+    },
+    tabTextActive: {
+      fontFamily: 'Manrope_700Bold',
+    },
+    tabTextInactive: {
+      fontFamily: 'Manrope_600SemiBold',
+    },
+    assetIconBgEquity: {
+      backgroundColor: 'rgba(59, 130, 246, 0.12)',
+    },
+    assetIconBgDebt: {
+      backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    },
+    assetIconBgGold: {
+      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    },
+    assetIconBgOther: {
+      backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    },
+    pnlPositive: {
+      color: '#10b981',
+    },
+    pnlNegative: {
+      color: '#ef4444',
+    },
+    tagPillTextSuccess: {
+      color: '#10B981',
+    },
     container: {
       flex: 1,
       backgroundColor: colors.background,

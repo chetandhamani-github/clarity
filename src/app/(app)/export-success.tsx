@@ -63,7 +63,7 @@ export default function ExportSuccessScreen() {
       <Header showBack title="Export Data" />
 
       <ScrollView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
@@ -76,12 +76,8 @@ export default function ExportSuccessScreen() {
           <MaterialIcons name="storage" size={20} color={colors.primary} />
           <Text style={styles.statsText}>
             Ready to export:{' '}
-            <Text style={{ fontWeight: '700', color: colors.onSurface }}>
-              {stats.transactionCount}
-            </Text>{' '}
-            transactions across{' '}
-            <Text style={{ fontWeight: '700', color: colors.onSurface }}>{stats.accountCount}</Text>{' '}
-            accounts
+            <Text style={styles.statsHighlight}>{stats.transactionCount}</Text> transactions across{' '}
+            <Text style={styles.statsHighlight}>{stats.accountCount}</Text> accounts
           </Text>
         </View>
 
@@ -174,6 +170,13 @@ const getStyles = (colors: ThemeColors) => {
 
     scrollContent: {
       padding: 20,
+    },
+    flex1: {
+      flex: 1,
+    },
+    statsHighlight: {
+      fontWeight: '700',
+      color: colors.onSurface,
     },
     statsCard: {
       flexDirection: 'row',
