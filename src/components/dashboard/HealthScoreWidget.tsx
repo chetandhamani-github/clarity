@@ -28,7 +28,7 @@ export function HealthScoreWidget() {
         </View>
 
         <View style={styles.textContainer}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={styles.titleRow}>
             <Text style={styles.titleLabel}>FINANCIAL HEALTH SCORE</Text>
             <View
               style={[
@@ -93,6 +93,11 @@ const getStyles = (colors: ThemeColors) => {
     textContainer: {
       flex: 1,
       marginRight: 8,
+    },
+    titleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
     },
     titleLabel: {
       ...typography.labelMd,

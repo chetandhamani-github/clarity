@@ -10,12 +10,17 @@ export interface ParsedPaymentIntent {
   contentHash: string;
 }
 
+function toInt32(n: number): number {
+  const mod = n % 4294967296;
+  const u32 = mod < 0 ? mod + 4294967296 : mod;
+  return u32 >= 2147483648 ? u32 - 4294967296 : u32;
+}
+
 function simpleHash(str: string): string {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0; // Convert to 32bit integer
+    hash = toInt32(hash * 31 + char);
   }
   return `clip_${Math.abs(hash)}`;
 }
@@ -113,7 +118,7 @@ export function parsePaymentClipboard(text: string): ParsedPaymentIntent | null 
   }
 
   // 5. Extract UPI Reference / UTR if present
-  let upiRef: string | undefined = undefined;
+  let upiRef: string | undefined;
   const refMatch = trimmed.match(/(?:upi\s*ref(?:\s*no\.?)?|utr|rrn|txn\s*id)[:\s]*([0-9]{10,16})/i);
   if (refMatch && refMatch[1]) {
     upiRef = refMatch[1];

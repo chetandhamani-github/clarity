@@ -59,7 +59,7 @@ export async function parseVoiceTranscript(
 
       if (aiResult && aiResult.amount > 0) {
         // Resolve account ID from account name if returned
-        let matchedAccountId: string | undefined = undefined;
+        let matchedAccountId: string | undefined;
         if (aiResult.account) {
           matchedAccountId = matchAccountFromText(aiResult.account.toLowerCase(), userAccounts);
           if (!matchedAccountId) {
@@ -135,7 +135,7 @@ export function matchAccountFromText(
 ): string | undefined {
   if (!userAccounts || userAccounts.length === 0) return undefined;
 
-  let bestAccountId: string | undefined = undefined;
+  let bestAccountId: string | undefined;
   let bestScore = 0;
 
   for (const acc of userAccounts) {

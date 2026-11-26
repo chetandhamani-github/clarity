@@ -22,7 +22,6 @@ export function SafeToSpendWidget() {
     return null;
   }
 
-  const isHealthy = !summary.hasCashCrunch && summary.safeToSpendDaily > 200;
   const isCaution = !summary.hasCashCrunch && summary.safeToSpendDaily <= 200;
   const isCrunch = summary.hasCashCrunch;
 

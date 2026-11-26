@@ -1,23 +1,21 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import { Header, Text, useAlert } from '@/components/ui';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
+import { radius, useTheme } from '@/theme';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
 import {
-  View,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
   ActivityIndicator,
   Platform,
-  ScrollView,
-  Keyboard,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeInsets } from '@/hooks/use-safe-insets';
-import { useRouter } from 'expo-router';
-import { useForm, Controller } from 'react-hook-form';
-import { Text, Header, useAlert } from '@/components/ui';
-import { typography, useTheme, radius } from '@/theme';
-import { useSplitwiseStore } from '../store/splitwise.store';
 import { SplitwiseSyncService } from '../services/SplitwiseSyncService';
+import { useSplitwiseStore } from '../store/splitwise.store';
 
 const GROUP_CATEGORIES = [
   { id: 'trip', label: 'Trip / Travel', icon: 'flight' as const },

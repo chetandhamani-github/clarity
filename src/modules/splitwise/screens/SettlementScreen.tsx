@@ -82,7 +82,7 @@ export function SettlementScreen() {
     isLoading,
   } = useSplitwiseStore();
 
-  const { accounts, isLoading: isLoadingAccounts } = useAccounts();
+  const { accounts } = useAccounts();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 

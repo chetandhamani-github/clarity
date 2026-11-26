@@ -148,7 +148,7 @@ export function useDeleteGoalContribution() {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
-    mutationFn: ({ contributionId, goalId }: { contributionId: string; goalId: string }) =>
+    mutationFn: ({ contributionId }: { contributionId: string; goalId: string }) =>
       goalDao.deleteGoalContribution(contributionId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['goals'] });

@@ -156,21 +156,17 @@ export function SubscriptionCard({ subscription, onPress }: SubscriptionCardProp
             <View
               style={[
                 styles.statusBadge,
-                {
-                  backgroundColor:
-                    subscription.status === 'active'
-                      ? 'rgba(16, 185, 129, 0.15)'
-                      : 'rgba(245, 158, 11, 0.15)',
-                },
+                subscription.status === 'active'
+                  ? styles.statusBadgeActive
+                  : styles.statusBadgePaused,
               ]}
             >
               <Text
                 style={[
                   styles.statusText,
-                  {
-                    color:
-                      subscription.status === 'active' ? '#10b981' : '#f59e0b',
-                  },
+                  subscription.status === 'active'
+                    ? styles.statusTextActive
+                    : styles.statusTextPaused,
                 ]}
                 numberOfLines={1}
               >
@@ -259,12 +255,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  statusBadgeActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+  },
+  statusBadgePaused: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+  },
   statusText: {
     ...typography.labelMd,
     fontWeight: '700',
     fontSize: 11,
     lineHeight: 15,
     textAlignVertical: 'center',
+  },
+  statusTextActive: {
+    color: '#10b981',
+  },
+  statusTextPaused: {
+    color: '#f59e0b',
   },
   dateLabel: {
     ...typography.bodyMd,

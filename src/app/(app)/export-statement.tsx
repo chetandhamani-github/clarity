@@ -1,21 +1,21 @@
-import React, { useState, useMemo } from 'react';
+import { Header, Text, useToast } from '@/components/ui';
+import { useAccounts } from '@/hooks/use-accounts';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
+import { exportCustomStatement } from '@/services/export/export-service';
+import { typography, useTheme } from '@/theme';
+import { formatLocalDate } from '@/utils/format';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useMemo, useState } from 'react';
 import {
-  View,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
-  TextInput,
   Platform,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { Text, Header, useToast } from '@/components/ui';
-import { typography, radius, useTheme, ThemeColors } from '@/theme';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeInsets } from '@/hooks/use-safe-insets';
-import { useAccounts } from '@/hooks/use-accounts';
-import { exportCustomStatement } from '@/services/export/export-service';
-import { formatLocalDate } from '@/utils/format';
 
 type ExportFormat = 'pdf' | 'csv';
 type DatePreset = 'this_month' | 'last_month' | 'last_90_days' | 'ytd' | 'all' | 'custom';

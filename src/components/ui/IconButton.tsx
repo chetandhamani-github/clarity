@@ -27,7 +27,7 @@ export const IconButton = ({ icon, onPress, color, size = 24, style }: IconButto
   );
 };
 
-const getStyles = (colors: ThemeColors) => {
+const getStyles = (_colors: ThemeColors) => {
   const styles = StyleSheet.create({
     container: {
       alignItems: 'center',

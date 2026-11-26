@@ -1,7 +1,6 @@
-import React from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
+import { ThemeColors, useTheme } from '@/theme';
+import { Animated, StyleSheet, View } from 'react-native';
 import { radius } from '../../theme';
-import { useTheme, ThemeColors } from '@/theme';
 
 interface ProgressBarProps {
   progress: number; // 0 to 1
@@ -36,7 +35,7 @@ export const ProgressBar = ({ progress, color, backgroundColor, height = 8 }: Pr
   );
 };
 
-const getStyles = (colors: ThemeColors) => {
+const getStyles = (_colors: ThemeColors) => {
   const styles = StyleSheet.create({
     container: {
       width: '100%',

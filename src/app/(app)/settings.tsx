@@ -188,7 +188,7 @@ export default function SettingsScreen() {
   const requestRebind = useNotificationStore((state) => state.requestRebind);
   const refreshNotificationHealth = useNotificationStore((state) => state.refreshHealth);
 
-  const [isResetting, setIsResetting] = useState(false);
+  const [, setIsResetting] = useState(false);
   const [legalModalType, setLegalModalType] = useState<'privacy' | 'terms' | null>(null);
   const [themeModalVisible, setThemeModalVisible] = useState(false);
   const [currencyModalVisible, setCurrencyModalVisible] = useState(false);

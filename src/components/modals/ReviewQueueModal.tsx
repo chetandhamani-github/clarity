@@ -76,16 +76,6 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
 
   const currentItem: ReviewQueueItem | undefined = items[activeItemIndex];
 
-  const handleNext = () => {
-    if (activeItemIndex < items.length - 1) {
-      const nextIndex = activeItemIndex + 1;
-      setActiveItemIndex(nextIndex);
-      initFields(items[nextIndex]);
-    } else {
-      onClose();
-    }
-  };
-
   const handleApprove = async () => {
     if (!currentItem) return;
     const parsedAmount = parseFloat(amountStr);

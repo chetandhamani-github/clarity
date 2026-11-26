@@ -1,18 +1,3 @@
-const mockRouter = {
-  push: jest.fn(),
-  navigate: jest.fn(),
-  replace: jest.fn(),
-  back: jest.fn(),
-  canGoBack: jest.fn(),
-  dismiss: jest.fn(),
-  dismissAll: jest.fn(),
-  dismissTo: jest.fn(),
-  canDismiss: jest.fn(),
-  setParams: jest.fn(),
-  reload: jest.fn(),
-  prefetch: jest.fn(),
-};
-
 jest.mock('expo-router', () => {
   const router = {
     push: jest.fn(),

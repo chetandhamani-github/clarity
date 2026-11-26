@@ -11,7 +11,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text, useToast } from '@/components/ui';
-import { useTheme, fontFamilies, ThemeColors, radius } from '@/theme';
+import { useTheme, fontFamilies, radius } from '@/theme';
 import { formatCurrency, formatDate } from '@/utils/format';
 import { getBillerBranding } from '@/utils/icons';
 import { useNotificationStore } from '@/store/useNotificationStore';

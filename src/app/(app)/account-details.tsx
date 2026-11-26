@@ -9,7 +9,7 @@ import {
   Platform,
   useWindowDimensions,
 } from 'react-native';
-import { Text, Header, DetailSkeleton, SkeletonCircle, SkeletonText } from '@/components/ui';
+import { Text, Header, DetailSkeleton, SkeletonCircle, SkeletonText, renderChartPointerLabel } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
@@ -43,7 +43,7 @@ export default function AccountDetailsScreen() {
     totalCount,
     isLoading: isTxLoading,
   } = usePaginatedTransactions({ accountId }, 5, Boolean(accountId));
-  const { history, isLoading: isHistoryLoading } = useAccountHistory(accountId, 30);
+  const { history } = useAccountHistory(accountId, 30);
   const { reconciliation } = useAccountReconciliation(accountId);
   const { mutate: createAdjustment, isPending: isAdjusting } = useCreateAdjustmentEntry();
   const { mutate: clearAccountData, isPending: isClearingData } = useClearAccountData();
@@ -416,35 +416,7 @@ export default function AccountDetailsScreen() {
                     pointerLabelHeight: 32,
                     activatePointersOnLongPress: true,
                     autoAdjustPointerLabelPosition: true,
-                    pointerLabelComponent: (items: { dataPointText?: string }[]) => {
-                      const label = items?.[0]?.dataPointText;
-                      if (!label) return null;
-                      return (
-                        <View
-                          style={{
-                            height: 32,
-                            width: 116,
-                            justifyContent: 'center',
-                            backgroundColor: colors.surfaceContainerHighest,
-                            borderRadius: 8,
-                            paddingHorizontal: 8,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              color: colors.onSurface,
-                              fontSize: 11,
-                              fontWeight: 'bold',
-                              textAlign: 'center',
-                            }}
-                            numberOfLines={1}
-                            adjustsFontSizeToFit
-                          >
-                            {label}
-                          </Text>
-                        </View>
-                      );
-                    },
+                    pointerLabelComponent: renderChartPointerLabel,
                   }}
                 />
               </View>

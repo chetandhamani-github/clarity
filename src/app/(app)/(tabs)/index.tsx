@@ -1,4 +1,4 @@
-import { Header, HomeSkeleton, ProgressBar, Text, useToast } from '@/components/ui';
+import { Header, HomeSkeleton, ProgressBar, Text, useToast, renderChartPointerLabel } from '@/components/ui';
 import { UpcomingBillsWidget, useBills } from '@/modules/bills';
 import { SplitwiseWidget } from '@/modules/splitwise';
 import { SafeToSpendWidget } from '@/components/dashboard/SafeToSpendWidget';
@@ -34,7 +34,7 @@ import { invalidateAnalyticsAndHealthQueries } from '@/hooks/use-financial-healt
 import { useMonthlyTotals, useNetWorthHistory, useTransactions, useCreateTransaction } from '@/hooks/use-transactions';
 import { useDoubleBackToExit } from '@/hooks/use-double-back-to-exit';
 import { useNotifications } from '@/hooks/use-notifications';
-import { formatCurrencyPrivacy, formatDate, formatLocalDate, formatTransactionTime, getCurrencySymbol, getTransactionSign } from '@/utils/format';
+import { formatCurrencyPrivacy, formatDate, formatTransactionTime, getCurrencySymbol, getTransactionSign } from '@/utils/format';
 import { summarizeAccounts } from '@/utils/account-metrics';
 import {
   buildStartMidEndLabels,
@@ -560,35 +560,7 @@ export default function DashboardScreen() {
                       pointerLabelHeight: 32,
                       activatePointersOnLongPress: true,
                       autoAdjustPointerLabelPosition: true,
-                      pointerLabelComponent: (items: { dataPointText?: string }[]) => {
-                        const label = items?.[0]?.dataPointText;
-                        if (!label) return null;
-                        return (
-                          <View
-                            style={{
-                              height: 32,
-                              width: 116,
-                              justifyContent: 'center',
-                              backgroundColor: colors.surfaceContainerHighest,
-                              borderRadius: 8,
-                              paddingHorizontal: 8,
-                            }}
-                          >
-                            <Text
-                              style={{
-                                color: colors.onSurface,
-                                fontSize: 11,
-                                fontWeight: 'bold',
-                                textAlign: 'center',
-                              }}
-                              numberOfLines={1}
-                              adjustsFontSizeToFit
-                            >
-                              {label}
-                            </Text>
-                          </View>
-                        );
-                      },
+                      pointerLabelComponent: renderChartPointerLabel,
                     }}
                   />
                 </View>

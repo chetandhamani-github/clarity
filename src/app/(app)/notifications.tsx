@@ -311,7 +311,7 @@ export default function NotificationsScreen() {
       </View>
 
       <ScrollView
-        style={{ flex: 1 }}
+        style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
@@ -354,6 +354,9 @@ const getStyles = (colors: ThemeColors) => {
     container: {
       flex: 1,
       backgroundColor: colors.surfaceContainerLow,
+    },
+    scrollView: {
+      flex: 1,
     },
     headerRightActions: {
       flexDirection: 'row',

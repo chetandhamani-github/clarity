@@ -11,14 +11,12 @@ import {
   getMonthlyReports,
   getMonthlyTotals,
   getNetWorthHistory,
-  getRecurringTransactions,
   getTopMerchants,
   getTransactionById,
   getTransactions,
   getTransactionsCount,
   insertTransaction,
   updateTransaction as updateTransactionDao,
-  type HistoryPoint,
 } from '@/services/database/transaction-dao';
 import {
   createRecurringTransaction,
@@ -30,7 +28,6 @@ import {
 import { queueAutoBackup } from '@/services/cloud/google-drive-service';
 import { invalidateAnalyticsAndHealthQueries } from '@/hooks/use-financial-health';
 import type {
-  MonthlyTotals,
   Transaction,
   TransactionFilters,
   TransactionWithAccount,

@@ -1,4 +1,3 @@
-import type { Account } from '@/types';
 import { getAllAccounts } from '../database/account-dao';
 import { getActiveRecurringTransactions } from '../database/recurring-dao';
 
@@ -175,7 +174,6 @@ export function simulateDebtStrategy(
 
   while (active.some((d) => !d.isPaid) && month < maxMonths) {
     month++;
-    let monthInterestTotal = 0;
     const paidOffThisMonth: string[] = [];
 
     // 1. Accrue monthly interest on all remaining active debts
@@ -185,7 +183,6 @@ export function simulateDebtStrategy(
         const interest = d.balance * monthlyRate;
         d.balance += interest;
         totalInterestAccumulated += interest;
-        monthInterestTotal += interest;
       }
     }
 

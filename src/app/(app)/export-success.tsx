@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
-import { Text, Header, useAlert, useToast } from '@/components/ui';
+import { Text, Header, useToast } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
@@ -18,7 +18,6 @@ export default function ExportSuccessScreen() {
   const styles = getStyles(colors);
   const insets = useSafeInsets();
   const router = useRouter();
-  const { showAlert } = useAlert();
   const { showToast } = useToast();
 
   const [selectedFormat, setSelectedFormat] = useState<'csv' | 'json' | 'summary'>('csv');

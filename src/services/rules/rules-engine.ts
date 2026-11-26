@@ -1,7 +1,7 @@
 import { getActiveSmartRules, incrementRuleMatch } from '../database/smart-rules-dao';
 import { getDatabase } from '../database/index';
 import { setTransactionTags, getTagsForTransaction } from '../database/tag-dao';
-import type { SmartRule, RuleCondition, RuleTrigger, Transaction } from '@/types';
+import type { SmartRule, RuleCondition, RuleTrigger } from '@/types';
 
 export interface EvaluatedRuleResult {
   category?: string;
@@ -145,7 +145,7 @@ export async function evaluateSmartRules(
 
   let currentCategory = tx.category;
   let currentNote = tx.note || '';
-  let currentStatus: string | undefined = undefined;
+  let currentStatus: string | undefined;
 
   for (const rule of rules) {
     const isMatch = doesRuleMatch(

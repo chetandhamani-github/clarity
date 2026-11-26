@@ -2,7 +2,6 @@ import type {
   Person,
   Debt,
   Settlement,
-  Expense,
   ExpenseWithSplits,
   ParticipantShare,
   SplitCalculationResult,
@@ -155,7 +154,7 @@ export function determineBalanceStatus(netBalance: number): BalanceStatus {
 /**
  * Generates a user-friendly status label.
  */
-export function getStatusLabel(status: BalanceStatus, netBalance: number): string {
+export function getStatusLabel(status: BalanceStatus, _netBalance: number): string {
   switch (status) {
     case 'OWED_TO_ME':
       return 'Owes you';
@@ -570,15 +569,15 @@ export function calculateGroupBalances(
   for (const set of settlements) {
     const amt = Number(set.amount) || 0;
     if (set.settlementType === 'YOU_PAID') {
-      if (memberBalances['current_user']) {
-        memberBalances['current_user'].totalSettled -= amt;
+      if (memberBalances.current_user) {
+        memberBalances.current_user.totalSettled -= amt;
       }
       if (memberBalances[set.personId]) {
         memberBalances[set.personId].totalSettled += amt;
       }
     } else {
-      if (memberBalances['current_user']) {
-        memberBalances['current_user'].totalSettled += amt;
+      if (memberBalances.current_user) {
+        memberBalances.current_user.totalSettled += amt;
       }
       if (memberBalances[set.personId]) {
         memberBalances[set.personId].totalSettled -= amt;

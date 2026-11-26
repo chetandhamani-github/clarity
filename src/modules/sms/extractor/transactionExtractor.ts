@@ -539,7 +539,7 @@ export class TransactionExtractor {
   /**
    * Extract and clean merchant / counterparty name.
    */
-  public static extractMerchant(body: string, bank: string): string {
+  public static extractMerchant(body: string, _bank: string): string {
     let merchant = '';
 
     // 0. Check NPCI standard UPI format: UPI/P2M/... or UPI/P2P/... or UPI/DR/...

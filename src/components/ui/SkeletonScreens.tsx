@@ -1,8 +1,8 @@
-import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useTheme } from '@/theme';
 import { radius } from '@/theme/radius';
+import React from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { Header } from './Header';
 import { SkeletonBox, SkeletonCircle, SkeletonText } from './Skeleton';
 
@@ -376,49 +376,49 @@ export function TransactionsSkeleton() {
   );
 }
 
-export const TransactionsPaginationSkeleton = React.memo(
-  function TransactionsPaginationSkeleton() {
-    const { colors } = useTheme();
+function TransactionsPaginationSkeletonComponent() {
+  const { colors } = useTheme();
 
-    return (
-      <View
-        style={[
-          styles.card,
-          {
-            backgroundColor: colors.surfaceContainerLowest,
-            borderColor: colors.outlineVariant,
-            padding: 0,
-            marginTop: 12,
-            overflow: 'hidden',
-          },
-        ]}
-      >
-        {[0, 1, 2].map((index) => (
-          <View
-            key={index}
-            style={[
-              styles.transactionRow,
-              index < 2 && {
-                borderBottomWidth: 1,
-                borderBottomColor: colors.outlineVariant,
-              },
-            ]}
-          >
-            <SkeletonCircle size={40} />
-            <View style={{ flex: 1, gap: 6 }}>
-              <SkeletonText width={index % 2 === 0 ? '58%' : '48%'} height={14} />
-              <SkeletonText width="38%" height={11} />
-            </View>
-            <View style={{ alignItems: 'flex-end', gap: 6 }}>
-              <SkeletonText width={72} height={16} />
-              <SkeletonBox width={54} height={16} borderRadius={4} />
-            </View>
+  return (
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.surfaceContainerLowest,
+          borderColor: colors.outlineVariant,
+          padding: 0,
+          marginTop: 12,
+          overflow: 'hidden',
+        },
+      ]}
+    >
+      {[0, 1, 2].map((index) => (
+        <View
+          key={index}
+          style={[
+            styles.transactionRow,
+            index < 2 && {
+              borderBottomWidth: 1,
+              borderBottomColor: colors.outlineVariant,
+            },
+          ]}
+        >
+          <SkeletonCircle size={40} />
+          <View style={{ flex: 1, gap: 6 }}>
+            <SkeletonText width={index % 2 === 0 ? '58%' : '48%'} height={14} />
+            <SkeletonText width="38%" height={11} />
           </View>
-        ))}
-      </View>
-    );
-  }
-);
+          <View style={{ alignItems: 'flex-end', gap: 6 }}>
+            <SkeletonText width={72} height={16} />
+            <SkeletonBox width={54} height={16} borderRadius={4} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export const TransactionsPaginationSkeleton = React.memo(TransactionsPaginationSkeletonComponent);
 
 /**
  * Pixel-perfect Skeleton for Goals Screen (`goals.tsx`)
@@ -662,12 +662,12 @@ export function FormSkeleton() {
 /**
  * Pixel-perfect Skeleton for List screens (Search, Notifications, Reports, Analytics)
  */
-export function ListSkeleton() {
+export function ListSkeleton({ count = 5 }: { count?: number }) {
   const { colors } = useTheme();
 
   return (
     <View style={styles.container}>
-      {[1, 2, 3, 4, 5].map((i) => (
+      {Array.from({ length: count }, (_, idx) => idx + 1).map((i) => (
         <View
           key={i}
           style={[

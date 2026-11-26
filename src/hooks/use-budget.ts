@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { BudgetPlan, BudgetCategory, BucketType, CategorySpending } from '@/types';
+import type { BudgetPlan, BudgetCategory, CategorySpending } from '@/types';
 import {
   getBudgetPlanForMonth,
   getCurrentBudgetPlan,

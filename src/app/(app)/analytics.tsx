@@ -1,27 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
-import { Text, Header, ListSkeleton, SkeletonBox, SkeletonText, useAlert, useToast, NoNetworkView } from '@/components/ui';
-import { typography, useTheme, radius, ThemeColors } from '@/theme';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useSafeInsets } from '@/hooks/use-safe-insets';
-import {
-  useMonthlyTotals,
-  useTopMerchants,
-  useRecurringTransactions,
-  useDeleteRecurringTransaction,
-  useMonthlyReports,
-} from '@/hooks/use-transactions';
+import { Header, ListSkeleton, NoNetworkView, SkeletonBox, SkeletonText, Text, useAlert, useToast } from '@/components/ui';
 import { useAccounts } from '@/hooks/use-accounts';
-import { usePortfolioSummary } from '@/hooks/use-investments';
-import { summarizeAccounts } from '@/utils/account-metrics';
+import { useMonthlyAiDigest } from '@/hooks/use-ai-digest';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
 import { useFinancialHealth } from '@/hooks/use-financial-health';
-import { useMonthlyAiDigest } from '@/hooks/use-ai-digest';
+import { usePortfolioSummary } from '@/hooks/use-investments';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
+import {
+  useDeleteRecurringTransaction,
+  useMonthlyReports,
+  useMonthlyTotals,
+  useRecurringTransactions,
+  useTopMerchants,
+} from '@/hooks/use-transactions';
+import { useAppStore } from '@/store/use-app-store';
+import { radius, ThemeColors, typography, useTheme } from '@/theme';
+import { summarizeAccounts } from '@/utils/account-metrics';
 import { formatCurrency, formatCurrencyPrivacy } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
 import { getTransactionDisplayName } from '@/utils/transaction-display';
-import { useAppStore } from '@/store/use-app-store';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 export default function AnalyticsScreen() {
   const { colors } = useTheme();
@@ -297,12 +297,12 @@ export default function AnalyticsScreen() {
                         try {
                           const parts = report.datePrefix.split('-');
                           const reportDate = new Date(
-                            parseInt(parts[0]),
-                            parseInt(parts[1]) - 1,
+                            parseInt(parts[0], 10),
+                            parseInt(parts[1], 10) - 1,
                             1
                           );
                           monthShort = reportDate.toLocaleString('default', { month: 'short' });
-                        } catch (e) {
+                        } catch {
                           monthShort = '';
                         }
 

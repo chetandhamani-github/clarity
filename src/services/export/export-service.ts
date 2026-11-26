@@ -1,8 +1,6 @@
 import { getDatabase } from '@/services/database';
 import { getAllAccounts } from '@/services/database/account-dao';
 import {
-    getAllCategories,
-    getCurrentBudgetPlan,
     getSpentByCategory,
 } from '@/services/database/budget-dao';
 import { getGoals } from '@/services/database/goal-dao';

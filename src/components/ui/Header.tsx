@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, ViewStyle } from 'react-native';
 import { Text } from './Text';
-import { typography, useTheme } from '@/theme';
+import { useTheme } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
@@ -43,15 +43,16 @@ export function Header({
 
   const hasLeft = Boolean(leftNode || showBack);
   const hasRight = Boolean(rightNode);
+  const containerBorderStyle: ViewStyle = {
+    borderBottomWidth: transparent || isMainTab ? 0 : StyleSheet.hairlineWidth,
+    borderBottomColor: transparent ? 'transparent' : colors.surfaceVariant,
+  };
 
   return (
     <View
       style={[
         styles.container,
-        {
-          borderBottomWidth: transparent || isMainTab ? 0 : StyleSheet.hairlineWidth,
-          borderBottomColor: transparent ? 'transparent' : colors.surfaceVariant,
-        },
+        containerBorderStyle,
         style,
       ]}
     >

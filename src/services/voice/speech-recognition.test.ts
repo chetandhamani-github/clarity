@@ -11,11 +11,11 @@ jest.mock('expo-speech-recognition', () => {
   const listeners: Record<string, ((event: unknown) => void)[]> = {};
   return {
     ExpoSpeechRecognitionModule: {
-      start: jest.fn((options: unknown) => {
+      start: jest.fn(() => {
         // Trigger simulated start and result for testing
         setTimeout(() => {
-          listeners['start']?.forEach((cb) => cb({}));
-          listeners['result']?.forEach((cb) =>
+          listeners.start?.forEach((cb) => cb({}));
+          listeners.result?.forEach((cb) =>
             cb({
               results: [{ transcript: 'Paid 200 for coffee' }],
               isFinal: true,

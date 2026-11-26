@@ -79,7 +79,7 @@ export default function LoginScreen() {
             <MaterialIcons name="arrow-back" size={22} color={colors.onSurface} />
           </TouchableOpacity>
         ) : (
-          <View style={{ height: 36 }} />
+          <View style={styles.backButtonSpacer} />
         )}
       </View>
 
@@ -167,10 +167,8 @@ export default function LoginScreen() {
           <TouchableOpacity
             style={[
               styles.googleButton,
-              {
-                backgroundColor: colors.primary,
-                opacity: isLoading ? 0.7 : 1,
-              },
+              { backgroundColor: colors.primary },
+              isLoading && styles.googleButtonDisabled,
             ]}
             onPress={handleGoogleSignIn}
             disabled={isLoading}
@@ -334,6 +332,12 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: 16,
     minHeight: 52,
+  },
+  googleButtonDisabled: {
+    opacity: 0.7,
+  },
+  backButtonSpacer: {
+    height: 36,
   },
   googleIconCircle: {
     width: 26,

@@ -13,12 +13,10 @@ import type {
   SplitwiseOverallSummary,
   DebtType,
   Group,
-  Expense,
   ExpenseWithSplits,
   CreateGroupDTO,
   UpdateGroupDTO,
   CreateExpenseDTO,
-  UpdateExpenseDTO,
   GroupBalanceSummary,
 } from '../types/splitwise.types';
 

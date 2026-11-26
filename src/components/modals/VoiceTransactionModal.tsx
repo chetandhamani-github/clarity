@@ -1,4 +1,5 @@
 import { Text } from '@/components/ui/Text';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import {
   isNativeSpeechRecognitionAvailable,
   startSpeechRecognition,
@@ -6,13 +7,12 @@ import {
   supportsOnDeviceSpeechRecognition,
 } from '@/services/voice/speech-recognition';
 import {
+  matchAccountFromText,
   ParsedVoiceTransaction,
   parseVoiceTranscript,
   UserAccountRef,
-  matchAccountFromText,
 } from '@/services/voice/voice-parser';
 import { ThemeColors, typography, useTheme } from '@/theme';
-import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { getCurrencySymbol } from '@/utils/format';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
@@ -85,13 +85,15 @@ export function VoiceTransactionModal({
     };
   }, []);
 
+  const startListeningRef = useRef<(() => Promise<void>) | null>(null);
+
   // Auto-start listening when modal opens
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     if (visible) {
       setIsOnDevice(supportsOnDeviceSpeechRecognition());
       timer = setTimeout(() => {
-        handleStartListening();
+        startListeningRef.current?.();
       }, 350);
     } else {
       stopSpeechRecognition();
@@ -216,6 +218,7 @@ export function VoiceTransactionModal({
       });
     }
   };
+  startListeningRef.current = handleStartListening;
 
   const handleStopListening = () => {
     stopSpeechRecognition();

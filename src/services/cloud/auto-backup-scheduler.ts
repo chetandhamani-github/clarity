@@ -52,7 +52,7 @@ export function initScheduledBackupListener(): () => void {
 
   // Run a delayed check on startup (10 seconds after launch)
   const initialTimer = setTimeout(() => {
-    void checkAndRunScheduledBackup('startup-check');
+    checkAndRunScheduledBackup('startup-check');
   }, 10000);
 
   // Check whenever app returns to foreground
@@ -62,7 +62,7 @@ export function initScheduledBackupListener(): () => void {
       previousAppState.match(/inactive|background/) &&
       nextAppState === 'active'
     ) {
-      void checkAndRunScheduledBackup('app-resume');
+      checkAndRunScheduledBackup('app-resume');
     }
     previousAppState = nextAppState;
   });

@@ -119,12 +119,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               <TouchableOpacity
                 style={[
                   styles.actionButton,
-                  {
-                    backgroundColor:
-                      colors.inverseSurface === getBackgroundColor(toast.type)
-                        ? colors.primary
-                        : 'rgba(255,255,255,0.25)',
-                  },
+                  colors.inverseSurface === getBackgroundColor(toast.type)
+                    ? { backgroundColor: colors.primary }
+                    : styles.actionButtonTranslucent,
                 ]}
                 onPress={() => {
                   toast.action?.onPress();
@@ -135,12 +132,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 <Text
                   style={[
                     styles.actionButtonText,
-                    {
-                      color:
-                        colors.inverseSurface === getBackgroundColor(toast.type)
-                          ? colors.onPrimary
-                          : '#FFFFFF',
-                    },
+                    colors.inverseSurface === getBackgroundColor(toast.type)
+                      ? { color: colors.onPrimary }
+                      : styles.actionButtonTextLight,
                   ]}
                   numberOfLines={1}
                 >
@@ -199,9 +193,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  actionButtonTranslucent: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
   actionButtonText: {
     fontSize: 12,
     fontFamily: 'Manrope_700Bold',
     letterSpacing: Platform.OS === 'ios' ? 0.5 : 0,
+  },
+  actionButtonTextLight: {
+    color: '#FFFFFF',
   },
 });

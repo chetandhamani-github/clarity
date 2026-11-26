@@ -15,6 +15,7 @@ import {
     TouchableOpacity,
     Vibration,
     View,
+    ViewStyle,
 } from 'react-native';
 
 interface ReorderableBankAccountsProps {
@@ -116,7 +117,6 @@ export function ReorderableBankAccounts({
       hoverIndexRef.current = targetSlot;
       Vibration.vibrate(15);
 
-      const from = dragIndexRef.current;
       const to = targetSlot;
 
       orderRef.current.forEach((itemId, k) => {
@@ -212,6 +212,7 @@ export function ReorderableBankAccounts({
   if (accounts.length === 0) return null;
 
   const totalContentWidth = accounts.length * ITEM_SLOT - GAP;
+  const horizontalTrackStyle: ViewStyle = { width: totalContentWidth, height: 152 };
 
   return (
     <View style={styles.sectionContainer}>
@@ -238,7 +239,7 @@ export function ReorderableBankAccounts({
         ]}
       >
         <View
-          style={{ width: totalContentWidth, height: 152 }}
+          style={horizontalTrackStyle}
           onTouchMove={(e: GestureResponderEvent) => {
             if (activeDragId !== null) {
               handleDragMove(e.nativeEvent.pageX);

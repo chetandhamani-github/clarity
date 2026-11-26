@@ -1,40 +1,41 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import {
-  View,
-  StyleSheet,
-  FlatList,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Keyboard,
-  Platform,
-  ActivityIndicator,
-  ScrollView,
-  useWindowDimensions,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
-} from 'react-native';
-import { Text, Header, useAlert, useToast, NoNetworkView } from '@/components/ui';
-import { typography, useTheme, ThemeColors } from '@/theme';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useSafeInsets } from '@/hooks/use-safe-insets';
-import { useMonthlyTotals, useRecurringTransactions } from '@/hooks/use-transactions';
-import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
+import { Header, NoNetworkView, Text, useAlert, useToast } from '@/components/ui';
 import { useAccounts } from '@/hooks/use-accounts';
-import { useInvestments, usePortfolioSummary } from '@/hooks/use-investments';
 import { useMonthlyBillSummary } from '@/hooks/use-bills';
-import { useGoals } from '@/hooks/use-goals';
+import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
 import { useSafeToSpend } from '@/hooks/use-cashflow';
 import { useDebtPayoff } from '@/hooks/use-debt-payoff';
 import { useFinancialHealth } from '@/hooks/use-financial-health';
+import { useGoals } from '@/hooks/use-goals';
+import { useInvestments, usePortfolioSummary } from '@/hooks/use-investments';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
+import { useMonthlyTotals, useRecurringTransactions } from '@/hooks/use-transactions';
 import { chatWithFinancialCopilot } from '@/services/api/ai.api';
-import { fetchRemoteConfig } from '@/services/api/config.api';
 import { apiClient } from '@/services/api/client';
-import { useNetworkStore } from '@/store/use-network-store';
+import { fetchRemoteConfig } from '@/services/api/config.api';
 import { isNetworkError } from '@/services/network/network.service';
 import { ChatMessage, useCopilotStore } from '@/store/use-copilot-store';
+import { useNetworkStore } from '@/store/use-network-store';
+import { ThemeColors, typography, useTheme } from '@/theme';
 import { getCurrencySymbol } from '@/utils/format';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+  ViewStyle,
+} from 'react-native';
 
 const SUGGESTED_PROMPTS = [
   'What is my total net worth and investment breakdown?',
@@ -59,7 +60,7 @@ function getActionLabel(actionRoute: string): string {
   return 'View Transactions →';
 }
 
-const ChatMessageBubble = React.memo(function ChatMessageBubble({
+function ChatMessageBubbleComponent({
   item,
   colors,
   styles,
@@ -138,7 +139,9 @@ const ChatMessageBubble = React.memo(function ChatMessageBubble({
       </View>
     </View>
   );
-});
+}
+
+const ChatMessageBubble = React.memo(ChatMessageBubbleComponent);
 
 export default function CopilotScreen() {
   const { colors } = useTheme();
@@ -491,7 +494,7 @@ export default function CopilotScreen() {
       setTimeout(() => scrollToEnd(true), 150);
     } catch (err: unknown) {
       if (isNetworkError(err)) {
-        void useNetworkStore.getState().verifyConnection();
+        useNetworkStore.getState().verifyConnection();
       }
       showToast('Could not reach assistant. Please try again.', 'error');
       const isNet = isNetworkError(err);
@@ -514,7 +517,7 @@ export default function CopilotScreen() {
         textInputRef.current?.focus();
       });
     }
-  }, [inputText, isSending, isConnected, checkConnection, financialContext, scrollToEnd, showToast]);
+  }, [inputText, isSending, isConnected, checkConnection, financialContext, scrollToEnd, setMessages, showToast]);
 
   const handleClearHistory = () => {
     showAlert(
@@ -594,9 +597,15 @@ export default function CopilotScreen() {
         : keyboardHeight + KEYBOARD_GAP
       : 0;
 
+  const topInsetStyle: ViewStyle = { paddingTop: insets.top };
+  const chatWrapperStyle: ViewStyle = { paddingBottom: androidBottomPadding };
+  const inputBarPaddingStyle: ViewStyle = {
+    paddingBottom: keyboardHeight > 0 ? 20 : Math.max(insets.bottom, 28) + 16,
+  };
+
   if (!isConnected && messages.length <= 1) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top, flex: 1, backgroundColor: colors.background }]}>
+      <View style={[styles.container, topInsetStyle]}>
         <Header showBack title="Clarity Copilot" />
         <NoNetworkView
           variant="fullscreen"
@@ -611,11 +620,11 @@ export default function CopilotScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colors.background }}
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 18 : 0}
     >
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={[styles.container, topInsetStyle]}>
         <Header
           showBack
           title="Clarity Copilot"
@@ -639,7 +648,7 @@ export default function CopilotScreen() {
           />
         )}
 
-        <View style={[styles.chatWrapper, { paddingBottom: androidBottomPadding }]}>
+        <View style={[styles.chatWrapper, chatWrapperStyle]}>
           <FlatList
             ref={flatListRef}
             data={messages}
@@ -705,7 +714,7 @@ export default function CopilotScreen() {
                 {SUGGESTED_PROMPTS.map((prompt, index) => (
                   <TouchableOpacity
                     key={index}
-                    style={[styles.promptChip, !isConnected && { opacity: 0.5 }]}
+                    style={[styles.promptChip, !isConnected && styles.promptChipOffline]}
                     onPress={() => {
                       if (!isConnected) {
                         showToast('Cannot send message while offline. Please check your connection.', 'error');
@@ -724,21 +733,11 @@ export default function CopilotScreen() {
           )}
 
           {/* Sticky Input Bar */}
-          <View
-            style={[
-              styles.inputBarContainer,
-              {
-                paddingBottom:
-                  keyboardHeight > 0
-                    ? 20
-                    : Math.max(insets.bottom, 28) + 16,
-              },
-            ]}
-          >
+          <View style={[styles.inputBarContainer, inputBarPaddingStyle]}>
             <View style={styles.inputInnerWrapper}>
               <TextInput
                 ref={textInputRef}
-                style={[styles.textInput, !isConnected && { opacity: 0.7 }]}
+                style={[styles.textInput, !isConnected && styles.textInputOffline]}
                 placeholder={
                   !isConnected
                     ? 'Offline — Connect to internet to chat...'
@@ -999,6 +998,9 @@ const getStyles = (colors: ThemeColors) => {
       paddingVertical: 8,
       borderRadius: 16,
     },
+    promptChipOffline: {
+      opacity: 0.5,
+    },
     promptChipText: {
       ...typography.bodyMd,
       fontSize: 13,
@@ -1029,6 +1031,9 @@ const getStyles = (colors: ThemeColors) => {
       maxHeight: 100,
       paddingVertical: 8,
       paddingHorizontal: 8,
+    },
+    textInputOffline: {
+      opacity: 0.7,
     },
     sendButton: {
       width: 36,

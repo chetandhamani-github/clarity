@@ -61,7 +61,7 @@ interface ScheduleCardProps {
   onPayNow: (schedule: RecurringTransactionWithAccount) => void;
 }
 
-const RecurringScheduleCard = React.memo(function RecurringScheduleCard({
+function RecurringScheduleCardComponent({
   item,
   accountById,
   hideBalances,
@@ -241,7 +241,9 @@ const RecurringScheduleCard = React.memo(function RecurringScheduleCard({
       </View>
     </View>
   );
-});
+}
+
+const RecurringScheduleCard = React.memo(RecurringScheduleCardComponent);
 
 export function RecurringSchedulesList({
   schedules,
@@ -461,8 +463,8 @@ export function RecurringSchedulesList({
   );
 }
 
-const getStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
+const getStyles = (colors: ThemeColors) => {
+  const styles = StyleSheet.create({
     summaryWrapper: {
       paddingHorizontal: 20,
       marginBottom: 14,
@@ -727,4 +729,6 @@ const getStyles = (colors: ThemeColors) =>
       fontFamily: 'Manrope_700Bold',
     },
   });
+  return styles;
+};
 

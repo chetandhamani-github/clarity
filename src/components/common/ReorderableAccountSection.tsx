@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   Vibration,
   View,
+  ViewStyle,
   Platform,
 } from 'react-native';
 
@@ -139,7 +140,6 @@ export function ReorderableAccountSection({
       hoverIndexRef.current = targetSlot;
       Vibration.vibrate(15);
 
-      const from = dragIndexRef.current;
       const to = targetSlot;
 
       orderRef.current.forEach((itemId, k) => {
@@ -235,6 +235,7 @@ export function ReorderableAccountSection({
   if (accounts.length === 0) return null;
 
   const totalContentHeight = accounts.length * ROW_SLOT - GAP;
+  const accountListStyle: ViewStyle = { height: totalContentHeight, position: 'relative' };
 
   return (
     <View style={styles.sectionCard}>
@@ -262,7 +263,7 @@ export function ReorderableAccountSection({
 
       {/* Account List */}
       <View
-        style={{ height: totalContentHeight, position: 'relative' }}
+        style={accountListStyle}
         onTouchMove={(e: GestureResponderEvent) => {
           if (activeDragId !== null) {
             handleDragMove(e.nativeEvent.pageY);

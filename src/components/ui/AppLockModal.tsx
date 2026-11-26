@@ -55,10 +55,13 @@ export function AppLockModal({ visible, onUnlock }: AppLockModalProps) {
     }
   };
 
+  const authenticateRef = useRef(handleAuthenticate);
+  authenticateRef.current = handleAuthenticate;
+
   useEffect(() => {
     if (visible) {
       const timer = setTimeout(() => {
-        handleAuthenticate();
+        authenticateRef.current();
       }, 150);
       return () => clearTimeout(timer);
     }

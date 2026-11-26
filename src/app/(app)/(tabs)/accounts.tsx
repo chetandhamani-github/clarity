@@ -4,12 +4,11 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   Platform,
   useWindowDimensions,
 } from 'react-native';
-import { Text, Header, AccountsSkeleton, SkeletonBox, WealthCardSkeleton } from '@/components/ui';
-import { spacing, typography, useTheme, radius, ThemeColors } from '@/theme';
+import { Text, Header, AccountsSkeleton, SkeletonBox, WealthCardSkeleton, renderChartPointerLabel } from '@/components/ui';
+import { typography, useTheme, radius, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -323,7 +322,7 @@ interface WealthPortfolioCardProps {
   styles: ReturnType<typeof getStyles>;
 }
 
-const WealthPortfolioCard = React.memo(function WealthPortfolioCard({
+function WealthPortfolioCardComponent({
   portfolioSummary,
   hideBalances,
   onPress,
@@ -425,7 +424,9 @@ const WealthPortfolioCard = React.memo(function WealthPortfolioCard({
       )}
     </TouchableOpacity>
   );
-});
+}
+
+const WealthPortfolioCard = React.memo(WealthPortfolioCardComponent);
 
 function AccountDetailCard({
   account,
@@ -616,35 +617,7 @@ function AccountDetailCard({
                 pointerLabelHeight: 32,
                 activatePointersOnLongPress: true,
                 autoAdjustPointerLabelPosition: true,
-                pointerLabelComponent: (items: { dataPointText?: string }[]) => {
-                  const label = items?.[0]?.dataPointText;
-                  if (!label) return null;
-                  return (
-                    <View
-                      style={{
-                        height: 32,
-                        width: 116,
-                        justifyContent: 'center',
-                        backgroundColor: colors.surfaceContainerHighest,
-                        borderRadius: 8,
-                        paddingHorizontal: 8,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: colors.onSurface,
-                          fontSize: 11,
-                          fontWeight: 'bold',
-                          textAlign: 'center',
-                        }}
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                      >
-                        {label}
-                      </Text>
-                    </View>
-                  );
-                },
+                pointerLabelComponent: renderChartPointerLabel,
               }}
             />
           </View>

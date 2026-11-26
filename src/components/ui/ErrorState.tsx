@@ -23,7 +23,7 @@ export const ErrorState = ({ message = 'Something went wrong', onRetry }: Props)
   );
 };
 
-const getStyles = (colors: ThemeColors) => {
+const getStyles = (_colors: ThemeColors) => {
   const styles = StyleSheet.create({
     container: {
       flex: 1,

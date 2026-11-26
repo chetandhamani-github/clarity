@@ -1,35 +1,34 @@
-import type {
-    Account,
-    MonthlyTotals,
-    Transaction,
-    TransactionFilters,
-    TransactionSource,
-    TransactionStatus,
-    TransactionType,
-    TransactionWithAccount,
-} from '@/types';
-import { DeviceEventEmitter } from 'react-native';
 import { evaluateSmartRules } from '@/services/rules/rules-engine';
+import type {
+  Account,
+  MonthlyTotals,
+  Transaction,
+  TransactionFilters,
+  TransactionSource,
+  TransactionStatus,
+  TransactionType,
+  TransactionWithAccount,
+} from '@/types';
 import { getLocalTodayYmd, shiftYmdDays } from '@/utils/date';
 import { formatLocalDate, parseDateSafely } from '@/utils/format';
+import { getAccountById } from './account-dao';
 import {
-  revertLinkedBillsForTransaction,
   resyncRevertedBills,
+  revertLinkedBillsForTransaction,
   type RevertedBillInfo,
 } from './bill-dao';
-import { getAccountById } from './account-dao';
 import { getDatabase } from './index';
 import {
   getAllTransactionTagsMap,
-  getTransactionTagsMapForIds,
   getTagsForTransaction,
+  getTransactionTagsMapForIds,
   setTransactionTags,
 } from './tag-dao';
 
 function generateId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    const r = Math.floor(Math.random() * 16);
+    const v = c === 'x' ? r : (r % 4) + 8;
     return v.toString(16);
   });
 }

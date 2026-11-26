@@ -1,6 +1,5 @@
 import { DatePickerModal, Header, Text, useAlert, useToast } from '@/components/ui';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
-import { useAppStore } from '@/store/use-app-store';
 import { getLocalTodayYmd } from '@/utils/date';
 import { getCurrencySymbol } from '@/utils/format';
 import { radius, useTheme } from '@/theme';
@@ -44,7 +43,6 @@ export function AddExpenseScreen() {
   const { colors } = useTheme();
   const insets = useSafeInsets();
   const router = useRouter();
-  const { hideBalances } = useAppStore();
   const { showAlert } = useAlert();
   const { showToast } = useToast();
 
@@ -108,9 +106,7 @@ export function AddExpenseScreen() {
     if (availableParticipants.length > 0) {
       const ids = availableParticipants.map((p) => p.id);
       setParticipantIds(ids);
-      if (!payerId || !ids.includes(payerId)) {
-        setPayerId(CURRENT_USER_ID);
-      }
+      setPayerId((prev) => (!prev || !ids.includes(prev) ? CURRENT_USER_ID : prev));
     }
   }, [availableParticipants]);
 

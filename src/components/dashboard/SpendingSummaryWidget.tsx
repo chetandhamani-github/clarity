@@ -295,7 +295,7 @@ export function SpendingSummaryWidget({
                   </View>
 
                   {hasBudgetLimit && (
-                    <View style={[styles.detailStatBlock, { alignItems: 'flex-end' }]}>
+                    <View style={[styles.detailStatBlock, styles.detailStatBlockEnd]}>
                       <Text style={styles.detailStatLabel}>Monthly Limit</Text>
                       <Text
                         style={styles.detailStatValue}
@@ -371,7 +371,7 @@ export function SpendingSummaryWidget({
                       <Text
                         style={[
                           styles.legendName,
-                          isSelected && { fontFamily: 'Manrope_700Bold' },
+                          isSelected && styles.legendNameSelected,
                         ]}
                         numberOfLines={1}
                       >
@@ -649,6 +649,12 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.bodyMd,
       color: colors.onSurface,
       flex: 1,
+    },
+    legendNameSelected: {
+      fontFamily: 'Manrope_700Bold',
+    },
+    detailStatBlockEnd: {
+      alignItems: 'flex-end',
     },
     legendRight: {
       flexDirection: 'row',

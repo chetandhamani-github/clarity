@@ -22,7 +22,6 @@ import type {
   CreateGroupDTO,
   UpdateGroupDTO,
   CreateExpenseDTO,
-  UpdateExpenseDTO,
   PersonBalanceSummary,
   SplitwiseOverallSummary,
   SplitwiseActivityItem,

@@ -11,10 +11,9 @@ import {
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Text, Header, useToast, useAlert } from '@/components/ui';
-import { spacing, typography, radius, useTheme, ThemeColors } from '@/theme';
+import { typography, radius, useTheme } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
-import { useRouter } from 'expo-router';
 import {
   useCategories,
   useCreateCategory,
@@ -65,11 +64,10 @@ const BUCKET_OPTIONS: { label: string; value: BucketType; color: string }[] = [
 export default function ManageCategoriesScreen() {
   const { colors } = useTheme();
   const insets = useSafeInsets();
-  const router = useRouter();
   const { showToast } = useToast();
   const { showAlert } = useAlert();
 
-  const { categories, isLoading } = useCategories();
+  const { categories } = useCategories();
   const createCategoryMutation = useCreateCategory();
   const updateCategoryMutation = useUpdateCategory();
   const deleteCategoryMutation = useDeleteCategory();
@@ -210,7 +208,7 @@ export default function ManageCategoriesScreen() {
       </View>
 
       <ScrollView
-        style={{ flex: 1 }}
+        style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
@@ -371,7 +369,8 @@ export default function ManageCategoriesScreen() {
                           style={[
                             styles.bucketChoiceText,
                             { color: colors.onSurfaceVariant },
-                            isSelected && { color: opt.color, fontWeight: '700' },
+                            isSelected && styles.bucketChoiceTextSelected,
+                            isSelected && { color: opt.color },
                           ]}
                         >
                           {opt.label}
@@ -620,6 +619,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
     fontWeight: '600',
+  },
+  bucketChoiceTextSelected: {
+    fontWeight: '700',
+  },
+  scrollView: {
+    flex: 1,
   },
   iconGrid: {
     flexDirection: 'row',

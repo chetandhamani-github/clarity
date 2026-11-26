@@ -1,6 +1,5 @@
 import {
   insertBill,
-  updateBill,
   deleteBill,
   markBillAsPaid,
   dismissBill,

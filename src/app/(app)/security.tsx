@@ -14,7 +14,7 @@ import * as FileSystem from 'expo-file-system';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text, Header, useToast, useAlert } from '@/components/ui';
 import { PassphraseModal } from '@/components/modals/PassphraseModal';
-import { spacing, typography, useTheme, ThemeColors } from '@/theme';
+import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
@@ -329,7 +329,7 @@ export default function SecurityPrivacyScreen() {
                   style={[
                     styles.radioPill,
                     timeoutSetting === 'never' && styles.radioPillActive,
-                    { opacity: 0.7 },
+                    styles.radioPillDimmed,
                   ]}
                   onPress={() => setTimeoutSetting('never')}
                 >
@@ -438,7 +438,7 @@ export default function SecurityPrivacyScreen() {
                 </Text>
               </View>
               <TouchableOpacity
-                style={[styles.errorBtn, isResetting && { opacity: 0.6 }]}
+                style={[styles.errorBtn, isResetting && styles.errorBtnDisabled]}
                 onPress={handleDeleteAllData}
                 disabled={isResetting}
               >
@@ -572,6 +572,9 @@ const getStyles = (colors: ThemeColors) => {
       backgroundColor: colors.primary,
       borderColor: colors.primary,
     },
+    radioPillDimmed: {
+      opacity: 0.7,
+    },
     radioPillText: {
       ...typography.bodyMd,
       color: colors.onSurface,
@@ -629,6 +632,9 @@ const getStyles = (colors: ThemeColors) => {
       paddingHorizontal: 24,
       paddingVertical: 10,
       borderRadius: 8,
+    },
+    errorBtnDisabled: {
+      opacity: 0.6,
     },
     errorBtnText: {
       ...typography.labelMd,

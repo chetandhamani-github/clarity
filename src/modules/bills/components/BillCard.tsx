@@ -211,7 +211,7 @@ export function BillCard({ bill, onPress }: BillCardProps) {
                 backgroundColor: colors.surfaceContainerLowest,
                 borderColor: colors.outlineVariant,
               },
-              !bill.paymentUrl && { flex: 1 },
+              !bill.paymentUrl && styles.markPaidButtonFull,
             ]}
             onPress={handleMarkPaid}
             activeOpacity={0.8}
@@ -368,6 +368,9 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 8,
+  },
+  markPaidButtonFull: {
+    flex: 1,
   },
   markPaidButtonText: {
     ...typography.labelMd,

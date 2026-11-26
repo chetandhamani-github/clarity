@@ -19,3 +19,4 @@ export * from './SkeletonScreens';
 export * from './DatePickerModal';
 export * from './DiscrepancyBanner';
 export * from './NoNetworkView';
+export * from './ChartPointerLabel';

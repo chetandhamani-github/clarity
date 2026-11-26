@@ -200,7 +200,7 @@ describe('google-drive-service', () => {
       },
     };
 
-    const mockFetch = jest.fn().mockImplementation((url: string) => {
+    const mockFetch = jest.fn().mockImplementation(() => {
       // files.list finding existing file
       return Promise.resolve({
         status: 200,

@@ -80,7 +80,7 @@ export function TransactionsCalendarCard({
     selectedRange?.start === todayYmd && selectedRange?.end === todayYmd;
   const showTodayShortcut = !isCurrentMonth || !isOnlyTodaySelected;
 
-  const currencySymbol = useMemo(() => getCurrencySymbol(), [currencyCode]);
+  const currencySymbol = getCurrencySymbol();
 
   const monthLabel = useMemo(() => {
     const dt = new Date(year, month - 1, 1);

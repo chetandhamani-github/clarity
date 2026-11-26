@@ -1,4 +1,4 @@
-import type { RawSmsMessage, BillerCategory } from '@/types';
+import type { BillerCategory, RawSmsMessage } from '@/types';
 
 export interface ExtractedBill {
   billerName: string;
@@ -76,16 +76,16 @@ export class BillExtractor {
     /(?:(?:bill|due|payable|pay|amount|emi|premium|installment)[^\d\n\r]{0,45}(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)|(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)[^\d\n\r]{0,45}(?:due|bill|payable|emi|premium|installment))/gi;
 
   private static readonly DAY_FIRST_DATE_REGEX =
-    /(?:due\s+(?:on|date|by)|pay\s+by|payable\s+by|valid\s+till|by|before)(?:\s+is|\s*:|:)?\s*(\d{1,2})(?:st|nd|rd|th)?[\s\-\/\.]([a-zA-Z]{3,9})(?:[\s\-\/\.](\d{2,4}))?/i;
+    /(?:due\s+(?:on|date|by)|pay\s+by|payable\s+by|valid\s+till|by|before)(?:\s+is|\s*:|:)?\s*(\d{1,2})(?:st|nd|rd|th)?[\s./-]([a-zA-Z]{3,9})(?:[\s./-](\d{2,4}))?/i;
 
   private static readonly MONTH_FIRST_DATE_REGEX =
-    /(?:due\s+(?:on|date|by)|pay\s+by|payable\s+by|valid\s+till|by|before)(?:\s+is|\s*:|:)?\s*([a-zA-Z]{3,9})[\s\-\/\.](\d{1,2})(?:st|nd|rd|th)?(?:[\s\-\/\.,]+(\d{2,4}))?/i;
+    /(?:due\s+(?:on|date|by)|pay\s+by|payable\s+by|valid\s+till|by|before)(?:\s+is|\s*:|:)?\s*([a-zA-Z]{3,9})[\s./-](\d{1,2})(?:st|nd|rd|th)?(?:[\s.,/-]+(\d{2,4}))?/i;
 
   private static readonly NUMERIC_DATE_REGEX =
-    /(?:due\s+(?:on|date|by)|pay\s+by|payable\s+by|valid\s+till|by|before)(?:\s+is|\s*:|:)?\s*(\d{1,2})[\-\/\.](\d{1,2})[\-\/\.](\d{2,4})/i;
+    /(?:due\s+(?:on|date|by)|pay\s+by|payable\s+by|valid\s+till|by|before)(?:\s+is|\s*:|:)?\s*(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})/i;
 
   private static readonly CONTEXTUAL_DATE_REGEX =
-    /(?:due|pay|bill|before|till)[^\d\n\r]{0,30}(\d{1,2})(?:st|nd|rd|th)?[\s\-\/\.]([a-zA-Z]{3,9})(?:[\s\-\/\.](\d{2,4}))?/i;
+    /(?:due|pay|bill|before|till)[^\d\n\r]{0,30}(\d{1,2})(?:st|nd|rd|th)?[\s./-]([a-zA-Z]{3,9})(?:[\s./-](\d{2,4}))?/i;
 
   private static readonly ACCOUNT_REF_REGEX =
     /(?:ca\s*no\.?|consumer\s*(?:no\.?|id)|sub(?:scriber)?\s*id|a\/c\s*no\.?|account\s*no\.?|policy\s*no\.?|landline\s*no\.?|bp\s*no\.?|k\s*no\.?|service\s*no\.?|connection\s*no\.?)\s*(?:is|:)?\s*([a-zA-Z0-9]{4,16})/i;
@@ -94,7 +94,7 @@ export class BillExtractor {
     /(?:card\s*(?:ending|xx|\.\.)(?:\s*(?:in|with|:|-))?\s*(\d{4}))/i;
 
   private static readonly PAYMENT_URL_REGEX =
-    /https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)/i;
+    /https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&//=]*)/i;
 
   private static readonly EMI_WORD_REGEX = /\bemi\b/i;
   private static readonly LIC_WORD_REGEX = /\blic\b/i;

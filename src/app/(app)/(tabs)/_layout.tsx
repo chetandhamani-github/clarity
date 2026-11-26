@@ -78,8 +78,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
               <Text
                 style={[
                   styles.tabLabel,
-                  { color: isFocused ? colors.primary : colors.secondary },
-                  isFocused && { fontWeight: '700' },
+                  isFocused ? styles.tabLabelFocused : styles.tabLabelInactive,
                 ]}
                 numberOfLines={1}
               >
@@ -93,12 +92,16 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   );
 }
 
+const renderTabBar: React.ComponentProps<typeof Tabs>['tabBar'] = (props) => (
+  <CustomTabBar {...props} />
+);
+
 export default function TabsLayout() {
   const { colors } = useTheme();
 
   return (
     <Tabs
-      tabBar={(props) => <CustomTabBar {...props} />}
+      tabBar={renderTabBar}
       screenOptions={{
         headerShown: false,
         sceneStyle: { backgroundColor: colors.background },
@@ -161,6 +164,13 @@ const getStyles = (colors: ThemeColors) => {
       lineHeight: 14,
       letterSpacing: -0.2,
       textAlign: 'center',
+    },
+    tabLabelFocused: {
+      color: colors.primary,
+      fontWeight: '700',
+    },
+    tabLabelInactive: {
+      color: colors.secondary,
     },
     fab: {
       position: 'absolute',

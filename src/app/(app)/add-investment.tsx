@@ -80,7 +80,7 @@ export default function AddInvestmentScreen() {
 
   const { id } = useLocalSearchParams<{ id?: string }>();
   const isEditing = !!id;
-  const { holding, isLoading: isFetching } = useInvestment(id);
+  const { holding } = useInvestment(id);
   const { accounts } = useAccounts();
 
   const { mutate: createHolding, isPending: isCreating } = useCreateInvestmentHolding();

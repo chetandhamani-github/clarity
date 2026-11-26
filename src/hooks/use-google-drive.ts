@@ -38,7 +38,6 @@ export function useGoogleDrive() {
   const setGoogleDriveConnected = useAppStore((state) => state.setGoogleDriveConnected);
   const setLastCloudBackupTime = useAppStore((state) => state.setLastCloudBackupTime);
   const hasCustomBackupPassphrase = useAppStore((state) => state.hasCustomBackupPassphrase);
-  const setHasCustomBackupPassphrase = useAppStore((state) => state.setHasCustomBackupPassphrase);
 
   const autoBackupEnabled = useAppStore((state) => state.autoBackupEnabled);
   const setAutoBackupEnabled = useAppStore((state) => state.setAutoBackupEnabled);

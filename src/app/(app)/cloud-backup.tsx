@@ -1,21 +1,21 @@
-import React, { useState } from 'react';
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Switch,
-  ActivityIndicator,
-} from 'react-native';
-import { Header, Text, useAlert, useToast } from '@/components/ui';
-import { useTheme, typography, fontFamilies, ThemeColors } from '@/theme';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeInsets } from '@/hooks/use-safe-insets';
-import { useGoogleDrive } from '@/hooks/use-google-drive';
-import { useAppStore } from '@/store/use-app-store';
-import { PassphraseModal } from '@/components/modals/PassphraseModal';
 import { BackupRevisionsModal } from '@/components/modals/BackupRevisionsModal';
+import { PassphraseModal } from '@/components/modals/PassphraseModal';
+import { Header, Text, useAlert, useToast } from '@/components/ui';
+import { useGoogleDrive } from '@/hooks/use-google-drive';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import type { GoogleDriveRevisionInfo } from '@/services/cloud/google-drive-service';
+import { useAppStore } from '@/store/use-app-store';
+import { fontFamilies, ThemeColors, typography, useTheme } from '@/theme';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useState } from 'react';
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 export default function CloudBackupScreen() {
   const { colors } = useTheme();
@@ -211,7 +211,7 @@ export default function CloudBackupScreen() {
     setPendingInitialSetup(false);
     setPassphraseModalVisible(false);
     if (shouldUploadUnencrypted) {
-      void syncInitialBackupIfMeaningful();
+      syncInitialBackupIfMeaningful();
     }
     if (passphraseMode === 'encrypt') {
       showToast(

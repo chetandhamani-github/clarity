@@ -1,9 +1,8 @@
-import React from 'react';
-import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Text } from './Text';
-import { useTheme, typography, ThemeColors } from '@/theme';
-import { MaterialIcons } from '@expo/vector-icons';
+import { typography, useTheme } from '@/theme';
 import { formatCurrency } from '@/utils/format';
+import { MaterialIcons } from '@expo/vector-icons';
+import { ActivityIndicator, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Text } from './Text';
 
 export interface DiscrepancyBannerProps {
   discrepancy: number; // positive = ledger is higher than statement, negative = ledger is lower than statement
@@ -16,7 +15,6 @@ export interface DiscrepancyBannerProps {
 
 export function DiscrepancyBanner({
   discrepancy,
-  statementBalance,
   calculatedBalance,
   currentBalance,
   onAdjust,
@@ -41,7 +39,7 @@ export function DiscrepancyBanner({
         <View style={[styles.iconCircle, { backgroundColor: colors.tertiaryContainer }]}>
           <MaterialIcons name="sync-problem" size={18} color={colors.onTertiaryContainer} />
         </View>
-        <View style={{ flex: 1 }}>
+        <View style={styles.headerTextCol}>
           <Text style={[styles.title, { color: colors.onSurface }]}>Discrepancy Detected</Text>
           <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
             Mismatch of {formatCurrency(diffAbs)} between your bank statement ({formatCurrency(calculatedBalance)}) and account balance ({formatCurrency(ledgerBalance)}).
@@ -79,6 +77,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
+  },
+  headerTextCol: {
+    flex: 1,
   },
   iconCircle: {
     width: 32,

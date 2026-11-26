@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, TextInput, Platform } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Text, Header } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
@@ -7,7 +7,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCreateAccount, useUpdateAccount, useAccount } from '@/hooks/use-accounts';
-import { useToast, useAlert } from '@/components/ui';
+import { useToast } from '@/components/ui';
 import { ACCOUNT_TYPES, type AccountType } from '@/types';
 import { getCurrencySymbol } from '@/utils/format';
 
@@ -35,9 +35,8 @@ export default function AddAccountScreen() {
   const { id, initialType } = useLocalSearchParams<{ id?: string | string[]; initialType?: string }>();
   const accountId = Array.isArray(id) ? id[0] : id;
   const isEditing = !!accountId;
-  const { account, isLoading: isFetching } = useAccount(accountId);
+  const { account } = useAccount(accountId);
   const { showToast } = useToast();
-  const { showAlert } = useAlert();
 
   const [name, setName] = useState('');
   const [type, setType] = useState<AccountType>(

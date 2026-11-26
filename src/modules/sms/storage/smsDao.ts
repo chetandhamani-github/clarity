@@ -7,16 +7,6 @@ import type {
   ExtractedTransaction,
 } from '@/modules/sms/types';
 
-interface SmsMessageRow {
-  id: string;
-  address: string;
-  body: string;
-  date: number;
-  date_sent: number | null;
-  status: string;
-  created_at: string;
-}
-
 interface ParsedTransactionRow {
   id: string;
   sms_id: string | null;

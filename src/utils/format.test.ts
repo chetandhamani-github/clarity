@@ -70,7 +70,7 @@ describe('format utilities', () => {
   });
 
   describe('parseDateSafely', () => {
-    const { parseDateSafely, formatTime, getRelativeTime } = require('./format');
+    const { parseDateSafely, getRelativeTime } = require('./format');
 
     it('parses calendar dates "YYYY-MM-DD" as local date without timezone shift', () => {
       const d = parseDateSafely('2026-11-18');

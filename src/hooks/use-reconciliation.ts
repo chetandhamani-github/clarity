@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getAccountReconciliationStatus,
   createBalanceAdjustmentEntry,
-  type AccountReconciliationStatus,
 } from '@/services/database/reconciliation-service';
 import { queueAutoBackup } from '@/services/cloud/google-drive-service';
 import { invalidateAnalyticsAndHealthQueries } from '@/hooks/use-financial-health';

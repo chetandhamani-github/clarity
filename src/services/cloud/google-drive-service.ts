@@ -1081,18 +1081,19 @@ export function clearAutoBackupTimer(): void {
 /**
  * Standalone background auto-sync utility.
  */
-export async function syncDatabaseToDriveSilently(reason = 'auto-sync'): Promise<boolean> {
+export async function syncDatabaseToDriveSilently(_reason = 'auto-sync'): Promise<boolean> {
   if (syncInFlight) {
     return syncInFlight;
   }
 
   syncInFlight = (async () => {
     try {
-      const { useAppStore } = await import('@/store/use-app-store');
-      const { generateDatabaseSnapshot, isMeaningfulDatabaseSnapshot } = await import(
-        '@/services/database/backup-restore-service'
-      );
-      const state = useAppStore.getState();
+      const { useAppStore: appStore } = await import('@/store/use-app-store');
+      const {
+        generateDatabaseSnapshot,
+        isMeaningfulDatabaseSnapshot: checkMeaningfulDatabaseSnapshot,
+      } = await import('@/services/database/backup-restore-service');
+      const state = appStore.getState();
 
       if (!state.googleDriveConnected || !state.autoBackupEnabled || state.isPostResetLocked) {
         return false;
@@ -1101,7 +1102,7 @@ export async function syncDatabaseToDriveSilently(reason = 'auto-sync'): Promise
       const snapshot = await generateDatabaseSnapshot();
 
       // Safeguard: Never auto-sync an empty/cleared local database to the cloud
-      if (!isMeaningfulDatabaseSnapshot(snapshot)) {
+      if (!checkMeaningfulDatabaseSnapshot(snapshot)) {
         return false;
       }
 

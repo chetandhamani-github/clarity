@@ -1,5 +1,4 @@
 import { BillService } from '../services/BillService';
-import { BillsRepository } from '../database/bills.repository';
 import { ReminderService } from '../services/ReminderService';
 import { getDatabase } from '@/services/database';
 

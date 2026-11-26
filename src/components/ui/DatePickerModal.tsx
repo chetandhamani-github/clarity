@@ -4,11 +4,10 @@ import {
   StyleSheet,
   Modal,
   TouchableOpacity,
-  ScrollView,
 } from 'react-native';
 import { Text } from './Text';
 import { MaterialIcons } from '@expo/vector-icons';
-import { typography, radius, useTheme, ThemeColors } from '@/theme';
+import { typography, radius, useTheme } from '@/theme';
 import { getLocalTodayYmd } from '@/utils/date';
 
 interface DatePickerModalProps {

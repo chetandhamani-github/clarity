@@ -82,7 +82,7 @@ describe('SmsAnalyticsService', () => {
     expect(report.averageSalary).toBe(85000);
     expect(report.bankBreakdown['HDFC Bank']).toBe(2);
     expect(report.bankBreakdown['ICICI Bank']).toBe(1);
-    expect(report.categoryBreakdown['Subscriptions']).toBe(1);
+    expect(report.categoryBreakdown.Subscriptions).toBe(1);
     expect(report.parsingSuccessRate).toBeGreaterThan(90);
   });
 });

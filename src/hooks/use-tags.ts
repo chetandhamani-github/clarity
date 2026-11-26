@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { Tag } from '@/types';
 import { getAllTags, getOrCreateTag } from '@/services/database/tag-dao';
 
 export function useTags() {

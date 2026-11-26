@@ -431,7 +431,7 @@ export default function TransactionsScreen({
 
   const handleLoadMore = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
-      void fetchNextPage();
+      fetchNextPage();
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 

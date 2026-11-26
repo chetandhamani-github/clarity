@@ -1,19 +1,19 @@
+import { BillsRepository } from '@/modules/bills/database/bills.repository';
 import { getDatabase } from '@/services/database';
 import { getAllAccounts } from '@/services/database/account-dao';
-import { BillsRepository } from '@/modules/bills/database/bills.repository';
 import { getUpcomingBills as getUpcomingBillsDao } from '@/services/database/bill-dao';
-import { getActiveRecurringTransactions } from '@/services/database/recurring-dao';
-import { getAllInvestmentHoldings } from '@/services/database/investment-dao';
 import { getCurrentBudgetPlan } from '@/services/database/budget-dao';
-import { isLiabilityAccountType, isLiquidAccountType } from '@/utils/account-metrics';
-import { calculateNextDate } from '@/utils/date';
+import { getAllInvestmentHoldings } from '@/services/database/investment-dao';
+import { getActiveRecurringTransactions } from '@/services/database/recurring-dao';
 import type {
-  SafeToSpendSummary,
+  Account,
   CashFlowDayProjection,
   CashFlowEvent,
-  Account,
   RecurringFrequency,
+  SafeToSpendSummary,
 } from '@/types';
+import { isLiabilityAccountType, isLiquidAccountType } from '@/utils/account-metrics';
+import { calculateNextDate } from '@/utils/date';
 
 function padZero(n: number): string {
   return n.toString().padStart(2, '0');
@@ -453,8 +453,8 @@ export async function calculateSafeToSpend(
   let runningCycleBalance = currentLiquidCash;
 
   let hasCashCrunch = false;
-  let cashCrunchDate: string | undefined = undefined;
-  let cashCrunchShortfall: number | undefined = undefined;
+  let cashCrunchDate: string | undefined;
+  let cashCrunchShortfall: number | undefined;
   let runwayDays = 30;
 
   for (let i = 0; i < 30; i++) {

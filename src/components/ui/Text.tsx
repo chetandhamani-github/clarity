@@ -62,7 +62,7 @@ export const Text = ({ variant = 'bodyMd', color, style, minimumFontScale, ...pr
       textBreakStrategy={Platform.OS === 'android' ? 'simple' : undefined}
       minimumFontScale={safeMinFontScale}
       style={[
-        Platform.OS === 'android' ? { includeFontPadding: false } : undefined,
+        Platform.OS === 'android' ? styles.androidText : undefined,
         typography[variant],
         { color: textColor },
         dynamicLineHeight,
@@ -73,3 +73,9 @@ export const Text = ({ variant = 'bodyMd', color, style, minimumFontScale, ...pr
     />
   );
 };
+
+const styles = StyleSheet.create({
+  androidText: {
+    includeFontPadding: false,
+  },
+});

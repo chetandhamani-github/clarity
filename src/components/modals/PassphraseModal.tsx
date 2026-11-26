@@ -120,7 +120,7 @@ export function PassphraseModal({
 
                 {requireConfirmation && (
                   <>
-                    <View style={[styles.inputWrapper, { marginTop: 2 }]}>
+                    <View style={[styles.inputWrapper, styles.confirmInputWrapper]}>
                       <MaterialIcons name="vpn-key" size={20} color={colors.onSurfaceVariant} />
                       <TextInput
                         style={styles.input}
@@ -165,7 +165,7 @@ export function PassphraseModal({
                   <TouchableOpacity
                     style={[
                       styles.confirmButton,
-                      (!isValid || isLoading) && { opacity: 0.5 },
+                      (!isValid || isLoading) && styles.confirmButtonDisabled,
                     ]}
                     onPress={handleSubmit}
                     disabled={!isValid || isLoading}
@@ -254,6 +254,9 @@ const getStyles = (colors: ThemeColors) => {
       gap: 8,
       marginTop: 8,
     },
+    confirmInputWrapper: {
+      marginTop: 2,
+    },
     input: {
       flex: 1,
       ...typography.bodyMd,
@@ -286,6 +289,9 @@ const getStyles = (colors: ThemeColors) => {
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    confirmButtonDisabled: {
+      opacity: 0.5,
     },
     confirmText: {
       ...typography.labelMd,

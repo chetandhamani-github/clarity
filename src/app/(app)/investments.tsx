@@ -1,28 +1,27 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import { Header, InvestmentsSkeleton, Text, useAlert, useToast } from '@/components/ui';
 import {
-  View,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Dimensions,
-  RefreshControl,
-  Platform,
-} from 'react-native';
-import { Text, Header, InvestmentsSkeleton, useAlert, useToast } from '@/components/ui';
-import { typography, useTheme, radius, ThemeColors } from '@/theme';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeInsets } from '@/hooks/use-safe-insets';
-import { useRouter, useFocusEffect } from 'expo-router';
-import { PieChart } from 'react-native-gifted-charts';
-import {
+  useDeleteInvestmentHolding,
+  useInvestmentMaturityCalendar,
   useInvestments,
   usePortfolioSummary,
-  useInvestmentMaturityCalendar,
-  useDeleteInvestmentHolding,
 } from '@/hooks/use-investments';
+import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useAppStore } from '@/store/use-app-store';
+import { radius, ThemeColors, typography, useTheme } from '@/theme';
+import type { InvestmentHolding } from '@/types';
 import { formatCurrency, formatCurrencyPrivacy } from '@/utils/format';
-import type { AssetClass, InvestmentHolding } from '@/types';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { PieChart } from 'react-native-gifted-charts';
 
 type FilterTab = 'all' | 'equity' | 'debt_fixed_income' | 'gold' | 'real_estate' | 'crypto';
 
@@ -34,6 +33,23 @@ const TABS: { id: FilterTab; label: string; icon: keyof typeof MaterialIcons.gly
   { id: 'real_estate', label: 'Real Estate', icon: 'apartment' },
   { id: 'crypto', label: 'Crypto', icon: 'currency-bitcoin' },
 ];
+
+function PortfolioDonutCenterLabel({ percentageLabel }: { percentageLabel: string }) {
+  const { colors } = useTheme();
+  const styles = getStyles(colors);
+  return (
+    <View style={styles.donutCenterContainer}>
+      <Text style={styles.donutCenterCaption}>ASSETS</Text>
+      <Text style={styles.donutCenterValue}>{percentageLabel}</Text>
+    </View>
+  );
+}
+
+function createPortfolioDonutCenterLabel(percentageLabel: string) {
+  return function RenderDonutCenterLabel() {
+    return <PortfolioDonutCenterLabel percentageLabel={percentageLabel} />;
+  };
+}
 
 export default function InvestmentsScreen() {
   const { colors } = useTheme();
@@ -48,7 +64,7 @@ export default function InvestmentsScreen() {
 
   const { holdings, isLoading: loadingHoldings, refetch: refetchHoldings } = useInvestments();
   const { summary, isLoading: loadingSummary, refetch: refetchSummary } = usePortfolioSummary();
-  const { calendar, isLoading: loadingCalendar, refetch: refetchCalendar } =
+  const { calendar, refetch: refetchCalendar } =
     useInvestmentMaturityCalendar();
   const { mutate: deleteHolding } = useDeleteInvestmentHolding();
 
@@ -264,15 +280,8 @@ export default function InvestmentsScreen() {
                       radius={68}
                       innerRadius={46}
                       innerCircleColor={colors.surfaceContainerLowest}
-                      centerLabelComponent={() => (
-                        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                          <Text style={{ fontSize: 10, color: colors.onSurfaceVariant, fontFamily: 'Manrope_700Bold' }}>
-                            ASSETS
-                          </Text>
-                          <Text style={{ fontSize: 12, color: colors.onSurface, fontFamily: 'Manrope_700Bold' }}>
-                            {positiveAllocations.length === 0 ? '0%' : '100%'}
-                          </Text>
-                        </View>
+                      centerLabelComponent={createPortfolioDonutCenterLabel(
+                        positiveAllocations.length === 0 ? '0%' : '100%'
                       )}
                     />
                   </View>
@@ -735,6 +744,20 @@ const getStyles = (colors: ThemeColors) => {
     donutWrapper: {
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    donutCenterContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    donutCenterCaption: {
+      fontSize: 10,
+      color: colors.onSurfaceVariant,
+      fontFamily: 'Manrope_700Bold',
+    },
+    donutCenterValue: {
+      fontSize: 12,
+      color: colors.onSurface,
+      fontFamily: 'Manrope_700Bold',
     },
     legendGrid: {
       flex: 1,

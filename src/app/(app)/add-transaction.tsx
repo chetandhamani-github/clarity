@@ -84,7 +84,7 @@ export default function AddTransactionScreen() {
   }>();
   const id = params.id;
   const isEditing = !!id;
-  const { transaction, isLoading: isTxLoading } = useTransaction(id);
+  const { transaction } = useTransaction(id);
   const { showToast } = useToast();
   const { showAlert } = useAlert();
 
@@ -392,7 +392,7 @@ export default function AddTransactionScreen() {
       return;
     }
 
-    let splitsToSave: { category: string; amount: number }[] | undefined = undefined;
+    let splitsToSave: { category: string; amount: number }[] | undefined;
     if (type === 'expense' && isSplitMode) {
       const validSplits = splitItems.filter((s) => parseFloat(s.amount) > 0);
       if (validSplits.length < 2) {
@@ -733,7 +733,7 @@ export default function AddTransactionScreen() {
       }
     } catch (err: unknown) {
       if (isNetworkError(err)) {
-        void useNetworkStore.getState().verifyConnection();
+        useNetworkStore.getState().verifyConnection();
         showToast('Network request timed out. Please check your connection and try again.', 'error');
       } else {
         const errMsg = err instanceof Error && err.message.includes('timeout')

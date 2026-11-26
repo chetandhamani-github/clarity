@@ -1,18 +1,18 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import { AppState, type AppStateStatus, StyleSheet, View } from 'react-native';
-import { getInstallationId } from '@/utils/installationId';
-import { registerDevice, checkDeviceStatus } from '@/services/api/device.api';
-import { fetchRemoteConfig } from '@/services/api/config.api';
-import { fetchFeatureFlags } from '@/services/api/feature.api';
-import { fetchAnnouncements } from '@/services/api/announcement.api';
-import { DeviceStatusResult } from '@/services/api/types';
+import { ForceUpdateScreen } from '@/components/backend/ForceUpdateScreen';
 import { FullScreenBlockedScreen } from '@/components/backend/FullScreenBlockedScreen';
 import { MaintenanceScreen } from '@/components/backend/MaintenanceScreen';
-import { ForceUpdateScreen } from '@/components/backend/ForceUpdateScreen';
-import { useRemoteConfigStore } from '@/store/remoteConfig.store';
-import { useFeatureFlagStore } from '@/store/featureFlag.store';
-import { useNetworkStore, initNetworkMonitoring } from '@/store/use-network-store';
 import { SplitwiseSyncService } from '@/modules/splitwise/services/SplitwiseSyncService';
+import { fetchAnnouncements } from '@/services/api/announcement.api';
+import { fetchRemoteConfig } from '@/services/api/config.api';
+import { checkDeviceStatus, registerDevice } from '@/services/api/device.api';
+import { fetchFeatureFlags } from '@/services/api/feature.api';
+import { DeviceStatusResult } from '@/services/api/types';
+import { useFeatureFlagStore } from '@/store/featureFlag.store';
+import { useRemoteConfigStore } from '@/store/remoteConfig.store';
+import { initNetworkMonitoring } from '@/store/use-network-store';
+import { getInstallationId } from '@/utils/installationId';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
+import { AppState, type AppStateStatus, StyleSheet, View } from 'react-native';
 
 interface BackendContextValue {
   installationId: string;

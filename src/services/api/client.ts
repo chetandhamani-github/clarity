@@ -173,17 +173,17 @@ class ApiClient {
 
       if (err instanceof ApiError) {
         if (err.status === 0 || err.status === 408) {
-          void useNetworkStore.getState().verifyConnection();
+          useNetworkStore.getState().verifyConnection();
         }
         throw err;
       }
 
       if (err instanceof Error && err.name === 'AbortError') {
-        void useNetworkStore.getState().verifyConnection();
+        useNetworkStore.getState().verifyConnection();
         throw new ApiError(`Request timeout after ${timeoutMs}ms`, 408);
       }
 
-      void useNetworkStore.getState().verifyConnection();
+      useNetworkStore.getState().verifyConnection();
       const fallbackMessage = err instanceof Error ? err.message : 'Network request failed';
       throw new ApiError(fallbackMessage, 0, err);
     }

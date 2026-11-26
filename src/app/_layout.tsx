@@ -74,7 +74,7 @@ export default function RootLayout() {
     !showNotificationPrompt &&
     !isNotificationDisclosureVisible &&
     (Platform.OS !== 'android' || hasSeenNotificationPrompt);
-  const { expoPushToken } = usePushNotifications({
+  usePushNotifications({
     canRequestPermissions: canRequestPushPermissions,
   });
   const { theme, colors } = useTheme();
@@ -179,12 +179,12 @@ export default function RootLayout() {
           await useAuthStore.getState().initializeAuth().catch(() => {});
 
           // Refresh review queue and surface any unlinked parsed transactions on app launch
-          const { useSmsStore } = await import('@/store/useSmsStore');
-          await useSmsStore.getState().refreshReviewQueueCount().catch(() => {});
+          const { useSmsStore: smsStore } = await import('@/store/useSmsStore');
+          await smsStore.getState().refreshReviewQueueCount().catch(() => {});
           const { SmsDao } = await import('@/modules/sms/storage/smsDao');
           const unlinked = await SmsDao.getUnlinkedParsedTransactions();
           if (unlinked.length > 0) {
-            useSmsStore.getState().setPendingTransactions(unlinked);
+            smsStore.getState().setPendingTransactions(unlinked);
           }
         } catch {
           // Recurring processing error ignored
@@ -239,9 +239,9 @@ export default function RootLayout() {
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     const txSubscription = DeviceEventEmitter.addListener('transactionsUpdated', () => {
-      void queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      void queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      void queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
     });
     return () => {
       subscription.remove();
@@ -282,16 +282,12 @@ export default function RootLayout() {
                   <View
                     style={[
                       StyleSheet.absoluteFill,
-                      {
-                        backgroundColor: colors.background,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 99999,
-                      },
+                      styles.screenShieldOverlay,
+                      { backgroundColor: colors.background },
                     ]}
                   >
                     <MaterialIcons name="security" size={48} color={colors.primary} />
-                    <Text style={{ marginTop: 12, ...typography.headlineSm, color: colors.onSurface }}>
+                    <Text style={[styles.screenShieldText, { color: colors.onSurface }]}>
                       Clarity Protected
                     </Text>
                   </View>
@@ -334,3 +330,15 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  screenShieldOverlay: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 99999,
+  },
+  screenShieldText: {
+    marginTop: 12,
+    ...typography.headlineSm,
+  },
+});

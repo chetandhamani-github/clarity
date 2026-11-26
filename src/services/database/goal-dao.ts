@@ -1,11 +1,10 @@
-import * as SQLite from 'expo-sqlite';
 import { getDatabase } from './index';
 import type { Goal, GoalContribution } from '@/types';
 
 function generateId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    const r = Math.floor(Math.random() * 16);
+    const v = c === 'x' ? r : (r % 4) + 8;
     return v.toString(16);
   });
 }
@@ -75,7 +74,6 @@ export async function createGoal(
 
 export async function updateGoalAmount(id: string, newAmount: number): Promise<void> {
   const db = getDatabase();
-  const now = new Date().toISOString();
   // We can also auto-update status to completed if current >= target, but for now we'll just update amount
   await db.runAsync('UPDATE goals SET current_amount = ? WHERE id = ?;', [newAmount, id]);
 }
@@ -149,7 +147,6 @@ export async function addGoalContribution(
 ): Promise<string> {
   const db = getDatabase();
   const id = Math.random().toString(36).substring(2, 9);
-  const now = new Date().toISOString();
 
   await db.withTransactionAsync(async () => {
     const goal = await getGoalById(contribution.goalId);

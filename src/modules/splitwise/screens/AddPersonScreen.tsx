@@ -92,7 +92,7 @@ export function AddPersonScreen() {
       />
 
       <KeyboardAwareScrollView
-        style={{ flex: 1 }}
+        style={styles.scrollView}
         contentContainerStyle={StyleSheet.flatten([
           styles.scrollContent,
           { paddingBottom: 32 },
@@ -334,6 +334,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_700Bold',
     fontSize: 13,
     lineHeight: 18,
+  },
+  scrollView: {
+    flex: 1,
   },
   scrollContent: {
     paddingHorizontal: 16,

@@ -354,21 +354,35 @@ endobj
         0x2e, 0x2e, 0x00, 0xb6, 0xd0, 0x68, 0x3e, 0x80, 0x2f, 0x0c, 0xa9, 0xfe, 0x64, 0x53, 0x69, 0x7a,
       ]);
 
+      const xorByteTest = (a: number, b: number): number => {
+        let ua = ((Math.trunc(a) % 256) + 256) % 256;
+        let ub = ((Math.trunc(b) % 256) + 256) % 256;
+        let res = 0;
+        let factor = 1;
+        for (let bit = 0; bit < 8; bit++) {
+          if (ua % 2 !== ub % 2) res += factor;
+          ua = Math.floor(ua / 2);
+          ub = Math.floor(ub / 2);
+          factor *= 2;
+        }
+        return res;
+      };
+
       const rc4Enc = (key: Buffer, data: Buffer): Buffer => {
         const s = Array.from({ length: 256 }, (_, i) => i);
         let j = 0;
         for (let i = 0; i < 256; i++) {
-          j = (j + s[i] + key[i % key.length]) & 255;
+          j = (j + s[i] + key[i % key.length]) % 256;
           [s[i], s[j]] = [s[j], s[i]];
         }
         let i = 0;
         j = 0;
         const out = Buffer.alloc(data.length);
         for (let k = 0; k < data.length; k++) {
-          i = (i + 1) & 255;
-          j = (j + s[i]) & 255;
+          i = (i + 1) % 256;
+          j = (j + s[i]) % 256;
           [s[i], s[j]] = [s[j], s[i]];
-          out[k] = data[k] ^ s[(s[i] + s[j]) & 255];
+          out[k] = xorByteTest(data[k], s[(s[i] + s[j]) % 256]);
         }
         return out;
       };
@@ -397,7 +411,7 @@ endobj
       uMd5.update(idBytes.toString('binary'));
       let uData: Buffer = Buffer.from(uMd5.digest().getBytes(), 'binary');
       for (let i = 0; i < 20; i++) {
-        const k = Buffer.from(encKey.map((b: number) => b ^ i));
+        const k = Buffer.from(encKey.map((b: number) => xorByteTest(b, i)));
         uData = rc4Enc(k, uData);
       }
       const uValue = Buffer.concat([uData, Buffer.alloc(16, 0)]);
@@ -786,11 +800,25 @@ endobj
       });
     });
 
+    const xorByteTest = (a: number, b: number): number => {
+      let ua = ((Math.trunc(a) % 256) + 256) % 256;
+      let ub = ((Math.trunc(b) % 256) + 256) % 256;
+      let res = 0;
+      let factor = 1;
+      for (let bit = 0; bit < 8; bit++) {
+        if (ua % 2 !== ub % 2) res += factor;
+        ua = Math.floor(ua / 2);
+        ub = Math.floor(ub / 2);
+        factor *= 2;
+      }
+      return res;
+    };
+
     const rc4EncryptTest = (key: Buffer, data: Buffer): Buffer => {
       const S = Array.from({ length: 256 }, (_, idx) => idx);
       let j = 0;
       for (let i = 0; i < 256; i++) {
-        j = (j + S[i] + key[i % key.length]) & 0xff;
+        j = (j + S[i] + key[i % key.length]) % 256;
         const tmp = S[i];
         S[i] = S[j];
         S[j] = tmp;
@@ -799,12 +827,12 @@ endobj
       let a = 0;
       let b = 0;
       for (let k = 0; k < data.length; k++) {
-        a = (a + 1) & 0xff;
-        b = (b + S[a]) & 0xff;
+        a = (a + 1) % 256;
+        b = (b + S[a]) % 256;
         const tmp = S[a];
         S[a] = S[b];
         S[b] = tmp;
-        out[k] = data[k] ^ S[(S[a] + S[b]) & 0xff];
+        out[k] = xorByteTest(data[k], S[(S[a] + S[b]) % 256]);
       }
       return out;
     };
@@ -841,7 +869,7 @@ endobj
       uMd5.update(id1.toString('binary'));
       let uData = Buffer.from(uMd5.digest().getBytes(), 'binary');
       for (let i = 0; i < 20; i++) {
-        const roundKey = Buffer.from(encKey.map((b: number) => b ^ i));
+        const roundKey = Buffer.from(encKey.map((b: number) => xorByteTest(b, i)));
         uData = rc4EncryptTest(roundKey, uData);
       }
       const uValue = Buffer.concat([uData, Buffer.alloc(16, 0)]);
@@ -902,15 +930,16 @@ trailer
         let acc = 0;
         let bits = 0;
         for (const c of codes) {
-          acc = (acc << 9) | (c & 0x1ff);
+          acc = acc * 512 + (c % 512);
           bits += 9;
           while (bits >= 8) {
             bits -= 8;
-            bytes.push((acc >> bits) & 0xff);
+            bytes.push(Math.floor(acc / Math.pow(2, bits)) % 256);
+            acc %= Math.pow(2, bits);
           }
         }
         if (bits > 0) {
-          bytes.push((acc << (8 - bits)) & 0xff);
+          bytes.push((acc * Math.pow(2, 8 - bits)) % 256);
         }
         return Buffer.from(bytes);
       };
@@ -1040,7 +1069,7 @@ endobj
     it('decompresses zlib streams with corrupted ADLER32 trailer bytes', async () => {
       const content = 'BT /F1 10 Tf 1 0 0 1 40 700 Tm (09 Apr 2026 UPI AMAZON 999.00 8,001.00) Tj ET';
       const zlibBytes = Buffer.from(pako.deflate(Buffer.from(content, 'latin1')));
-      zlibBytes[zlibBytes.length - 1] ^= 0xff; // Corrupt ADLER32 checksum
+      zlibBytes[zlibBytes.length - 1] = 255 - zlibBytes[zlibBytes.length - 1]; // Corrupt ADLER32 checksum
 
       const mockPdf = `%PDF-1.4
 1 0 obj

@@ -1,7 +1,6 @@
 import {
   clearAccountData,
   getAllAccounts,
-  getAccountById,
   insertAccount,
   updateAccount,
   updateAccountsOrder,

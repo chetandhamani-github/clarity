@@ -1,32 +1,32 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import {
-  ActivityIndicator,
-  View,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  RefreshControl,
-  Platform,
-  Modal,
-  DeviceEventEmitter,
-} from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { Header, SplitwiseSkeleton, Text } from '@/components/ui';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
-import { useRouter } from 'expo-router';
-import { Text, Header, SplitwiseSkeleton } from '@/components/ui';
-import { typography, useTheme, radius } from '@/theme';
 import { mmkv } from '@/lib/storage';
 import { useAppStore } from '@/store/use-app-store';
 import { useAuthStore } from '@/store/use-auth-store';
+import { radius, typography, useTheme } from '@/theme';
 import { formatCurrencyPrivacy, parseDateSafely } from '@/utils/format';
-import { useSplitwiseStore } from '../store/splitwise.store';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  DeviceEventEmitter,
+  Modal,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SplitwiseRepository } from '../database/splitwise.repository';
-import { SplitwiseSyncService } from '../services/SplitwiseSyncService';
 import {
   BalanceCalculator,
   DetailedPersonBalance,
 } from '../services/BalanceCalculator';
+import { SplitwiseSyncService } from '../services/SplitwiseSyncService';
+import { useSplitwiseStore } from '../store/splitwise.store';
 import type {
   SplitwiseActivityItem,
 } from '../types/splitwise.types';
@@ -352,7 +352,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
             <TouchableOpacity
               style={[styles.offlineSyncBtn, { backgroundColor: colors.primary }]}
               onPress={() => {
-                void signInWithGoogle();
+                signInWithGoogle();
               }}
               disabled={isAuthLoading}
               activeOpacity={0.85}

@@ -112,7 +112,7 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
   };
 
   const handleSkipPassphrase = () => {
-    void syncInitialBackupIfMeaningful();
+    syncInitialBackupIfMeaningful();
     showToast(
       'Backups will be saved without encryption. You can set a password anytime in Cloud Backup.',
       'info'
@@ -312,7 +312,7 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
                         style={[
                           styles.primaryButton,
                           { backgroundColor: colors.primary },
-                          (!isSetupPasswordValid || isBackingUp) && { opacity: 0.5 },
+                          (!isSetupPasswordValid || isBackingUp) && styles.primaryButtonDisabled,
                         ]}
                         onPress={handleSetPassphraseSubmit}
                         disabled={!isSetupPasswordValid || isBackingUp}
@@ -394,7 +394,7 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
                         style={[
                           styles.primaryButton,
                           { backgroundColor: colors.primary },
-                          (!passphrase.trim() || isRestoring) && { opacity: 0.5 },
+                          (!passphrase.trim() || isRestoring) && styles.primaryButtonDisabled,
                         ]}
                         onPress={handleRestoreSubmit}
                         disabled={!passphrase.trim() || isRestoring}
@@ -538,6 +538,9 @@ const getStyles = (colors: ThemeColors) => {
       gap: 10,
       paddingVertical: 14,
       borderRadius: 14,
+    },
+    primaryButtonDisabled: {
+      opacity: 0.5,
     },
     primaryButtonText: {
       ...typography.bodyMd,

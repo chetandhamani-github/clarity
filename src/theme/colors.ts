@@ -1,5 +1,3 @@
-import { Appearance } from 'react-native';
-
 const lightTheme = {
   primary: '#785600',
   onPrimary: '#ffffff',

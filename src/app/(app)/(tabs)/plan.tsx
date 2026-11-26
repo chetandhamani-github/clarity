@@ -4,7 +4,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   Modal,
   TextInput,
   KeyboardAvoidingView,
@@ -92,6 +91,68 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
     };
   }, [plan, spending]);
 
+  const safePlan = plan || {
+    monthlyIncome: 0,
+    needsPercent: 50,
+    wantsPercent: 30,
+    savingsPercent: 20,
+  };
+
+  const needsLimit = safePlan.monthlyIncome * (safePlan.needsPercent / 100);
+  const wantsLimit = safePlan.monthlyIncome * (safePlan.wantsPercent / 100);
+  const savingsLimit = safePlan.monthlyIncome * (safePlan.savingsPercent / 100);
+
+  const remaining = safePlan.monthlyIncome - totals.totalSpent;
+
+  const forecast = useMemo(() => {
+    if (!safePlan.monthlyIncome || safePlan.monthlyIncome <= 0 || totals.totalSpent <= 0) return null;
+    const currentDate = new Date();
+    const daysPassed = Math.max(1, currentDate.getDate());
+    const totalDays = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+    const daysLeft = Math.max(0, totalDays - daysPassed);
+    const daysToPace = Math.max(1, totalDays - daysPassed + 1);
+
+    // Operational spending (Needs + Wants) represents regular burn rate.
+    // Savings allocations are intentional lump-sum goal transfers, not operational daily burn.
+    const operationalSpent = totals.needsSpent + totals.wantsSpent;
+    const dailyBurn = operationalSpent > 0 ? operationalSpent / daysPassed : totals.totalSpent / daysPassed;
+    const projectedMonthEnd = Math.round(dailyBurn * totalDays + totals.savingsSpent);
+    const variance = projectedMonthEnd - safePlan.monthlyIncome;
+    const isOverbudgetRisk = variance > 0;
+
+    // totalPending in billSummary already includes totalOverdue
+    const unpaidBills = billSummary ? billSummary.totalPending : 0;
+    const targetDailyPace = Math.max(0, (safePlan.monthlyIncome - totals.totalSpent) / daysToPace);
+    const safeDailySpend = Math.max(0, (safePlan.monthlyIncome - totals.totalSpent - unpaidBills) / daysToPace);
+
+    return {
+      daysPassed,
+      totalDays,
+      daysLeft,
+      dailyBurn: Math.round(dailyBurn),
+      projectedMonthEnd,
+      variance,
+      isOverbudgetRisk,
+      unpaidBills: Math.round(unpaidBills),
+      targetDailyPace: Math.round(targetDailyPace),
+      safeDailySpend: Math.round(safeDailySpend),
+    };
+  }, [
+    safePlan.monthlyIncome,
+    totals.totalSpent,
+    totals.needsSpent,
+    totals.wantsSpent,
+    totals.savingsSpent,
+    billSummary,
+  ]);
+
+  const filteredCategorySpending = useMemo(() => {
+    return spending.filter((cat) => {
+      if (activeCategoryFilter === 'all') return true;
+      return cat.bucketType === activeCategoryFilter;
+    });
+  }, [spending, activeCategoryFilter]);
+
   if (isLoading) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -165,61 +226,6 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
     );
   }
 
-  const safePlan = plan || {
-    monthlyIncome: 0,
-    needsPercent: 50,
-    wantsPercent: 30,
-    savingsPercent: 20,
-  };
-
-  const needsLimit = safePlan.monthlyIncome * (safePlan.needsPercent / 100);
-  const wantsLimit = safePlan.monthlyIncome * (safePlan.wantsPercent / 100);
-  const savingsLimit = safePlan.monthlyIncome * (safePlan.savingsPercent / 100);
-
-  const remaining = safePlan.monthlyIncome - totals.totalSpent;
-
-  const forecast = useMemo(() => {
-    if (!safePlan.monthlyIncome || safePlan.monthlyIncome <= 0 || totals.totalSpent <= 0) return null;
-    const now = new Date();
-    const daysPassed = Math.max(1, now.getDate());
-    const totalDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    const daysLeft = Math.max(0, totalDays - daysPassed);
-    const daysToPace = Math.max(1, totalDays - daysPassed + 1);
-
-    // Operational spending (Needs + Wants) represents regular burn rate.
-    // Savings allocations are intentional lump-sum goal transfers, not operational daily burn.
-    const operationalSpent = totals.needsSpent + totals.wantsSpent;
-    const dailyBurn = operationalSpent > 0 ? operationalSpent / daysPassed : totals.totalSpent / daysPassed;
-    const projectedMonthEnd = Math.round(dailyBurn * totalDays + totals.savingsSpent);
-    const variance = projectedMonthEnd - safePlan.monthlyIncome;
-    const isOverbudgetRisk = variance > 0;
-
-    // totalPending in billSummary already includes totalOverdue
-    const unpaidBills = billSummary ? billSummary.totalPending : 0;
-    const targetDailyPace = Math.max(0, (safePlan.monthlyIncome - totals.totalSpent) / daysToPace);
-    const safeDailySpend = Math.max(0, (safePlan.monthlyIncome - totals.totalSpent - unpaidBills) / daysToPace);
-
-    return {
-      daysPassed,
-      totalDays,
-      daysLeft,
-      dailyBurn: Math.round(dailyBurn),
-      projectedMonthEnd,
-      variance,
-      isOverbudgetRisk,
-      unpaidBills: Math.round(unpaidBills),
-      targetDailyPace: Math.round(targetDailyPace),
-      safeDailySpend: Math.round(safeDailySpend),
-    };
-  }, [
-    safePlan.monthlyIncome,
-    totals.totalSpent,
-    totals.needsSpent,
-    totals.wantsSpent,
-    totals.savingsSpent,
-    billSummary?.totalPending,
-  ]);
-
   const handleOpenCapModal = (cat: CategorySpending) => {
     setSelectedCategoryForCap(cat);
     setCapInputAmount(cat.limit > 0 ? cat.limit.toString() : '');
@@ -290,13 +296,6 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
       }
     );
   };
-
-  const filteredCategorySpending = useMemo(() => {
-    return spending.filter((cat) => {
-      if (activeCategoryFilter === 'all') return true;
-      return cat.bucketType === activeCategoryFilter;
-    });
-  }, [spending, activeCategoryFilter]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: showBack ? insets.bottom : 0 }]}>

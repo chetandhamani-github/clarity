@@ -10,11 +10,11 @@ import {
   Platform,
   useWindowDimensions,
 } from 'react-native';
-import { Text, Header, CashflowSkeleton, useToast } from '@/components/ui';
+import { Text, Header, CashflowSkeleton, useToast, renderWideChartPointerLabel } from '@/components/ui';
 import { typography, useTheme, radius, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { LineChart } from 'react-native-gifted-charts';
 import { useAppStore } from '@/store/use-app-store';
 import { formatCurrency, formatCurrencyPrivacy } from '@/utils/format';
@@ -36,7 +36,6 @@ export default function CashFlowScreen() {
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const insets = useSafeInsets();
-  const router = useRouter();
   const { showToast } = useToast();
   const {
     hideBalances,
@@ -402,21 +401,7 @@ export default function CashFlowScreen() {
                     pointerLabelHeight: 34,
                     activatePointersOnLongPress: true,
                     autoAdjustPointerLabelPosition: true,
-                    pointerLabelComponent: (items: { dataPointText?: string }[]) => {
-                      const label = items?.[0]?.dataPointText;
-                      if (!label) return null;
-                      return (
-                        <View style={[styles.tooltipBox, { backgroundColor: colors.surfaceContainerHighest }]}>
-                          <Text
-                            style={[styles.tooltipText, { color: colors.onSurface }]}
-                            numberOfLines={1}
-                            adjustsFontSizeToFit
-                          >
-                            {label}
-                          </Text>
-                        </View>
-                      );
-                    },
+                    pointerLabelComponent: renderWideChartPointerLabel,
                   }}
                 />
               </View>
@@ -823,18 +808,6 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       fontSize: 10,
       fontFamily: 'Manrope_600SemiBold',
-    },
-    tooltipBox: {
-      borderRadius: radius.sm,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    tooltipText: {
-      ...typography.labelMd,
-      fontSize: 10,
-      fontFamily: 'Manrope_700Bold',
     },
     timelineSection: {
       marginBottom: 16,

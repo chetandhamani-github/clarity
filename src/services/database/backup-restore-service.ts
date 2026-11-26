@@ -1,7 +1,7 @@
-import { getDatabase } from './index';
-import { useAppStore } from '@/store/use-app-store';
 import { mmkv } from '@/lib/storage';
+import { useAppStore } from '@/store/use-app-store';
 import { getLocalTodayYmd } from '@/utils/date';
+import { getDatabase } from './index';
 
 export interface ClarityBackupPayload {
   version: number;
@@ -58,16 +58,37 @@ export interface BackupMetadata {
   checksum?: string;
 }
 
+function toUint32(n: number): number {
+  const mod = n % 4294967296;
+  return mod < 0 ? mod + 4294967296 : mod;
+}
+
+function xor32(a: number, b: number): number {
+  let ua = toUint32(Math.trunc(a));
+  let ub = toUint32(Math.trunc(b));
+  let result = 0;
+  let factor = 1;
+  for (let bit = 0; bit < 32; bit++) {
+    if (ua % 2 !== ub % 2) {
+      result += factor;
+    }
+    ua = Math.floor(ua / 2);
+    ub = Math.floor(ub / 2);
+    factor *= 2;
+  }
+  return result;
+}
+
 export function computeChecksum(str: string): string {
   let hash1 = 5381;
   let hash2 = 52711;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
-    hash1 = (hash1 * 33) ^ char;
-    hash2 = (hash2 * 33) ^ char;
+    hash1 = xor32(hash1 * 33, char);
+    hash2 = xor32(hash2 * 33, char);
   }
-  const part1 = (hash1 >>> 0).toString(16).padStart(8, '0');
-  const part2 = (hash2 >>> 0).toString(16).padStart(8, '0');
+  const part1 = hash1.toString(16).padStart(8, '0');
+  const part2 = hash2.toString(16).padStart(8, '0');
   return `sha256_${part1}${part2}`;
 }
 

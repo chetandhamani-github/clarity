@@ -7,7 +7,6 @@ import {
   RefreshControl,
   DeviceEventEmitter,
   Platform,
-  Alert,
   Modal,
   KeyboardAvoidingView,
 } from 'react-native';
@@ -15,7 +14,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Text, Header, useAlert, useToast } from '@/components/ui';
-import { typography, useTheme, radius } from '@/theme';
+import { useTheme, radius } from '@/theme';
 import { useAppStore } from '@/store/use-app-store';
 import { formatCurrency, formatCurrencyPrivacy, formatLocalDate, parseDateSafely } from '@/utils/format';
 import { useSplitwiseStore } from '../store/splitwise.store';
@@ -37,7 +36,6 @@ export function GroupDetailsScreen() {
   const {
     people,
     groups,
-    activeGroupId,
     activeGroupExpenses,
     activeGroupBalances,
     activeGroupMembers,

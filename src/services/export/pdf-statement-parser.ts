@@ -102,6 +102,27 @@ for (let i = 0; i < B64_CHARS.length; i++) {
   B64_MAP[B64_CHARS.charCodeAt(i)] = i;
 }
 
+function toUint32(n: number): number {
+  const mod = n % 4294967296;
+  return mod < 0 ? mod + 4294967296 : mod;
+}
+
+function xorByte(a: number, b: number): number {
+  let ua = ((Math.trunc(a) % 256) + 256) % 256;
+  let ub = ((Math.trunc(b) % 256) + 256) % 256;
+  let res = 0;
+  let factor = 1;
+  for (let bit = 0; bit < 8; bit++) {
+    if (ua % 2 !== ub % 2) {
+      res += factor;
+    }
+    ua = Math.floor(ua / 2);
+    ub = Math.floor(ub / 2);
+    factor *= 2;
+  }
+  return res;
+}
+
 function base64ToUint8(base64: string): Uint8Array {
   const clean = base64.replace(/\s+/g, '');
   const len = clean.length;
@@ -121,15 +142,15 @@ function base64ToUint8(base64: string): Uint8Array {
 
     if (c0 === -1 || c1 === -1) break;
 
-    const b0 = (c0 << 2) | (c1 >> 4);
+    const b0 = c0 * 4 + Math.floor(c1 / 16);
     if (outIdx < outLen) out[outIdx++] = b0;
 
     if (i + 2 < len && clean[i + 2] !== '=') {
-      const b1 = ((c1 & 15) << 4) | (c2 >> 2);
+      const b1 = (c1 % 16) * 16 + Math.floor(c2 / 4);
       if (outIdx < outLen) out[outIdx++] = b1;
     }
     if (i + 3 < len && clean[i + 3] !== '=') {
-      const b2 = ((c2 & 3) << 6) | c3;
+      const b2 = (c2 % 4) * 64 + c3;
       if (outIdx < outLen) out[outIdx++] = b2;
     }
   }
@@ -150,7 +171,7 @@ function uint8ToBinary(u8: Uint8Array): string {
 function binaryToUint8(bin: string): Uint8Array {
   const u8 = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) {
-    u8[i] = bin.charCodeAt(i) & 0xff;
+    u8[i] = bin.charCodeAt(i) % 256;
   }
   return u8;
 }
@@ -165,7 +186,7 @@ function rc4(key: Uint8Array, data: Uint8Array): Uint8Array {
   for (let i = 0; i < 256; i++) s[i] = i;
   let j = 0;
   for (let i = 0; i < 256; i++) {
-    j = (j + s[i] + key[i % key.length]) & 255;
+    j = (j + s[i] + key[i % key.length]) % 256;
     const tmp = s[i];
     s[i] = s[j];
     s[j] = tmp;
@@ -174,12 +195,12 @@ function rc4(key: Uint8Array, data: Uint8Array): Uint8Array {
   j = 0;
   const out = new Uint8Array(data.length);
   for (let k = 0; k < data.length; k++) {
-    i = (i + 1) & 255;
-    j = (j + s[i]) & 255;
+    i = (i + 1) % 256;
+    j = (j + s[i]) % 256;
     const tmp = s[i];
     s[i] = s[j];
     s[j] = tmp;
-    out[k] = data[k] ^ s[(s[i] + s[j]) & 255];
+    out[k] = xorByte(data[k], s[(s[i] + s[j]) % 256]);
   }
   return out;
 }
@@ -212,7 +233,7 @@ function decodePdfLiteralRaw(str: string): string {
           oct += str[i + step];
           step++;
         }
-        out += String.fromCharCode(parseInt(oct, 8) & 0xff);
+        out += String.fromCharCode(parseInt(oct, 8) % 256);
         i += step;
         continue;
       }
@@ -332,7 +353,7 @@ function parseCMap(cmapStr: string): ParsedCMap {
       if (isNaN(startCode) || isNaN(endCode) || endCode < startCode) continue;
 
       if (dstTok.startsWith('[')) {
-        const destHexes = dstTok.replace(/[\[\]]/g, '').trim().match(/<[0-9a-fA-F\s]+>/g) || [];
+        const destHexes = dstTok.replace(/[[\]]/g, '').trim().match(/<[0-9a-fA-F\s]+>/g) || [];
         for (let code = startCode; code <= endCode && code - startCode < destHexes.length; code++) {
           const dHex = destHexes[code - startCode].replace(/[^0-9a-fA-F]/g, '');
           const dstStr = decodeDestinationHex(dHex);
@@ -379,7 +400,7 @@ function decodeRawBytesWithCMap(bytes: Uint8Array, cmap?: ParsedCMap): string {
       let out = '';
       let mappedCount = 0;
       for (let i = 0; i < bytes.length; i += 2) {
-        const cid = (bytes[i] << 8) | bytes[i + 1];
+        const cid = bytes[i] * 256 + bytes[i + 1];
         const mapped = cmap.map.get(cid);
         if (mapped !== undefined) {
           out += mapped;
@@ -424,7 +445,7 @@ function decodeRawBytesWithCMap(bytes: Uint8Array, cmap?: ParsedCMap): string {
   if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
     let out = '';
     for (let i = 2; i + 1 < bytes.length; i += 2) {
-      out += String.fromCharCode((bytes[i] << 8) | bytes[i + 1]);
+      out += String.fromCharCode(bytes[i] * 256 + bytes[i + 1]);
     }
     return out.replace(/\0/g, '');
   }
@@ -440,7 +461,7 @@ function decodeRawBytesWithCMap(bytes: Uint8Array, cmap?: ParsedCMap): string {
     if (allHighZero) {
       let out = '';
       for (let i = 0; i < bytes.length; i += 2) {
-        out += String.fromCharCode((bytes[i] << 8) | bytes[i + 1]);
+        out += String.fromCharCode(bytes[i] * 256 + bytes[i + 1]);
       }
       return out.replace(/\0/g, '');
     }
@@ -823,7 +844,7 @@ function deriveEncryptionKeyR234(
   const { r, length, p, o, id1, encryptMetadataFalse } = encryptInfo;
   const keyLengthBytes = Math.max(5, Math.min(16, Math.floor(length / 8)));
 
-  const pwdBytes = new Uint8Array(Array.from(password).map((c) => c.charCodeAt(0) & 0xff));
+  const pwdBytes = new Uint8Array(Array.from(password).map((c) => c.charCodeAt(0) % 256));
   const padded = new Uint8Array(32);
   padded.set(pwdBytes.slice(0, 32));
   if (pwdBytes.length < 32) {
@@ -835,11 +856,11 @@ function deriveEncryptionKeyR234(
   md5.update(uint8ToBinary(o));
 
   const pBytes = new Uint8Array(4);
-  const pUnsigned = p >>> 0;
-  pBytes[0] = pUnsigned & 0xff;
-  pBytes[1] = (pUnsigned >> 8) & 0xff;
-  pBytes[2] = (pUnsigned >> 16) & 0xff;
-  pBytes[3] = (pUnsigned >> 24) & 0xff;
+  const pUnsigned = toUint32(p);
+  pBytes[0] = pUnsigned % 256;
+  pBytes[1] = Math.floor(pUnsigned / 256) % 256;
+  pBytes[2] = Math.floor(pUnsigned / 65536) % 256;
+  pBytes[3] = Math.floor(pUnsigned / 16777216) % 256;
   md5.update(uint8ToBinary(pBytes));
 
   md5.update(uint8ToBinary(id1));
@@ -880,7 +901,7 @@ function verifyUserPasswordR234(encKey: Uint8Array, encryptInfo: EncryptDictInfo
   for (let i = 0; i < 20; i++) {
     const iterKey = new Uint8Array(encKey.length);
     for (let j = 0; j < encKey.length; j++) {
-      iterKey[j] = encKey[j] ^ i;
+      iterKey[j] = xorByte(encKey[j], i);
     }
     data = rc4(iterKey, data);
   }
@@ -1058,11 +1079,11 @@ function getObjectKey(
 ): Uint8Array {
   const seed = new Uint8Array(encKey.length + 5 + (isAes ? 4 : 0));
   seed.set(encKey);
-  seed[encKey.length] = objNum & 0xff;
-  seed[encKey.length + 1] = (objNum >> 8) & 0xff;
-  seed[encKey.length + 2] = (objNum >> 16) & 0xff;
-  seed[encKey.length + 3] = genNum & 0xff;
-  seed[encKey.length + 4] = (genNum >> 8) & 0xff;
+  seed[encKey.length] = objNum % 256;
+  seed[encKey.length + 1] = Math.floor(objNum / 256) % 256;
+  seed[encKey.length + 2] = Math.floor(objNum / 65536) % 256;
+  seed[encKey.length + 3] = genNum % 256;
+  seed[encKey.length + 4] = Math.floor(genNum / 256) % 256;
   if (isAes) {
     seed[encKey.length + 5] = 0x73; // 's'
     seed[encKey.length + 6] = 0x41; // 'A'
@@ -1148,7 +1169,13 @@ function decodeAscii85(data: Uint8Array): Uint8Array {
     if (tuple.length === 5) {
       let val = 0;
       for (const d of tuple) val = val * 85 + d;
-      out.push((val >>> 24) & 0xff, (val >>> 16) & 0xff, (val >>> 8) & 0xff, val & 0xff);
+      const valU32 = toUint32(val);
+      out.push(
+        Math.floor(valU32 / 16777216) % 256,
+        Math.floor(valU32 / 65536) % 256,
+        Math.floor(valU32 / 256) % 256,
+        valU32 % 256
+      );
       tuple.length = 0;
     }
   }
@@ -1158,8 +1185,10 @@ function decodeAscii85(data: Uint8Array): Uint8Array {
     while (tuple.length < 5) tuple.push(84);
     let val = 0;
     for (const d of tuple) val = val * 85 + d;
+    const valU32 = toUint32(val);
     for (let k = 0; k < count - 1; k++) {
-      out.push((val >>> (24 - k * 8)) & 0xff);
+      const shiftPow = Math.pow(2, 24 - k * 8);
+      out.push(Math.floor(valU32 / shiftPow) % 256);
     }
   }
 
@@ -1203,10 +1232,10 @@ function applyPngPredictor(
       const upLeft = x >= bpp ? prevRow[x - bpp] : 0;
 
       let val = raw;
-      if (filterType === 1) val = (raw + left) & 0xff;
-      else if (filterType === 2) val = (raw + up) & 0xff;
-      else if (filterType === 3) val = (raw + ((left + up) >> 1)) & 0xff;
-      else if (filterType === 4) val = (raw + paethPredictor(left, up, upLeft)) & 0xff;
+      if (filterType === 1) val = (raw + left) % 256;
+      else if (filterType === 2) val = (raw + up) % 256;
+      else if (filterType === 3) val = (raw + Math.floor((left + up) / 2)) % 256;
+      else if (filterType === 4) val = (raw + paethPredictor(left, up, upLeft)) % 256;
 
       out[dstOff + x] = val;
     }
@@ -1226,9 +1255,10 @@ function decodeLzw(data: Uint8Array, earlyChange = 1): Uint8Array | null {
     if (bitPos + width > totalBits) return -1;
     let code = 0;
     for (let k = 0; k < width; k++) {
-      const byteIdx = (bitPos + k) >> 3;
-      const bitIdx = 7 - ((bitPos + k) & 7);
-      code = (code << 1) | ((data[byteIdx] >> bitIdx) & 1);
+      const byteIdx = Math.floor((bitPos + k) / 8);
+      const bitIdx = 7 - ((bitPos + k) % 8);
+      const bitVal = Math.floor(data[byteIdx] / Math.pow(2, bitIdx)) % 2;
+      code = code * 2 + bitVal;
     }
     bitPos += width;
     return code;
@@ -1319,7 +1349,7 @@ function applyTiffPredictor(
   out.set(data);
   for (let row = 0; row < out.length; row += stride) {
     for (let col = colors; col < stride && row + col < out.length; col++) {
-      out[row + col] = (out[row + col] + out[row + col - colors]) & 0xff;
+      out[row + col] = (out[row + col] + out[row + col - colors]) % 256;
     }
   }
   return out;
@@ -1381,7 +1411,7 @@ function inflateRawPureJs(rawDeflate: Uint8Array): Uint8Array | null {
   const ensureBits = (n: number): boolean => {
     while (bitCnt < n) {
       if (bytePos >= rawDeflate.length) return false;
-      bitBuf |= rawDeflate[bytePos++] << bitCnt;
+      bitBuf += rawDeflate[bytePos++] * Math.pow(2, bitCnt);
       bitCnt += 8;
     }
     return true;
@@ -1390,8 +1420,9 @@ function inflateRawPureJs(rawDeflate: Uint8Array): Uint8Array | null {
   const readBits = (n: number): number => {
     if (n === 0) return 0;
     if (!ensureBits(n)) return -1;
-    const val = bitBuf & ((1 << n) - 1);
-    bitBuf >>>= n;
+    const mask = Math.pow(2, n);
+    const val = bitBuf % mask;
+    bitBuf = Math.floor(bitBuf / mask);
     bitCnt -= n;
     return val;
   };
@@ -1403,15 +1434,15 @@ function inflateRawPureJs(rawDeflate: Uint8Array): Uint8Array | null {
     for (let len = 1; len <= 15; len++) {
       const bit = readBits(1);
       if (bit < 0) return -1;
-      code |= bit;
+      code += bit;
       const count = tree.counts[len];
       if (code - count < first) {
         return tree.symbols[index + (code - first)];
       }
       index += count;
       first += count;
-      first <<= 1;
-      code <<= 1;
+      first *= 2;
+      code *= 2;
     }
     return -1;
   };
@@ -1429,10 +1460,10 @@ function inflateRawPureJs(rawDeflate: Uint8Array): Uint8Array | null {
       bitBuf = 0;
       bitCnt = 0;
       if (bytePos + 4 > rawDeflate.length) break;
-      const len = rawDeflate[bytePos] | (rawDeflate[bytePos + 1] << 8);
-      const nlen = rawDeflate[bytePos + 2] | (rawDeflate[bytePos + 3] << 8);
+      const len = rawDeflate[bytePos] + rawDeflate[bytePos + 1] * 256;
+      const nlen = rawDeflate[bytePos + 2] + rawDeflate[bytePos + 3] * 256;
       bytePos += 4;
-      if ((len ^ 0xffff) !== nlen) break;
+      if (65535 - len !== nlen) break;
       const copyEnd = Math.min(rawDeflate.length, bytePos + len);
       for (let i = bytePos; i < copyEnd; i++) {
         out.push(rawDeflate[i]);
@@ -1525,8 +1556,8 @@ function getZlibHeaderOffset(data: Uint8Array): number {
   if (data.length < 2) return 0;
   const cmf = data[0];
   const flg = data[1];
-  if ((cmf & 0x0f) === 8 && (((cmf << 8) | flg) % 31 === 0)) {
-    return (flg & 0x20) !== 0 && data.length >= 6 ? 6 : 2;
+  if (cmf % 16 === 8 && (cmf * 256 + flg) % 31 === 0) {
+    return Math.floor(flg / 32) % 2 !== 0 && data.length >= 6 ? 6 : 2;
   }
   return 0;
 }
@@ -1970,13 +2001,13 @@ function tokenizeContentStream(streamStr: string): ContentToken[] {
     if (c === '/') {
       const start = i + 1;
       i++;
-      while (i < len && !/[\s()<>\[\]{}/%]/.test(streamStr[i])) i++;
+      while (i < len && !/[\s()<>[\]{}/%]/.test(streamStr[i])) i++;
       tokens.push({ kind: 'name', value: streamStr.substring(start, i) });
       continue;
     }
 
     const start = i;
-    while (i < len && !/[\s()<>\[\]{}/%]/.test(streamStr[i])) i++;
+    while (i < len && !/[\s()<>[\]{}/%]/.test(streamStr[i])) i++;
     if (i === start) {
       // Advance past stray closing/grouping delimiters (e.g., }, {, ], ), >)
       i++;
@@ -2355,7 +2386,7 @@ function extractAmountTokens(text: string): ExtractedAmountToken[] {
   const results: ExtractedAmountToken[] = [];
   // Require [+-] to attach directly to currency/digits so an empty Debit "-" placeholder never marks a Credit amount as DR.
   const tokenRegex =
-    /(?:^|[\s|(/:\[])(?:(CR|DR)\s+)?([+-](?=(?:₹|rs\.?|inr)?\d))?(?:₹|rs\.?|inr)?\s*(\d{1,3}(?:,\d{2,3})*\.\d{2}|\d+\.\d{2})\s*(?:\(?\s*(CR|DR|C|D)\.?\s*\)?)?(?=$|[\s|,;)\]])/gi;
+    /(?:^|[\s|(/:[])(?:(CR|DR)\s+)?([+-](?=(?:₹|rs\.?|inr)?\d))?(?:₹|rs\.?|inr)?\s*(\d{1,3}(?:,\d{2,3})*\.\d{2}|\d+\.\d{2})\s*(?:\(?\s*(CR|DR|C|D)\.?\s*\)?)?(?=$|[\s|,;)\]])/gi;
 
   let m: RegExpExecArray | null;
   while ((m = tokenRegex.exec(text)) !== null) {
@@ -2364,20 +2395,20 @@ function extractAmountTokens(text: string): ExtractedAmountToken[] {
 
     results.push({
       value: val,
-      raw: m[0].replace(/^[\s|(/:\[]+/, '').trim(),
+      raw: m[0].replace(/^[\s|(/:[]+/, '').trim(),
       tag: resolveAmountTag(m[4] || m[1], m[2]),
     });
   }
 
   if (results.length === 0) {
     const fallbackRegex =
-      /(?:^|[\s|(/:\[])(?:(CR|DR)\s+)?([+-](?=(?:₹|rs\.?|inr)?\d))?(?:₹|rs\.?|inr)?\s*(\d{1,3}(?:,\d{2,3})+)\s*(?:\(?\s*(CR|DR|C|D)\.?\s*\)?)?(?=$|[\s|,;)\]])/gi;
+      /(?:^|[\s|(/:[])(?:(CR|DR)\s+)?([+-](?=(?:₹|rs\.?|inr)?\d))?(?:₹|rs\.?|inr)?\s*(\d{1,3}(?:,\d{2,3})+)\s*(?:\(?\s*(CR|DR|C|D)\.?\s*\)?)?(?=$|[\s|,;)\]])/gi;
     while ((m = fallbackRegex.exec(text)) !== null) {
       const val = parseFloat(m[3].replace(/,/g, ''));
       if (isNaN(val) || val <= 0 || val >= 100000000) continue;
       results.push({
         value: val,
-        raw: m[0].replace(/^[\s|(/:\[]+/, '').trim(),
+        raw: m[0].replace(/^[\s|(/:[]+/, '').trim(),
         tag: resolveAmountTag(m[4] || m[1], m[2]),
       });
     }
@@ -2474,7 +2505,7 @@ function parseTransactionRowWithMeta(rowText: string): ParsedPdfRowResult | null
 
   narration = narration
     .replace(/\b(cr|dr|credit|debit|neft|rtgs|upi|imps|chq|pos)\b/gi, ' ')
-    .replace(/[\/\\|:_\-\t]+/g, ' ')
+    .replace(/[/\\|:_\-\t]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -2616,7 +2647,7 @@ function parseBankStatementPdfTextWithMeta(text: string): InternalPdfParseResult
           k++;
         }
         if (extra.trim()) {
-          const cleanExtra = extra.replace(/[\/\\|:_\-\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+          const cleanExtra = extra.replace(/[/\\|:_\-\t]+/g, ' ').replace(/\s+/g, ' ').trim();
           immediateParsed.transaction.note = `${immediateParsed.transaction.note} ${cleanExtra}`.trim();
           if (immediateParsed.confidence === 'default') {
             const extraDir = inferDirectionFromNarration(cleanExtra);
@@ -2795,7 +2826,7 @@ function parseBankStatementPdfTextWithMeta(text: string): InternalPdfParseResult
             }
 
             const cleanNarr =
-              narration.replace(/[\/\\|:_\-\t]+/g, ' ').replace(/\s+/g, ' ').trim() ||
+              narration.replace(/[/\\|:_\-\t]+/g, ' ').replace(/\s+/g, ' ').trim() ||
               'Bank Transaction';
             const merchant = cleanNarr.split(' ').slice(0, 4).join(' ');
 

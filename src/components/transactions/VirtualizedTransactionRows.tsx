@@ -1,7 +1,5 @@
-import React, { useCallback, useMemo } from 'react';
-import { Platform, Pressable, StyleSheet, Text as RNText, View } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
 import { fontFamilies, ThemeColors, typography } from '@/theme';
+import type { TransactionWithAccount } from '@/types';
 import {
   formatCurrency,
   formatTransactionTime,
@@ -10,7 +8,9 @@ import {
 } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
 import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
-import type { TransactionWithAccount } from '@/types';
+import { MaterialIcons } from '@expo/vector-icons';
+import React, { useCallback, useMemo } from 'react';
+import { Platform, Pressable, Text as RNText, StyleSheet, View } from 'react-native';
 
 export const SECTION_HEADER_HEIGHT = 44;
 export const TRANSACTION_ROW_HEIGHT = 76;
@@ -184,8 +184,8 @@ export function getTransactionListItemLayout(
   return { length: TRANSACTION_ROW_HEIGHT, offset: index * TRANSACTION_ROW_HEIGHT, index };
 }
 
-export const getTransactionListStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
+export const getTransactionListStyles = (colors: ThemeColors) => {
+  const styles = StyleSheet.create({
     dateGroupHeader: {
       backgroundColor: colors.surfaceContainerLow + '80',
       height: SECTION_HEADER_HEIGHT,
@@ -321,6 +321,8 @@ export const getTransactionListStyles = (colors: ThemeColors) =>
       justifyContent: 'center',
     },
   });
+  return styles;
+};
 
 export type TransactionListStyles = ReturnType<typeof getTransactionListStyles>;
 
@@ -330,7 +332,7 @@ interface SectionHeaderItemProps {
   styles: TransactionListStyles;
 }
 
-export const SectionHeaderItem = React.memo(function SectionHeaderItem({
+function SectionHeaderItemComponent({
   title,
   isFirst,
   styles,
@@ -342,7 +344,9 @@ export const SectionHeaderItem = React.memo(function SectionHeaderItem({
       </RNText>
     </View>
   );
-});
+}
+
+export const SectionHeaderItem = React.memo(SectionHeaderItemComponent);
 
 interface TransactionRowItemProps {
   item: PreparedTransactionRow;
@@ -359,7 +363,7 @@ interface TransactionRowItemProps {
   onLongPress?: (id: string) => void;
 }
 
-export const TransactionRowItem = React.memo(function TransactionRowItem({
+function TransactionRowItemComponent({
   item,
   isLastInSection,
   isVeryLast,
@@ -487,4 +491,6 @@ export const TransactionRowItem = React.memo(function TransactionRowItem({
       </View>
     </Pressable>
   );
-});
+}
+
+export const TransactionRowItem = React.memo(TransactionRowItemComponent);

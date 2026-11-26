@@ -11,7 +11,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Text, Header, DatePickerModal, useToast } from '@/components/ui';
-import { typography, useTheme, ThemeColors, radius } from '@/theme';
+import { typography, useTheme, radius } from '@/theme';
 import { getCurrencySymbol } from '@/utils/format';
 import { getLocalTodayYmd } from '@/utils/date';
 import { useBills } from '../hooks/useBills';
@@ -688,12 +688,11 @@ export function AddBillScreen() {
             <TextInput
               style={[
                 styles.textInput,
+                styles.notesInput,
                 {
                   backgroundColor: colors.surfaceContainerLowest,
                   borderColor: colors.outlineVariant,
                   color: colors.onSurface,
-                  height: 65,
-                  textAlignVertical: 'top',
                 },
               ]}
               value={notes}
@@ -899,6 +898,10 @@ const styles = StyleSheet.create({
   },
   freqChipTextSelected: {
     fontWeight: '700',
+  },
+  notesInput: {
+    height: 65,
+    textAlignVertical: 'top',
   },
   saveButton: {
     paddingVertical: 14,

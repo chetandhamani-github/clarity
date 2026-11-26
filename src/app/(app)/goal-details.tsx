@@ -74,7 +74,7 @@ export default function GoalDetailsScreen() {
   const { mutate: addContrib, isPending } = useAddGoalContribution();
   const { mutate: deleteGoal, isPending: isDeleting } = useDeleteGoal();
   const { mutate: updateGoal, isPending: isUpdating } = useUpdateGoal();
-  const { mutate: deleteContrib, isPending: isDeletingContrib } = useDeleteGoalContribution();
+  const { mutate: deleteContrib } = useDeleteGoalContribution();
   const { accounts } = useAccounts();
 
   // Contribution Form State

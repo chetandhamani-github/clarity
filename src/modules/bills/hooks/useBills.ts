@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useCallback } from 'react';
 import { DeviceEventEmitter } from 'react-native';
-import { useBillsStore, BillsTab } from '../store/bills.store';
-import type { Bill, Subscription } from '../types/bill.types';
+import { useBillsStore } from '../store/bills.store';
 
 export function useBills() {
   const {

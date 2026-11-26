@@ -7,7 +7,6 @@ import {
   TextInput,
   RefreshControl,
   DeviceEventEmitter,
-  Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
@@ -284,7 +283,6 @@ function PeopleListItem({ balance, hideBalances, onPress }: PeopleListItemProps)
 
   const isOwedToMe = balance.status === 'OWED_TO_ME';
   const isYouOwe = balance.status === 'YOU_OWE';
-  const isSettled = balance.status === 'SETTLED';
 
   const badgeBg = isOwedToMe
     ? 'rgba(16, 185, 129, 0.12)'
@@ -326,19 +324,21 @@ function PeopleListItem({ balance, hideBalances, onPress }: PeopleListItemProps)
         <View
           style={[
             styles.avatarCircle,
-            {
-              backgroundColor: isOwedToMe
-                ? 'rgba(16, 185, 129, 0.12)'
-                : isYouOwe
-                  ? 'rgba(239, 68, 68, 0.12)'
-                  : colors.surfaceContainerHigh,
-            },
+            isOwedToMe
+              ? styles.avatarCirclePositive
+              : isYouOwe
+                ? styles.avatarCircleNegative
+                : { backgroundColor: colors.surfaceContainerHigh },
           ]}
         >
           <Text
             style={[
               styles.avatarText,
-              { color: isOwedToMe ? '#10b981' : isYouOwe ? '#ef4444' : colors.primary },
+              isOwedToMe
+                ? styles.avatarTextPositive
+                : isYouOwe
+                  ? styles.avatarTextNegative
+                  : { color: colors.primary },
             ]}
           >
             {initials}
@@ -498,6 +498,18 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_700Bold',
     fontSize: 15,
     lineHeight: 20,
+  },
+  avatarCirclePositive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  },
+  avatarCircleNegative: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+  },
+  avatarTextPositive: {
+    color: '#10b981',
+  },
+  avatarTextNegative: {
+    color: '#ef4444',
   },
   emptyContainer: {
     alignItems: 'center',

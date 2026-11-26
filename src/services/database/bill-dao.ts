@@ -1,7 +1,10 @@
-import { DeviceEventEmitter } from 'react-native';
-import { getDatabase } from './index';
-import { insertNotification } from './notification-dao';
-import { formatCurrency } from '@/utils/format';
+import type {
+  BillerCategory,
+  BillReminder,
+  BillRepeatFrequency,
+  BillStatus,
+  MonthlyBillSummary,
+} from '@/types';
 import {
   calculateNextDate,
   formatLocalDateYmd,
@@ -9,18 +12,15 @@ import {
   shiftMonthsPreserveDay,
   shiftYmdDays,
 } from '@/utils/date';
-import type {
-  BillReminder,
-  BillerCategory,
-  BillStatus,
-  BillRepeatFrequency,
-  MonthlyBillSummary,
-} from '@/types';
+import { formatCurrency } from '@/utils/format';
+import { DeviceEventEmitter } from 'react-native';
+import { getDatabase } from './index';
+import { insertNotification } from './notification-dao';
 
 function generateId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    const r = Math.floor(Math.random() * 16);
+    const v = c === 'x' ? r : (r % 4) + 8;
     return v.toString(16);
   });
 }

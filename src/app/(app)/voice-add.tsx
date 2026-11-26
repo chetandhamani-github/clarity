@@ -7,7 +7,7 @@ import { VoiceTransactionModal } from '@/components/modals/VoiceTransactionModal
 import { useToast } from '@/components/ui';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useTheme } from '@/theme';
-import { formatLocalDate, getCurrencySymbol } from '@/utils/format';
+import { getCurrencySymbol } from '@/utils/format';
 import { haptics } from '@/utils/haptics';
 import type { ParsedVoiceTransaction } from '@/services/voice/voice-parser';
 

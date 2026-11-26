@@ -82,7 +82,7 @@ export default function FinancialHealthScreen() {
       <Header showBack title="Financial Health Score" />
 
       <ScrollView
-        style={{ flex: 1 }}
+        style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 80 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -133,7 +133,7 @@ export default function FinancialHealthScreen() {
             {/* ACTIONABLE RECOMMENDATIONS */}
             {report.actionableTips.length > 0 && (
               <View style={styles.actionSection}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <View style={styles.actionHeaderRow}>
                   <MaterialIcons name="lightbulb" size={18} color="#F59E0B" />
                   <Text style={styles.sectionHeaderTitle}>Priority Recommendations</Text>
                 </View>
@@ -363,6 +363,15 @@ const getStyles = (colors: ThemeColors) => {
       color: colors.onSurfaceVariant,
       flex: 1,
       lineHeight: 14,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    actionHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 8,
     },
   });
   return styles;

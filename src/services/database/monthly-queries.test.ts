@@ -152,8 +152,6 @@ describe('monthly SQL queries', () => {
   });
 
   it('getTransactions with limit scopes tag lookup to returned transaction IDs', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { getTransactions } = require('./transaction-dao');
     const prevAllAsyncImpl = mockDb.getAllAsync.getMockImplementation();
 
     try {

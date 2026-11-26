@@ -1,4 +1,4 @@
-import { Header, FormSkeleton, Text, useAlert, useToast } from '@/components/ui';
+import { Header, FormSkeleton, Text, useToast } from '@/components/ui';
 import { useBudgetPlan, useUpdateBudgetPlan } from '@/hooks/use-budget';
 import { ThemeColors, typography, useTheme } from '@/theme';
 import { formatCurrencyWhole, getCurrencySymbol } from '@/utils/format';
@@ -35,9 +35,9 @@ export default function BudgetSetupScreen() {
   }, [plan]);
 
   const parsedIncome = parseFloat(income.replace(/[^0-9.]/g, '')) || 0;
-  const needsNum = parseInt(needsPct) || 0;
-  const wantsNum = parseInt(wantsPct) || 0;
-  const savingsNum = parseInt(savingsPct) || 0;
+  const needsNum = parseInt(needsPct, 10) || 0;
+  const wantsNum = parseInt(wantsPct, 10) || 0;
+  const savingsNum = parseInt(savingsPct, 10) || 0;
 
   const totalPct = needsNum + wantsNum + savingsNum;
 

@@ -23,8 +23,8 @@ import type {
 
 function generateId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    const r = Math.floor(Math.random() * 16);
+    const v = c === 'x' ? r : (r % 4) + 8;
     return v.toString(16);
   });
 }
@@ -632,7 +632,6 @@ export class BillsRepository {
     year?: number
   ): Promise<BillsSummary> {
     await this.ensureSchema();
-    const db = getDatabase();
     const now = new Date();
     const targetMonth = month ?? now.getMonth() + 1;
     const targetYear = year ?? now.getFullYear();

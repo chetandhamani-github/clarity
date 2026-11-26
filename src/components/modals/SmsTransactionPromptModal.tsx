@@ -290,10 +290,10 @@ export function SmsTransactionPromptModal({ visible, onDismiss }: Props) {
                 <TouchableOpacity
                   style={[
                     styles.primaryButton,
-                    {
-                      backgroundColor: selectedCount === 0 ? colors.surfaceContainerHighest : colors.primary,
-                      opacity: isProcessing ? 0.7 : 1,
-                    },
+                    selectedCount === 0
+                      ? styles.primaryButtonEmpty
+                      : styles.primaryButtonActive,
+                    isProcessing && styles.primaryButtonProcessing,
                   ]}
                   onPress={handleFetch}
                   disabled={isProcessing || selectedCount === 0}
@@ -502,6 +502,15 @@ const getStyles = (colors: ThemeColors) => {
       gap: 8,
       paddingVertical: 13,
       borderRadius: 14,
+    },
+    primaryButtonActive: {
+      backgroundColor: colors.primary,
+    },
+    primaryButtonEmpty: {
+      backgroundColor: colors.surfaceContainerHighest,
+    },
+    primaryButtonProcessing: {
+      opacity: 0.7,
     },
     primaryButtonText: {
       ...typography.bodyMd,

@@ -94,55 +94,55 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
 
   try {
     await db.execAsync('ALTER TABLE goal_contributions ADD COLUMN transaction_id TEXT;');
-  } catch (e) {
+  } catch {
     // Column might already exist, ignore error
   }
 
   try {
     await db.execAsync('ALTER TABLE transactions ADD COLUMN to_account_id TEXT;');
-  } catch (e) {
+  } catch {
     // Column might already exist, ignore error
   }
 
   try {
     await db.execAsync('CREATE INDEX IF NOT EXISTS idx_transactions_to_account ON transactions(to_account_id);');
-  } catch (e) {
+  } catch {
     // Index might already exist, ignore error
   }
 
   try {
     await db.execAsync('ALTER TABLE transactions ADD COLUMN splits_json TEXT;');
-  } catch (e) {
+  } catch {
     // Column might already exist, ignore error
   }
 
   try {
     await db.execAsync("ALTER TABLE transactions ADD COLUMN source TEXT NOT NULL DEFAULT 'MANUAL';");
-  } catch (e) {
+  } catch {
     // Column might already exist, ignore error
   }
 
   try {
     await db.execAsync("ALTER TABLE transactions ADD COLUMN status TEXT NOT NULL DEFAULT 'VERIFIED';");
-  } catch (e) {
+  } catch {
     // Column might already exist, ignore error
   }
 
   try {
     await db.execAsync('ALTER TABLE transactions ADD COLUMN sms_id TEXT;');
-  } catch (e) {
+  } catch {
     // Column might already exist, ignore error
   }
 
   try {
     await db.execAsync('ALTER TABLE transactions ADD COLUMN parsed_tx_id TEXT;');
-  } catch (e) {
+  } catch {
     // Column might already exist, ignore error
   }
 
   try {
     await db.execAsync('ALTER TABLE transactions ADD COLUMN receipt_uri TEXT;');
-  } catch (e) {
+  } catch {
     // Column might already exist, ignore error
   }
 
@@ -166,7 +166,7 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_trans_tags_tag ON transaction_tags(tag_id);
       CREATE INDEX IF NOT EXISTS idx_trans_tags_tx ON transaction_tags(transaction_id);
     `);
-  } catch (e) {
+  } catch {
     // Tables might already exist, ignore error
   }
 
@@ -175,19 +175,19 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_transactions_matching 
       ON transactions(account_id, amount, source, date);
     `);
-  } catch (e) {
+  } catch {
     // Index might already exist, ignore error
   }
 
   try {
     await db.execAsync('ALTER TABLE accounts ADD COLUMN billing_cycle_day INTEGER;');
-  } catch (e) {
+  } catch {
     // Column might already exist, ignore error
   }
 
   try {
     await db.execAsync('ALTER TABLE accounts ADD COLUMN due_day INTEGER;');
-  } catch (e) {
+  } catch {
     // Column might already exist, ignore error
   }
 

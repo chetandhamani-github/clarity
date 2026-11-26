@@ -9,7 +9,7 @@ import { formatCurrency, formatLocalDate } from '@/utils/format';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Animated,
     AppState,
@@ -28,7 +28,6 @@ export function SmartClipboardPrompt() {
   const { showToast } = useToast();
 
   const clipboardDetectionEnabled = useAppStore((state) => state.clipboardDetectionEnabled);
-  const lastDismissedClipboardHash = useAppStore((state) => state.lastDismissedClipboardHash);
   const setLastDismissedClipboardHash = useAppStore((state) => state.setLastDismissedClipboardHash);
 
   const { accounts } = useAccounts();
@@ -38,7 +37,7 @@ export function SmartClipboardPrompt() {
   const slideAnim = useRef(new Animated.Value(120)).current;
   const isChecking = useRef(false);
 
-  const checkClipboard = async () => {
+  const checkClipboard = useCallback(async () => {
     if (!clipboardDetectionEnabled || isChecking.current) return;
     isChecking.current = true;
 
@@ -65,7 +64,7 @@ export function SmartClipboardPrompt() {
     } finally {
       isChecking.current = false;
     }
-  };
+  }, [clipboardDetectionEnabled, slideAnim]);
 
   useEffect(() => {
     // Check on mount
@@ -87,7 +86,7 @@ export function SmartClipboardPrompt() {
       subscription.remove();
       resetSub.remove();
     };
-  }, [clipboardDetectionEnabled]);
+  }, [checkClipboard, slideAnim]);
 
   const handleDismiss = () => {
     if (intent) {
@@ -171,8 +170,8 @@ export function SmartClipboardPrompt() {
             <MaterialIcons name="bolt" size={20} color={colors.primary} />
           </View>
 
-          <View style={{ flex: 1, marginRight: 8 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={styles.detailsColumn}>
+            <View style={styles.headerRow}>
               <Text style={styles.headerLabel}>UPI PAYMENT DETECTED</Text>
               {intent.upiRef && (
                 <View style={[styles.refBadge, { backgroundColor: colors.surfaceContainerHigh }]}>
@@ -313,6 +312,15 @@ const getStyles = (colors: ThemeColors) => {
       fontFamily: 'Manrope_600SemiBold',
       fontSize: 12,
       color: colors.onSurface,
+    },
+    detailsColumn: {
+      flex: 1,
+      marginRight: 8,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
     },
   });
   return styles;
