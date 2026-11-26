@@ -262,7 +262,12 @@ export default function AddInvestmentScreen() {
         ])}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
+        enableAutomaticScroll={true}
+        enableResetScrollToCoords={false}
         extraScrollHeight={Platform.OS === 'ios' ? 140 : 160}
+        extraHeight={Platform.OS === 'ios' ? 75 : 140}
+        keyboardOpeningTime={0}
       >
         {/* CARD 1: ASSET CLASS SELECTOR */}
         <View style={styles.card}>

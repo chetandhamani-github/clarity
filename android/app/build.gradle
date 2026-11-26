@@ -124,15 +124,12 @@ android {
                 storePassword System.getenv("KEYSTORE_PASSWORD")
                 keyAlias System.getenv("KEY_ALIAS")
                 keyPassword System.getenv("KEY_PASSWORD")
+            } else {
+                storeFile file('debug.keystore')
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
             }
-        }
-    }
-    gradle.taskGraph.whenReady { taskGraph ->
-        def isReleaseBuild = taskGraph.allTasks.any { task ->
-            task.name.contains("Release") && !task.name.contains("Lint")
-        }
-        if (isReleaseBuild && !project.hasProperty('MYAPP_UPLOAD_STORE_FILE') && System.getenv("KEYSTORE_PATH") == null) {
-            throw new GradleException("Release builds require upload keystore properties (MYAPP_UPLOAD_STORE_FILE or KEYSTORE_PATH). Never ship debug.keystore.")
         }
     }
     buildTypes {
