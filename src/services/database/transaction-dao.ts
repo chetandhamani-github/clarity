@@ -167,32 +167,27 @@ export async function ensureTransactionsSchema(db: any) {
   schemaEnsured = true;
 }
 
-export async function getTransactions(
-  filters?: TransactionFilters
-): Promise<TransactionWithAccount[]> {
-  const db = getDatabase();
-  await ensureTransactionsSchema(db);
+const LOCAL_DATE_EXPR_T = `CASE WHEN t.date LIKE '%T%' THEN SUBSTR(date(t.date, 'localtime'), 1, 10) ELSE SUBSTR(t.date, 1, 10) END`;
+const LOCAL_MONTH_EXPR_T = `CASE WHEN t.date LIKE '%T%' THEN SUBSTR(date(t.date, 'localtime'), 1, 7) ELSE SUBSTR(t.date, 1, 7) END`;
 
-  let query = `
-    SELECT t.*, a.name as account_name, ta.name as to_account_name 
-    FROM transactions t
-    LEFT JOIN accounts a ON t.account_id = a.id
-    LEFT JOIN accounts ta ON t.to_account_id = ta.id
-    WHERE 1=1
-  `;
-  const params: any[] = [];
+function buildTransactionsWhereClause(filters?: Omit<TransactionFilters, 'limit' | 'offset'>): {
+  whereClause: string;
+  params: (string | number)[];
+} {
+  let whereClause = 'WHERE 1=1';
+  const params: (string | number)[] = [];
 
   if (filters?.accountId) {
-    query += ` AND (t.account_id = ? OR t.to_account_id = ?)`;
+    whereClause += ' AND (t.account_id = ? OR t.to_account_id = ?)';
     params.push(filters.accountId, filters.accountId);
   }
   if (filters?.category) {
-    query += ` AND t.category = ?`;
+    whereClause += ' AND t.category = ?';
     params.push(filters.category);
   }
   if (filters?.tag) {
     const cleanTag = filters.tag.trim().toLowerCase().replace(/^#/, '');
-    query += ` AND t.id IN (
+    whereClause += ` AND t.id IN (
       SELECT tt.transaction_id 
       FROM transaction_tags tt 
       JOIN tags tg ON tt.tag_id = tg.id 
@@ -201,36 +196,67 @@ export async function getTransactions(
     params.push(cleanTag);
   }
   if (filters?.type) {
-    query += ` AND t.type = ?`;
+    whereClause += ' AND t.type = ?';
     params.push(filters.type);
   }
   if (filters?.search) {
-    query += ` AND (t.merchant LIKE ? OR t.note LIKE ?)`;
+    whereClause += ' AND (t.merchant LIKE ? OR t.note LIKE ?)';
     params.push(`%${filters.search}%`, `%${filters.search}%`);
   }
   if (filters?.dateFrom) {
     const fromStr = filters.dateFrom.includes('T') ? filters.dateFrom.split('T')[0] : filters.dateFrom;
-    query += ` AND substr(t.date, 1, 10) >= ?`;
+    whereClause += ` AND (${LOCAL_DATE_EXPR_T}) >= ?`;
     params.push(fromStr);
   }
   if (filters?.dateTo) {
     const toStr = filters.dateTo.includes('T') ? filters.dateTo.split('T')[0] : filters.dateTo;
-    query += ` AND substr(t.date, 1, 10) <= ?`;
+    whereClause += ` AND (${LOCAL_DATE_EXPR_T}) <= ?`;
     params.push(toStr);
   }
 
-  query += ` ORDER BY t.date DESC, t.rowid DESC`;
+  return { whereClause, params };
+}
+
+export async function getTransactionsCount(
+  filters?: Omit<TransactionFilters, 'limit' | 'offset'>
+): Promise<number> {
+  const db = getDatabase();
+  await ensureTransactionsSchema(db);
+  const { whereClause, params } = buildTransactionsWhereClause(filters);
+  const row = await db.getFirstAsync<{ count: number }>(
+    `SELECT COUNT(*) as count FROM transactions t ${whereClause}`,
+    params
+  );
+  return row?.count ?? 0;
+}
+
+export async function getTransactions(
+  filters?: TransactionFilters
+): Promise<TransactionWithAccount[]> {
+  const db = getDatabase();
+  await ensureTransactionsSchema(db);
+
+  const { whereClause, params } = buildTransactionsWhereClause(filters);
+  let query = `
+    SELECT t.*, a.name as account_name, ta.name as to_account_name 
+    FROM transactions t
+    LEFT JOIN accounts a ON t.account_id = a.id
+    LEFT JOIN accounts ta ON t.to_account_id = ta.id
+    ${whereClause}
+    ORDER BY t.date DESC, t.rowid DESC
+  `;
 
   if (filters?.limit) {
-    query += ` LIMIT ?`;
+    query += ' LIMIT ?';
     params.push(filters.limit);
     if (filters?.offset) {
-      query += ` OFFSET ?`;
+      query += ' OFFSET ?';
       params.push(filters.offset);
     }
   }
 
   const rows = await db.getAllAsync<TransactionRow>(query, params);
+  if (rows.length === 0) return [];
   const tagsMap = await getAllTransactionTagsMap();
   return rows.map((row) => ({
     ...mapRow(row),
@@ -750,6 +776,44 @@ export async function bulkUpdateAccount(ids: string[], targetAccountId: string):
 }
 
 const LOCAL_MONTH_EXPR = `CASE WHEN date LIKE '%T%' THEN SUBSTR(date(date, 'localtime'), 1, 7) ELSE SUBSTR(date, 1, 7) END`;
+
+export interface DailyTransactionSummary {
+  date: string; // YYYY-MM-DD
+  income: number;
+  expense: number;
+  transfer: number;
+  count: number;
+}
+
+export async function getMonthlyDailyTotals(
+  month: number,
+  year: number,
+  filters?: Omit<TransactionFilters, 'limit' | 'offset' | 'dateFrom' | 'dateTo'>
+): Promise<DailyTransactionSummary[]> {
+  const db = getDatabase();
+  await ensureTransactionsSchema(db);
+
+  const monthStr = month.toString().padStart(2, '0');
+  const datePrefix = `${year}-${monthStr}`;
+  const { whereClause, params } = buildTransactionsWhereClause(filters);
+
+  const rows = await db.getAllAsync<DailyTransactionSummary>(
+    `SELECT
+      (${LOCAL_DATE_EXPR_T}) as date,
+      COALESCE(SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END), 0) as income,
+      COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END), 0) as expense,
+      COALESCE(SUM(CASE WHEN t.type = 'transfer' THEN t.amount ELSE 0 END), 0) as transfer,
+      COUNT(*) as count
+     FROM transactions t
+     ${whereClause}
+       AND (${LOCAL_MONTH_EXPR_T}) = ?
+     GROUP BY date
+     ORDER BY date ASC`,
+    [...params, datePrefix]
+  );
+
+  return rows;
+}
 
 export async function getMonthlyTotals(month: number, year: number): Promise<MonthlyTotals> {
   const db = getDatabase();

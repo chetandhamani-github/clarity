@@ -376,6 +376,50 @@ export function TransactionsSkeleton() {
   );
 }
 
+export const TransactionsPaginationSkeleton = React.memo(
+  function TransactionsPaginationSkeleton() {
+    const { colors } = useTheme();
+
+    return (
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surfaceContainerLowest,
+            borderColor: colors.outlineVariant,
+            padding: 0,
+            marginTop: 12,
+            overflow: 'hidden',
+          },
+        ]}
+      >
+        {[0, 1, 2].map((index) => (
+          <View
+            key={index}
+            style={[
+              styles.transactionRow,
+              index < 2 && {
+                borderBottomWidth: 1,
+                borderBottomColor: colors.outlineVariant,
+              },
+            ]}
+          >
+            <SkeletonCircle size={40} />
+            <View style={{ flex: 1, gap: 6 }}>
+              <SkeletonText width={index % 2 === 0 ? '58%' : '48%'} height={14} />
+              <SkeletonText width="38%" height={11} />
+            </View>
+            <View style={{ alignItems: 'flex-end', gap: 6 }}>
+              <SkeletonText width={72} height={16} />
+              <SkeletonBox width={54} height={16} borderRadius={4} />
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  }
+);
+
 /**
  * Pixel-perfect Skeleton for Goals Screen (`goals.tsx`)
  */

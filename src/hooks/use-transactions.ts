@@ -1,10 +1,12 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   deleteTransaction as deleteTransactionDao,
   bulkDeleteTransactions,
   bulkUpdateCategory,
   bulkUpdateAccount,
   getAccountHistory,
+  getMonthlyDailyTotals,
   getMonthlyReports,
   getMonthlyTotals,
   getNetWorthHistory,
@@ -12,6 +14,7 @@ import {
   getTopMerchants,
   getTransactionById,
   getTransactions,
+  getTransactionsCount,
   insertTransaction,
   updateTransaction as updateTransactionDao,
   type HistoryPoint,
@@ -44,6 +47,66 @@ export function useTransactions(filters?: TransactionFilters) {
   });
 
   return { transactions: data || [], isLoading, refetch };
+}
+
+export function usePaginatedTransactions(
+  filters?: Omit<TransactionFilters, 'limit' | 'offset'>,
+  pageSize = 50
+) {
+  const filtersString = JSON.stringify(filters || {});
+
+  const {
+    data,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    refetch,
+  } = useInfiniteQuery({
+    queryKey: ['transactions', 'paginated', filtersString, pageSize],
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
+      const parsedFilters = filters ? (JSON.parse(filtersString) as TransactionFilters) : {};
+      const [items, totalCount] = await Promise.all([
+        getTransactions({ ...parsedFilters, limit: pageSize, offset: pageParam }),
+        pageParam === 0 ? getTransactionsCount(parsedFilters) : Promise.resolve<number | null>(null),
+      ]);
+      return {
+        items,
+        totalCount,
+        nextOffset: pageParam + items.length,
+      };
+    },
+    getNextPageParam: (lastPage) =>
+      lastPage.items.length < pageSize ? undefined : lastPage.nextOffset,
+  });
+
+  const transactions = useMemo(() => {
+    if (!data?.pages) return [];
+    const seenIds = new Set<string>();
+    const combined: TransactionWithAccount[] = [];
+    for (const page of data.pages) {
+      for (const tx of page.items) {
+        if (!seenIds.has(tx.id)) {
+          seenIds.add(tx.id);
+          combined.push(tx);
+        }
+      }
+    }
+    return combined;
+  }, [data?.pages]);
+
+  const totalCount = data?.pages?.[0]?.totalCount ?? transactions.length;
+
+  return {
+    transactions,
+    totalCount,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage: Boolean(hasNextPage),
+    fetchNextPage,
+    refetch,
+  };
 }
 
 export function useCreateTransaction() {
@@ -231,6 +294,35 @@ export function useMonthlyTotals(month: number, year: number) {
   });
 
   return { totals: data || { income: 0, expenses: 0 }, isLoading, refetch };
+}
+
+export function useMonthlyDailyTotals(
+  month: number,
+  year: number,
+  filters?: Omit<TransactionFilters, 'limit' | 'offset' | 'dateFrom' | 'dateTo'>,
+  enabled = true
+) {
+  const filtersString = JSON.stringify(filters || {});
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['transactions', 'monthlyDailyTotals', month, year, filtersString],
+    queryFn: () => {
+      const parsedFilters = filters ? (JSON.parse(filtersString) as TransactionFilters) : undefined;
+      return getMonthlyDailyTotals(month, year, parsedFilters);
+    },
+    enabled,
+  });
+
+  const dailyMap = useMemo(() => {
+    const map: Record<string, (typeof rows)[number]> = {};
+    const rows = data || [];
+    for (const row of rows) {
+      map[row.date] = row;
+    }
+    return map;
+  }, [data]);
+
+  return { dailyTotals: data || [], dailyMap, isLoading, refetch };
 }
 
 export function useMonthlyReports() {

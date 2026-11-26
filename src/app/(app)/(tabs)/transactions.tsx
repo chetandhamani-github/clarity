@@ -1,21 +1,30 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  View,
-  Text as RNText,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  SectionList,
-  Platform,
+  FlatList,
   Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text as RNText,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { Text, Header, TransactionsSkeleton, useToast, useAlert } from '@/components/ui';
+import {
+  Text,
+  Header,
+  TransactionsSkeleton,
+  TransactionsPaginationSkeleton,
+  useToast,
+  useAlert,
+} from '@/components/ui';
 import { spacing, typography, fontFamilies, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useFocusEffect } from 'expo-router';
 import {
-  useTransactions,
+  usePaginatedTransactions,
+  useMonthlyDailyTotals,
   useBulkDeleteTransactions,
   useBulkUpdateCategory,
   useBulkUpdateAccount,
@@ -23,9 +32,12 @@ import {
 } from '@/hooks/use-transactions';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useCategories } from '@/hooks/use-budget';
-import { formatCurrency, formatLocalDate, formatTransactionTime, getTransactionSign, groupTransactionsByDate } from '@/utils/format';
+import { formatCurrency, formatDate, formatLocalDate, formatTransactionTime, getTransactionSign, groupTransactionsByDate } from '@/utils/format';
+import { getMonthDateBounds } from '@/utils/calendar-utils';
+import { getLocalTodayYmd } from '@/utils/date';
 import { getCategoryIcon } from '@/utils/icons';
 import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
+import { TransactionsCalendarCard } from '@/components/transactions/TransactionsCalendarCard';
 import { TransactionFilterModal, ActiveFilters, DatePreset } from '@/components/modals/TransactionFilterModal';
 import { ReviewQueueModal } from '@/components/modals/ReviewQueueModal';
 import { useAppStore } from '@/store/use-app-store';
@@ -40,6 +52,10 @@ const FILTERS = [
   { id: 'transfer', label: 'Transfers', icon: 'swap-horiz' },
 ];
 
+const SECTION_HEADER_HEIGHT = 44;
+const TRANSACTION_ROW_HEIGHT = 76;
+const TRANSACTIONS_PAGE_SIZE = 25;
+
 interface TransactionsScreenProps {
   showBack?: boolean;
   lockedAccountId?: string;
@@ -47,6 +63,25 @@ interface TransactionsScreenProps {
   initialType?: 'all' | 'expense' | 'income' | 'transfer';
   initialDatePreset?: DatePreset;
 }
+
+type FlatTransactionListItem =
+  | {
+      kind: 'header';
+      key: string;
+      title: string;
+      isFirst: boolean;
+      offset: number;
+      length: number;
+    }
+  | {
+      kind: 'row';
+      key: string;
+      row: PreparedTransactionRow;
+      isLastInSection: boolean;
+      isVeryLast: boolean;
+      offset: number;
+      length: number;
+    };
 
 interface PreparedTransactionRow {
   id: string;
@@ -112,6 +147,31 @@ function prepareTransactionRow(
   };
 }
 
+const preparedRowCacheByContext = new Map<
+  string,
+  WeakMap<TransactionWithAccount, PreparedTransactionRow>
+>();
+
+function getPreparedTransactionRow(
+  tx: TransactionWithAccount,
+  currency: string,
+  filterAccountId?: string
+): PreparedTransactionRow {
+  const contextKey = `${currency}:${filterAccountId ?? ''}`;
+  let cache = preparedRowCacheByContext.get(contextKey);
+  if (!cache) {
+    cache = new WeakMap();
+    preparedRowCacheByContext.set(contextKey, cache);
+  }
+  const cached = cache.get(tx);
+  if (cached) {
+    return cached;
+  }
+  const prepared = prepareTransactionRow(tx, filterAccountId);
+  cache.set(tx, prepared);
+  return prepared;
+}
+
 interface SectionHeaderItemProps {
   title: string;
   isFirst: boolean;
@@ -125,7 +185,9 @@ const SectionHeaderItem = React.memo(function SectionHeaderItem({
 }: SectionHeaderItemProps) {
   return (
     <View style={[styles.dateGroupHeader, isFirst && styles.firstSectionHeader]}>
-      <RNText style={styles.dateGroupText}>{title}</RNText>
+      <RNText style={styles.dateGroupText} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+        {title}
+      </RNText>
     </View>
   );
 });
@@ -159,16 +221,39 @@ const TransactionRowItem = React.memo(function TransactionRowItem({
   onPress,
   onLongPress,
 }: TransactionRowItemProps) {
+  const handleRowPress = useCallback(() => {
+    onPress(item.id);
+  }, [onPress, item.id]);
+
+  const handleRowLongPress = useCallback(() => {
+    onLongPress(item.id);
+  }, [onLongPress, item.id]);
+
+  const baseRowStyle = useMemo(
+    () => [
+      styles.transactionItem,
+      isSelected && styles.transactionItemSelected,
+      isVeryLast && styles.lastTransactionItem,
+      isLastInSection && !isVeryLast && styles.transactionItemSectionLast,
+    ],
+    [styles, isSelected, isVeryLast, isLastInSection]
+  );
+
+  const pressedRowStyle = useMemo(
+    () => [...baseRowStyle, styles.transactionItemPressed],
+    [baseRowStyle, styles.transactionItemPressed]
+  );
+
+  const getRowStyle = useCallback(
+    ({ pressed }: { pressed: boolean }) => (pressed ? pressedRowStyle : baseRowStyle),
+    [pressedRowStyle, baseRowStyle]
+  );
+
   return (
-    <TouchableOpacity
-      style={[
-        styles.transactionItem,
-        isSelected && styles.transactionItemSelected,
-        isVeryLast && styles.lastTransactionItem,
-        isLastInSection && !isVeryLast && styles.transactionItemSectionLast,
-      ]}
-      onPress={() => onPress(item.id)}
-      onLongPress={() => onLongPress(item.id)}
+    <Pressable
+      style={getRowStyle}
+      onPress={handleRowPress}
+      onLongPress={handleRowLongPress}
       delayLongPress={200}
     >
       {hasSelectionMode && (
@@ -194,10 +279,10 @@ const TransactionRowItem = React.memo(function TransactionRowItem({
           />
         </View>
         <View style={styles.transactionTextCol}>
-          <RNText style={styles.transactionName} numberOfLines={1}>
+          <RNText style={styles.transactionName} numberOfLines={1} maxFontSizeMultiplier={1.15}>
             {item.title}
           </RNText>
-          <RNText style={styles.transactionMeta} numberOfLines={1}>
+          <RNText style={styles.transactionMeta} numberOfLines={1} maxFontSizeMultiplier={1.15}>
             {item.subtitle}
           </RNText>
         </View>
@@ -208,25 +293,35 @@ const TransactionRowItem = React.memo(function TransactionRowItem({
             styles.transactionAmount,
             item.isCredit && styles.transactionAmountCredit,
           ]}
+          numberOfLines={1}
+          maxFontSizeMultiplier={1.15}
         >
           {item.amountText}
         </RNText>
         <View style={styles.badgesRow}>
           {item.splitCount > 0 && (
             <View style={[styles.categoryBadge, styles.secondaryBadge]}>
-              <RNText style={[styles.categoryBadgeText, styles.secondaryBadgeText]} numberOfLines={1}>
+              <RNText
+                style={[styles.categoryBadgeText, styles.secondaryBadgeText]}
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.15}
+              >
                 Split ({item.splitCount})
               </RNText>
             </View>
           )}
           <View style={styles.categoryBadge}>
-            <RNText style={styles.categoryBadgeText} numberOfLines={1}>
+            <RNText style={styles.categoryBadgeText} numberOfLines={1} maxFontSizeMultiplier={1.15}>
               {item.category}
             </RNText>
           </View>
           {item.tagLabel !== null && (
             <View style={[styles.categoryBadge, styles.tagBadge]}>
-              <RNText style={[styles.categoryBadgeText, styles.secondaryBadgeText]} numberOfLines={1}>
+              <RNText
+                style={[styles.categoryBadgeText, styles.secondaryBadgeText]}
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.15}
+              >
                 {item.tagLabel}
               </RNText>
             </View>
@@ -238,7 +333,7 @@ const TransactionRowItem = React.memo(function TransactionRowItem({
           )}
         </View>
       </View>
-    </TouchableOpacity>
+    </Pressable>
   );
 });
 
@@ -255,6 +350,12 @@ export default function TransactionsScreen({
   const bottomInset = insets.bottom;
   const router = useRouter();
   const currency = useAppStore((state) => state.currency);
+  const hideBalances = useAppStore((state) => state.hideBalances);
+
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth() + 1);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
 
   const { accounts } = useAccounts();
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -313,6 +414,13 @@ export default function TransactionsScreen({
   const [bulkAccountModalVisible, setBulkAccountModalVisible] = useState(false);
 
   const dateRange = useMemo<{ dateFrom?: string; dateTo?: string }>(() => {
+    if (viewMode === 'calendar') {
+      if (selectedCalendarDate) {
+        return { dateFrom: selectedCalendarDate, dateTo: selectedCalendarDate };
+      }
+      return getMonthDateBounds(calendarYear, calendarMonth);
+    }
+
     const today = new Date();
     const y = today.getFullYear();
     const m = today.getMonth();
@@ -336,33 +444,52 @@ export default function TransactionsScreen({
       default:
         return {};
     }
-  }, [filters.datePreset]);
+  }, [viewMode, selectedCalendarDate, calendarYear, calendarMonth, filters.datePreset]);
 
-  const queryFilters = useMemo<TransactionFilters>(() => {
-    return {
+  const calendarBaseFilters = useMemo<Omit<TransactionFilters, 'limit' | 'offset' | 'dateFrom' | 'dateTo'>>(
+    () => ({
       type: filters.type === 'all' ? undefined : filters.type,
       accountId: effectiveAccountId,
       category: filters.category,
       tag: filters.tag,
+    }),
+    [filters.type, effectiveAccountId, filters.category, filters.tag]
+  );
+
+  const {
+    dailyTotals,
+    dailyMap,
+    isLoading: isCalendarTotalsLoading,
+  } = useMonthlyDailyTotals(
+    calendarMonth,
+    calendarYear,
+    calendarBaseFilters,
+    viewMode === 'calendar'
+  );
+
+  const queryFilters = useMemo<TransactionFilters>(() => {
+    return {
+      ...calendarBaseFilters,
       dateFrom: dateRange.dateFrom,
       dateTo: dateRange.dateTo,
     };
-  }, [filters, dateRange, effectiveAccountId]);
+  }, [calendarBaseFilters, dateRange]);
 
-  const { transactions, isLoading, refetch } = useTransactions(queryFilters);
-  const hasFocusedOnceRef = useRef(false);
+  const {
+    transactions,
+    totalCount,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = usePaginatedTransactions(queryFilters, TRANSACTIONS_PAGE_SIZE);
 
   useFocusEffect(
     useCallback(() => {
+      if (lockedAccountId) return;
+
       const runFocusRefresh = () => {
-        if (hasFocusedOnceRef.current) {
-          refetch();
-        } else {
-          hasFocusedOnceRef.current = true;
-        }
-        if (!lockedAccountId) {
-          refreshReviewQueueCount();
-        }
+        refreshReviewQueueCount();
       };
 
       if (typeof globalThis.requestIdleCallback === 'function') {
@@ -382,7 +509,7 @@ export default function TransactionsScreen({
       return () => {
         clearTimeout(timer);
       };
-    }, [refetch, refreshReviewQueueCount, lockedAccountId])
+    }, [refreshReviewQueueCount, lockedAccountId])
   );
 
   const toggleSelect = useCallback((id: string) => {
@@ -508,28 +635,55 @@ export default function TransactionsScreen({
     [transactions]
   );
 
-  const sections = useMemo(() => {
-    if (isLoading) return [];
+  const flatListItems = useMemo<FlatTransactionListItem[]>(() => {
+    if (isLoading || groupedTransactions.length === 0) return [];
+    const items: FlatTransactionListItem[] = [];
     const lastGroupIdx = groupedTransactions.length - 1;
-    return groupedTransactions.map((group, groupIndex) => ({
-      title: group.label,
-      date: group.date,
-      data: group.items.map((tx) => prepareTransactionRow(tx, effectiveAccountId)),
-      isFirst: groupIndex === 0,
-      isLast: groupIndex === lastGroupIdx,
-    }));
+    let offset = 0;
+
+    for (let groupIndex = 0; groupIndex < groupedTransactions.length; groupIndex++) {
+      const group = groupedTransactions[groupIndex];
+      const isFirstGroup = groupIndex === 0;
+      const isLastGroup = groupIndex === lastGroupIdx;
+
+      items.push({
+        kind: 'header',
+        key: `header:${group.date}`,
+        title: group.label,
+        isFirst: isFirstGroup,
+        offset,
+        length: SECTION_HEADER_HEIGHT,
+      });
+      offset += SECTION_HEADER_HEIGHT;
+
+      const lastRowIdx = group.items.length - 1;
+      for (let rowIndex = 0; rowIndex < group.items.length; rowIndex++) {
+        const tx = group.items[rowIndex];
+        const isLastInSection = rowIndex === lastRowIdx;
+        const isVeryLast = isLastGroup && isLastInSection;
+
+        items.push({
+          kind: 'row',
+          key: tx.id,
+          row: getPreparedTransactionRow(tx, currency, effectiveAccountId),
+          isLastInSection,
+          isVeryLast,
+          offset,
+          length: TRANSACTION_ROW_HEIGHT,
+        });
+        offset += TRANSACTION_ROW_HEIGHT;
+      }
+    }
+
+    return items;
   }, [groupedTransactions, isLoading, effectiveAccountId, currency]);
 
-  const renderSectionHeader = useCallback(
-    ({ section }: any) => (
-      <SectionHeaderItem title={section.title} isFirst={section.isFirst} styles={styles} />
-    ),
-    [styles]
-  );
-
   const hasSelectionMode = selectedIds.size > 0;
-  const hasSelectionModeRef = useRef(false);
-  hasSelectionModeRef.current = hasSelectionMode;
+  const hasSelectionModeRef = useRef(hasSelectionMode);
+
+  useEffect(() => {
+    hasSelectionModeRef.current = hasSelectionMode;
+  }, [hasSelectionMode]);
 
   const handleItemPress = useCallback(
     (id: string) => {
@@ -549,23 +703,58 @@ export default function TransactionsScreen({
     [toggleSelect]
   );
 
-  const keyExtractor = useCallback((item: PreparedTransactionRow) => item.id, []);
+  const keyExtractor = useCallback((item: FlatTransactionListItem) => item.key, []);
+
+  const getItemLayout = useCallback(
+    (data: ArrayLike<FlatTransactionListItem> | null | undefined, index: number) => {
+      const entry = data?.[index];
+      if (entry) {
+        return { length: entry.length, offset: entry.offset, index };
+      }
+      return { length: TRANSACTION_ROW_HEIGHT, offset: index * TRANSACTION_ROW_HEIGHT, index };
+    },
+    []
+  );
 
   const listContentContainerStyle = useMemo(
     () => [styles.scrollContent, { paddingBottom: bottomInset + (showBack ? 32 : 120) }],
     [styles.scrollContent, bottomInset, showBack]
   );
 
+  const listExtraData = useMemo(
+    () => ({ selectedIds, hasSelectionMode }),
+    [selectedIds, hasSelectionMode]
+  );
+
+  const handleLoadMore = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      void fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const renderListFooter = useCallback(() => {
+    if (!isFetchingNextPage) return null;
+    return <TransactionsPaginationSkeleton />;
+  }, [isFetchingNextPage]);
+
   const renderItem = useCallback(
-    ({ item, index, section }: any) => {
-      const isLastInSection = index === section.data.length - 1;
-      const isVeryLast = section.isLast && isLastInSection;
+    ({ item }: { item: FlatTransactionListItem }) => {
+      if (item.kind === 'header') {
+        return (
+          <SectionHeaderItem
+            title={item.title}
+            isFirst={item.isFirst}
+            styles={styles}
+          />
+        );
+      }
+
       return (
         <TransactionRowItem
-          item={item}
-          isLastInSection={isLastInSection}
-          isVeryLast={isVeryLast}
-          isSelected={hasSelectionMode && selectedIds.has(item.id)}
+          item={item.row}
+          isLastInSection={item.isLastInSection}
+          isVeryLast={item.isVeryLast}
+          isSelected={hasSelectionMode && selectedIds.has(item.row.id)}
           hasSelectionMode={hasSelectionMode}
           iconDefaultColor={colors.onSurfaceVariant}
           iconCreditColor={colors.onPrimaryContainer}
@@ -582,7 +771,7 @@ export default function TransactionsScreen({
 
   const activeCount =
     (filters.type && filters.type !== 'all' ? 1 : 0) +
-    (filters.datePreset !== 'all' ? 1 : 0) +
+    (viewMode === 'list' && filters.datePreset !== 'all' ? 1 : 0) +
     (!lockedAccountId && filters.accountId ? 1 : 0) +
     (filters.category ? 1 : 0) +
     (filters.tag ? 1 : 0);
@@ -615,7 +804,7 @@ export default function TransactionsScreen({
         onRemove: () => setFilters((prev) => ({ ...prev, tag: undefined })),
       });
     }
-    if (filters.datePreset !== 'all') {
+    if (viewMode === 'list' && filters.datePreset !== 'all') {
       const label =
         filters.datePreset === 'this_month'
           ? 'This Month'
@@ -629,7 +818,56 @@ export default function TransactionsScreen({
       });
     }
     return list;
-  }, [filters, selectedAccount]);
+  }, [filters, selectedAccount, lockedAccountId, viewMode]);
+
+  const handleCalendarPrevMonth = useCallback(() => {
+    setSelectedCalendarDate(null);
+    if (calendarMonth === 1) {
+      setCalendarMonth(12);
+      setCalendarYear((y) => y - 1);
+    } else {
+      setCalendarMonth((m) => m - 1);
+    }
+  }, [calendarMonth]);
+
+  const handleCalendarNextMonth = useCallback(() => {
+    setSelectedCalendarDate(null);
+    if (calendarMonth === 12) {
+      setCalendarMonth(1);
+      setCalendarYear((y) => y + 1);
+    } else {
+      setCalendarMonth((m) => m + 1);
+    }
+  }, [calendarMonth]);
+
+  const handleCalendarJumpToToday = useCallback(() => {
+    const todayYmd = getLocalTodayYmd();
+    const [y, m] = todayYmd.split('-').map(Number);
+    setCalendarYear(y);
+    setCalendarMonth(m);
+    setSelectedCalendarDate(todayYmd);
+  }, []);
+
+  const handleSelectCalendarDate = useCallback(
+    (dateStr: string) => {
+      if (selectedCalendarDate === dateStr) {
+        setSelectedCalendarDate(null);
+        return;
+      }
+      const [y, m] = dateStr.split('-').map(Number);
+      if (y && m && (y !== calendarYear || m !== calendarMonth)) {
+        setCalendarYear(y);
+        setCalendarMonth(m);
+      }
+      setSelectedCalendarDate(dateStr);
+    },
+    [selectedCalendarDate, calendarYear, calendarMonth]
+  );
+
+  const handleToggleViewMode = useCallback(() => {
+    haptics.selection();
+    setViewMode((prev) => (prev === 'list' ? 'calendar' : 'list'));
+  }, []);
 
   const navigateToSearch = useCallback(() => {
     router.navigate(lockedAccountId ? `/(app)/search?accountId=${lockedAccountId}` : '/search');
@@ -658,8 +896,22 @@ export default function TransactionsScreen({
             <Text style={styles.searchPlaceholder}>Search transactions...</Text>
           </TouchableOpacity>
           <TouchableOpacity
+            style={[styles.filterButton, viewMode === 'calendar' && styles.filterButtonActive]}
+            onPress={handleToggleViewMode}
+            accessibilityRole="button"
+            accessibilityLabel={viewMode === 'calendar' ? 'Switch to list view' : 'Switch to calendar view'}
+          >
+            <MaterialIcons
+              name={viewMode === 'calendar' ? 'view-agenda' : 'calendar-month'}
+              size={22}
+              color={viewMode === 'calendar' ? colors.onPrimary : colors.onSurface}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.filterButton, activeCount > 0 && styles.filterButtonActive]}
             onPress={() => setFilterModalVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Filter transactions"
           >
             <MaterialIcons
               name="tune"
@@ -756,9 +1008,40 @@ export default function TransactionsScreen({
           </TouchableOpacity>
         )}
 
+        {viewMode === 'calendar' && (
+          <TransactionsCalendarCard
+            year={calendarYear}
+            month={calendarMonth}
+            selectedDate={selectedCalendarDate}
+            dailyTotals={dailyTotals}
+            dailyMap={dailyMap}
+            isLoading={isCalendarTotalsLoading}
+            currencyCode={currency}
+            hideBalances={hideBalances}
+            onPrevMonth={handleCalendarPrevMonth}
+            onNextMonth={handleCalendarNextMonth}
+            onJumpToToday={handleCalendarJumpToToday}
+            onSelectDate={handleSelectCalendarDate}
+            onClearSelectedDate={() => setSelectedCalendarDate(null)}
+          />
+        )}
+
         <View style={styles.resultsHeader}>
-          <Text style={styles.resultsTitle}>Recent Activity</Text>
-          <Text style={styles.resultsCount}>{transactions.length} Transactions</Text>
+          <Text style={styles.resultsTitle}>
+            {viewMode === 'calendar'
+              ? selectedCalendarDate
+                ? formatDate(selectedCalendarDate, 'short')
+                : formatDate(
+                    `${calendarYear}-${String(calendarMonth).padStart(2, '0')}-01`,
+                    'month-year'
+                  )
+              : 'Recent Activity'}
+          </Text>
+          <Text style={styles.resultsCount}>
+            {transactions.length < totalCount
+              ? `${transactions.length} of ${totalCount}`
+              : `${totalCount} ${totalCount === 1 ? 'Transaction' : 'Transactions'}`}
+          </Text>
         </View>
       </View>
     ),
@@ -769,10 +1052,25 @@ export default function TransactionsScreen({
       activeCount,
       activeBadges,
       transactions.length,
+      totalCount,
       reviewQueueCount,
       lockedAccountId,
       navigateToSearch,
       clearFilters,
+      viewMode,
+      calendarYear,
+      calendarMonth,
+      selectedCalendarDate,
+      dailyTotals,
+      dailyMap,
+      isCalendarTotalsLoading,
+      currency,
+      hideBalances,
+      handleToggleViewMode,
+      handleCalendarPrevMonth,
+      handleCalendarNextMonth,
+      handleCalendarJumpToToday,
+      handleSelectCalendarDate,
     ]
   );
 
@@ -781,26 +1079,49 @@ export default function TransactionsScreen({
       return <TransactionsSkeleton />;
     }
     const hasActiveFilters = activeCount > 0;
+    const isCalendarDayEmpty = viewMode === 'calendar' && selectedCalendarDate !== null;
+    const isCalendarMonthEmpty = viewMode === 'calendar' && selectedCalendarDate === null;
     return (
       <View style={styles.emptyContainer}>
         <View style={styles.emptyIconCircle}>
           <MaterialIcons
-            name={hasActiveFilters ? 'filter-list-off' : 'receipt-long'}
+            name={
+              hasActiveFilters
+                ? 'filter-list-off'
+                : viewMode === 'calendar'
+                ? 'event-busy'
+                : 'receipt-long'
+            }
             size={40}
             color={colors.primary}
           />
         </View>
         <Text style={styles.emptyTitle}>
-          {hasActiveFilters ? 'No Matching Transactions' : 'No Transactions Yet'}
+          {isCalendarDayEmpty
+            ? `No Activity on ${formatDate(selectedCalendarDate, 'short')}`
+            : hasActiveFilters
+            ? 'No Matching Transactions'
+            : isCalendarMonthEmpty
+            ? 'No Activity This Month'
+            : 'No Transactions Yet'}
         </Text>
         <Text style={styles.emptyDescription}>
-          {hasActiveFilters
+          {isCalendarDayEmpty
+            ? 'No transactions were recorded on this date under your current filters.'
+            : hasActiveFilters
             ? 'Try resetting your search or filter criteria to see all activity.'
             : lockedAccountId
             ? 'No transactions found for this account yet.'
             : 'Track expenses automatically via bank alerts or record your first cash spend manually.'}
         </Text>
-        {hasActiveFilters ? (
+        {isCalendarDayEmpty ? (
+          <TouchableOpacity
+            style={styles.emptyActionBtn}
+            onPress={() => setSelectedCalendarDate(null)}
+          >
+            <Text style={styles.emptyActionBtnText}>Show Full Month</Text>
+          </TouchableOpacity>
+        ) : hasActiveFilters ? (
           <TouchableOpacity
             style={styles.emptyActionBtn}
             onPress={clearFilters}
@@ -818,7 +1139,17 @@ export default function TransactionsScreen({
         )}
       </View>
     );
-  }, [isLoading, activeCount, styles, colors, lockedAccountId, clearFilters, navigateToAddTransaction]);
+  }, [
+    isLoading,
+    activeCount,
+    viewMode,
+    selectedCalendarDate,
+    styles,
+    colors,
+    lockedAccountId,
+    clearFilters,
+    navigateToAddTransaction,
+  ]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: showBack ? insets.bottom : 0 }]}>
@@ -875,21 +1206,24 @@ export default function TransactionsScreen({
         }
       />
 
-      <SectionList
-        sections={sections}
+      <FlatList<FlatTransactionListItem>
+        data={flatListItems}
         keyExtractor={keyExtractor}
-        renderSectionHeader={renderSectionHeader}
+        getItemLayout={getItemLayout}
         renderItem={renderItem}
         ListHeaderComponent={renderListHeader}
         ListEmptyComponent={renderListEmpty}
+        ListFooterComponent={renderListFooter}
         contentContainerStyle={listContentContainerStyle}
         showsVerticalScrollIndicator={false}
-        stickySectionHeadersEnabled={false}
-        initialNumToRender={8}
-        maxToRenderPerBatch={5}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        removeClippedSubviews={Platform.OS === 'android'}
+        initialNumToRender={10}
+        maxToRenderPerBatch={6}
         windowSize={5}
-        updateCellsBatchingPeriod={30}
-        extraData={selectedIds}
+        updateCellsBatchingPeriod={50}
+        extraData={listExtraData}
       />
 
       {filterModalVisible && (
@@ -898,7 +1232,12 @@ export default function TransactionsScreen({
           filters={filters}
           lockedAccountId={lockedAccountId}
           onClose={() => setFilterModalVisible(false)}
-          onApply={setFilters}
+          onApply={(nextFilters) => {
+            setFilters(nextFilters);
+            if (viewMode === 'calendar' && nextFilters.datePreset !== 'all') {
+              setViewMode('list');
+            }
+          }}
         />
       )}
 
@@ -1281,8 +1620,9 @@ const getStyles = (colors: ThemeColors) => {
     },
     dateGroupHeader: {
       backgroundColor: colors.surfaceContainerLow + '80',
+      height: SECTION_HEADER_HEIGHT,
+      justifyContent: 'center',
       paddingHorizontal: 16,
-      paddingVertical: 12,
       borderBottomWidth: 1,
       borderBottomColor: colors.outlineVariant,
       borderLeftWidth: 1,
@@ -1304,8 +1644,8 @@ const getStyles = (colors: ThemeColors) => {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
+      height: TRANSACTION_ROW_HEIGHT,
       paddingHorizontal: 16,
-      paddingVertical: 12,
       borderBottomWidth: 1,
       borderBottomColor: colors.outlineVariant,
       borderLeftWidth: 1,
@@ -1315,6 +1655,9 @@ const getStyles = (colors: ThemeColors) => {
     },
     transactionItemSelected: {
       backgroundColor: colors.primaryContainer + '30',
+    },
+    transactionItemPressed: {
+      opacity: 0.72,
     },
     transactionItemSectionLast: {
       borderBottomWidth: 0,

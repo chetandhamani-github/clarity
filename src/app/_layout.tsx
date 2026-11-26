@@ -28,7 +28,7 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, type AppStateStatus, Platform, StyleSheet, View } from 'react-native';
+import { AppState, type AppStateStatus, DeviceEventEmitter, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 
 SplashScreen.preventAutoHideAsync();
@@ -235,7 +235,15 @@ export default function RootLayout() {
     };
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
-    return () => subscription.remove();
+    const txSubscription = DeviceEventEmitter.addListener('transactionsUpdated', () => {
+      void queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      void queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      void queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+    });
+    return () => {
+      subscription.remove();
+      txSubscription.remove();
+    };
   }, []);
 
   useEffect(() => {
