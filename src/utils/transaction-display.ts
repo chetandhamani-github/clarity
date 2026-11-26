@@ -15,6 +15,10 @@ export function getTransactionDisplayName(
   transaction: Pick<TransactionWithAccount, 'type' | 'merchant' | 'category'>
 ): string {
   if (transaction.type === 'transfer') {
+    const trimmed = transaction.merchant?.trim();
+    if (trimmed && trimmed.toLowerCase() !== 'transfer' && !GENERIC_SMS_MERCHANT.test(trimmed)) {
+      return trimmed;
+    }
     return 'Transfer';
   }
 

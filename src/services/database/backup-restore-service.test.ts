@@ -292,5 +292,69 @@ describe('backup-restore-service', () => {
       );
       expect(mmkv.set).toHaveBeenCalledWith('clarity_last_sms_sync_timestamp', '1705300000000');
     });
+
+    it('rejects backups when checksum does not match data', async () => {
+      const tamperedPayload: ClarityBackupPayload = {
+        version: 1,
+        appName: 'Clarity',
+        exportedAt: '2026-09-01T12:00:00.000Z',
+        checksum: 'sha256_invalid00000000',
+        data: {
+          accounts: [{ id: 'a1', name: 'Bank', balance: 100 }],
+          transactions: [],
+          goals: [],
+          goal_contributions: [],
+          budget_plans: [],
+          budget_categories: [],
+          recurring_transactions: [],
+          notifications: [],
+        },
+      };
+
+      await expect(restoreDatabaseFromSnapshot(tamperedPayload)).rejects.toThrow(
+        'Backup integrity verification failed'
+      );
+      expect(mockDb.execAsync).not.toHaveBeenCalledWith('BEGIN TRANSACTION');
+    });
+
+    it('restores tags, merchant rules, and splitwise group expenses when present', async () => {
+      const payload: ClarityBackupPayload = {
+        version: 1,
+        appName: 'Clarity',
+        exportedAt: '2026-09-01T12:00:00.000Z',
+        data: {
+          accounts: [],
+          transactions: [],
+          tags: [{ id: 'tag-1', name: 'trip' }],
+          transaction_tags: [{ transaction_id: 'tx-1', tag_id: 'tag-1' }],
+          merchant_category_rules: [{ id: 'r1', merchant_pattern: 'swiggy', category: 'Food', updated_at: 1000 }],
+          splitwise_groups: [{ id: 'g1', name: 'Goa Trip' }],
+          splitwise_group_members: [{ id: 'gm1', group_id: 'g1', person_id: 'p1', role: 'member' }],
+          splitwise_expenses: [{ id: 'e1', description: 'Dinner', amount: 1200, payer_id: 'p1', group_id: 'g1' }],
+          splitwise_expense_splits: [{ id: 'sp1', expense_id: 'e1', person_id: 'p1', paid_amount: 1200, owed_amount: 600 }],
+          goals: [],
+          goal_contributions: [],
+          budget_plans: [],
+          budget_categories: [],
+          recurring_transactions: [],
+          notifications: [],
+        },
+      };
+
+      await restoreDatabaseFromSnapshot(payload);
+
+      expect(mockDb.runAsync).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT OR IGNORE INTO tags'),
+        expect.arrayContaining(['tag-1', 'trip'])
+      );
+      expect(mockDb.runAsync).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT OR REPLACE INTO merchant_category_rules'),
+        expect.arrayContaining(['r1', 'swiggy', 'Food'])
+      );
+      expect(mockDb.runAsync).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT OR REPLACE INTO splitwise_groups'),
+        expect.arrayContaining(['g1', 'Goa Trip'])
+      );
+    });
   });
 });

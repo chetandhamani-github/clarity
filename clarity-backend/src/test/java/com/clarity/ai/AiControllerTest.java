@@ -51,6 +51,7 @@ class AiControllerTest {
         when(aiService.categorize(any(AiCategorizeRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/ai/categorize")
+                        .header("X-Installation-Id", "inst-123456")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -83,6 +84,7 @@ class AiControllerTest {
         when(aiService.scanReceipt(any(ReceiptScanRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/ai/receipt-scan")
+                        .header("X-Installation-Id", "inst-123456")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -108,6 +110,7 @@ class AiControllerTest {
         when(aiService.chat(any(AiChatRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/ai/chat")
+                        .header("X-Installation-Id", "inst-123456")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -137,6 +140,7 @@ class AiControllerTest {
         when(aiService.generateDigest(any(MonthlyDigestRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/ai/digest")
+                        .header("X-Installation-Id", "inst-123456")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -156,8 +160,23 @@ class AiControllerTest {
                 .build();
 
         mockMvc.perform(post("/api/v1/ai/digest")
+                        .header("X-Installation-Id", "inst-123456")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalid)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/ai/categorize should return 401 when client identity missing")
+    void shouldRejectUnauthenticatedAiCall() throws Exception {
+        AiCategorizeRequest request = AiCategorizeRequest.builder()
+                .merchant("Starbucks Coffee")
+                .amount(350.0)
+                .build();
+
+        mockMvc.perform(post("/api/v1/ai/categorize")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized());
     }
 }

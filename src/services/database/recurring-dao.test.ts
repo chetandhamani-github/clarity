@@ -6,10 +6,16 @@ import {
   processDueRecurringTransactions,
 } from './recurring-dao';
 import { getDatabase } from './index';
+import { getAccountById } from './account-dao';
 import { insertTransaction } from './transaction-dao';
+import { insertNotification } from './notification-dao';
 
 jest.mock('./index', () => ({
   getDatabase: jest.fn(),
+}));
+
+jest.mock('./account-dao', () => ({
+  getAccountById: jest.fn().mockResolvedValue(null),
 }));
 
 jest.mock('./transaction-dao', () => ({
@@ -220,6 +226,148 @@ describe('recurring-dao', () => {
       expect(mockDb.runAsync).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE recurring_transactions'),
         expect.arrayContaining(['2026-09-01', '2026-10-01', 'rec-netflix'])
+      );
+    });
+
+    it('scopes recurring transfer deduplication to to_account_id and inserts recurring transfers cleanly', async () => {
+      const mockDue = [
+        {
+          id: 'rec-loan',
+          account_id: 'bank-1',
+          to_account_id: 'loan-1',
+          amount: 2000,
+          type: 'transfer',
+          merchant: 'Home Loan EMI',
+          category: 'Transfer',
+          frequency: 'monthly',
+          next_process_date: '2026-09-01',
+          last_processed_date: '2026-08-01',
+          is_active: 1,
+        },
+      ];
+
+      mockDb.getAllAsync.mockResolvedValueOnce(mockDue);
+      (getAccountById as jest.Mock).mockResolvedValueOnce({
+        id: 'loan-1',
+        name: 'Home Loan',
+        type: 'loan',
+        balance: -20000,
+      });
+      (insertTransaction as jest.Mock).mockResolvedValueOnce({
+        id: 'tx-loan-1',
+        amount: 2000,
+        type: 'transfer',
+        accountId: 'bank-1',
+        toAccountId: 'loan-1',
+        category: 'Transfer',
+        date: '2026-09-01',
+      });
+
+      const processed = await processDueRecurringTransactions();
+
+      expect(processed).toBe(1);
+      expect(mockDb.getFirstAsync).toHaveBeenCalledWith(
+        expect.stringContaining('AND to_account_id = ?'),
+        expect.arrayContaining(['bank-1', 2000, 'transfer', 'loan-1'])
+      );
+      expect(insertTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'bank-1',
+          toAccountId: 'loan-1',
+          amount: 2000,
+          type: 'transfer',
+        })
+      );
+    });
+
+    it('caps final recurring loan payment to remaining debt and auto-pauses settled schedule', async () => {
+      const mockDue = [
+        {
+          id: 'rec-loan-final',
+          account_id: 'bank-1',
+          to_account_id: 'loan-1',
+          amount: 2000,
+          type: 'transfer',
+          merchant: 'Car Loan EMI',
+          category: 'Transfer',
+          frequency: 'monthly',
+          next_process_date: '2026-09-01',
+          last_processed_date: '2026-08-01',
+          is_active: 1,
+        },
+      ];
+
+      mockDb.getAllAsync.mockResolvedValueOnce(mockDue);
+      (getAccountById as jest.Mock).mockResolvedValueOnce({
+        id: 'loan-1',
+        name: 'Car Loan',
+        type: 'loan',
+        balance: -1500,
+      });
+      (insertTransaction as jest.Mock).mockResolvedValueOnce({
+        id: 'tx-final',
+        amount: 1500,
+        type: 'transfer',
+        accountId: 'bank-1',
+        toAccountId: 'loan-1',
+        category: 'Transfer',
+        date: '2026-09-01',
+      });
+
+      const processed = await processDueRecurringTransactions();
+
+      expect(processed).toBe(1);
+      expect(insertTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'bank-1',
+          toAccountId: 'loan-1',
+          amount: 1500,
+          type: 'transfer',
+        })
+      );
+      expect(mockDb.runAsync).toHaveBeenCalledWith(
+        expect.stringContaining('is_active = 0'),
+        ['2026-09-01', '2026-10-01', 'rec-loan-final']
+      );
+      expect(insertNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Loan / Debt Paid Off!',
+        })
+      );
+    });
+
+    it('auto-pauses recurring loan payment without debiting when debt is already settled', async () => {
+      const mockDue = [
+        {
+          id: 'rec-loan-settled',
+          account_id: 'bank-1',
+          to_account_id: 'loan-1',
+          amount: 2000,
+          type: 'transfer',
+          merchant: 'Car Loan EMI',
+          category: 'Transfer',
+          frequency: 'monthly',
+          next_process_date: '2026-09-01',
+          last_processed_date: '2026-08-01',
+          is_active: 1,
+        },
+      ];
+
+      mockDb.getAllAsync.mockResolvedValueOnce(mockDue);
+      (getAccountById as jest.Mock).mockResolvedValueOnce({
+        id: 'loan-1',
+        name: 'Car Loan',
+        type: 'loan',
+        balance: 0,
+      });
+
+      const processed = await processDueRecurringTransactions();
+
+      expect(processed).toBe(0);
+      expect(insertTransaction).not.toHaveBeenCalled();
+      expect(mockDb.runAsync).toHaveBeenCalledWith(
+        'UPDATE recurring_transactions SET is_active = 0 WHERE id = ?',
+        ['rec-loan-settled']
       );
     });
   });

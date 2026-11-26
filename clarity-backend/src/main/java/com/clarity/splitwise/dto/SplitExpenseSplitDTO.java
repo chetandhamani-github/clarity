@@ -15,6 +15,8 @@ public class SplitExpenseSplitDTO {
     private String id;
     private String expenseId;
     private String personId;
+    private String personEmail;
+    private String personName;
     private BigDecimal paidAmount;
     private BigDecimal owedAmount;
     private BigDecimal percentage;

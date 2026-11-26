@@ -9,6 +9,7 @@ import {
 import { Text } from './Text';
 import { MaterialIcons } from '@expo/vector-icons';
 import { typography, radius, useTheme, ThemeColors } from '@/theme';
+import { getLocalTodayYmd } from '@/utils/date';
 
 interface DatePickerModalProps {
   visible: boolean;
@@ -41,7 +42,7 @@ export function DatePickerModal({
 
   const [currentMonth, setCurrentMonth] = useState(initialDate.getMonth());
   const [currentYear, setCurrentYear] = useState(initialDate.getFullYear());
-  const [selectedDateStr, setSelectedDateStr] = useState(value || new Date().toISOString().split('T')[0]);
+  const [selectedDateStr, setSelectedDateStr] = useState(value || getLocalTodayYmd());
 
   useEffect(() => {
     if (visible) {
@@ -54,7 +55,7 @@ export function DatePickerModal({
         const now = new Date();
         setCurrentMonth(now.getMonth());
         setCurrentYear(now.getFullYear());
-        setSelectedDateStr(now.toISOString().split('T')[0]);
+        setSelectedDateStr(getLocalTodayYmd());
       }
     }
   }, [visible, value]);

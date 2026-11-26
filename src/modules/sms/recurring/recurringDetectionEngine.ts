@@ -1,4 +1,5 @@
 import type { ParsedTransaction, RecurringCandidate } from '@/modules/sms/types';
+import { formatLocalDateYmd } from '@/utils/date';
 
 export class RecurringDetectionEngine {
   private static readonly KNOWN_RECURRING_KEYWORDS = [
@@ -141,8 +142,8 @@ export class RecurringDetectionEngine {
         intervalDays: Math.round(avgInterval),
         confidence: Math.round(confidence * 100) / 100,
         transactionCount: txs.length,
-        lastDate: lastDate.toISOString().slice(0, 10),
-        nextPredictedDate: nextDate.toISOString().slice(0, 10),
+        lastDate: formatLocalDateYmd(lastDate),
+        nextPredictedDate: formatLocalDateYmd(nextDate),
         category: sampleTx.category,
       });
     }

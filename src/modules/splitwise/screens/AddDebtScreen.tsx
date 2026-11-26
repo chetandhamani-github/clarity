@@ -18,7 +18,8 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
 import { Text, Header, DatePickerModal, useAlert } from '@/components/ui';
 import { typography, useTheme, radius } from '@/theme';
-import { formatCurrencyPrivacy } from '@/utils/format';
+import { formatCurrencyPrivacy, getCurrencySymbol } from '@/utils/format';
+import { getLocalTodayYmd, shiftYmdDays } from '@/utils/date';
 import { useAppStore } from '@/store/use-app-store';
 import { useSplitwiseStore } from '../store/splitwise.store';
 import { SplitwiseSyncService } from '../services/SplitwiseSyncService';
@@ -61,12 +62,9 @@ export function AddDebtScreen() {
 
   const { people, debts, settlements, addDebt, loadPeople, isLoading } = useSplitwiseStore();
 
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const yesterdayStr = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    return d.toISOString().split('T')[0];
-  }, []);
+  const currencySymbol = getCurrencySymbol();
+  const todayStr = useMemo(() => getLocalTodayYmd(), []);
+  const yesterdayStr = useMemo(() => shiftYmdDays(getLocalTodayYmd(), -1), []);
 
   const initialPersonId = useMemo(() => {
     if (params.personId && people.some((p) => p.id === params.personId)) {
@@ -459,7 +457,7 @@ export function AddDebtScreen() {
             render={({ field: { onChange, onBlur, value } }) => (
               <View style={styles.amountInputRow}>
                 <Text style={[styles.amountCurrency, { color: themeColor }]}>
-                  {isOweMe ? '+' : '-'}₹
+                  {isOweMe ? '+' : '-'}{currencySymbol}
                 </Text>
                 <TextInput
                   style={[styles.amountInput, { color: colors.onSurface }]}
@@ -714,7 +712,7 @@ export function AddDebtScreen() {
               <MaterialIcons name="check" size={20} color={colors.onPrimary} />
               <Text style={[styles.submitButtonText, { color: colors.onPrimary }]}>
                 {currentAmount && parseFloat(currentAmount) > 0
-                  ? `Save Debt (${isOweMe ? '+' : '-'}₹${currentAmount})`
+                  ? `Save Debt (${isOweMe ? '+' : '-'}${currencySymbol}${currentAmount})`
                   : 'Save Debt'}
               </Text>
             </>

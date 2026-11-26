@@ -1,25 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  ActivityIndicator,
+  FlatList,
   Platform,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { Text, Header, ListSkeleton } from '@/components/ui';
+import { Text, Header, ListSkeleton, TransactionsPaginationSkeleton } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
-import { useTransactions } from '@/hooks/use-transactions';
-import { formatCurrency, formatTransactionTime, getTransactionSign, groupTransactionsByDate } from '@/utils/format';
-import { getCategoryIcon } from '@/utils/icons';
-import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
+import { usePaginatedTransactions } from '@/hooks/use-transactions';
+import { useAppStore } from '@/store/use-app-store';
+import {
+  FlatTransactionListItem,
+  SectionHeaderItem,
+  TransactionRowItem,
+  buildFlatTransactionListItems,
+  getTransactionListItemLayout,
+  getTransactionListStyles,
+} from '@/components/transactions/VirtualizedTransactionRows';
 
-// Simple debounce hook
+const SEARCH_PAGE_SIZE = 25;
+
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
   useEffect(() => {
@@ -33,11 +38,20 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
+const FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'expense', label: 'Expenses' },
+  { id: 'income', label: 'Income' },
+  { id: 'transfer', label: 'Transfers' },
+];
+
 export default function SearchScreen() {
   const { colors } = useTheme();
-  const styles = getStyles(colors);
+  const styles = useMemo(() => getStyles(colors), [colors]);
+  const listStyles = useMemo(() => getTransactionListStyles(colors), [colors]);
   const router = useRouter();
   const insets = useSafeInsets();
+  const currency = useAppStore((state) => state.currency);
   const params = useLocalSearchParams<{ accountId?: string | string[] }>();
   const accountId = Array.isArray(params.accountId) ? params.accountId[0] : params.accountId;
 
@@ -49,19 +63,107 @@ export default function SearchScreen() {
   const typeFilter =
     activeFilter === 'all' ? undefined : (activeFilter as 'expense' | 'income' | 'transfer');
 
-  const { transactions, isLoading } = useTransactions({
-    search: debouncedSearchQuery,
-    type: typeFilter,
-    accountId,
-  });
-  const groupedTransactions = groupTransactionsByDate(transactions);
+  const queryFilters = useMemo(
+    () => ({
+      search: debouncedSearchQuery.trim() || undefined,
+      type: typeFilter,
+      accountId,
+    }),
+    [debouncedSearchQuery, typeFilter, accountId]
+  );
 
-  const FILTERS = [
-    { id: 'all', label: 'All' },
-    { id: 'expense', label: 'Expenses' },
-    { id: 'income', label: 'Income' },
-    { id: 'transfer', label: 'Transfers' },
-  ];
+  const {
+    transactions,
+    totalCount,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = usePaginatedTransactions(queryFilters, SEARCH_PAGE_SIZE);
+
+  const flatListItems = useMemo<FlatTransactionListItem[]>(() => {
+    if (isLoading) return [];
+    return buildFlatTransactionListItems(transactions, currency, accountId);
+  }, [transactions, isLoading, currency, accountId]);
+
+  const handleItemPress = useCallback(
+    (id: string) => {
+      router.navigate(`/(app)/add-transaction?id=${id}`);
+    },
+    [router]
+  );
+
+  const keyExtractor = useCallback((item: FlatTransactionListItem) => item.key, []);
+
+  const handleLoadMore = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      void fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const renderListHeader = useMemo(() => {
+    if (isLoading) return null;
+    return (
+      <View style={styles.resultsHeader}>
+        <Text style={styles.resultsTitle}>
+          {debouncedSearchQuery.trim() ? 'Matching Results' : 'Recent Activity'}
+        </Text>
+        <Text style={styles.resultsCount}>
+          {transactions.length < totalCount
+            ? `${transactions.length} of ${totalCount}`
+            : `${totalCount} ${totalCount === 1 ? 'Transaction' : 'Transactions'}`}
+        </Text>
+      </View>
+    );
+  }, [isLoading, styles, debouncedSearchQuery, transactions.length, totalCount]);
+
+  const renderListEmpty = useCallback(() => {
+    if (isLoading) {
+      return <ListSkeleton />;
+    }
+    return (
+      <View style={styles.emptyContainer}>
+        <MaterialIcons name="search-off" size={48} color={colors.outline} />
+        <Text style={styles.emptyText}>No results found.</Text>
+      </View>
+    );
+  }, [isLoading, styles, colors.outline]);
+
+  const renderListFooter = useCallback(() => {
+    if (!isFetchingNextPage) return null;
+    return <TransactionsPaginationSkeleton />;
+  }, [isFetchingNextPage]);
+
+  const renderItem = useCallback(
+    ({ item }: { item: FlatTransactionListItem }) => {
+      if (item.kind === 'header') {
+        return (
+          <SectionHeaderItem
+            title={item.title}
+            isFirst={item.isFirst}
+            styles={listStyles}
+          />
+        );
+      }
+
+      return (
+        <TransactionRowItem
+          item={item.row}
+          isLastInSection={item.isLastInSection}
+          isVeryLast={item.isVeryLast}
+          isSelected={false}
+          hasSelectionMode={false}
+          iconDefaultColor={colors.onSurfaceVariant}
+          iconCreditColor={colors.onPrimaryContainer}
+          primaryColor={colors.primary}
+          outlineColor={colors.outline}
+          styles={listStyles}
+          onPress={handleItemPress}
+        />
+      );
+    },
+    [colors, listStyles, handleItemPress]
+  );
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
@@ -115,137 +217,28 @@ export default function SearchScreen() {
           </View>
         </View>
 
-        {/* Search Results */}
-        <KeyboardAwareScrollView
+        {/* Virtualized Search Results */}
+        <FlatList<FlatTransactionListItem>
           style={styles.resultsContainer}
-          contentContainerStyle={StyleSheet.flatten([
-            styles.resultsScrollContent,
-            { paddingBottom: 40 },
-          ])}
+          data={flatListItems}
+          keyExtractor={keyExtractor}
+          getItemLayout={getTransactionListItemLayout}
+          renderItem={renderItem}
+          ListHeaderComponent={renderListHeader}
+          ListEmptyComponent={renderListEmpty}
+          ListFooterComponent={renderListFooter}
+          contentContainerStyle={styles.resultsScrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          enableOnAndroid={true}
-        >
-          {isLoading ? (
-            <ListSkeleton />
-          ) : (
-            <>
-              <View style={styles.resultsHeader}>
-                <Text style={styles.resultsTitle}>
-                  {searchQuery ? 'Matching Results' : 'Recent Activity'}
-                </Text>
-                <Text style={styles.resultsCount}>{transactions.length} Transactions</Text>
-              </View>
-
-              {transactions.length === 0 ? (
-                <View style={styles.emptyContainer}>
-                  <MaterialIcons name="search-off" size={48} color={colors.outline} />
-                  <Text style={styles.emptyText}>No results found.</Text>
-                </View>
-              ) : (
-                <View style={styles.transactionsList}>
-                  {groupedTransactions.map((group, groupIndex) => (
-                    <React.Fragment key={group.date}>
-                      <View style={styles.dateHeader}>
-                        <Text style={styles.dateHeaderText}>{group.label}</Text>
-                      </View>
-
-                      {group.items.map((tx, txIndex) => {
-                        const isLast =
-                          groupIndex === groupedTransactions.length - 1 &&
-                          txIndex === group.items.length - 1;
-                        const isIncomingTransfer =
-                          Boolean(accountId) &&
-                          tx.type === 'transfer' &&
-                          tx.toAccountId === accountId;
-                        const isOutgoingTransfer =
-                          Boolean(accountId) &&
-                          tx.type === 'transfer' &&
-                          tx.accountId === accountId;
-                        const isCredit = tx.type === 'income' || isIncomingTransfer;
-                        const sign = isCredit
-                          ? '+'
-                          : isOutgoingTransfer || tx.type === 'expense'
-                            ? '-'
-                            : getTransactionSign(tx.type);
-
-                        return (
-                          <TouchableOpacity
-                            key={tx.id}
-                            style={[styles.transactionItem, isLast && { borderBottomWidth: 0 }]}
-                            onPress={() => {
-                              router.navigate(`/(app)/add-transaction?id=${tx.id}`);
-                            }}
-                          >
-                            <View style={styles.txLeft}>
-                              <View
-                                style={[
-                                  styles.txIconBox,
-                                  isCredit
-                                    ? { backgroundColor: colors.primaryContainer }
-                                    : undefined,
-                                ]}
-                              >
-                                <MaterialIcons
-                                  name={getCategoryIcon(tx.category)}
-                                  size={20}
-                                  color={
-                                    isCredit
-                                      ? colors.onPrimaryContainer
-                                      : colors.onSurfaceVariant
-                                  }
-                                />
-                              </View>
-                              <View style={styles.txTextContent}>
-                                <Text style={styles.txTitle} numberOfLines={1}>
-                                  {tx.type === 'transfer'
-                                    ? 'Transfer'
-                                    : getTransactionDisplayName(tx)}
-                                </Text>
-                                {(() => {
-                                  const timeStr = formatTransactionTime(tx.date, tx.createdAt);
-                                  const metaParts: string[] = [];
-                                  if (timeStr) metaParts.push(timeStr);
-                                  if (tx.type === 'transfer') {
-                                    metaParts.push(`${tx.accountName} → ${tx.toAccountName || 'Unknown'}`);
-                                  } else if (hasMeaningfulMerchant(tx)) {
-                                    if (tx.accountName) metaParts.push(tx.accountName);
-                                    metaParts.push(tx.category);
-                                  } else {
-                                    if (tx.accountName) metaParts.push(tx.accountName);
-                                  }
-                                  return (
-                                    <Text style={styles.txSubtitle} numberOfLines={1}>
-                                      {metaParts.join(' • ')}
-                                    </Text>
-                                  );
-                                })()}
-                              </View>
-                            </View>
-                            <View style={styles.txRight}>
-                              <Text
-                                style={[
-                                  styles.txAmount,
-                                  isCredit ? { color: colors.primary } : undefined,
-                                ]}
-                              >
-                                {sign}
-                                {formatCurrency(tx.amount)}
-                              </Text>
-                              <View style={styles.categoryBadge}>
-                                <Text style={styles.categoryBadgeText} numberOfLines={1}>{tx.category}</Text>
-                              </View>
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </React.Fragment>
-                  ))}
-                </View>
-              )}
-            </>
-          )}
-        </KeyboardAwareScrollView>
+          keyboardDismissMode="on-drag"
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          removeClippedSubviews={Platform.OS === 'android'}
+          initialNumToRender={10}
+          maxToRenderPerBatch={6}
+          windowSize={5}
+          updateCellsBatchingPeriod={50}
+        />
       </View>
     </View>
   );
@@ -257,7 +250,6 @@ const getStyles = (colors: ThemeColors) => {
       flex: 1,
       backgroundColor: colors.surfaceContainerLow,
     },
-
     content: {
       flex: 1,
     },
@@ -348,89 +340,6 @@ const getStyles = (colors: ThemeColors) => {
     emptyText: {
       ...typography.bodyLg,
       color: colors.onSurfaceVariant,
-    },
-    transactionsList: {
-      backgroundColor: colors.surfaceContainerLowest,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: colors.outlineVariant,
-      overflow: 'hidden',
-    },
-    dateHeader: {
-      backgroundColor: colors.surfaceContainerLow + '80',
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.outlineVariant,
-    },
-    dateHeaderText: {
-      ...typography.labelMd,
-      color: colors.onSurfaceVariant,
-      textTransform: 'uppercase',
-      letterSpacing: Platform.OS === 'ios' ? 0.6 : 0,
-    },
-    transactionItem: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.outlineVariant,
-    },
-    txLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      flex: 1,
-      paddingRight: 12,
-    },
-    txIconBox: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: colors.surfaceContainer,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    txTextContent: {
-      flex: 1,
-      minWidth: 0,
-      justifyContent: 'center',
-    },
-    txTitle: {
-      ...typography.bodyLg,
-      fontWeight: '500',
-      color: colors.onSurface,
-    },
-    txSubtitle: {
-      ...typography.bodyMd,
-      color: colors.onSurfaceVariant,
-    },
-    txRight: {
-      alignItems: 'flex-end',
-      flexShrink: 0,
-    },
-    txAmount: {
-      ...typography.dataLg,
-      fontSize: 20,
-      lineHeight: 28,
-      color: colors.onSurface,
-    },
-    categoryBadge: {
-      backgroundColor: colors.primary + '1A',
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 2,
-      marginTop: 4,
-      flexShrink: 0,
-    },
-    categoryBadgeText: {
-      ...typography.labelMd,
-      fontSize: 11,
-      lineHeight: 15,
-      color: colors.primary,
-      textTransform: 'uppercase',
     },
   });
   return styles;

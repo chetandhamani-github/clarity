@@ -1,6 +1,7 @@
 import { getDatabase } from './index';
 import { useAppStore } from '@/store/use-app-store';
 import { mmkv } from '@/lib/storage';
+import { getLocalTodayYmd } from '@/utils/date';
 
 export interface ClarityBackupPayload {
   version: number;
@@ -10,6 +11,8 @@ export interface ClarityBackupPayload {
   data: {
     accounts: any[];
     transactions: any[];
+    tags?: any[];
+    transaction_tags?: any[];
     goals: any[];
     goal_contributions: any[];
     budget_plans: any[];
@@ -22,8 +25,13 @@ export interface ClarityBackupPayload {
     splitwise_people?: any[];
     splitwise_debts?: any[];
     splitwise_settlements?: any[];
+    splitwise_groups?: any[];
+    splitwise_group_members?: any[];
+    splitwise_expenses?: any[];
+    splitwise_expense_splits?: any[];
     investment_holdings?: any[];
     smart_rules?: any[];
+    merchant_category_rules?: any[];
     sms_messages?: any[];
     parsed_transactions?: any[];
     sms_review_queue?: any[];
@@ -89,6 +97,10 @@ export function isMeaningfulDatabaseSnapshot(payload: ClarityBackupPayload | nul
   if (Array.isArray(data.subscriptions) && data.subscriptions.length > 0) return true;
   if (Array.isArray(data.splitwise_debts) && data.splitwise_debts.length > 0) return true;
   if (Array.isArray(data.splitwise_people) && data.splitwise_people.length > 0) return true;
+  if (Array.isArray(data.splitwise_groups) && data.splitwise_groups.length > 0) return true;
+  if (Array.isArray(data.splitwise_expenses) && data.splitwise_expenses.length > 0) return true;
+  if (Array.isArray(data.tags) && data.tags.length > 0) return true;
+  if (Array.isArray(data.merchant_category_rules) && data.merchant_category_rules.length > 0) return true;
   if (Array.isArray(data.parsed_transactions) && data.parsed_transactions.length > 0) return true;
   if (Array.isArray(data.sms_messages) && data.sms_messages.length > 0) return true;
 
@@ -125,6 +137,8 @@ export async function generateDatabaseSnapshot(): Promise<ClarityBackupPayload> 
 
   const accounts = await safeGetAll('SELECT * FROM accounts');
   const transactions = await safeGetAll('SELECT * FROM transactions');
+  const tags = await safeGetAll('SELECT * FROM tags');
+  const transaction_tags = await safeGetAll('SELECT * FROM transaction_tags');
   const goals = await safeGetAll('SELECT * FROM goals');
   const goal_contributions = await safeGetAll('SELECT * FROM goal_contributions');
   const budget_plans = await safeGetAll('SELECT * FROM budget_plans');
@@ -137,8 +151,13 @@ export async function generateDatabaseSnapshot(): Promise<ClarityBackupPayload> 
   const splitwise_people = await safeGetAll('SELECT * FROM splitwise_people');
   const splitwise_debts = await safeGetAll('SELECT * FROM splitwise_debts');
   const splitwise_settlements = await safeGetAll('SELECT * FROM splitwise_settlements');
+  const splitwise_groups = await safeGetAll('SELECT * FROM splitwise_groups');
+  const splitwise_group_members = await safeGetAll('SELECT * FROM splitwise_group_members');
+  const splitwise_expenses = await safeGetAll('SELECT * FROM splitwise_expenses');
+  const splitwise_expense_splits = await safeGetAll('SELECT * FROM splitwise_expense_splits');
   const investment_holdings = await safeGetAll('SELECT * FROM investment_holdings');
   const smart_rules = await safeGetAll('SELECT * FROM smart_rules');
+  const merchant_category_rules = await safeGetAll('SELECT * FROM merchant_category_rules');
   const sms_messages = await safeGetAll('SELECT * FROM sms_messages');
   const parsed_transactions = await safeGetAll('SELECT * FROM parsed_transactions');
   const sms_review_queue = await safeGetAll('SELECT * FROM sms_review_queue');
@@ -163,6 +182,8 @@ export async function generateDatabaseSnapshot(): Promise<ClarityBackupPayload> 
   const dataPayload: ClarityBackupPayload['data'] = {
     accounts,
     transactions,
+    tags,
+    transaction_tags,
     goals,
     goal_contributions,
     budget_plans,
@@ -175,8 +196,13 @@ export async function generateDatabaseSnapshot(): Promise<ClarityBackupPayload> 
     splitwise_people,
     splitwise_debts,
     splitwise_settlements,
+    splitwise_groups,
+    splitwise_group_members,
+    splitwise_expenses,
+    splitwise_expense_splits,
     investment_holdings,
     smart_rules,
+    merchant_category_rules,
     sms_messages,
     parsed_transactions,
     sms_review_queue,
@@ -223,9 +249,7 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
     const canonicalHash = computeChecksum(canonicalizeData(payload.data));
     const rawHash = computeChecksum(JSON.stringify(payload.data));
     if (payload.checksum !== canonicalHash && payload.checksum !== rawHash) {
-      if (!Array.isArray(payload.data.accounts) || !Array.isArray(payload.data.transactions)) {
-        throw new Error('Backup integrity verification failed: Corrupted or invalid backup file.');
-      }
+      throw new Error('Backup integrity verification failed: Corrupted or invalid backup file.');
     }
   }
 
@@ -237,6 +261,8 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
   try {
     // 1. Wipe current tables in safe dependency order
     await db.execAsync(`
+      DELETE FROM transaction_tags;
+      DELETE FROM tags;
       DELETE FROM goal_contributions;
       DELETE FROM recurring_transactions;
       DELETE FROM transactions;
@@ -252,11 +278,16 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
         DELETE FROM bill_reminders;
         DELETE FROM bills;
         DELETE FROM subscriptions;
+        DELETE FROM splitwise_expense_splits;
+        DELETE FROM splitwise_expenses;
+        DELETE FROM splitwise_group_members;
         DELETE FROM splitwise_settlements;
         DELETE FROM splitwise_debts;
+        DELETE FROM splitwise_groups;
         DELETE FROM splitwise_people;
         DELETE FROM investment_holdings;
         DELETE FROM smart_rules;
+        DELETE FROM merchant_category_rules;
       `);
     } catch {
       // Ignore if some tables do not exist in older migrations
@@ -277,8 +308,8 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
     if (Array.isArray(data.accounts)) {
       for (const a of data.accounts) {
         await db.runAsync(
-          `INSERT INTO accounts (id, name, type, balance, institution, last_four, sort_order, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO accounts (id, name, type, balance, institution, last_four, sort_order, billing_cycle_day, due_day, credit_limit, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             a.id,
             a.name,
@@ -287,6 +318,9 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
             a.institution ?? '',
             a.last_four ?? a.lastFour ?? '',
             a.sort_order ?? a.sortOrder ?? 0,
+            a.billing_cycle_day ?? a.billingCycleDay ?? null,
+            a.due_day ?? a.dueDay ?? null,
+            a.credit_limit ?? a.creditLimit ?? null,
             a.created_at ?? a.createdAt ?? new Date().toISOString(),
             a.updated_at ?? a.updatedAt ?? a.created_at ?? new Date().toISOString(),
           ]
@@ -298,8 +332,8 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
     if (Array.isArray(data.transactions)) {
       for (const t of data.transactions) {
         await db.runAsync(
-          `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, to_account_id, splits_json, source, status, sms_id, parsed_tx_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, to_account_id, splits_json, source, status, sms_id, parsed_tx_id, receipt_uri, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             t.id,
             t.account_id ?? t.accountId,
@@ -316,9 +350,39 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
             t.status ?? 'VERIFIED',
             t.sms_id ?? t.smsId ?? null,
             t.parsed_tx_id ?? t.parsedTxId ?? null,
+            t.receipt_uri ?? t.receiptUri ?? null,
             t.created_at ?? t.createdAt ?? new Date().toISOString(),
           ]
         );
+      }
+    }
+
+    // 3b. Insert Tags & Transaction Tag Links
+    if (Array.isArray(data.tags)) {
+      for (const tag of data.tags) {
+        try {
+          await db.runAsync(
+            `INSERT OR IGNORE INTO tags (id, name, color, created_at)
+             VALUES (?, ?, ?, ?)`,
+            [tag.id, tag.name, tag.color ?? null, tag.created_at ?? tag.createdAt ?? Math.floor(Date.now() / 1000)]
+          );
+        } catch {
+          // Ignore if tags table unavailable
+        }
+      }
+    }
+
+    if (Array.isArray(data.transaction_tags)) {
+      for (const tt of data.transaction_tags) {
+        try {
+          await db.runAsync(
+            `INSERT OR IGNORE INTO transaction_tags (transaction_id, tag_id)
+             VALUES (?, ?)`,
+            [tt.transaction_id ?? tt.transactionId, tt.tag_id ?? tt.tagId]
+          );
+        } catch {
+          // Ignore if transaction_tags table unavailable
+        }
       }
     }
 
@@ -465,7 +529,7 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
               b.category ?? '',
               b.amount,
               b.min_amount ?? b.minAmount ?? null,
-              b.due_date ?? b.dueDate ?? new Date().toISOString().split('T')[0],
+              b.due_date ?? b.dueDate ?? getLocalTodayYmd(),
               b.reminder_days ?? b.reminderDays ?? 3,
               billStatus,
               b.notes ?? '',
@@ -511,7 +575,7 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
               br.biller_category ?? br.billerCategory ?? br.category ?? 'other',
               br.amount_due ?? br.amountDue ?? br.amount ?? 0,
               br.min_amount_due ?? br.minAmountDue ?? br.min_amount ?? null,
-              br.due_date ?? br.dueDate ?? new Date().toISOString().split('T')[0],
+              br.due_date ?? br.dueDate ?? getLocalTodayYmd(),
               brFreq,
               br.account_reference ?? br.accountReference ?? null,
               brStatus,
@@ -549,7 +613,7 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
               s.provider ?? '',
               s.amount,
               subCycle,
-              s.next_renewal_date ?? s.nextRenewalDate ?? new Date().toISOString().split('T')[0],
+              s.next_renewal_date ?? s.nextRenewalDate ?? getLocalTodayYmd(),
               s.category ?? 'subscription',
               subStatus,
               s.payment_url ?? s.paymentUrl ?? null,
@@ -571,9 +635,58 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
       for (const p of data.splitwise_people) {
         try {
           await db.runAsync(
-            `INSERT INTO splitwise_people (id, name, phone, notes, created_at)
-             VALUES (?, ?, ?, ?, ?)`,
-            [p.id, p.name, p.phone ?? null, p.notes ?? null, p.created_at ?? p.createdAt ?? new Date().toISOString()]
+            `INSERT INTO splitwise_people (id, name, email, phone, notes, created_at)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [p.id, p.name, p.email ?? null, p.phone ?? null, p.notes ?? null, p.created_at ?? p.createdAt ?? new Date().toISOString()]
+          );
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    // 13b. Insert Splitwise Groups & Members (if present)
+    if (Array.isArray(data.splitwise_groups)) {
+      for (const g of data.splitwise_groups) {
+        try {
+          await db.runAsync(
+            `INSERT OR REPLACE INTO splitwise_groups (id, name, description, icon, category, currency, created_by, is_archived, sync_status, sync_version, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              g.id,
+              g.name,
+              g.description ?? null,
+              g.icon ?? null,
+              g.category ?? null,
+              g.currency ?? 'INR',
+              g.created_by ?? g.createdBy ?? null,
+              (g.is_archived ?? g.isArchived) ? 1 : 0,
+              g.sync_status ?? g.syncStatus ?? 'LOCAL_ONLY',
+              g.sync_version ?? g.syncVersion ?? 1,
+              g.created_at ?? g.createdAt ?? new Date().toISOString(),
+              g.updated_at ?? g.updatedAt ?? null,
+            ]
+          );
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    if (Array.isArray(data.splitwise_group_members)) {
+      for (const gm of data.splitwise_group_members) {
+        try {
+          await db.runAsync(
+            `INSERT OR IGNORE INTO splitwise_group_members (id, group_id, person_id, role, joined_at, sync_status)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [
+              gm.id,
+              gm.group_id ?? gm.groupId,
+              gm.person_id ?? gm.personId,
+              gm.role ?? 'member',
+              gm.joined_at ?? gm.joinedAt ?? new Date().toISOString(),
+              gm.sync_status ?? gm.syncStatus ?? 'LOCAL_ONLY',
+            ]
           );
         } catch {
           // Ignore
@@ -586,14 +699,16 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
       for (const d of data.splitwise_debts) {
         try {
           await db.runAsync(
-            `INSERT INTO splitwise_debts (id, person_id, amount, type, description, created_at)
-             VALUES (?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO splitwise_debts (id, person_id, amount, type, description, friend_email, group_id, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               d.id,
               d.person_id ?? d.personId,
               d.amount,
               d.type,
               d.description,
+              d.friend_email ?? d.friendEmail ?? null,
+              d.group_id ?? d.groupId ?? null,
               d.created_at ?? d.createdAt ?? new Date().toISOString(),
             ]
           );
@@ -608,15 +723,73 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
       for (const st of data.splitwise_settlements) {
         try {
           await db.runAsync(
-            `INSERT INTO splitwise_settlements (id, person_id, amount, description, settlement_type, created_at)
-             VALUES (?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO splitwise_settlements (id, person_id, amount, description, settlement_type, friend_email, group_id, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               st.id,
               st.person_id ?? st.personId,
               st.amount,
               st.description ?? null,
               st.settlement_type ?? st.settlementType ?? 'THEY_PAID',
+              st.friend_email ?? st.friendEmail ?? null,
+              st.group_id ?? st.groupId ?? null,
               st.created_at ?? st.createdAt ?? new Date().toISOString(),
+            ]
+          );
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    // 15b. Insert Splitwise Expenses & Expense Splits (if present)
+    if (Array.isArray(data.splitwise_expenses)) {
+      for (const ex of data.splitwise_expenses) {
+        try {
+          await db.runAsync(
+            `INSERT OR REPLACE INTO splitwise_expenses (id, description, amount, currency, category, date, payer_id, group_id, split_type, notes, receipt_url, created_by_id, sync_status, sync_version, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              ex.id,
+              ex.description,
+              ex.amount,
+              ex.currency ?? 'INR',
+              ex.category ?? null,
+              ex.date ?? new Date().toISOString(),
+              ex.payer_id ?? ex.payerId,
+              ex.group_id ?? ex.groupId ?? null,
+              ex.split_type ?? ex.splitType ?? 'EQUAL',
+              ex.notes ?? null,
+              ex.receipt_url ?? ex.receiptUrl ?? null,
+              ex.created_by_id ?? ex.createdById ?? null,
+              ex.sync_status ?? ex.syncStatus ?? 'LOCAL_ONLY',
+              ex.sync_version ?? ex.syncVersion ?? 1,
+              ex.created_at ?? ex.createdAt ?? new Date().toISOString(),
+              ex.updated_at ?? ex.updatedAt ?? null,
+            ]
+          );
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    if (Array.isArray(data.splitwise_expense_splits)) {
+      for (const sp of data.splitwise_expense_splits) {
+        try {
+          await db.runAsync(
+            `INSERT OR IGNORE INTO splitwise_expense_splits (id, expense_id, person_id, paid_amount, owed_amount, percentage, shares, is_paid, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              sp.id,
+              sp.expense_id ?? sp.expenseId,
+              sp.person_id ?? sp.personId,
+              sp.paid_amount ?? sp.paidAmount ?? 0,
+              sp.owed_amount ?? sp.owedAmount ?? 0,
+              sp.percentage ?? null,
+              sp.shares ?? null,
+              (sp.is_paid ?? sp.isPaid) ? 1 : 0,
+              sp.created_at ?? sp.createdAt ?? new Date().toISOString(),
             ]
           );
         } catch {
@@ -793,6 +966,26 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
               rule.last_matched_at ?? rule.lastMatchedAt ?? null,
               rule.created_at ?? rule.createdAt ?? new Date().toISOString(),
               rule.updated_at ?? rule.updatedAt ?? new Date().toISOString(),
+            ]
+          );
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    // 22. Insert Merchant Category Rules (if present)
+    if (Array.isArray(data.merchant_category_rules)) {
+      for (const mcr of data.merchant_category_rules) {
+        try {
+          await db.runAsync(
+            `INSERT OR REPLACE INTO merchant_category_rules (id, merchant_pattern, category, updated_at)
+             VALUES (?, ?, ?, ?)`,
+            [
+              mcr.id,
+              mcr.merchant_pattern ?? mcr.merchantPattern,
+              mcr.category,
+              mcr.updated_at ?? mcr.updatedAt ?? Date.now(),
             ]
           );
         } catch {

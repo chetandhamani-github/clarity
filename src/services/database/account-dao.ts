@@ -1,3 +1,5 @@
+import { DuplicateDetectionEngine } from '@/modules/sms/duplicate/duplicateDetectionEngine';
+import { deleteReceiptImage } from '@/services/storage/receipt-storage';
 import type { Account } from '@/types';
 import {
   resyncRevertedBills,
@@ -339,7 +341,6 @@ export async function clearAccountData(id: string): Promise<void> {
 
   if (receiptUris.length > 0) {
     try {
-      const { deleteReceiptImage } = await import('@/services/storage/receipt-storage');
       await Promise.all(receiptUris.map((uri) => deleteReceiptImage(uri)));
     } catch {
       // Ignore receipt file cleanup failures
@@ -347,9 +348,6 @@ export async function clearAccountData(id: string): Promise<void> {
   }
 
   try {
-    const { DuplicateDetectionEngine } = await import(
-      '@/modules/sms/duplicate/duplicateDetectionEngine'
-    );
     DuplicateDetectionEngine.clearCache();
   } catch {
     // Ignore in isolated environments

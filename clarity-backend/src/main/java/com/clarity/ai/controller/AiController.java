@@ -26,7 +26,7 @@ public class AiController {
 
     @PostMapping("/receipt-scan")
     @Operation(summary = "Scan receipt image/text", description = "Multimodal extraction of merchant, date, total, and itemized splits from receipt payload")
-    public ResponseEntity<ReceiptScanResponse> scanReceipt(@RequestBody ReceiptScanRequest request) {
+    public ResponseEntity<ReceiptScanResponse> scanReceipt(@Valid @RequestBody ReceiptScanRequest request) {
         ReceiptScanResponse response = aiService.scanReceipt(request);
         return ResponseEntity.ok(response);
     }
@@ -40,7 +40,7 @@ public class AiController {
 
     @PostMapping("/voice-parse")
     @Operation(summary = "Parse voice transaction", description = "Extracts amount, vendor, category, and account from a conversational speech transcript")
-    public ResponseEntity<VoiceParseResponse> parseVoiceTransaction(@RequestBody VoiceParseRequest request) {
+    public ResponseEntity<VoiceParseResponse> parseVoiceTransaction(@Valid @RequestBody VoiceParseRequest request) {
         VoiceParseResponse response = aiService.parseVoiceTransaction(request);
         return ResponseEntity.ok(response);
     }

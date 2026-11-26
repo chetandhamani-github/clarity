@@ -55,6 +55,62 @@ export interface HealthStatus {
   service: string;
 }
 
+export interface SplitSyncGroupMemberDTO {
+  personId: string;
+  email?: string;
+  name?: string;
+  role?: string;
+}
+
+export interface SplitSyncGroupDTO {
+  id: string;
+  name?: string;
+  description?: string;
+  icon?: string;
+  category?: string;
+  currency?: string;
+  memberIds?: string[];
+  members?: SplitSyncGroupMemberDTO[];
+  isArchived?: boolean;
+  isDeleted?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SplitSyncExpenseSplitDTO {
+  id?: string;
+  expenseId?: string;
+  personId: string;
+  personEmail?: string;
+  personName?: string;
+  paidAmount: number;
+  owedAmount: number;
+  percentage?: number;
+  shares?: number;
+  isPaid?: boolean;
+  createdAt?: string;
+}
+
+export interface SplitSyncExpenseDTO {
+  id: string;
+  groupId?: string;
+  payerId?: string;
+  payerEmail?: string;
+  payerName?: string;
+  description?: string;
+  amount?: number;
+  currency?: string;
+  category?: string;
+  date?: string;
+  splitType?: string;
+  notes?: string;
+  receiptUrl?: string;
+  splits?: SplitSyncExpenseSplitDTO[];
+  isDeleted?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface SplitSyncPayload {
   installationId: string;
   lastSyncedAt?: string | null;
@@ -84,6 +140,7 @@ export interface SplitSyncPayload {
     id: string;
     personId?: string;
     friendEmail?: string;
+    groupId?: string;
     amount?: number;
     settlementType?: string;
     description?: string;
@@ -91,6 +148,8 @@ export interface SplitSyncPayload {
     createdAt?: string;
     updatedAt?: string;
   }>;
+  groups?: SplitSyncGroupDTO[];
+  expenses?: SplitSyncExpenseDTO[];
 }
 
 export interface SplitSyncResponse {
@@ -122,6 +181,7 @@ export interface SplitSyncResponse {
     id: string;
     personId: string;
     friendEmail?: string;
+    groupId?: string;
     amount: number;
     settlementType?: string;
     description?: string;
@@ -129,6 +189,8 @@ export interface SplitSyncResponse {
     createdAt?: string;
     updatedAt?: string;
   }>;
+  groups?: SplitSyncGroupDTO[];
+  expenses?: SplitSyncExpenseDTO[];
   confirmedIds: string[];
 }
 

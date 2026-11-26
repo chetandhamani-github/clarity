@@ -20,6 +20,7 @@ public class SplitGroupDTO {
     private String currency;
     private String ownerEmail;
     private List<String> memberIds;
+    private List<SplitGroupMemberDTO> members;
     private boolean isArchived;
     private boolean isDeleted;
     private String createdAt;

@@ -16,6 +16,8 @@ public class SplitExpenseDTO {
     private String id;
     private String groupId;
     private String payerId;
+    private String payerEmail;
+    private String payerName;
     private String description;
     private BigDecimal amount;
     private String currency;

@@ -30,6 +30,12 @@ public class SplitGroupMember {
     @Column(name = "person_id", nullable = false, length = 255)
     private String personId;
 
+    @Column(name = "member_email", length = 255)
+    private String memberEmail;
+
+    @Column(name = "member_name", length = 255)
+    private String memberName;
+
     @Column(name = "role", nullable = false, length = 50)
     @Builder.Default
     private String role = "member";

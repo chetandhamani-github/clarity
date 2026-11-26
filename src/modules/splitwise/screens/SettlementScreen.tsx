@@ -20,6 +20,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { Text, Header, DatePickerModal, useAlert, useToast } from '@/components/ui';
 import { typography, useTheme, radius } from '@/theme';
 import { formatCurrencyPrivacy } from '@/utils/format';
+import { getLocalTodayYmd, shiftYmdDays } from '@/utils/date';
 import { useAppStore } from '@/store/use-app-store';
 import { useSplitwiseStore } from '../store/splitwise.store';
 import { SplitwiseSyncService } from '../services/SplitwiseSyncService';
@@ -100,12 +101,8 @@ export function SettlementScreen() {
     [accounts, selectedAccountId]
   );
 
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const yesterdayStr = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    return d.toISOString().split('T')[0];
-  }, []);
+  const todayStr = useMemo(() => getLocalTodayYmd(), []);
+  const yesterdayStr = useMemo(() => shiftYmdDays(getLocalTodayYmd(), -1), []);
 
   const initialPersonId = useMemo(() => {
     if (params.personId && people.some((p) => p.id === params.personId)) {

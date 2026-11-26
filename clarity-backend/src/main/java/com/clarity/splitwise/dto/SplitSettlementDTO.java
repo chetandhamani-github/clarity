@@ -15,6 +15,7 @@ public class SplitSettlementDTO {
     private String id;
     private String personId;
     private String friendEmail;
+    private String groupId;
     private BigDecimal amount;
     private String settlementType;
     private String description;

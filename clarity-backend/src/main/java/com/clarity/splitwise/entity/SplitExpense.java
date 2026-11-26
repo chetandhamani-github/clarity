@@ -37,6 +37,12 @@ public class SplitExpense {
     @Column(name = "payer_id", nullable = false, length = 255)
     private String payerId;
 
+    @Column(name = "payer_email", length = 255)
+    private String payerEmail;
+
+    @Column(name = "payer_name", length = 255)
+    private String payerName;
+
     @Column(name = "description", nullable = false, length = 500)
     private String description;
 

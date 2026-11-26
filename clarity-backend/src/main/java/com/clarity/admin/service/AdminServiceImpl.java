@@ -20,6 +20,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -30,7 +32,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AdminServiceImpl implements AdminService {
 
-    @Value("${clarity.admin.secret-key:clarity-admin-2026}")
+    @Value("${clarity.admin.secret-key:}")
     private String adminSecretKey;
 
     private final AppConfigRepository appConfigRepository;
@@ -40,7 +42,15 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     public void validateAdminKey(String providedKey) {
-        if (providedKey == null || !providedKey.trim().equals(adminSecretKey.trim())) {
+        if (adminSecretKey == null || adminSecretKey.trim().isEmpty()) {
+            throw new ApiException("Admin endpoints are disabled: ADMIN_SECRET_KEY is not configured", HttpStatus.SERVICE_UNAVAILABLE);
+        }
+        if (providedKey == null || providedKey.trim().isEmpty()) {
+            throw new ApiException("Invalid or missing X-Admin-Key header", HttpStatus.UNAUTHORIZED);
+        }
+        byte[] expected = adminSecretKey.trim().getBytes(StandardCharsets.UTF_8);
+        byte[] actual = providedKey.trim().getBytes(StandardCharsets.UTF_8);
+        if (!MessageDigest.isEqual(expected, actual)) {
             throw new ApiException("Invalid or missing X-Admin-Key header", HttpStatus.UNAUTHORIZED);
         }
     }

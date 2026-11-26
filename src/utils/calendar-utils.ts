@@ -8,6 +8,11 @@ export interface CalendarDayCell {
   isToday: boolean;
 }
 
+export interface CalendarDateRange {
+  start: string; // YYYY-MM-DD
+  end: string;   // YYYY-MM-DD (always >= start)
+}
+
 export interface MonthTotalsSummary {
   income: number;
   expense: number;
@@ -143,3 +148,173 @@ export function summarizeMonthDailyTotals(
     count,
   };
 }
+
+export function normalizeCalendarRange(a: string, b: string): CalendarDateRange {
+  return a <= b ? { start: a, end: b } : { start: b, end: a };
+}
+
+/**
+ * Transitions calendar range selection on date tap:
+ * - none -> single-day { start: d, end: d }
+ * - single-day same date -> null (clear)
+ * - single-day different date -> normalized { start: min, end: max }
+ * - multi-day range -> fresh single-day { start: d, end: d }
+ */
+export function nextCalendarDateRange(
+  current: CalendarDateRange | null,
+  tappedDate: string
+): CalendarDateRange | null {
+  if (!current) {
+    return { start: tappedDate, end: tappedDate };
+  }
+  if (current.start === current.end) {
+    if (current.start === tappedDate) {
+      return null;
+    }
+    return normalizeCalendarRange(current.start, tappedDate);
+  }
+  return { start: tappedDate, end: tappedDate };
+}
+
+/**
+ * Maps a touch coordinate (x, y) inside a 7-column calendar grid of size (width, height)
+ * and `rowCount` week rows to a flat cell index [0 .. rowCount * 7 - 1].
+ */
+export function getCalendarGridCellIndex(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  rowCount: number
+): number | null {
+  if (width <= 0 || height <= 0 || rowCount <= 0) {
+    return null;
+  }
+  const col = Math.min(6, Math.max(0, Math.floor((x / width) * 7)));
+  const row = Math.min(rowCount - 1, Math.max(0, Math.floor((y / height) * rowCount)));
+  return row * 7 + col;
+}
+
+export function isValidYmd(dateStr: string | undefined): dateStr is string {
+  return Boolean(dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr));
+}
+
+/**
+ * Checks if a date range falls completely inside a given 1-based month.
+ */
+export function isRangeWithinMonth(
+  range: CalendarDateRange,
+  year: number,
+  month1Based: number
+): boolean {
+  const { dateFrom, dateTo } = getMonthDateBounds(year, month1Based);
+  return range.start >= dateFrom && range.end <= dateTo;
+}
+
+export type CalendarRangePreset =
+  | 'all'
+  | 'this_month'
+  | 'last_7_days'
+  | 'last_30_days'
+  | 'last_month'
+  | 'last_90_days'
+  | 'custom';
+
+function formatYmd(date: Date): string {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+/**
+ * Resolves inclusive YYYY-MM-DD bounds for a filter preset or normalized custom range.
+ */
+export function resolvePresetDateRange(
+  preset: CalendarRangePreset,
+  customFrom?: string,
+  customTo?: string,
+  referenceDate: Date = new Date()
+): { dateFrom?: string; dateTo?: string } {
+  const y = referenceDate.getFullYear();
+  const m = referenceDate.getMonth();
+  const todayStr = formatYmd(referenceDate);
+
+  switch (preset) {
+    case 'this_month': {
+      return { dateFrom: formatYmd(new Date(y, m, 1)), dateTo: todayStr };
+    }
+    case 'last_7_days': {
+      const from = new Date(y, m, referenceDate.getDate() - 6);
+      return { dateFrom: formatYmd(from), dateTo: todayStr };
+    }
+    case 'last_30_days': {
+      const from = new Date(y, m, referenceDate.getDate() - 29);
+      return { dateFrom: formatYmd(from), dateTo: todayStr };
+    }
+    case 'last_month': {
+      return {
+        dateFrom: formatYmd(new Date(y, m - 1, 1)),
+        dateTo: formatYmd(new Date(y, m, 0)),
+      };
+    }
+    case 'last_90_days': {
+      const from = new Date(y, m, referenceDate.getDate() - 90);
+      return { dateFrom: formatYmd(from), dateTo: todayStr };
+    }
+    case 'custom': {
+      if (isValidYmd(customFrom) && isValidYmd(customTo)) {
+        const normalized = normalizeCalendarRange(customFrom, customTo);
+        return { dateFrom: normalized.start, dateTo: normalized.end };
+      }
+      if (isValidYmd(customFrom)) {
+        return { dateFrom: customFrom, dateTo: customFrom };
+      }
+      if (isValidYmd(customTo)) {
+        return { dateFrom: customTo, dateTo: customTo };
+      }
+      return {};
+    }
+    case 'all':
+    default:
+      return {};
+  }
+}
+
+/**
+ * Applies a date tap to an explicit start/end custom range editor with automatic
+ * normalization so the start date never exceeds the end date.
+ */
+export function applyCustomRangeEndpoint(
+  currentStart: string,
+  currentEnd: string,
+  activeEndpoint: 'start' | 'end',
+  tappedDate: string
+): { start: string; end: string; nextEndpoint: 'start' | 'end' } {
+  if (activeEndpoint === 'start') {
+    if (tappedDate > currentEnd) {
+      return { start: tappedDate, end: tappedDate, nextEndpoint: 'end' };
+    }
+    return { start: tappedDate, end: currentEnd, nextEndpoint: 'end' };
+  }
+
+  if (tappedDate < currentStart) {
+    return { start: tappedDate, end: currentStart, nextEndpoint: 'start' };
+  }
+  return { start: currentStart, end: tappedDate, nextEndpoint: 'start' };
+}
+
+/**
+ * Aggregates income, expense, transfer, net, and count across a date range
+ * using a date-keyed map of daily summaries.
+ */
+export function summarizeCalendarRange(
+  dailyMap: Record<string, DailyTransactionSummary>,
+  range: CalendarDateRange
+): { income: number; expense: number; transfer: number; net: number; count: number } {
+  const rows: DailyTransactionSummary[] = [];
+  for (const [dateStr, summary] of Object.entries(dailyMap)) {
+    if (dateStr >= range.start && dateStr <= range.end) {
+      rows.push(summary);
+    }
+  }
+  return summarizeMonthDailyTotals(rows);
+}
+

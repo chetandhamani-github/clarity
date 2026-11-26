@@ -1,3 +1,4 @@
+import { DeviceEventEmitter } from 'react-native';
 import { mmkv } from '@/lib/storage';
 import { BillsRepository } from '@/modules/bills/database/bills.repository';
 import { useBillsStore } from '@/modules/bills/store/bills.store';
@@ -10,7 +11,9 @@ import { SmsSyncService } from '@/modules/sms/services/smsSyncService';
 import { useSplitwiseStore } from '@/modules/splitwise/store/splitwise.store';
 import { clearAutoBackupTimer } from '@/services/cloud/google-drive-service';
 import { clearDatabase } from '@/services/database';
+import { clearCachedExportFiles } from '@/services/export/export-service';
 import { resetBillReminderCheckCooldown } from '@/services/notifications/alert-engine';
+import { BillAlertEngine } from '@/services/notifications/bill-alert-engine';
 import { clearAllReceiptImages } from '@/services/storage/receipt-storage';
 import { useAppStore } from '@/store/use-app-store';
 import { useCopilotStore } from '@/store/use-copilot-store';
@@ -55,7 +58,6 @@ async function executeResetEntireAppData(queryClient?: QueryClient): Promise<voi
     // 3. Remove persisted receipt images & cached export files on disk
     await clearAllReceiptImages();
     try {
-      const { clearCachedExportFiles } = await import('@/services/export/export-service');
       await clearCachedExportFiles();
     } catch {
       // Ignore in test/headless mode
@@ -63,7 +65,6 @@ async function executeResetEntireAppData(queryClient?: QueryClient): Promise<voi
 
     // 4. Cancel scheduled OS notifications, clear notification tray, & reset alert cooldown
     try {
-      const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
       await BillAlertEngine.cancelAllNativeBillReminders();
       await BillAlertEngine.dismissAllDeliveredNotifications();
     } catch {
@@ -175,7 +176,6 @@ async function executeResetEntireAppData(queryClient?: QueryClient): Promise<voi
     }
 
     try {
-      const { DeviceEventEmitter } = await import('react-native');
       DeviceEventEmitter?.emit?.('appDataReset');
       DeviceEventEmitter?.emit?.('billsUpdated');
       DeviceEventEmitter?.emit?.('notificationsUpdated');

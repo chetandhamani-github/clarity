@@ -30,6 +30,22 @@ const DRIVE_UPLOAD_ENDPOINT = 'https://www.googleapis.com/upload/drive/v3/files'
 
 // Scope required: Drive AppData (private hidden app folder)
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+const DEFAULT_DRIVE_TIMEOUT_MS = 25000;
+const TRANSFER_DRIVE_TIMEOUT_MS = 60000;
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs: number = DEFAULT_DRIVE_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 let isGoogleSignInConfigured = false;
 
@@ -348,7 +364,7 @@ export async function findBackupFile(accessToken: string): Promise<GoogleDriveBa
     const query = encodeURIComponent(`name = '${BACKUP_FILE_NAME}'`);
     const appDataUrl = `${DRIVE_FILES_ENDPOINT}?spaces=appDataFolder&q=${query}&fields=files(id,name,modifiedTime,size)&orderBy=modifiedTime%20desc`;
 
-    const response = await fetch(appDataUrl, {
+    const response = await fetchWithTimeout(appDataUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
@@ -366,7 +382,7 @@ export async function findBackupFile(accessToken: string): Promise<GoogleDriveBa
           for (let i = 1; i < data.files.length; i++) {
             const oldId = data.files[i]?.id;
             if (oldId) {
-              fetch(`${DRIVE_FILES_ENDPOINT}/${oldId}`, {
+              fetchWithTimeout(`${DRIVE_FILES_ENDPOINT}/${oldId}`, {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${accessToken}` },
               }).catch(() => {});
@@ -385,7 +401,7 @@ export async function findBackupFile(accessToken: string): Promise<GoogleDriveBa
 
     // 2. Fallback: list all files in appDataFolder and filter client-side
     const listAllUrl = `${DRIVE_FILES_ENDPOINT}?spaces=appDataFolder&fields=files(id,name,modifiedTime,size)&pageSize=20`;
-    const listResponse = await fetch(listAllUrl, {
+    const listResponse = await fetchWithTimeout(listAllUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
@@ -407,7 +423,7 @@ export async function findBackupFile(accessToken: string): Promise<GoogleDriveBa
             for (let i = 1; i < matchingFiles.length; i++) {
               const oldId = matchingFiles[i]?.id;
               if (oldId) {
-                fetch(`${DRIVE_FILES_ENDPOINT}/${oldId}`, {
+                fetchWithTimeout(`${DRIVE_FILES_ENDPOINT}/${oldId}`, {
                   method: 'DELETE',
                   headers: { Authorization: `Bearer ${accessToken}` },
                 }).catch(() => {});
@@ -527,27 +543,27 @@ export async function uploadBackup(
     if (existingFile) {
       // 1. UPDATE EXISTING FILE: Use direct media PATCH (most reliable, avoids multipart boundary issues)
       const uploadUrl = `${DRIVE_UPLOAD_ENDPOINT}/${existingFile.fileId}?uploadType=media`;
-      response = await fetch(uploadUrl, {
+      response = await fetchWithTimeout(uploadUrl, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json; charset=UTF-8',
         },
         body: jsonContent,
-      });
+      }, TRANSFER_DRIVE_TIMEOUT_MS);
 
       // If 401, retry once with refreshed token
       if (response.status === 401) {
         accessToken = await getValidAccessToken(true, allowInteractive);
         if (accessToken) {
-          response = await fetch(uploadUrl, {
+          response = await fetchWithTimeout(uploadUrl, {
             method: 'PATCH',
             headers: {
               Authorization: `Bearer ${accessToken}`,
               'Content-Type': 'application/json; charset=UTF-8',
             },
             body: jsonContent,
-          });
+          }, TRANSFER_DRIVE_TIMEOUT_MS);
         }
       }
     } else {
@@ -570,27 +586,27 @@ export async function uploadBackup(
         `\r\n--${boundary}--`;
 
       const uploadUrl = `${DRIVE_UPLOAD_ENDPOINT}?uploadType=multipart`;
-      response = await fetch(uploadUrl, {
+      response = await fetchWithTimeout(uploadUrl, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': `multipart/related; boundary=${boundary}`,
         },
         body: multipartRequestBody,
-      });
+      }, TRANSFER_DRIVE_TIMEOUT_MS);
 
       // If 401, retry once with refreshed token
       if (response.status === 401) {
         accessToken = await getValidAccessToken(true, allowInteractive);
         if (accessToken) {
-          response = await fetch(uploadUrl, {
+          response = await fetchWithTimeout(uploadUrl, {
             method: 'POST',
             headers: {
               Authorization: `Bearer ${accessToken}`,
               'Content-Type': `multipart/related; boundary=${boundary}`,
             },
             body: multipartRequestBody,
-          });
+          }, TRANSFER_DRIVE_TIMEOUT_MS);
         }
       }
     }
@@ -613,12 +629,12 @@ export async function uploadBackup(
     if (fileId && options?.pinRevision) {
       try {
         const revUrl = `${DRIVE_FILES_ENDPOINT}/${fileId}/revisions?fields=revisions(id)&orderBy=modifiedTime%20desc`;
-        const revRes = await fetch(revUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+        const revRes = await fetchWithTimeout(revUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
         if (revRes.ok) {
           const revData = await revRes.json();
           const latestRev = revData.revisions?.[revData.revisions.length - 1];
           if (latestRev?.id) {
-            await fetch(`${DRIVE_FILES_ENDPOINT}/${fileId}/revisions/${latestRev.id}`, {
+            await fetchWithTimeout(`${DRIVE_FILES_ENDPOINT}/${fileId}/revisions/${latestRev.id}`, {
               method: 'PATCH',
               headers: {
                 Authorization: `Bearer ${accessToken}`,
@@ -673,16 +689,16 @@ export async function downloadBackup(passphrase?: string): Promise<{
     }
 
     const downloadUrl = `${DRIVE_FILES_ENDPOINT}/${backupInfo.fileId}?alt=media`;
-    let response = await fetch(downloadUrl, {
+    let response = await fetchWithTimeout(downloadUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    }, TRANSFER_DRIVE_TIMEOUT_MS);
 
     if (response.status === 401) {
       accessToken = await getValidAccessToken(true);
       if (accessToken) {
-        response = await fetch(downloadUrl, {
+        response = await fetchWithTimeout(downloadUrl, {
           headers: { Authorization: `Bearer ${accessToken}` },
-        });
+        }, TRANSFER_DRIVE_TIMEOUT_MS);
       }
     }
 
@@ -736,14 +752,14 @@ export async function downloadBackup(passphrase?: string): Promise<{
     if (!isMeaningfulDatabaseSnapshot(payload)) {
       try {
         const revUrl = `${DRIVE_FILES_ENDPOINT}/${backupInfo.fileId}/revisions?fields=revisions(id,modifiedTime,size)`;
-        let revRes = await fetch(revUrl, {
+        let revRes = await fetchWithTimeout(revUrl, {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
 
         if (revRes.status === 401) {
           accessToken = await getValidAccessToken(true);
           if (accessToken) {
-            revRes = await fetch(revUrl, {
+            revRes = await fetchWithTimeout(revUrl, {
               headers: { Authorization: `Bearer ${accessToken}` },
             });
           }
@@ -758,9 +774,9 @@ export async function downloadBackup(passphrase?: string): Promise<{
             for (let i = revisions.length - 1; i >= 0; i--) {
               const rev = revisions[i];
               const revDlUrl = `${DRIVE_FILES_ENDPOINT}/${backupInfo.fileId}/revisions/${rev.id}?alt=media`;
-              const revFileRes = await fetch(revDlUrl, {
+              const revFileRes = await fetchWithTimeout(revDlUrl, {
                 headers: { Authorization: `Bearer ${accessToken}` },
-              });
+              }, TRANSFER_DRIVE_TIMEOUT_MS);
 
               if (revFileRes.ok) {
                 const revText = await revFileRes.text();
@@ -840,14 +856,14 @@ export async function listBackupRevisions(): Promise<{
     }
 
     const revUrl = `${DRIVE_FILES_ENDPOINT}/${backupInfo.fileId}/revisions?fields=revisions(id,modifiedTime,size,keepForever)`;
-    let revRes = await fetch(revUrl, {
+    let revRes = await fetchWithTimeout(revUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
     if (revRes.status === 401) {
       accessToken = await getValidAccessToken(true);
       if (accessToken) {
-        revRes = await fetch(revUrl, {
+        revRes = await fetchWithTimeout(revUrl, {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
       }
@@ -910,16 +926,16 @@ export async function downloadBackupRevision(
     }
 
     const revDlUrl = `${DRIVE_FILES_ENDPOINT}/${backupInfo.fileId}/revisions/${revisionId}?alt=media`;
-    let response = await fetch(revDlUrl, {
+    let response = await fetchWithTimeout(revDlUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    }, TRANSFER_DRIVE_TIMEOUT_MS);
 
     if (response.status === 401) {
       accessToken = await getValidAccessToken(true);
       if (accessToken) {
-        response = await fetch(revDlUrl, {
+        response = await fetchWithTimeout(revDlUrl, {
           headers: { Authorization: `Bearer ${accessToken}` },
-        });
+        }, TRANSFER_DRIVE_TIMEOUT_MS);
       }
     }
 
@@ -991,14 +1007,14 @@ export async function deleteAllBackups(
 
     // 1. List all files in the private appDataFolder
     const listUrl = `${DRIVE_FILES_ENDPOINT}?spaces=appDataFolder&fields=files(id,name)&pageSize=100`;
-    let listResponse = await fetch(listUrl, {
-      headers: { Authorization: `Bearer ${token}` },
+    let listResponse = await fetchWithTimeout(listUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
 
     if (listResponse.status === 401) {
       token = await getValidAccessToken(true);
       if (token) {
-        listResponse = await fetch(listUrl, {
+        listResponse = await fetchWithTimeout(listUrl, {
           headers: { Authorization: `Bearer ${token}` },
         });
       }
@@ -1027,7 +1043,7 @@ export async function deleteAllBackups(
     let deletedCount = 0;
     for (const file of backupFiles) {
       try {
-        const delResponse = await fetch(`${DRIVE_FILES_ENDPOINT}/${file.id}`, {
+        const delResponse = await fetchWithTimeout(`${DRIVE_FILES_ENDPOINT}/${file.id}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -1050,6 +1066,7 @@ export async function deleteAllBackups(
 }
 
 let autoBackupDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let syncInFlight: Promise<boolean> | null = null;
 
 /**
  * Cancel any pending debounced auto-backup timer.
@@ -1065,33 +1082,54 @@ export function clearAutoBackupTimer(): void {
  * Standalone background auto-sync utility.
  */
 export async function syncDatabaseToDriveSilently(reason = 'auto-sync'): Promise<boolean> {
-  try {
-    const { useAppStore } = await import('@/store/use-app-store');
-    const { generateDatabaseSnapshot, isMeaningfulDatabaseSnapshot } = await import(
-      '@/services/database/backup-restore-service'
-    );
-    const state = useAppStore.getState();
+  if (syncInFlight) {
+    return syncInFlight;
+  }
 
-    if (!state.googleDriveConnected || !state.autoBackupEnabled || state.isPostResetLocked) {
+  syncInFlight = (async () => {
+    try {
+      const { useAppStore } = await import('@/store/use-app-store');
+      const { generateDatabaseSnapshot, isMeaningfulDatabaseSnapshot } = await import(
+        '@/services/database/backup-restore-service'
+      );
+      const state = useAppStore.getState();
+
+      if (!state.googleDriveConnected || !state.autoBackupEnabled || state.isPostResetLocked) {
+        return false;
+      }
+
+      const snapshot = await generateDatabaseSnapshot();
+
+      // Safeguard: Never auto-sync an empty/cleared local database to the cloud
+      if (!isMeaningfulDatabaseSnapshot(snapshot)) {
+        return false;
+      }
+
+      const result = await uploadBackup(snapshot, { allowInteractive: false });
+      if (result.success && result.modifiedTime) {
+        state.setLastCloudBackupTime(result.modifiedTime);
+        return true;
+      }
       return false;
-    }
-
-    const snapshot = await generateDatabaseSnapshot();
-
-    // Safeguard: Never auto-sync an empty/cleared local database to the cloud
-    if (!isMeaningfulDatabaseSnapshot(snapshot)) {
+    } catch {
       return false;
+    } finally {
+      syncInFlight = null;
     }
+  })();
 
-    const result = await uploadBackup(snapshot, { allowInteractive: false });
-    if (result.success && result.modifiedTime) {
-      state.setLastCloudBackupTime(result.modifiedTime);
-      return true;
-    }
-    return false;
-  } catch {
+  return syncInFlight;
+}
+
+/**
+ * Flushes any queued debounced auto-backup immediately (e.g. before app backgrounds).
+ */
+export async function flushPendingAutoBackup(reason = 'app-background'): Promise<boolean> {
+  if (!autoBackupDebounceTimer) {
     return false;
   }
+  clearAutoBackupTimer();
+  return syncDatabaseToDriveSilently(reason);
 }
 
 /**
@@ -1103,6 +1141,7 @@ export function queueAutoBackup(reason = 'db-change'): void {
   }
 
   autoBackupDebounceTimer = setTimeout(() => {
+    autoBackupDebounceTimer = null;
     syncDatabaseToDriveSilently(reason).catch(() => {});
   }, 5000);
 }

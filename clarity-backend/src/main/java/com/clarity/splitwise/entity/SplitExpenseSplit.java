@@ -29,6 +29,12 @@ public class SplitExpenseSplit {
     @Column(name = "person_id", nullable = false, length = 255)
     private String personId;
 
+    @Column(name = "person_email", length = 255)
+    private String personEmail;
+
+    @Column(name = "person_name", length = 255)
+    private String personName;
+
     @Column(name = "paid_amount", nullable = false, precision = 12, scale = 2)
     @Builder.Default
     private BigDecimal paidAmount = BigDecimal.ZERO;

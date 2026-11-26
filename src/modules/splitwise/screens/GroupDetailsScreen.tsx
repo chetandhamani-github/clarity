@@ -17,10 +17,11 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Text, Header, useAlert, useToast } from '@/components/ui';
 import { typography, useTheme, radius } from '@/theme';
 import { useAppStore } from '@/store/use-app-store';
-import { formatCurrencyPrivacy, formatLocalDate, parseDateSafely } from '@/utils/format';
+import { formatCurrency, formatCurrencyPrivacy, formatLocalDate, parseDateSafely } from '@/utils/format';
 import { useSplitwiseStore } from '../store/splitwise.store';
 import { BalanceCalculator } from '../services/BalanceCalculator';
-import type { ExpenseWithSplits, SimplifiedDebt } from '../types/splitwise.types';
+import { SplitwiseSyncService } from '../services/SplitwiseSyncService';
+import { CURRENT_USER_ID, type ExpenseWithSplits, type SimplifiedDebt } from '../types/splitwise.types';
 
 type GroupTab = 'EXPENSES' | 'BALANCES';
 
@@ -56,8 +57,13 @@ export function GroupDetailsScreen() {
 
   const candidateFriends = useMemo(() => {
     const existingIds = new Set(activeGroupMembers.map((m) => m.id));
-    return people.filter((p) => !existingIds.has(p.id) && p.id !== 'current_user');
+    return people.filter((p) => !existingIds.has(p.id) && p.id !== CURRENT_USER_ID);
   }, [people, activeGroupMembers]);
+
+  const hasSharedMembers = useMemo(
+    () => activeGroupMembers.some((m) => m.id !== CURRENT_USER_ID && Boolean(m.email)),
+    [activeGroupMembers]
+  );
 
   const loadData = useCallback(async () => {
     if (!groupId) return;
@@ -74,6 +80,7 @@ export function GroupDetailsScreen() {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
+    await SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {});
     await Promise.all([loadData(), loadAllData()]);
     setRefreshing(false);
   }, [loadData, loadAllData]);
@@ -94,6 +101,7 @@ export function GroupDetailsScreen() {
     if (!groupId || selectedAddMemberIds.length === 0) return;
     try {
       await addGroupMembers(groupId, selectedAddMemberIds);
+      SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {});
       showToast('Members added to group', 'success');
       setSelectedAddMemberIds([]);
       setShowAddMemberModal(false);
@@ -122,6 +130,7 @@ export function GroupDetailsScreen() {
             try {
               if (groupId) {
                 await deleteGroup(groupId);
+                SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {});
                 showToast('Group deleted successfully', 'success');
                 router.back();
               }
@@ -138,7 +147,7 @@ export function GroupDetailsScreen() {
   const handleDeleteExpense = (expense: ExpenseWithSplits) => {
     showAlert(
       'Delete Expense',
-      `Delete "${expense.description}" (₹${expense.amount})?`,
+      `Delete "${expense.description}" (${formatCurrency(expense.amount)})?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -147,6 +156,7 @@ export function GroupDetailsScreen() {
           onPress: async () => {
             try {
               await deleteExpense(expense.id);
+              SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {});
               showToast('Expense deleted', 'success');
             } catch (err: unknown) {
               const msg = err instanceof Error ? err.message : 'Failed to delete expense';
@@ -217,6 +227,7 @@ export function GroupDetailsScreen() {
               <Text style={[styles.groupSubtitle, { color: colors.onSurfaceVariant }]}>
                 {memberCount} {memberCount === 1 ? 'member' : 'members'}
                 {group?.category ? ` • ${group.category.toUpperCase()}` : ''}
+                {hasSharedMembers ? ' • Shared' : ' • Local only'}
               </Text>
             </View>
           </View>
@@ -389,7 +400,8 @@ export function GroupDetailsScreen() {
               <View style={styles.expensesList}>
                 {activeGroupExpenses.map((expense) => {
                   const dateStr = formatLocalDate(parseDateSafely(expense.date));
-                  const payerName = expense.payer?.name || 'Someone';
+                  const payerName =
+                    expense.payerId === CURRENT_USER_ID ? 'You' : expense.payer?.name || 'Someone';
 
                   return (
                     <View
@@ -734,9 +746,20 @@ export function GroupDetailsScreen() {
                       ]}
                       onPress={() => toggleSelectCandidate(friend.id)}
                     >
-                      <Text style={[styles.candidateName, { color: colors.onSurface }]}>
-                        {friend.name}
-                      </Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.candidateName, { color: colors.onSurface }]}>
+                          {friend.name}
+                        </Text>
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            color: friend.email ? colors.primary : colors.onSurfaceVariant,
+                            marginTop: 2,
+                          }}
+                        >
+                          {friend.email ? `${friend.email} • Syncs` : 'No email (local only)'}
+                        </Text>
+                      </View>
                       <MaterialIcons
                         name={isSelected ? 'check-box' : 'check-box-outline-blank'}
                         size={22}

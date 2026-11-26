@@ -9,12 +9,15 @@
 import { DeviceEventEmitter } from 'react-native';
 import { getDatabase } from '@/services/database';
 import { syncSplitwiseData } from '@/services/api/splitwise.api';
+import type { SplitSyncGroupMemberDTO } from '@/services/api/types';
+import { useAuthStore } from '@/store/use-auth-store';
 import { mmkv } from '@/lib/storage';
-import type {
-  ISplitwiseCloudSyncService,
-  SplitwiseSyncMetadata,
-  SplitwiseSyncPayload,
-  SplitwiseSyncResult,
+import {
+  CURRENT_USER_ID,
+  type ISplitwiseCloudSyncService,
+  type SplitwiseSyncMetadata,
+  type SplitwiseSyncPayload,
+  type SplitwiseSyncResult,
 } from '../types/splitwise.types';
 import {
   SplitwiseRepository,
@@ -258,12 +261,28 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
       await SplitwiseRepository.ensureSchema();
       const lastSyncedAt = mmkv.getString(SPLITWISE_LAST_SYNCED_KEY) ?? null;
       const localData = await this.exportPayload();
+      const authUser = useAuthStore.getState().user;
+      const myEmail = authUser?.email?.trim().toLowerCase() || undefined;
+      const myName = authUser?.name?.trim() || undefined;
+      const peopleById = new Map(localData.people.map((p) => [p.id, p]));
+      const resolvePersonMeta = (personId: string): { email?: string; name?: string } => {
+        if (personId === CURRENT_USER_ID) {
+          return { email: myEmail, name: myName };
+        }
+        const person = peopleById.get(personId);
+        return {
+          email: person?.email?.trim().toLowerCase() || undefined,
+          name: person?.name?.trim() || undefined,
+        };
+      };
 
       // Retrieve locally queued deletions to propagate to cloud
       const deletedRecords = getDeletedRecords();
       const deletedPeople = deletedRecords.filter((r) => r.type === 'person');
       const deletedDebts = deletedRecords.filter((r) => r.type === 'debt');
       const deletedSettlements = deletedRecords.filter((r) => r.type === 'settlement');
+      const deletedGroups = deletedRecords.filter((r) => r.type === 'group');
+      const deletedExpenses = deletedRecords.filter((r) => r.type === 'expense');
 
       // 1. Send local records & delta request to Spring Boot backend
       const response = await syncSplitwiseData({
@@ -308,7 +327,8 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
           ...localData.settlements.map((s) => ({
             id: s.id,
             personId: s.personId,
-            friendEmail: s.friendEmail,
+            friendEmail: s.friendEmail ?? resolvePersonMeta(s.personId).email,
+            groupId: s.groupId,
             amount: s.amount,
             settlementType: s.settlementType,
             description: s.description,
@@ -322,13 +342,148 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
             updatedAt: s.deletedAt,
           })),
         ],
+        groups: [
+          ...localData.groups.map((g) => ({
+            id: g.id,
+            name: g.name,
+            description: g.description,
+            icon: g.icon,
+            category: g.category,
+            currency: g.currency || 'INR',
+            memberIds: (g.members || []).map((m) => m.personId),
+            members: (g.members || []).map((m) => {
+              const meta = resolvePersonMeta(m.personId);
+              return {
+                personId: m.personId,
+                email: meta.email,
+                name: meta.name,
+                role: m.role,
+              };
+            }),
+            isArchived: g.isArchived,
+            isDeleted: false,
+            createdAt: g.createdAt,
+            updatedAt: g.updatedAt ?? g.createdAt,
+          })),
+          ...deletedGroups.map((g) => ({
+            id: g.id,
+            isDeleted: true,
+            updatedAt: g.deletedAt,
+          })),
+        ],
+        expenses: [
+          ...localData.expenses.map((e) => {
+            const payerMeta = resolvePersonMeta(e.payerId);
+            return {
+              id: e.id,
+              groupId: e.groupId,
+              payerId: e.payerId,
+              payerEmail: payerMeta.email,
+              payerName: payerMeta.name,
+              description: e.description,
+              amount: e.amount,
+              currency: e.currency || 'INR',
+              category: e.category,
+              date: e.date,
+              splitType: e.splitType,
+              notes: e.notes,
+              receiptUrl: e.receiptUrl,
+              splits: (e.splits || []).map((sp) => {
+                const splitMeta = resolvePersonMeta(sp.personId);
+                return {
+                  id: sp.id,
+                  expenseId: sp.expenseId,
+                  personId: sp.personId,
+                  personEmail: splitMeta.email,
+                  personName: splitMeta.name,
+                  paidAmount: sp.paidAmount,
+                  owedAmount: sp.owedAmount,
+                  percentage: sp.percentage,
+                  shares: sp.shares,
+                  isPaid: sp.isPaid,
+                  createdAt: sp.createdAt,
+                };
+              }),
+              isDeleted: false,
+              createdAt: e.createdAt,
+              updatedAt: e.updatedAt ?? e.createdAt,
+            };
+          }),
+          ...deletedExpenses.map((e) => ({
+            id: e.id,
+            isDeleted: true,
+            updatedAt: e.deletedAt,
+          })),
+        ],
       });
 
       // 2. Apply server delta updates to local SQLite
       const db = getDatabase();
-      const serverAppliedCount = { people: 0, debts: 0, settlements: 0 };
+      const serverAppliedCount = { people: 0, debts: 0, settlements: 0, groups: 0, expenses: 0 };
 
       if (response && response.success) {
+        const resolvedPersonCache = new Map<string, string>();
+        const resolveLocalPersonId = async (
+          remotePersonId: string | undefined,
+          email?: string,
+          name?: string,
+          createdAt?: string
+        ): Promise<string> => {
+          const normEmail = email?.trim().toLowerCase() || undefined;
+          if (!remotePersonId || remotePersonId === CURRENT_USER_ID) {
+            return CURRENT_USER_ID;
+          }
+          if (normEmail && myEmail && normEmail === myEmail) {
+            return CURRENT_USER_ID;
+          }
+
+          const cacheKey = `${remotePersonId}|${normEmail || ''}`;
+          const cached = resolvedPersonCache.get(cacheKey);
+          if (cached) return cached;
+
+          if (normEmail) {
+            const existingByEmail = await db.getFirstAsync<{ id: string }>(
+              'SELECT id FROM splitwise_people WHERE LOWER(email) = ? AND id != ?',
+              [normEmail, CURRENT_USER_ID]
+            );
+            if (existingByEmail?.id) {
+              resolvedPersonCache.set(cacheKey, existingByEmail.id);
+              return existingByEmail.id;
+            }
+          }
+
+          const existingById = await db.getFirstAsync<{ id: string; email: string | null }>(
+            'SELECT id, email FROM splitwise_people WHERE id = ?',
+            [remotePersonId]
+          );
+          if (existingById) {
+            if (!normEmail || !existingById.email || existingById.email.toLowerCase() === normEmail) {
+              if (normEmail && !existingById.email) {
+                await db.runAsync('UPDATE splitwise_people SET email = ? WHERE id = ?', [
+                  normEmail,
+                  existingById.id,
+                ]);
+              }
+              resolvedPersonCache.set(cacheKey, existingById.id);
+              return existingById.id;
+            }
+          }
+
+          const canReuseId = !existingById && !remotePersonId.startsWith('user_inst_');
+          const newId = canReuseId
+            ? remotePersonId
+            : `p_shared_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          const displayName =
+            name?.trim() || (normEmail ? normEmail.split('@')[0] : 'Member');
+          await db.runAsync(
+            `INSERT INTO splitwise_people (id, name, email, created_at)
+             VALUES (?, ?, ?, ?)`,
+            [newId, displayName, normEmail ?? null, createdAt || new Date().toISOString()]
+          );
+          resolvedPersonCache.set(cacheKey, newId);
+          return newId;
+        };
+
         await db.withTransactionAsync(async () => {
           // Upsert server people
           if (Array.isArray(response.people)) {
@@ -380,18 +535,180 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
               if (s.isDeleted) {
                 await db.runAsync('DELETE FROM splitwise_settlements WHERE id = ?', [s.id]);
               } else {
+                const localPersonId = await resolveLocalPersonId(
+                  s.personId,
+                  s.friendEmail,
+                  undefined,
+                  s.createdAt
+                );
                 await db.runAsync(
-                  `INSERT INTO splitwise_settlements (id, person_id, amount, description, settlement_type, friend_email, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)
+                  `INSERT INTO splitwise_settlements (id, person_id, amount, description, settlement_type, friend_email, group_id, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(id) DO UPDATE SET
+                     person_id = excluded.person_id,
                      amount = excluded.amount,
                      description = excluded.description,
                      settlement_type = excluded.settlement_type,
-                     friend_email = excluded.friend_email;`,
-                  [s.id, s.personId, s.amount, s.description ?? null, s.settlementType || 'THEY_PAID', s.friendEmail ?? null, s.createdAt || new Date().toISOString()]
+                     friend_email = excluded.friend_email,
+                     group_id = excluded.group_id;`,
+                  [
+                    s.id,
+                    localPersonId,
+                    s.amount,
+                    s.description ?? null,
+                    s.settlementType || 'THEY_PAID',
+                    s.friendEmail ?? null,
+                    s.groupId ?? null,
+                    s.createdAt || new Date().toISOString(),
+                  ]
                 );
               }
               serverAppliedCount.settlements++;
+            }
+          }
+
+          // Upsert server groups
+          if (Array.isArray(response.groups)) {
+            for (const g of response.groups) {
+              if (g.isDeleted) {
+                await db.runAsync('DELETE FROM splitwise_group_members WHERE group_id = ?', [g.id]);
+                await db.runAsync('DELETE FROM splitwise_groups WHERE id = ?', [g.id]);
+              } else {
+                const nowIso = new Date().toISOString();
+                await db.runAsync(
+                  `INSERT INTO splitwise_groups (id, name, description, icon, category, currency, is_archived, sync_status, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, 'SYNCED', ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET
+                     name = excluded.name,
+                     description = excluded.description,
+                     icon = excluded.icon,
+                     category = excluded.category,
+                     currency = excluded.currency,
+                     is_archived = excluded.is_archived,
+                     sync_status = 'SYNCED',
+                     updated_at = excluded.updated_at;`,
+                  [
+                    g.id,
+                    g.name ?? 'Group',
+                    g.description ?? null,
+                    g.icon ?? null,
+                    g.category ?? null,
+                    g.currency || 'INR',
+                    g.isArchived ? 1 : 0,
+                    g.createdAt || nowIso,
+                    g.updatedAt || g.createdAt || nowIso,
+                  ]
+                );
+                const incomingMembers: SplitSyncGroupMemberDTO[] =
+                  Array.isArray(g.members) && g.members.length > 0
+                    ? g.members
+                    : Array.isArray(g.memberIds)
+                      ? g.memberIds.map((pid) => ({ personId: pid, role: 'member' }))
+                      : [];
+                if (incomingMembers.length > 0) {
+                  await db.runAsync('DELETE FROM splitwise_group_members WHERE group_id = ?', [g.id]);
+                  const seenMemberIds = new Set<string>();
+                  for (const m of incomingMembers) {
+                    const localMemberId = await resolveLocalPersonId(
+                      m.personId,
+                      m.email,
+                      m.name,
+                      g.createdAt || nowIso
+                    );
+                    if (seenMemberIds.has(localMemberId)) continue;
+                    seenMemberIds.add(localMemberId);
+                    await db.runAsync(
+                      `INSERT INTO splitwise_group_members (id, group_id, person_id, role, joined_at, sync_status)
+                       VALUES (?, ?, ?, ?, ?, 'SYNCED');`,
+                      [
+                        `${g.id}_${localMemberId}`,
+                        g.id,
+                        localMemberId,
+                        m.role || (localMemberId === CURRENT_USER_ID ? 'admin' : 'member'),
+                        g.createdAt || nowIso,
+                      ]
+                    );
+                  }
+                }
+              }
+              serverAppliedCount.groups++;
+            }
+          }
+
+          // Upsert server expenses
+          if (Array.isArray(response.expenses)) {
+            for (const e of response.expenses) {
+              if (e.isDeleted) {
+                await db.runAsync('DELETE FROM splitwise_expense_splits WHERE expense_id = ?', [e.id]);
+                await db.runAsync('DELETE FROM splitwise_expenses WHERE id = ?', [e.id]);
+              } else {
+                const nowIso = new Date().toISOString();
+                const localPayerId = await resolveLocalPersonId(
+                  e.payerId,
+                  e.payerEmail,
+                  e.payerName,
+                  e.createdAt || nowIso
+                );
+                await db.runAsync(
+                  `INSERT INTO splitwise_expenses (id, description, amount, currency, category, date, payer_id, group_id, split_type, notes, receipt_url, sync_status, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'SYNCED', ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET
+                     description = excluded.description,
+                     amount = excluded.amount,
+                     currency = excluded.currency,
+                     category = excluded.category,
+                     date = excluded.date,
+                     payer_id = excluded.payer_id,
+                     group_id = excluded.group_id,
+                     split_type = excluded.split_type,
+                     notes = excluded.notes,
+                     receipt_url = excluded.receipt_url,
+                     sync_status = 'SYNCED',
+                     updated_at = excluded.updated_at;`,
+                  [
+                    e.id,
+                    e.description ?? 'Expense',
+                    e.amount ?? 0,
+                    e.currency || 'INR',
+                    e.category ?? null,
+                    e.date || e.createdAt || nowIso,
+                    localPayerId,
+                    e.groupId ?? null,
+                    e.splitType || 'EQUAL',
+                    e.notes ?? null,
+                    e.receiptUrl ?? null,
+                    e.createdAt || nowIso,
+                    e.updatedAt || e.createdAt || nowIso,
+                  ]
+                );
+                if (Array.isArray(e.splits)) {
+                  await db.runAsync('DELETE FROM splitwise_expense_splits WHERE expense_id = ?', [e.id]);
+                  for (const sp of e.splits) {
+                    const localSplitPersonId = await resolveLocalPersonId(
+                      sp.personId,
+                      sp.personEmail,
+                      sp.personName,
+                      sp.createdAt || e.createdAt || nowIso
+                    );
+                    await db.runAsync(
+                      `INSERT INTO splitwise_expense_splits (id, expense_id, person_id, paid_amount, owed_amount, percentage, shares, is_paid, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+                      [
+                        sp.id || `${e.id}_${localSplitPersonId}`,
+                        e.id,
+                        localSplitPersonId,
+                        sp.paidAmount ?? 0,
+                        sp.owedAmount ?? 0,
+                        sp.percentage ?? null,
+                        sp.shares ?? null,
+                        sp.isPaid ? 1 : 0,
+                        sp.createdAt || e.createdAt || nowIso,
+                      ]
+                    );
+                  }
+                }
+              }
+              serverAppliedCount.expenses++;
             }
           }
         });
@@ -416,8 +733,8 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
             people: serverAppliedCount.people,
             debts: serverAppliedCount.debts,
             settlements: serverAppliedCount.settlements,
-            groups: 0,
-            expenses: 0,
+            groups: serverAppliedCount.groups,
+            expenses: serverAppliedCount.expenses,
           },
           conflictsCount: 0,
         };

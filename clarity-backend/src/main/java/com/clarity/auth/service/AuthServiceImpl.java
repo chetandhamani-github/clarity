@@ -6,25 +6,56 @@ import com.clarity.auth.dto.UserDTO;
 import com.clarity.auth.entity.User;
 import com.clarity.auth.repository.UserRepository;
 import com.clarity.exception.ApiException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
+    private final boolean allowUnverifiedFallback;
+    private final Set<String> allowedGoogleClientIds;
+
+    @Autowired
+    public AuthServiceImpl(
+            UserRepository userRepository,
+            @Value("${clarity.auth.allow-unverified-fallback:false}") boolean allowUnverifiedFallback,
+            @Value("${clarity.auth.google-client-id:}") String googleClientIds) {
+        this(userRepository, new RestTemplate(), allowUnverifiedFallback, googleClientIds);
+    }
+
+    public AuthServiceImpl(
+            UserRepository userRepository,
+            RestTemplate restTemplate,
+            boolean allowUnverifiedFallback,
+            String googleClientIds) {
+        this.userRepository = userRepository;
+        this.restTemplate = restTemplate;
+        this.allowUnverifiedFallback = allowUnverifiedFallback;
+        this.allowedGoogleClientIds = googleClientIds == null
+                ? Set.of()
+                : Arrays.stream(googleClientIds.split(","))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .collect(Collectors.toSet());
+    }
 
     @Override
     @Transactional
@@ -34,32 +65,46 @@ public class AuthServiceImpl implements AuthService {
         String avatarUrl = null;
         String googleId = null;
 
-        // 1. Verify Google ID token via Google TokenInfo API if possible
+        // 1. Verify Google ID token via Google TokenInfo API
         if (request.getIdToken() != null && !request.getIdToken().trim().isEmpty()) {
             try {
-                String tokenInfoUrl = "https://oauth2.googleapis.com/tokeninfo?id_token=" + request.getIdToken().trim();
+                String encodedToken = URLEncoder.encode(request.getIdToken().trim(), StandardCharsets.UTF_8);
+                String tokenInfoUrl = "https://oauth2.googleapis.com/tokeninfo?id_token=" + encodedToken;
                 @SuppressWarnings("unchecked")
                 Map<String, Object> tokenInfo = restTemplate.getForObject(tokenInfoUrl, Map.class);
                 if (tokenInfo != null && tokenInfo.containsKey("email")) {
+                    Object emailVerified = tokenInfo.get("email_verified");
+                    if ("false".equalsIgnoreCase(String.valueOf(emailVerified))) {
+                        throw new ApiException("Google account email is not verified", HttpStatus.UNAUTHORIZED);
+                    }
+                    if (!allowedGoogleClientIds.isEmpty()) {
+                        String aud = tokenInfo.get("aud") != null ? String.valueOf(tokenInfo.get("aud")).trim() : "";
+                        String azp = tokenInfo.get("azp") != null ? String.valueOf(tokenInfo.get("azp")).trim() : "";
+                        if (!allowedGoogleClientIds.contains(aud) && !allowedGoogleClientIds.contains(azp)) {
+                            throw new ApiException("Google token audience mismatch", HttpStatus.UNAUTHORIZED);
+                        }
+                    }
                     email = (String) tokenInfo.get("email");
                     name = (String) tokenInfo.get("name");
                     avatarUrl = (String) tokenInfo.get("picture");
                     googleId = (String) tokenInfo.get("sub");
                 }
+            } catch (ApiException e) {
+                throw e;
             } catch (Exception e) {
-                log.warn("Google tokeninfo verification failed or unreachable: {}", e.getMessage());
+                log.warn("Google tokeninfo verification failed: {}", e.getMessage());
             }
         }
 
-        // Fallback to client-provided profile information if network verification was not possible (e.g. mock or local testing)
-        if (email == null && request.getEmail() != null && !request.getEmail().trim().isEmpty()) {
+        // Only allow unverified profile fallback in explicitly configured local/dev environments
+        if (email == null && allowUnverifiedFallback && request.getEmail() != null && !request.getEmail().trim().isEmpty()) {
             email = request.getEmail().trim().toLowerCase();
             name = request.getName();
             avatarUrl = request.getAvatarUrl();
         }
 
         if (email == null || email.trim().isEmpty()) {
-            throw new ApiException("Invalid Google authentication token", HttpStatus.BAD_REQUEST);
+            throw new ApiException("Invalid or unverified Google authentication token", HttpStatus.UNAUTHORIZED);
         }
 
         email = email.trim().toLowerCase();

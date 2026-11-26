@@ -1,7 +1,7 @@
 import { GoogleDrivePromptModal } from '@/components/modals/GoogleDrivePromptModal';
 import { NotificationPermissionPromptModal } from '@/components/modals/NotificationPermissionPromptModal';
 import { SmsTransactionPromptModal } from '@/components/modals/SmsTransactionPromptModal';
-import { AlertProvider, AppLockModal, Text, ToastProvider } from '@/components/ui';
+import { AlertProvider, AppLockModal, ErrorBoundary, Text, ToastProvider } from '@/components/ui';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import '@/lib/navigation';
 import { queryClient } from '@/lib/query-client';
@@ -209,6 +209,9 @@ export default function RootLayout() {
         if (state.biometricEnabled && state.timeoutSetting === 'immediate') {
           setIsAppLocked(true);
         }
+        import('@/services/cloud/google-drive-service')
+          .then(({ flushPendingAutoBackup }) => flushPendingAutoBackup('app-background'))
+          .catch(() => {});
       } else if (nextAppState === 'active') {
         const state = useAppStore.getState();
         if (state.biometricEnabled && lastBackgroundTime.current) {
@@ -264,15 +267,17 @@ export default function RootLayout() {
           <ToastProvider>
             <AlertProvider>
               <ThemeProvider value={navigationTheme}>
-                <Stack
-                  screenOptions={{
-                    headerShown: false,
-                    contentStyle: { backgroundColor: colors.background },
-                  }}
-                >
-                  <Stack.Screen name="(app)" options={{ headerShown: false }} />
-                  <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-                </Stack>
+                <ErrorBoundary>
+                  <Stack
+                    screenOptions={{
+                      headerShown: false,
+                      contentStyle: { backgroundColor: colors.background },
+                    }}
+                  >
+                    <Stack.Screen name="(app)" options={{ headerShown: false }} />
+                    <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                  </Stack>
+                </ErrorBoundary>
                 {isScreenShielded && !isAppLocked && (
                   <View
                     style={[

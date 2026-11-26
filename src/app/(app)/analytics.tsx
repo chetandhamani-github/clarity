@@ -616,7 +616,12 @@ export default function AnalyticsScreen() {
                     <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Recurring</Text>
                     <TouchableOpacity
                       style={styles.addRecurringBtn}
-                      onPress={() => router.navigate('/add-transaction')}
+                      onPress={() =>
+                        router.navigate({
+                          pathname: '/add-transaction',
+                          params: { recurring: '1' },
+                        })
+                      }
                     >
                       <Text style={styles.addRecurringText}>Add</Text>
                       <MaterialIcons name="add" size={16} color={colors.primary} />

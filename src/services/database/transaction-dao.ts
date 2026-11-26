@@ -9,6 +9,7 @@ import type {
     TransactionWithAccount,
 } from '@/types';
 import { DeviceEventEmitter } from 'react-native';
+import { evaluateSmartRules } from '@/services/rules/rules-engine';
 import { getLocalTodayYmd, shiftYmdDays } from '@/utils/date';
 import { formatLocalDate, parseDateSafely } from '@/utils/format';
 import {
@@ -20,6 +21,7 @@ import { getAccountById } from './account-dao';
 import { getDatabase } from './index';
 import {
   getAllTransactionTagsMap,
+  getTransactionTagsMapForIds,
   getTagsForTransaction,
   setTransactionTags,
 } from './tag-dao';
@@ -257,7 +259,9 @@ export async function getTransactions(
 
   const rows = await db.getAllAsync<TransactionRow>(query, params);
   if (rows.length === 0) return [];
-  const tagsMap = await getAllTransactionTagsMap();
+  const tagsMap = filters?.limit
+    ? await getTransactionTagsMapForIds(rows.map((r) => r.id))
+    : await getAllTransactionTagsMap();
   return rows.map((row) => ({
     ...mapRow(row),
     tags: tagsMap[row.id] || [],
@@ -323,7 +327,6 @@ export async function insertTransaction(
   const tagsToApply = data.tags ? [...data.tags] : [];
 
   try {
-    const { evaluateSmartRules } = await import('@/services/rules/rules-engine');
     const ruleResult = await evaluateSmartRules(
       {
         merchant: data.merchant,
@@ -813,6 +816,41 @@ export async function getMonthlyDailyTotals(
   );
 
   return rows;
+}
+
+export async function getDateRangeTotals(
+  filters?: Omit<TransactionFilters, 'limit' | 'offset'>
+): Promise<{ income: number; expense: number; transfer: number; net: number; count: number }> {
+  const db = getDatabase();
+  await ensureTransactionsSchema(db);
+
+  const { whereClause, params } = buildTransactionsWhereClause(filters);
+  const row = await db.getFirstAsync<{
+    income: number;
+    expense: number;
+    transfer: number;
+    count: number;
+  }>(
+    `SELECT
+      COALESCE(SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END), 0) as income,
+      COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END), 0) as expense,
+      COALESCE(SUM(CASE WHEN t.type = 'transfer' THEN t.amount ELSE 0 END), 0) as transfer,
+      COUNT(*) as count
+     FROM transactions t
+     ${whereClause}`,
+    params
+  );
+
+  const income = Math.round((row?.income ?? 0) * 100) / 100;
+  const expense = Math.round((row?.expense ?? 0) * 100) / 100;
+  const transfer = Math.round((row?.transfer ?? 0) * 100) / 100;
+  return {
+    income,
+    expense,
+    transfer,
+    net: Math.round((income - expense) * 100) / 100,
+    count: row?.count ?? 0,
+  };
 }
 
 export async function getMonthlyTotals(month: number, year: number): Promise<MonthlyTotals> {

@@ -3,10 +3,8 @@ import {
   FlatList,
   Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
-  Text as RNText,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -18,42 +16,60 @@ import {
   useToast,
   useAlert,
 } from '@/components/ui';
-import { spacing, typography, fontFamilies, useTheme, ThemeColors } from '@/theme';
+import { spacing, typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useFocusEffect } from 'expo-router';
 import {
   usePaginatedTransactions,
   useMonthlyDailyTotals,
+  useDateRangeTotals,
   useBulkDeleteTransactions,
   useBulkUpdateCategory,
   useBulkUpdateAccount,
   useCreateTransaction,
+  useAllRecurringTransactions,
+  useToggleRecurringTransaction,
+  useDeleteRecurringTransaction,
 } from '@/hooks/use-transactions';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useCategories } from '@/hooks/use-budget';
-import { formatCurrency, formatDate, formatLocalDate, formatTransactionTime, getTransactionSign, groupTransactionsByDate } from '@/utils/format';
-import { getMonthDateBounds } from '@/utils/calendar-utils';
+import { formatCurrency, formatDate } from '@/utils/format';
+import {
+  CalendarDateRange,
+  getMonthDateBounds,
+  isRangeWithinMonth,
+  normalizeCalendarRange,
+  resolvePresetDateRange,
+} from '@/utils/calendar-utils';
 import { getLocalTodayYmd } from '@/utils/date';
 import { getCategoryIcon } from '@/utils/icons';
-import { getTransactionDisplayName, hasMeaningfulMerchant } from '@/utils/transaction-display';
+import {
+  FlatTransactionListItem,
+  SectionHeaderItem,
+  TransactionRowItem,
+  buildFlatTransactionListItems,
+  getTransactionListItemLayout,
+  getTransactionListStyles,
+} from '@/components/transactions/VirtualizedTransactionRows';
 import { TransactionsCalendarCard } from '@/components/transactions/TransactionsCalendarCard';
+import { RecurringSchedulesList } from '@/components/transactions/RecurringSchedulesList';
 import { TransactionFilterModal, ActiveFilters, DatePreset } from '@/components/modals/TransactionFilterModal';
 import { ReviewQueueModal } from '@/components/modals/ReviewQueueModal';
 import { useAppStore } from '@/store/use-app-store';
 import { useSmsStore } from '@/store/useSmsStore';
 import { haptics } from '@/utils/haptics';
-import type { TransactionFilters, TransactionWithAccount } from '@/types';
+import { getTransactionDisplayName } from '@/utils/transaction-display';
+import type { RecurringTransactionWithAccount, TransactionFilters, TransactionType } from '@/types';
 
 const FILTERS = [
   { id: 'all', label: 'All', icon: 'list' },
   { id: 'expense', label: 'Expenses', icon: 'arrow-downward' },
   { id: 'income', label: 'Income', icon: 'arrow-upward' },
   { id: 'transfer', label: 'Transfers', icon: 'swap-horiz' },
+  { id: 'recurring', label: 'Recurring', icon: 'autorenew' },
 ];
 
-const SECTION_HEADER_HEIGHT = 44;
-const TRANSACTION_ROW_HEIGHT = 76;
 const TRANSACTIONS_PAGE_SIZE = 25;
 
 interface TransactionsScreenProps {
@@ -64,279 +80,6 @@ interface TransactionsScreenProps {
   initialDatePreset?: DatePreset;
 }
 
-type FlatTransactionListItem =
-  | {
-      kind: 'header';
-      key: string;
-      title: string;
-      isFirst: boolean;
-      offset: number;
-      length: number;
-    }
-  | {
-      kind: 'row';
-      key: string;
-      row: PreparedTransactionRow;
-      isLastInSection: boolean;
-      isVeryLast: boolean;
-      offset: number;
-      length: number;
-    };
-
-interface PreparedTransactionRow {
-  id: string;
-  title: string;
-  subtitle: string;
-  amountText: string;
-  category: string;
-  categoryIcon: ReturnType<typeof getCategoryIcon>;
-  splitCount: number;
-  tagLabel: string | null;
-  hasReceipt: boolean;
-  isCredit: boolean;
-}
-
-function prepareTransactionRow(
-  tx: TransactionWithAccount,
-  filterAccountId?: string
-): PreparedTransactionRow {
-  const isIncomingTransfer =
-    Boolean(filterAccountId) && tx.type === 'transfer' && tx.toAccountId === filterAccountId;
-  const isOutgoingTransfer =
-    Boolean(filterAccountId) && tx.type === 'transfer' && tx.accountId === filterAccountId;
-  const isCredit = tx.type === 'income' || isIncomingTransfer;
-  const sign = isCredit
-    ? '+'
-    : isOutgoingTransfer || tx.type === 'expense'
-    ? '-'
-    : getTransactionSign(tx.type);
-  const hasMerchant = hasMeaningfulMerchant(tx);
-  const title = getTransactionDisplayName(tx);
-  const timeStr = formatTransactionTime(tx.date, tx.createdAt);
-
-  const metaParts: string[] = [];
-  if (timeStr) {
-    metaParts.push(timeStr);
-  }
-  if (tx.type === 'transfer') {
-    metaParts.push(`${tx.accountName} → ${tx.toAccountName || 'Unknown'}`);
-  } else if (hasMerchant) {
-    if (tx.accountName) metaParts.push(tx.accountName);
-    metaParts.push(tx.category);
-  } else if (tx.accountName) {
-    metaParts.push(tx.accountName);
-  }
-
-  const tags = tx.tags;
-  const tagLabel =
-    tags && tags.length > 0
-      ? `#${tags[0]}${tags.length > 1 ? ` +${tags.length - 1}` : ''}`
-      : null;
-
-  return {
-    id: tx.id,
-    title,
-    subtitle: metaParts.join(' • '),
-    amountText: `${sign}${formatCurrency(tx.amount)}`,
-    category: tx.category,
-    categoryIcon: getCategoryIcon(tx.category),
-    splitCount: tx.splits?.length ?? 0,
-    tagLabel,
-    hasReceipt: Boolean(tx.receiptUri),
-    isCredit,
-  };
-}
-
-const preparedRowCacheByContext = new Map<
-  string,
-  WeakMap<TransactionWithAccount, PreparedTransactionRow>
->();
-
-function getPreparedTransactionRow(
-  tx: TransactionWithAccount,
-  currency: string,
-  filterAccountId?: string
-): PreparedTransactionRow {
-  const contextKey = `${currency}:${filterAccountId ?? ''}`;
-  let cache = preparedRowCacheByContext.get(contextKey);
-  if (!cache) {
-    cache = new WeakMap();
-    preparedRowCacheByContext.set(contextKey, cache);
-  }
-  const cached = cache.get(tx);
-  if (cached) {
-    return cached;
-  }
-  const prepared = prepareTransactionRow(tx, filterAccountId);
-  cache.set(tx, prepared);
-  return prepared;
-}
-
-interface SectionHeaderItemProps {
-  title: string;
-  isFirst: boolean;
-  styles: ReturnType<typeof getStyles>;
-}
-
-const SectionHeaderItem = React.memo(function SectionHeaderItem({
-  title,
-  isFirst,
-  styles,
-}: SectionHeaderItemProps) {
-  return (
-    <View style={[styles.dateGroupHeader, isFirst && styles.firstSectionHeader]}>
-      <RNText style={styles.dateGroupText} numberOfLines={1} maxFontSizeMultiplier={1.15}>
-        {title}
-      </RNText>
-    </View>
-  );
-});
-
-interface TransactionRowItemProps {
-  item: PreparedTransactionRow;
-  isLastInSection: boolean;
-  isVeryLast: boolean;
-  isSelected: boolean;
-  hasSelectionMode: boolean;
-  iconDefaultColor: string;
-  iconCreditColor: string;
-  primaryColor: string;
-  outlineColor: string;
-  styles: ReturnType<typeof getStyles>;
-  onPress: (id: string) => void;
-  onLongPress: (id: string) => void;
-}
-
-const TransactionRowItem = React.memo(function TransactionRowItem({
-  item,
-  isLastInSection,
-  isVeryLast,
-  isSelected,
-  hasSelectionMode,
-  iconDefaultColor,
-  iconCreditColor,
-  primaryColor,
-  outlineColor,
-  styles,
-  onPress,
-  onLongPress,
-}: TransactionRowItemProps) {
-  const handleRowPress = useCallback(() => {
-    onPress(item.id);
-  }, [onPress, item.id]);
-
-  const handleRowLongPress = useCallback(() => {
-    onLongPress(item.id);
-  }, [onLongPress, item.id]);
-
-  const baseRowStyle = useMemo(
-    () => [
-      styles.transactionItem,
-      isSelected && styles.transactionItemSelected,
-      isVeryLast && styles.lastTransactionItem,
-      isLastInSection && !isVeryLast && styles.transactionItemSectionLast,
-    ],
-    [styles, isSelected, isVeryLast, isLastInSection]
-  );
-
-  const pressedRowStyle = useMemo(
-    () => [...baseRowStyle, styles.transactionItemPressed],
-    [baseRowStyle, styles.transactionItemPressed]
-  );
-
-  const getRowStyle = useCallback(
-    ({ pressed }: { pressed: boolean }) => (pressed ? pressedRowStyle : baseRowStyle),
-    [pressedRowStyle, baseRowStyle]
-  );
-
-  return (
-    <Pressable
-      style={getRowStyle}
-      onPress={handleRowPress}
-      onLongPress={handleRowLongPress}
-      delayLongPress={200}
-    >
-      {hasSelectionMode && (
-        <View style={styles.selectionCheckbox}>
-          <MaterialIcons
-            name={isSelected ? 'check-circle' : 'radio-button-unchecked'}
-            size={22}
-            color={isSelected ? primaryColor : outlineColor}
-          />
-        </View>
-      )}
-      <View style={styles.transactionLeft}>
-        <View
-          style={[
-            styles.transactionIconBox,
-            item.isCredit && styles.transactionIconBoxCredit,
-          ]}
-        >
-          <MaterialIcons
-            name={item.categoryIcon}
-            size={20}
-            color={item.isCredit ? iconCreditColor : iconDefaultColor}
-          />
-        </View>
-        <View style={styles.transactionTextCol}>
-          <RNText style={styles.transactionName} numberOfLines={1} maxFontSizeMultiplier={1.15}>
-            {item.title}
-          </RNText>
-          <RNText style={styles.transactionMeta} numberOfLines={1} maxFontSizeMultiplier={1.15}>
-            {item.subtitle}
-          </RNText>
-        </View>
-      </View>
-      <View style={styles.transactionRight}>
-        <RNText
-          style={[
-            styles.transactionAmount,
-            item.isCredit && styles.transactionAmountCredit,
-          ]}
-          numberOfLines={1}
-          maxFontSizeMultiplier={1.15}
-        >
-          {item.amountText}
-        </RNText>
-        <View style={styles.badgesRow}>
-          {item.splitCount > 0 && (
-            <View style={[styles.categoryBadge, styles.secondaryBadge]}>
-              <RNText
-                style={[styles.categoryBadgeText, styles.secondaryBadgeText]}
-                numberOfLines={1}
-                maxFontSizeMultiplier={1.15}
-              >
-                Split ({item.splitCount})
-              </RNText>
-            </View>
-          )}
-          <View style={styles.categoryBadge}>
-            <RNText style={styles.categoryBadgeText} numberOfLines={1} maxFontSizeMultiplier={1.15}>
-              {item.category}
-            </RNText>
-          </View>
-          {item.tagLabel !== null && (
-            <View style={[styles.categoryBadge, styles.tagBadge]}>
-              <RNText
-                style={[styles.categoryBadgeText, styles.secondaryBadgeText]}
-                numberOfLines={1}
-                maxFontSizeMultiplier={1.15}
-              >
-                {item.tagLabel}
-              </RNText>
-            </View>
-          )}
-          {item.hasReceipt && (
-            <View style={[styles.categoryBadge, styles.receiptBadge]}>
-              <MaterialIcons name="receipt" size={12} color={primaryColor} />
-            </View>
-          )}
-        </View>
-      </View>
-    </Pressable>
-  );
-});
-
 export default function TransactionsScreen({
   showBack = false,
   lockedAccountId,
@@ -346,6 +89,7 @@ export default function TransactionsScreen({
 }: TransactionsScreenProps = {}) {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
+  const listStyles = useMemo(() => getTransactionListStyles(colors), [colors]);
   const insets = useSafeInsets();
   const bottomInset = insets.bottom;
   const router = useRouter();
@@ -353,9 +97,11 @@ export default function TransactionsScreen({
   const hideBalances = useAppStore((state) => state.hideBalances);
 
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [isRecurringTab, setIsRecurringTab] = useState(false);
   const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth() + 1);
-  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
+  const [selectedCalendarRange, setSelectedCalendarRange] = useState<CalendarDateRange | null>(null);
+  const [isCalendarGliding, setIsCalendarGliding] = useState(false);
 
   const { accounts } = useAccounts();
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -379,6 +125,9 @@ export default function TransactionsScreen({
 
   useEffect(() => {
     if (!initialCategory && !initialType && !initialDatePreset) return;
+    if (initialType) {
+      setIsRecurringTab(false);
+    }
     setFilters((prev) => {
       const nextCategory = initialCategory;
       const nextType = initialType ?? prev.type;
@@ -408,6 +157,12 @@ export default function TransactionsScreen({
   const { mutate: bulkUpdateCat } = useBulkUpdateCategory();
   const { mutate: bulkUpdateAcc } = useBulkUpdateAccount();
   const { mutate: restoreTx } = useCreateTransaction();
+  const {
+    transactions: recurringSchedules,
+    isLoading: isRecurringLoading,
+  } = useAllRecurringTransactions(isRecurringTab);
+  const { mutate: toggleRecurring } = useToggleRecurringTransaction();
+  const { mutate: deleteRecurring } = useDeleteRecurringTransaction();
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkCategoryModalVisible, setBulkCategoryModalVisible] = useState(false);
@@ -415,36 +170,26 @@ export default function TransactionsScreen({
 
   const dateRange = useMemo<{ dateFrom?: string; dateTo?: string }>(() => {
     if (viewMode === 'calendar') {
-      if (selectedCalendarDate) {
-        return { dateFrom: selectedCalendarDate, dateTo: selectedCalendarDate };
+      if (selectedCalendarRange) {
+        return { dateFrom: selectedCalendarRange.start, dateTo: selectedCalendarRange.end };
       }
       return getMonthDateBounds(calendarYear, calendarMonth);
     }
 
-    const today = new Date();
-    const y = today.getFullYear();
-    const m = today.getMonth();
-
-    switch (filters.datePreset) {
-      case 'this_month': {
-        const from = formatLocalDate(new Date(y, m, 1));
-        const to = formatLocalDate(today);
-        return { dateFrom: from, dateTo: to };
-      }
-      case 'last_month': {
-        const from = formatLocalDate(new Date(y, m - 1, 1));
-        const to = formatLocalDate(new Date(y, m, 0));
-        return { dateFrom: from, dateTo: to };
-      }
-      case 'last_90_days': {
-        const fromDate = new Date();
-        fromDate.setDate(fromDate.getDate() - 90);
-        return { dateFrom: formatLocalDate(fromDate), dateTo: formatLocalDate(today) };
-      }
-      default:
-        return {};
-    }
-  }, [viewMode, selectedCalendarDate, calendarYear, calendarMonth, filters.datePreset]);
+    return resolvePresetDateRange(
+      filters.datePreset,
+      filters.customDateFrom,
+      filters.customDateTo
+    );
+  }, [
+    viewMode,
+    selectedCalendarRange,
+    calendarYear,
+    calendarMonth,
+    filters.datePreset,
+    filters.customDateFrom,
+    filters.customDateTo,
+  ]);
 
   const calendarBaseFilters = useMemo<Omit<TransactionFilters, 'limit' | 'offset' | 'dateFrom' | 'dateTo'>>(
     () => ({
@@ -464,7 +209,7 @@ export default function TransactionsScreen({
     calendarMonth,
     calendarYear,
     calendarBaseFilters,
-    viewMode === 'calendar'
+    viewMode === 'calendar' && !isRecurringTab
   );
 
   const queryFilters = useMemo<TransactionFilters>(() => {
@@ -475,6 +220,18 @@ export default function TransactionsScreen({
     };
   }, [calendarBaseFilters, dateRange]);
 
+  const isCalendarCrossMonth = Boolean(
+    !isRecurringTab &&
+      viewMode === 'calendar' &&
+      selectedCalendarRange &&
+      !isRangeWithinMonth(selectedCalendarRange, calendarYear, calendarMonth)
+  );
+
+  const { rangeTotals: crossMonthRangeTotals } = useDateRangeTotals(
+    queryFilters,
+    isCalendarCrossMonth
+  );
+
   const {
     transactions,
     totalCount,
@@ -482,7 +239,7 @@ export default function TransactionsScreen({
     isFetchingNextPage,
     hasNextPage,
     fetchNextPage,
-  } = usePaginatedTransactions(queryFilters, TRANSACTIONS_PAGE_SIZE);
+  } = usePaginatedTransactions(queryFilters, TRANSACTIONS_PAGE_SIZE, !isRecurringTab);
 
   useFocusEffect(
     useCallback(() => {
@@ -630,53 +387,10 @@ export default function TransactionsScreen({
     [selectedIds, accounts, bulkUpdateAcc, showToast]
   );
 
-  const groupedTransactions = useMemo(
-    () => groupTransactionsByDate(transactions),
-    [transactions]
-  );
-
   const flatListItems = useMemo<FlatTransactionListItem[]>(() => {
-    if (isLoading || groupedTransactions.length === 0) return [];
-    const items: FlatTransactionListItem[] = [];
-    const lastGroupIdx = groupedTransactions.length - 1;
-    let offset = 0;
-
-    for (let groupIndex = 0; groupIndex < groupedTransactions.length; groupIndex++) {
-      const group = groupedTransactions[groupIndex];
-      const isFirstGroup = groupIndex === 0;
-      const isLastGroup = groupIndex === lastGroupIdx;
-
-      items.push({
-        kind: 'header',
-        key: `header:${group.date}`,
-        title: group.label,
-        isFirst: isFirstGroup,
-        offset,
-        length: SECTION_HEADER_HEIGHT,
-      });
-      offset += SECTION_HEADER_HEIGHT;
-
-      const lastRowIdx = group.items.length - 1;
-      for (let rowIndex = 0; rowIndex < group.items.length; rowIndex++) {
-        const tx = group.items[rowIndex];
-        const isLastInSection = rowIndex === lastRowIdx;
-        const isVeryLast = isLastGroup && isLastInSection;
-
-        items.push({
-          kind: 'row',
-          key: tx.id,
-          row: getPreparedTransactionRow(tx, currency, effectiveAccountId),
-          isLastInSection,
-          isVeryLast,
-          offset,
-          length: TRANSACTION_ROW_HEIGHT,
-        });
-        offset += TRANSACTION_ROW_HEIGHT;
-      }
-    }
-
-    return items;
-  }, [groupedTransactions, isLoading, effectiveAccountId, currency]);
+    if (isLoading) return [];
+    return buildFlatTransactionListItems(transactions, currency, effectiveAccountId);
+  }, [transactions, isLoading, effectiveAccountId, currency]);
 
   const hasSelectionMode = selectedIds.size > 0;
   const hasSelectionModeRef = useRef(hasSelectionMode);
@@ -704,17 +418,6 @@ export default function TransactionsScreen({
   );
 
   const keyExtractor = useCallback((item: FlatTransactionListItem) => item.key, []);
-
-  const getItemLayout = useCallback(
-    (data: ArrayLike<FlatTransactionListItem> | null | undefined, index: number) => {
-      const entry = data?.[index];
-      if (entry) {
-        return { length: entry.length, offset: entry.offset, index };
-      }
-      return { length: TRANSACTION_ROW_HEIGHT, offset: index * TRANSACTION_ROW_HEIGHT, index };
-    },
-    []
-  );
 
   const listContentContainerStyle = useMemo(
     () => [styles.scrollContent, { paddingBottom: bottomInset + (showBack ? 32 : 120) }],
@@ -744,7 +447,7 @@ export default function TransactionsScreen({
           <SectionHeaderItem
             title={item.title}
             isFirst={item.isFirst}
-            styles={styles}
+            styles={listStyles}
           />
         );
       }
@@ -760,13 +463,13 @@ export default function TransactionsScreen({
           iconCreditColor={colors.onPrimaryContainer}
           primaryColor={colors.primary}
           outlineColor={colors.outline}
-          styles={styles}
+          styles={listStyles}
           onPress={handleItemPress}
           onLongPress={handleItemLongPress}
         />
       );
     },
-    [colors, styles, selectedIds, hasSelectionMode, handleItemPress, handleItemLongPress]
+    [colors, listStyles, selectedIds, hasSelectionMode, handleItemPress, handleItemLongPress]
   );
 
   const activeCount =
@@ -805,23 +508,41 @@ export default function TransactionsScreen({
       });
     }
     if (viewMode === 'list' && filters.datePreset !== 'all') {
-      const label =
-        filters.datePreset === 'this_month'
-          ? 'This Month'
-          : filters.datePreset === 'last_month'
-          ? 'Last Month'
-          : 'Last 90 Days';
+      let label: string;
+      if (filters.datePreset === 'custom' && dateRange.dateFrom && dateRange.dateTo) {
+        label =
+          dateRange.dateFrom === dateRange.dateTo
+            ? formatDate(dateRange.dateFrom, 'short')
+            : `${formatDate(dateRange.dateFrom, 'short')} – ${formatDate(dateRange.dateTo, 'short')}`;
+      } else if (filters.datePreset === 'this_month') {
+        label = 'This Month';
+      } else if (filters.datePreset === 'last_7_days') {
+        label = 'Last 7 Days';
+      } else if (filters.datePreset === 'last_30_days') {
+        label = 'Last 30 Days';
+      } else if (filters.datePreset === 'last_month') {
+        label = 'Last Month';
+      } else {
+        label = 'Last 90 Days';
+      }
       list.push({
         id: 'date',
         label: `Date: ${label}`,
-        onRemove: () => setFilters((prev) => ({ ...prev, datePreset: 'all' })),
+        onRemove: () => {
+          setSelectedCalendarRange(null);
+          setFilters((prev) => ({
+            ...prev,
+            datePreset: 'all',
+            customDateFrom: undefined,
+            customDateTo: undefined,
+          }));
+        },
       });
     }
     return list;
-  }, [filters, selectedAccount, lockedAccountId, viewMode]);
+  }, [filters, selectedAccount, lockedAccountId, viewMode, dateRange]);
 
   const handleCalendarPrevMonth = useCallback(() => {
-    setSelectedCalendarDate(null);
     if (calendarMonth === 1) {
       setCalendarMonth(12);
       setCalendarYear((y) => y - 1);
@@ -831,7 +552,6 @@ export default function TransactionsScreen({
   }, [calendarMonth]);
 
   const handleCalendarNextMonth = useCallback(() => {
-    setSelectedCalendarDate(null);
     if (calendarMonth === 12) {
       setCalendarMonth(1);
       setCalendarYear((y) => y + 1);
@@ -845,41 +565,156 @@ export default function TransactionsScreen({
     const [y, m] = todayYmd.split('-').map(Number);
     setCalendarYear(y);
     setCalendarMonth(m);
-    setSelectedCalendarDate(todayYmd);
+    setSelectedCalendarRange({ start: todayYmd, end: todayYmd });
   }, []);
 
-  const handleSelectCalendarDate = useCallback(
-    (dateStr: string) => {
-      if (selectedCalendarDate === dateStr) {
-        setSelectedCalendarDate(null);
-        return;
+  const handleSelectCalendarRange = useCallback(
+    (range: CalendarDateRange | null) => {
+      if (range && range.start === range.end && selectedCalendarRange === null) {
+        const [y, m] = range.start.split('-').map(Number);
+        if (y && m && (y !== calendarYear || m !== calendarMonth)) {
+          setCalendarYear(y);
+          setCalendarMonth(m);
+        }
       }
-      const [y, m] = dateStr.split('-').map(Number);
-      if (y && m && (y !== calendarYear || m !== calendarMonth)) {
-        setCalendarYear(y);
-        setCalendarMonth(m);
-      }
-      setSelectedCalendarDate(dateStr);
+      setSelectedCalendarRange(range);
     },
-    [selectedCalendarDate, calendarYear, calendarMonth]
+    [calendarYear, calendarMonth, selectedCalendarRange]
   );
 
   const handleToggleViewMode = useCallback(() => {
     haptics.selection();
-    setViewMode((prev) => (prev === 'list' ? 'calendar' : 'list'));
-  }, []);
+    if (isRecurringTab) {
+      setIsRecurringTab(false);
+      setViewMode('calendar');
+      return;
+    }
+    if (viewMode === 'calendar') {
+      if (selectedCalendarRange) {
+        setFilters((prev) => ({
+          ...prev,
+          datePreset: 'custom',
+          customDateFrom: selectedCalendarRange.start,
+          customDateTo: selectedCalendarRange.end,
+        }));
+      }
+      setViewMode('list');
+      return;
+    }
+
+    if (filters.datePreset === 'this_month') {
+      const now = new Date();
+      setCalendarYear(now.getFullYear());
+      setCalendarMonth(now.getMonth() + 1);
+      setSelectedCalendarRange(null);
+    } else if (filters.datePreset === 'last_month') {
+      const last = new Date();
+      last.setMonth(last.getMonth() - 1);
+      setCalendarYear(last.getFullYear());
+      setCalendarMonth(last.getMonth() + 1);
+      setSelectedCalendarRange(null);
+    } else if (filters.datePreset !== 'all' && dateRange.dateFrom && dateRange.dateTo) {
+      const normalized = normalizeCalendarRange(dateRange.dateFrom, dateRange.dateTo);
+      const focusDate = filters.datePreset === 'custom' ? normalized.start : normalized.end;
+      const [y, m] = focusDate.split('-').map(Number);
+      if (y && m) {
+        setCalendarYear(y);
+        setCalendarMonth(m);
+      }
+      setSelectedCalendarRange(normalized);
+    }
+    setViewMode('calendar');
+  }, [isRecurringTab, viewMode, selectedCalendarRange, filters.datePreset, dateRange]);
 
   const navigateToSearch = useCallback(() => {
     router.navigate(lockedAccountId ? `/(app)/search?accountId=${lockedAccountId}` : '/search');
   }, [router, lockedAccountId]);
 
   const navigateToAddTransaction = useCallback(() => {
-    router.navigate(
-      lockedAccountId ? `/(app)/add-transaction?accountId=${lockedAccountId}` : '/add-transaction'
-    );
-  }, [router, lockedAccountId]);
+    const params: Record<string, string> = {};
+    if (lockedAccountId) params.accountId = lockedAccountId;
+    if (isRecurringTab) params.recurring = '1';
+    if (Object.keys(params).length > 0) {
+      router.navigate({ pathname: '/add-transaction', params });
+      return;
+    }
+    router.navigate('/add-transaction');
+  }, [router, lockedAccountId, isRecurringTab]);
+
+  const handleAddRecurring = useCallback(
+    (opts?: { type?: TransactionType; accountId?: string; toAccountId?: string }) => {
+      const params: Record<string, string> = { recurring: '1' };
+      if (opts?.type) params.type = opts.type;
+      if (opts?.accountId) params.accountId = opts.accountId;
+      else if (lockedAccountId && !opts?.toAccountId) params.accountId = lockedAccountId;
+      if (opts?.toAccountId) params.toAccountId = opts.toAccountId;
+      router.navigate({ pathname: '/add-transaction', params });
+    },
+    [router, lockedAccountId]
+  );
+
+  const handleToggleRecurringActive = useCallback(
+    (id: string, isActive: boolean) => {
+      haptics.selection();
+      toggleRecurring(
+        { id, isActive },
+        {
+          onSuccess: () => {
+            showToast(
+              isActive ? 'Recurring schedule resumed' : 'Recurring schedule paused',
+              'info'
+            );
+          },
+        }
+      );
+    },
+    [toggleRecurring, showToast]
+  );
+
+  const handleDeleteRecurring = useCallback(
+    (schedule: RecurringTransactionWithAccount) => {
+      const title = getTransactionDisplayName(schedule);
+      showAlert(
+        'Cancel Recurring Schedule',
+        `Cancel the ${schedule.frequency} recurring schedule for "${title}"?\n\nPast recorded transactions will not be deleted.`,
+        [
+          { text: 'Keep Schedule', style: 'cancel' },
+          {
+            text: 'Cancel Schedule',
+            style: 'destructive',
+            onPress: () => {
+              deleteRecurring(schedule.id, {
+                onSuccess: () => {
+                  showToast('Recurring schedule cancelled', 'success');
+                },
+              });
+            },
+          },
+        ]
+      );
+    },
+    [showAlert, deleteRecurring, showToast]
+  );
+
+  const handlePayRecurringNow = useCallback(
+    (schedule: RecurringTransactionWithAccount) => {
+      const params: Record<string, string> = {
+        type: schedule.type,
+        accountId: schedule.accountId,
+        amount: schedule.amount.toString(),
+        merchant: schedule.merchant,
+        category: schedule.category,
+      };
+      if (schedule.type === 'transfer' && schedule.toAccountId) {
+        params.toAccountId = schedule.toAccountId;
+      }
+      router.navigate({ pathname: '/add-transaction', params });
+    },
+    [router]
+  );
 
   const clearFilters = useCallback(() => {
+    setSelectedCalendarRange(null);
     setFilters({
       datePreset: 'all',
       type: 'all',
@@ -933,17 +768,28 @@ export default function TransactionsScreen({
             contentContainerStyle={styles.filtersContainer}
           >
             {FILTERS.map((filter) => {
-              const isActive = (filters.type || 'all') === filter.id;
+              const isActive =
+                filter.id === 'recurring'
+                  ? isRecurringTab
+                  : !isRecurringTab && (filters.type || 'all') === filter.id;
               return (
                 <TouchableOpacity
                   key={filter.id}
                   style={isActive ? styles.activeFilter : styles.inactiveFilter}
-                  onPress={() =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      type: filter.id as any,
-                    }))
-                  }
+                  onPress={() => {
+                    haptics.selection();
+                    if (filter.id === 'recurring') {
+                      setSelectedIds(new Set());
+                      setViewMode('list');
+                      setIsRecurringTab(true);
+                    } else {
+                      setIsRecurringTab(false);
+                      setFilters((prev) => ({
+                        ...prev,
+                        type: filter.id as ActiveFilters['type'],
+                      }));
+                    }
+                  }}
                 >
                   <MaterialIcons
                     name={filter.icon as any}
@@ -959,7 +805,7 @@ export default function TransactionsScreen({
           </ScrollView>
         </View>
 
-        {activeBadges.length > 0 && (
+        {!isRecurringTab && activeBadges.length > 0 && (
           <View style={styles.activeBadgesRow}>
             <ScrollView
               horizontal
@@ -987,7 +833,7 @@ export default function TransactionsScreen({
           </View>
         )}
 
-        {!lockedAccountId && reviewQueueCount > 0 && (
+        {!isRecurringTab && !lockedAccountId && reviewQueueCount > 0 && (
           <TouchableOpacity
             style={styles.reviewQueueBanner}
             onPress={() => setReviewModalVisible(true)}
@@ -1008,47 +854,67 @@ export default function TransactionsScreen({
           </TouchableOpacity>
         )}
 
-        {viewMode === 'calendar' && (
+        {!isRecurringTab && viewMode === 'calendar' && (
           <TransactionsCalendarCard
             year={calendarYear}
             month={calendarMonth}
-            selectedDate={selectedCalendarDate}
+            selectedRange={selectedCalendarRange}
             dailyTotals={dailyTotals}
             dailyMap={dailyMap}
+            rangeSummaryOverride={isCalendarCrossMonth ? crossMonthRangeTotals : null}
             isLoading={isCalendarTotalsLoading}
             currencyCode={currency}
             hideBalances={hideBalances}
             onPrevMonth={handleCalendarPrevMonth}
             onNextMonth={handleCalendarNextMonth}
             onJumpToToday={handleCalendarJumpToToday}
-            onSelectDate={handleSelectCalendarDate}
-            onClearSelectedDate={() => setSelectedCalendarDate(null)}
+            onSelectRange={handleSelectCalendarRange}
+            onGlideStateChange={setIsCalendarGliding}
           />
         )}
 
-        <View style={styles.resultsHeader}>
-          <Text style={styles.resultsTitle}>
-            {viewMode === 'calendar'
-              ? selectedCalendarDate
-                ? formatDate(selectedCalendarDate, 'short')
-                : formatDate(
-                    `${calendarYear}-${String(calendarMonth).padStart(2, '0')}-01`,
-                    'month-year'
-                  )
-              : 'Recent Activity'}
-          </Text>
-          <Text style={styles.resultsCount}>
-            {transactions.length < totalCount
-              ? `${transactions.length} of ${totalCount}`
-              : `${totalCount} ${totalCount === 1 ? 'Transaction' : 'Transactions'}`}
-          </Text>
-        </View>
+        {!isRecurringTab && (
+          <View style={styles.resultsHeader}>
+            <Text style={styles.resultsTitle}>
+              {viewMode === 'calendar'
+                ? selectedCalendarRange
+                  ? selectedCalendarRange.start === selectedCalendarRange.end
+                    ? formatDate(selectedCalendarRange.start, 'short')
+                    : `${formatDate(selectedCalendarRange.start, 'short')} – ${formatDate(selectedCalendarRange.end, 'short')}`
+                  : formatDate(
+                      `${calendarYear}-${String(calendarMonth).padStart(2, '0')}-01`,
+                      'month-year'
+                    )
+                : filters.datePreset === 'custom' && dateRange.dateFrom && dateRange.dateTo
+                ? dateRange.dateFrom === dateRange.dateTo
+                  ? formatDate(dateRange.dateFrom, 'short')
+                  : `${formatDate(dateRange.dateFrom, 'short')} – ${formatDate(dateRange.dateTo, 'short')}`
+                : filters.datePreset === 'this_month'
+                ? 'This Month'
+                : filters.datePreset === 'last_7_days'
+                ? 'Last 7 Days'
+                : filters.datePreset === 'last_30_days'
+                ? 'Last 30 Days'
+                : filters.datePreset === 'last_month'
+                ? 'Last Month'
+                : filters.datePreset === 'last_90_days'
+                ? 'Last 90 Days'
+                : 'Recent Activity'}
+            </Text>
+            <Text style={styles.resultsCount}>
+              {transactions.length < totalCount
+                ? `${transactions.length} of ${totalCount}`
+                : `${totalCount} ${totalCount === 1 ? 'Transaction' : 'Transactions'}`}
+            </Text>
+          </View>
+        )}
       </View>
     ),
     [
       colors,
       styles,
       filters,
+      isRecurringTab,
       activeCount,
       activeBadges,
       transactions.length,
@@ -1060,17 +926,21 @@ export default function TransactionsScreen({
       viewMode,
       calendarYear,
       calendarMonth,
-      selectedCalendarDate,
+      selectedCalendarRange,
       dailyTotals,
       dailyMap,
       isCalendarTotalsLoading,
+      isCalendarCrossMonth,
+      crossMonthRangeTotals,
+      dateRange.dateFrom,
+      dateRange.dateTo,
       currency,
       hideBalances,
       handleToggleViewMode,
       handleCalendarPrevMonth,
       handleCalendarNextMonth,
       handleCalendarJumpToToday,
-      handleSelectCalendarDate,
+      handleSelectCalendarRange,
     ]
   );
 
@@ -1079,8 +949,11 @@ export default function TransactionsScreen({
       return <TransactionsSkeleton />;
     }
     const hasActiveFilters = activeCount > 0;
-    const isCalendarDayEmpty = viewMode === 'calendar' && selectedCalendarDate !== null;
-    const isCalendarMonthEmpty = viewMode === 'calendar' && selectedCalendarDate === null;
+    const isCalendarRangeEmpty = viewMode === 'calendar' && selectedCalendarRange !== null;
+    const isCalendarMonthEmpty = viewMode === 'calendar' && selectedCalendarRange === null;
+    const isSingleDayEmpty = Boolean(
+      selectedCalendarRange && selectedCalendarRange.start === selectedCalendarRange.end
+    );
     return (
       <View style={styles.emptyContainer}>
         <View style={styles.emptyIconCircle}>
@@ -1097,8 +970,10 @@ export default function TransactionsScreen({
           />
         </View>
         <Text style={styles.emptyTitle}>
-          {isCalendarDayEmpty
-            ? `No Activity on ${formatDate(selectedCalendarDate, 'short')}`
+          {isCalendarRangeEmpty && selectedCalendarRange
+            ? isSingleDayEmpty
+              ? `No Activity on ${formatDate(selectedCalendarRange.start, 'short')}`
+              : `No Activity (${formatDate(selectedCalendarRange.start, 'short')} – ${formatDate(selectedCalendarRange.end, 'short')})`
             : hasActiveFilters
             ? 'No Matching Transactions'
             : isCalendarMonthEmpty
@@ -1106,18 +981,20 @@ export default function TransactionsScreen({
             : 'No Transactions Yet'}
         </Text>
         <Text style={styles.emptyDescription}>
-          {isCalendarDayEmpty
-            ? 'No transactions were recorded on this date under your current filters.'
+          {isCalendarRangeEmpty
+            ? isSingleDayEmpty
+              ? 'No transactions were recorded on this date under your current filters.'
+              : 'No transactions were recorded in this date range under your current filters.'
             : hasActiveFilters
             ? 'Try resetting your search or filter criteria to see all activity.'
             : lockedAccountId
             ? 'No transactions found for this account yet.'
             : 'Track expenses automatically via bank alerts or record your first cash spend manually.'}
         </Text>
-        {isCalendarDayEmpty ? (
+        {isCalendarRangeEmpty ? (
           <TouchableOpacity
             style={styles.emptyActionBtn}
-            onPress={() => setSelectedCalendarDate(null)}
+            onPress={() => setSelectedCalendarRange(null)}
           >
             <Text style={styles.emptyActionBtnText}>Show Full Month</Text>
           </TouchableOpacity>
@@ -1143,7 +1020,7 @@ export default function TransactionsScreen({
     isLoading,
     activeCount,
     viewMode,
-    selectedCalendarDate,
+    selectedCalendarRange,
     styles,
     colors,
     lockedAccountId,
@@ -1206,25 +1083,42 @@ export default function TransactionsScreen({
         }
       />
 
-      <FlatList<FlatTransactionListItem>
-        data={flatListItems}
-        keyExtractor={keyExtractor}
-        getItemLayout={getItemLayout}
-        renderItem={renderItem}
-        ListHeaderComponent={renderListHeader}
-        ListEmptyComponent={renderListEmpty}
-        ListFooterComponent={renderListFooter}
-        contentContainerStyle={listContentContainerStyle}
-        showsVerticalScrollIndicator={false}
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.5}
-        removeClippedSubviews={Platform.OS === 'android'}
-        initialNumToRender={10}
-        maxToRenderPerBatch={6}
-        windowSize={5}
-        updateCellsBatchingPeriod={50}
-        extraData={listExtraData}
-      />
+      {isRecurringTab ? (
+        <RecurringSchedulesList
+          schedules={recurringSchedules}
+          accounts={accounts}
+          isLoading={isRecurringLoading}
+          hideBalances={hideBalances}
+          lockedAccountId={lockedAccountId}
+          bottomInset={showBack ? 16 : bottomInset}
+          ListHeaderComponent={renderListHeader}
+          onAddRecurring={handleAddRecurring}
+          onToggleActive={handleToggleRecurringActive}
+          onDeleteSchedule={handleDeleteRecurring}
+          onPayNow={handlePayRecurringNow}
+        />
+      ) : (
+        <FlatList<FlatTransactionListItem>
+          data={flatListItems}
+          scrollEnabled={!isCalendarGliding}
+          keyExtractor={keyExtractor}
+          getItemLayout={getTransactionListItemLayout}
+          renderItem={renderItem}
+          ListHeaderComponent={renderListHeader}
+          ListEmptyComponent={renderListEmpty}
+          ListFooterComponent={renderListFooter}
+          contentContainerStyle={listContentContainerStyle}
+          showsVerticalScrollIndicator={false}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          removeClippedSubviews={Platform.OS === 'android'}
+          initialNumToRender={10}
+          maxToRenderPerBatch={6}
+          windowSize={5}
+          updateCellsBatchingPeriod={50}
+          extraData={listExtraData}
+        />
+      )}
 
       {filterModalVisible && (
         <TransactionFilterModal
@@ -1233,9 +1127,40 @@ export default function TransactionsScreen({
           lockedAccountId={lockedAccountId}
           onClose={() => setFilterModalVisible(false)}
           onApply={(nextFilters) => {
+            setIsRecurringTab(false);
             setFilters(nextFilters);
-            if (viewMode === 'calendar' && nextFilters.datePreset !== 'all') {
-              setViewMode('list');
+            if (viewMode === 'calendar') {
+              if (
+                nextFilters.datePreset === 'custom' &&
+                nextFilters.customDateFrom &&
+                nextFilters.customDateTo
+              ) {
+                const normalized = normalizeCalendarRange(
+                  nextFilters.customDateFrom,
+                  nextFilters.customDateTo
+                );
+                const [y, m] = normalized.start.split('-').map(Number);
+                if (y && m) {
+                  setCalendarYear(y);
+                  setCalendarMonth(m);
+                }
+                setSelectedCalendarRange(normalized);
+              } else if (nextFilters.datePreset === 'all') {
+                setSelectedCalendarRange(null);
+              } else if (nextFilters.datePreset === 'this_month') {
+                const now = new Date();
+                setCalendarYear(now.getFullYear());
+                setCalendarMonth(now.getMonth() + 1);
+                setSelectedCalendarRange(null);
+              } else if (nextFilters.datePreset === 'last_month') {
+                const last = new Date();
+                last.setMonth(last.getMonth() - 1);
+                setCalendarYear(last.getFullYear());
+                setCalendarMonth(last.getMonth() + 1);
+                setSelectedCalendarRange(null);
+              } else {
+                setViewMode('list');
+              }
             }
           }}
         />
@@ -1617,140 +1542,6 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.labelMd,
       fontFamily: 'Manrope_700Bold',
       color: colors.onPrimary,
-    },
-    dateGroupHeader: {
-      backgroundColor: colors.surfaceContainerLow + '80',
-      height: SECTION_HEADER_HEIGHT,
-      justifyContent: 'center',
-      paddingHorizontal: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.outlineVariant,
-      borderLeftWidth: 1,
-      borderRightWidth: 1,
-      borderColor: colors.outlineVariant,
-    },
-    dateGroupText: {
-      ...typography.labelMd,
-      color: colors.onSurfaceVariant,
-      textTransform: 'uppercase',
-      letterSpacing: Platform.OS === 'ios' ? 0.6 : 0,
-    },
-    firstSectionHeader: {
-      borderTopLeftRadius: 16,
-      borderTopRightRadius: 16,
-      borderTopWidth: 1,
-    },
-    transactionItem: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      height: TRANSACTION_ROW_HEIGHT,
-      paddingHorizontal: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.outlineVariant,
-      borderLeftWidth: 1,
-      borderRightWidth: 1,
-      borderColor: colors.outlineVariant,
-      backgroundColor: colors.surfaceContainerLowest,
-    },
-    transactionItemSelected: {
-      backgroundColor: colors.primaryContainer + '30',
-    },
-    transactionItemPressed: {
-      opacity: 0.72,
-    },
-    transactionItemSectionLast: {
-      borderBottomWidth: 0,
-    },
-    lastTransactionItem: {
-      borderBottomLeftRadius: 16,
-      borderBottomRightRadius: 16,
-      borderBottomWidth: 1,
-    },
-    transactionLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      flex: 1,
-      paddingRight: 12,
-    },
-    transactionIconBox: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: colors.surfaceContainer,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    transactionIconBoxCredit: {
-      backgroundColor: colors.primaryContainer,
-    },
-    transactionTextCol: {
-      flex: 1,
-      justifyContent: 'center',
-    },
-    transactionName: {
-      ...typography.bodyLg,
-      fontFamily: fontFamilies.medium,
-      ...(Platform.OS === 'ios' ? { fontWeight: '500' as const } : {}),
-      color: colors.onSurface,
-    },
-    transactionMeta: {
-      ...typography.bodyMd,
-      color: colors.onSurfaceVariant,
-    },
-    transactionRight: {
-      alignItems: 'flex-end',
-      flexShrink: 0,
-    },
-    transactionAmount: {
-      fontFamily: fontFamilies.medium,
-      fontSize: 20,
-      lineHeight: 28,
-      color: colors.onSurface,
-      ...(Platform.OS === 'android' ? { includeFontPadding: false as const } : {}),
-    },
-    transactionAmountCredit: {
-      color: colors.primary,
-    },
-    badgesRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-    },
-    categoryBadge: {
-      backgroundColor: colors.primary + '1A', // primary/10
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 2,
-      marginTop: 4,
-      flexShrink: 0,
-    },
-    secondaryBadge: {
-      backgroundColor: colors.secondaryContainer,
-    },
-    tagBadge: {
-      backgroundColor: colors.secondaryContainer,
-      paddingHorizontal: 6,
-    },
-    receiptBadge: {
-      backgroundColor: colors.surfaceContainerHighest,
-      paddingHorizontal: 5,
-    },
-    categoryBadgeText: {
-      fontFamily: fontFamilies.semiBold,
-      fontSize: 11,
-      lineHeight: 15,
-      color: colors.primary,
-      textTransform: 'uppercase',
-      ...(Platform.OS === 'android' ? { includeFontPadding: false as const } : {}),
-    },
-    secondaryBadgeText: {
-      color: colors.onSecondaryContainer,
-    },
-    selectionCheckbox: {
-      marginRight: 10,
-      justifyContent: 'center',
     },
     selectAllBtn: {
       paddingHorizontal: 10,

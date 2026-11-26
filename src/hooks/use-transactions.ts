@@ -6,6 +6,7 @@ import {
   bulkUpdateCategory,
   bulkUpdateAccount,
   getAccountHistory,
+  getDateRangeTotals,
   getMonthlyDailyTotals,
   getMonthlyReports,
   getMonthlyTotals,
@@ -22,6 +23,7 @@ import {
 import {
   createRecurringTransaction,
   getActiveRecurringTransactions,
+  getAllRecurringTransactions,
   deleteRecurringTransaction,
   toggleRecurringTransactionActive,
 } from '@/services/database/recurring-dao';
@@ -51,7 +53,8 @@ export function useTransactions(filters?: TransactionFilters) {
 
 export function usePaginatedTransactions(
   filters?: Omit<TransactionFilters, 'limit' | 'offset'>,
-  pageSize = 50
+  pageSize = 50,
+  enabled = true
 ) {
   const filtersString = JSON.stringify(filters || {});
 
@@ -65,6 +68,7 @@ export function usePaginatedTransactions(
   } = useInfiniteQuery({
     queryKey: ['transactions', 'paginated', filtersString, pageSize],
     initialPageParam: 0,
+    enabled,
     queryFn: async ({ pageParam }) => {
       const parsedFilters = filters ? (JSON.parse(filtersString) as TransactionFilters) : {};
       const [items, totalCount] = await Promise.all([
@@ -325,6 +329,26 @@ export function useMonthlyDailyTotals(
   return { dailyTotals: data || [], dailyMap, isLoading, refetch };
 }
 
+export function useDateRangeTotals(
+  filters?: Omit<TransactionFilters, 'limit' | 'offset'>,
+  enabled = true
+) {
+  const filtersString = JSON.stringify(filters || {});
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['transactions', 'dateRangeTotals', filtersString],
+    queryFn: () => {
+      const parsedFilters = filters
+        ? (JSON.parse(filtersString) as Omit<TransactionFilters, 'limit' | 'offset'>)
+        : undefined;
+      return getDateRangeTotals(parsedFilters);
+    },
+    enabled,
+  });
+
+  return { rangeTotals: data || null, isLoading };
+}
+
 export function useMonthlyReports() {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['transactions', 'monthlyReports'],
@@ -352,6 +376,16 @@ export function useRecurringTransactions() {
   return { transactions: data || [], isLoading, refetch };
 }
 
+export function useAllRecurringTransactions(enabled = true) {
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['transactions', 'recurring', 'all'],
+    queryFn: () => getAllRecurringTransactions(),
+    enabled,
+  });
+
+  return { transactions: data || [], isLoading, refetch };
+}
+
 export function useCreateRecurringTransaction() {
   const queryClient = useQueryClient();
 
@@ -361,6 +395,7 @@ export function useCreateRecurringTransaction() {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['transactions', 'recurring'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['safeToSpend'] });
       invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('recurring-create');
     },
@@ -382,6 +417,7 @@ export function useDeleteRecurringTransaction() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['transactions', 'recurring'] });
+      queryClient.invalidateQueries({ queryKey: ['safeToSpend'] });
       invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('recurring-delete');
     },
@@ -404,6 +440,7 @@ export function useToggleRecurringTransaction() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['transactions', 'recurring'] });
+      queryClient.invalidateQueries({ queryKey: ['safeToSpend'] });
       invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('recurring-toggle');
     },

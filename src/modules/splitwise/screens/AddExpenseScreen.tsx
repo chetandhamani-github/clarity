@@ -1,6 +1,8 @@
 import { DatePickerModal, Header, Text, useAlert, useToast } from '@/components/ui';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useAppStore } from '@/store/use-app-store';
+import { getLocalTodayYmd } from '@/utils/date';
+import { getCurrencySymbol } from '@/utils/format';
 import { radius, useTheme } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -16,6 +18,7 @@ import {
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { BalanceCalculator } from '../services/BalanceCalculator';
+import { SplitwiseSyncService } from '../services/SplitwiseSyncService';
 import { useSplitwiseStore } from '../store/splitwise.store';
 import type { ExpenseSplit } from '../types/splitwise.types';
 import { SplitType, CURRENT_USER_ID, CURRENT_USER_PERSON } from '../types/splitwise.types';
@@ -57,7 +60,8 @@ export function AddExpenseScreen() {
     isLoading,
   } = useSplitwiseStore();
 
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const currencySymbol = getCurrencySymbol();
+  const todayStr = useMemo(() => getLocalTodayYmd(), []);
   const [date, setDate] = useState(todayStr);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
@@ -240,6 +244,7 @@ export function AddExpenseScreen() {
         splits: splitsToSave,
       });
 
+      SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {});
       showToast('Expense added successfully', 'success');
       router.back();
     } catch (err: unknown) {
@@ -307,7 +312,7 @@ export function AddExpenseScreen() {
           </Text>
 
           <View style={styles.amountInputRow}>
-            <Text style={[styles.currencySymbol, { color: colors.primary }]}>₹</Text>
+            <Text style={[styles.currencySymbol, { color: colors.primary }]}>{currencySymbol}</Text>
             <TextInput
               style={[styles.amountInput, { color: colors.onSurface }]}
               placeholder="0.00"
@@ -629,14 +634,14 @@ export function AddExpenseScreen() {
                     <View style={styles.splitInputCol}>
                       {splitType === SplitType.EQUAL && (
                         <Text style={[styles.shareCalculatedVal, { color: colors.primary }]}>
-                          ₹{share ? share.owedAmount.toFixed(2) : '0.00'}
+                          {currencySymbol}{share ? share.owedAmount.toFixed(2) : '0.00'}
                         </Text>
                       )}
 
                       {splitType === SplitType.EXACT && (
                         <View style={styles.customInputWrapper}>
                           <Text style={[styles.prefixSign, { color: colors.onSurfaceVariant }]}>
-                            ₹
+                            {currencySymbol}
                           </Text>
                           <TextInput
                             style={[styles.customInput, { color: colors.onSurface }]}
@@ -682,7 +687,7 @@ export function AddExpenseScreen() {
                             }
                           />
                           <Text style={[styles.suffixSign, { color: colors.onSurfaceVariant }]}>
-                            {share ? `(₹${share.owedAmount.toFixed(2)})` : ''}
+                            {share ? `(${currencySymbol}${share.owedAmount.toFixed(2)})` : ''}
                           </Text>
                         </View>
                       )}

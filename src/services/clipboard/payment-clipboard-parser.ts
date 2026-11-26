@@ -1,3 +1,5 @@
+import { getLocalTodayYmd } from '@/utils/date';
+
 export interface ParsedPaymentIntent {
   amount: number;
   merchant: string;
@@ -39,7 +41,7 @@ export function parsePaymentClipboard(text: string): ParsedPaymentIntent | null 
           amount: am,
           merchant: decodeURIComponent(pn).replace(/\+/g, ' ').trim(),
           upiRef: ref || undefined,
-          dateStr: new Date().toISOString().split('T')[0],
+          dateStr: getLocalTodayYmd(),
           rawText: trimmed,
           contentHash: simpleHash(trimmed),
         };
@@ -121,7 +123,7 @@ export function parsePaymentClipboard(text: string): ParsedPaymentIntent | null 
     amount: Math.round(amount * 100) / 100,
     merchant,
     upiRef,
-    dateStr: new Date().toISOString().split('T')[0],
+    dateStr: getLocalTodayYmd(),
     rawText: trimmed,
     contentHash: simpleHash(trimmed),
   };

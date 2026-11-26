@@ -17,6 +17,7 @@ import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useGoals, useCreateGoal } from '@/hooks/use-goals';
 import { formatCurrency, getCurrencySymbol, formatDate } from '@/utils/format';
+import { getLocalTodayYmd } from '@/utils/date';
 import type { Goal } from '@/types';
 
 interface GoalsScreenProps {
@@ -164,7 +165,7 @@ export default function GoalsScreen({ showBack = false }: GoalsScreenProps = {})
     );
   };
 
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayStr = useMemo(() => getLocalTodayYmd(), []);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: showBack ? insets.bottom : 0 }]}>

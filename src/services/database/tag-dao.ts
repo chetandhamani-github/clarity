@@ -86,15 +86,7 @@ export async function getTagsForTransaction(transactionId: string): Promise<stri
   return rows.map((r) => r.name);
 }
 
-export async function getAllTransactionTagsMap(): Promise<Record<string, string[]>> {
-  const db = getDatabase();
-  const rows = await db.getAllAsync<{ transaction_id: string; name: string }>(
-    `SELECT tt.transaction_id, t.name
-     FROM transaction_tags tt
-     JOIN tags t ON tt.tag_id = t.id
-     ORDER BY t.name ASC`
-  );
-
+function buildTagsMap(rows: { transaction_id: string; name: string }[]): Record<string, string[]> {
   const map: Record<string, string[]> = {};
   for (const row of rows) {
     if (!map[row.transaction_id]) {
@@ -103,4 +95,35 @@ export async function getAllTransactionTagsMap(): Promise<Record<string, string[
     map[row.transaction_id].push(row.name);
   }
   return map;
+}
+
+export async function getAllTransactionTagsMap(): Promise<Record<string, string[]>> {
+  const db = getDatabase();
+  const rows = await db.getAllAsync<{ transaction_id: string; name: string }>(
+    `SELECT tt.transaction_id, t.name
+     FROM transaction_tags tt
+     JOIN tags t ON tt.tag_id = t.id
+     ORDER BY t.name ASC`
+  );
+  return buildTagsMap(rows);
+}
+
+export async function getTransactionTagsMapForIds(
+  transactionIds: string[]
+): Promise<Record<string, string[]>> {
+  if (transactionIds.length === 0) return {};
+  if (transactionIds.length > 500) {
+    return getAllTransactionTagsMap();
+  }
+  const db = getDatabase();
+  const placeholders = transactionIds.map(() => '?').join(',');
+  const rows = await db.getAllAsync<{ transaction_id: string; name: string }>(
+    `SELECT tt.transaction_id, t.name
+     FROM transaction_tags tt
+     JOIN tags t ON tt.tag_id = t.id
+     WHERE tt.transaction_id IN (${placeholders})
+     ORDER BY t.name ASC`,
+    transactionIds
+  );
+  return buildTagsMap(rows);
 }

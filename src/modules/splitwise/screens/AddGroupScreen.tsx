@@ -17,6 +17,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { Text, Header, useAlert } from '@/components/ui';
 import { typography, useTheme, radius } from '@/theme';
 import { useSplitwiseStore } from '../store/splitwise.store';
+import { SplitwiseSyncService } from '../services/SplitwiseSyncService';
 
 const GROUP_CATEGORIES = [
   { id: 'trip', label: 'Trip / Travel', icon: 'flight' as const },
@@ -114,6 +115,7 @@ export function AddGroupScreen() {
         memberIds: selectedMemberIds,
       });
 
+      SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {});
       router.back();
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Failed to create group';
@@ -342,6 +344,10 @@ export function AddGroupScreen() {
             </View>
           </View>
 
+          <Text style={[styles.memberPhone, { color: colors.onSurfaceVariant, marginBottom: 10 }]}>
+            Friends with a Google email automatically see this group &amp; its expenses.
+          </Text>
+
           {/* Search Box */}
           <View
             style={[
@@ -487,11 +493,13 @@ export function AddGroupScreen() {
                       <Text style={[styles.memberName, { color: colors.onSurface }]}>
                         {person.name}
                       </Text>
-                      {person.phone && (
-                        <Text style={[styles.memberPhone, { color: colors.onSurfaceVariant }]}>
-                          {person.phone}
-                        </Text>
-                      )}
+                      <Text style={[styles.memberPhone, { color: person.email ? colors.primary : colors.onSurfaceVariant }]}>
+                        {person.email
+                          ? `${person.email} • Syncs to friend`
+                          : person.phone
+                            ? `${person.phone} • No email (local only)`
+                            : 'No email (local only)'}
+                      </Text>
                     </View>
 
                     <MaterialIcons

@@ -73,6 +73,7 @@ export function PersonDetailsScreen() {
   // Modal states - Edit Friend
   const [showEditPersonModal, setShowEditPersonModal] = useState(false);
   const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -124,6 +125,7 @@ export function PersonDetailsScreen() {
   const openEditModal = () => {
     if (!person) return;
     setEditName(person.name);
+    setEditEmail(person.email || '');
     setEditPhone(person.phone || '');
     setEditNotes(person.notes || '');
     setShowEditPersonModal(true);
@@ -138,11 +140,13 @@ export function PersonDetailsScreen() {
     try {
       await updatePerson(person.id, {
         name: editName.trim(),
+        email: editEmail.trim().toLowerCase() || undefined,
         phone: editPhone.trim() || undefined,
         notes: editNotes.trim() || undefined,
       });
       setShowEditPersonModal(false);
       showToast('Friend details updated', 'success');
+      SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {});
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to update person';
       showAlert('Error', msg);
@@ -984,6 +988,26 @@ export function PersonDetailsScreen() {
                 onChangeText={setEditName}
                 placeholder="Friend's name"
                 placeholderTextColor={colors.onSurfaceVariant}
+              />
+
+              <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>
+                Google Email (needed for shared groups)
+              </Text>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: colors.surfaceContainerLow,
+                    borderColor: colors.outlineVariant,
+                    color: colors.onSurface,
+                  },
+                ]}
+                value={editEmail}
+                onChangeText={setEditEmail}
+                placeholder="friend@gmail.com"
+                placeholderTextColor={colors.onSurfaceVariant}
+                keyboardType="email-address"
+                autoCapitalize="none"
               />
 
               <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>Phone Number</Text>

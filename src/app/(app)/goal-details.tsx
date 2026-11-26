@@ -28,6 +28,7 @@ import {
 } from '@/hooks/use-goals';
 import { useAccounts } from '@/hooks/use-accounts';
 import { formatCurrency, getCurrencySymbol, formatDate } from '@/utils/format';
+import { getLocalTodayYmd } from '@/utils/date';
 import { evaluateGoalMilestoneAlerts } from '@/services/notifications/alert-engine';
 import type { GoalContribution } from '@/types';
 
@@ -168,7 +169,7 @@ export default function GoalDetailsScreen() {
         data: {
           goalId,
           amount: amt,
-          date: new Date().toISOString().split('T')[0],
+          date: getLocalTodayYmd(),
           description: notes.trim() || '',
         },
         accountId: selectedAccountId || undefined,
@@ -794,8 +795,8 @@ export default function GoalDetailsScreen() {
       {/* DatePickerModal for Edit Modal */}
       <DatePickerModal
         visible={showEditDatePicker}
-        value={editTargetDate || new Date().toISOString().split('T')[0]}
-        minDate={new Date().toISOString().split('T')[0]}
+        value={editTargetDate || getLocalTodayYmd()}
+        minDate={getLocalTodayYmd()}
         onChange={(date) => {
           setEditTargetDate(date);
           setShowEditDatePicker(false);

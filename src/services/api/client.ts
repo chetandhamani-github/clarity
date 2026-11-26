@@ -52,13 +52,16 @@ function getDefaultBaseUrl(): string {
     }
   }
 
-  // Android emulator routes host machine loopback to 10.0.2.2
-  // Physical Android devices use localhost:8080 (forwarded via `adb reverse tcp:8080 tcp:8080`)
-  if (Platform.OS === 'android') {
-    return Device.isDevice ? 'http://localhost:8080' : 'http://10.0.2.2:8080';
+  // Android emulator routes host machine loopback to 10.0.2.2 in dev;
+  // physical Android devices in dev use localhost:8080 (forwarded via `adb reverse tcp:8080 tcp:8080`)
+  if (__DEV__) {
+    if (Platform.OS === 'android') {
+      return Device.isDevice ? 'http://localhost:8080' : 'http://10.0.2.2:8080';
+    }
+    return 'http://localhost:8080';
   }
 
-  return 'http://localhost:8080';
+  return 'https://clarity-lqdi.onrender.com';
 }
 
 // Dynamically resolve fetch implementation (nitro-fetch on native, global fetch fallback)

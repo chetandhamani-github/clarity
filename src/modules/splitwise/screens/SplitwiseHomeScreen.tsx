@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
+  ActivityIndicator,
   View,
   StyleSheet,
   ScrollView,
@@ -15,7 +16,9 @@ import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter } from 'expo-router';
 import { Text, Header, SplitwiseSkeleton } from '@/components/ui';
 import { typography, useTheme, radius } from '@/theme';
+import { mmkv } from '@/lib/storage';
 import { useAppStore } from '@/store/use-app-store';
+import { useAuthStore } from '@/store/use-auth-store';
 import { formatCurrencyPrivacy, parseDateSafely } from '@/utils/format';
 import { useSplitwiseStore } from '../store/splitwise.store';
 import { SplitwiseRepository } from '../database/splitwise.repository';
@@ -30,6 +33,8 @@ import type {
 
 type FilterTab = 'ALL' | 'OWE_ME' | 'I_OWE' | 'SETTLED';
 
+const SPLITWISE_AUTH_PROMPT_SEEN_KEY = 'clarity_splitwise_auth_prompt_seen';
+
 export interface SplitwiseHomeScreenProps {
   isMainTab?: boolean;
 }
@@ -39,6 +44,12 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
   const insets = useSafeInsets();
   const router = useRouter();
   const { hideBalances } = useAppStore();
+  const {
+    isAuthenticated,
+    isLoading: isAuthLoading,
+    error: authError,
+    signInWithGoogle,
+  } = useAuthStore();
 
   const {
     people,
@@ -57,6 +68,24 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
   const [groupSearchQuery, setGroupSearchQuery] = useState('');
   const [recentActivities, setRecentActivities] = useState<SplitwiseActivityItem[]>([]);
   const [showChooserModal, setShowChooserModal] = useState(false);
+  const [allowOfflineGuest, setAllowOfflineGuest] = useState<boolean>(
+    () => mmkv.getString(SPLITWISE_AUTH_PROMPT_SEEN_KEY) === 'true'
+  );
+
+  const markAuthPromptSeen = useCallback(() => {
+    try {
+      mmkv.set(SPLITWISE_AUTH_PROMPT_SEEN_KEY, 'true');
+    } catch {
+      // Ignore MMKV persistence error
+    }
+    setAllowOfflineGuest(true);
+  }, []);
+
+  useEffect(() => {
+    if (isAuthenticated && !allowOfflineGuest) {
+      markAuthPromptSeen();
+    }
+  }, [isAuthenticated, allowOfflineGuest, markAuthPromptSeen]);
 
   // Load activity history
   const loadRecentActivities = useCallback(async () => {
@@ -73,12 +102,17 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
     await Promise.all([
       loadAllData(),
       loadRecentActivities(),
-      SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {}),
+      ...(isAuthenticated
+        ? [SplitwiseSyncService.getInstance().syncWithCloud().catch(() => {})]
+        : []),
     ]);
     setRefreshing(false);
-  }, [loadAllData, loadRecentActivities]);
+  }, [isAuthenticated, loadAllData, loadRecentActivities]);
 
   useEffect(() => {
+    if (!isAuthenticated && !allowOfflineGuest) {
+      return;
+    }
     handleRefresh();
     const subscription = DeviceEventEmitter.addListener('splitwiseUpdated', () => {
       loadAllData();
@@ -87,7 +121,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
     return () => {
       subscription.remove();
     };
-  }, [handleRefresh, loadAllData, loadRecentActivities]);
+  }, [isAuthenticated, allowOfflineGuest, handleRefresh, loadAllData, loadRecentActivities]);
 
   // Overall summary calculated safely with pure functions including shared expenses
   const overallSummary = useMemo(() => {
@@ -149,6 +183,107 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
   const isNetOwe = netBalance < 0;
   const netColor = isNetOwed ? '#10b981' : isNetOwe ? '#ef4444' : colors.onSurface;
 
+  if (!isAuthenticated && !allowOfflineGuest) {
+    return (
+      <View
+        style={[
+          styles.container,
+          {
+            backgroundColor: colors.background,
+            paddingTop: insets.top,
+            paddingBottom: isMainTab ? 0 : insets.bottom,
+          },
+        ]}
+      >
+        <Header
+          title="Splitwise & Shared"
+          showBack={!isMainTab}
+          isMainTab={isMainTab}
+          leftNode={
+            isMainTab ? (
+              <TouchableOpacity style={styles.avatarButton} onPress={() => router.navigate('/settings')}>
+                <View style={[styles.avatarFallback, { backgroundColor: colors.primaryContainer }]}>
+                  <MaterialIcons name="person" size={20} color={colors.onPrimaryContainer} />
+                </View>
+              </TouchableOpacity>
+            ) : undefined
+          }
+        />
+
+        <View style={styles.authGateContainer}>
+          <View
+            style={[
+              styles.authGateCard,
+              {
+                backgroundColor: colors.surfaceContainerLow,
+                borderColor: colors.outlineVariant,
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.authGateIconCircle,
+                { backgroundColor: colors.primaryContainer },
+              ]}
+            >
+              <MaterialIcons name="group" size={32} color={colors.onPrimaryContainer} />
+            </View>
+            <Text style={[styles.authGateTitle, { color: colors.onSurface }]}>
+              Sign in to Splitwise & Shared
+            </Text>
+            <Text style={[styles.authGateSubtitle, { color: colors.onSurfaceVariant }]}>
+              Sign in with Google to link your friends&apos; debts and shared expenses to your account so they sync across devices and restores.
+            </Text>
+
+            {authError ? (
+              <Text style={[styles.authGateError, { color: colors.error }]}>
+                {authError}
+              </Text>
+            ) : null}
+
+            <TouchableOpacity
+              style={[
+                styles.authGateButton,
+                { backgroundColor: colors.primary },
+                isAuthLoading && styles.authGateButtonDisabled,
+              ]}
+              onPress={async () => {
+                const res = await signInWithGoogle();
+                if (res.success) {
+                  markAuthPromptSeen();
+                }
+              }}
+              disabled={isAuthLoading}
+              activeOpacity={0.85}
+            >
+              {isAuthLoading ? (
+                <ActivityIndicator size="small" color={colors.onPrimary} />
+              ) : (
+                <>
+                  <MaterialIcons name="login" size={18} color={colors.onPrimary} />
+                  <Text style={[styles.authGateButtonText, { color: colors.onPrimary }]}>
+                    Continue with Google
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.authGateSecondaryButton}
+              onPress={markAuthPromptSeen}
+              disabled={isAuthLoading}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.authGateSecondaryText, { color: colors.onSurfaceVariant }]}>
+                Continue offline (local only)
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View
       style={[
@@ -200,6 +335,39 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
           />
         }
       >
+        {!isAuthenticated && allowOfflineGuest && (
+          <View
+            style={[
+              styles.offlineSyncBanner,
+              {
+                backgroundColor: colors.primaryContainer,
+                borderColor: colors.outlineVariant,
+              },
+            ]}
+          >
+            <MaterialIcons name="cloud-off" size={18} color={colors.onPrimaryContainer} />
+            <Text style={[styles.offlineSyncBannerText, { color: colors.onPrimaryContainer }]}>
+              Local mode — Sign in to sync across devices
+            </Text>
+            <TouchableOpacity
+              style={[styles.offlineSyncBtn, { backgroundColor: colors.primary }]}
+              onPress={() => {
+                void signInWithGoogle();
+              }}
+              disabled={isAuthLoading}
+              activeOpacity={0.85}
+            >
+              {isAuthLoading ? (
+                <ActivityIndicator size="small" color={colors.onPrimary} />
+              ) : (
+                <Text style={[styles.offlineSyncBtnText, { color: colors.onPrimary }]}>
+                  Sign In
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
         {isLoading && people.length === 0 && groups.length === 0 && debts.length === 0 ? (
           <SplitwiseSkeleton />
         ) : (
@@ -517,6 +685,9 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
                       <Text style={[styles.groupCardMeta, { color: colors.onSurfaceVariant }]}>
                         {g.memberIds.length} {g.memberIds.length === 1 ? 'member' : 'members'}
                         {g.category ? ` • ${g.category.toUpperCase()}` : ''}
+                        {g.members?.some((m) => m.personId !== 'current_user' && people.some((p) => p.id === m.personId && Boolean(p.email)))
+                          ? ' • Shared'
+                          : ''}
                       </Text>
                     </View>
 
@@ -536,7 +707,7 @@ export function SplitwiseHomeScreen({ isMainTab = false }: SplitwiseHomeScreenPr
                 Friends & Balances
               </Text>
               <Text style={[styles.sectionSubtitle, { color: colors.onSurfaceVariant }]}>
-                {overallSummary.activePeopleCount} active · {overallSummary.settledPeopleCount} settled
+                Private 1-on-1 ledger · {overallSummary.activePeopleCount} active · {overallSummary.settledPeopleCount} settled
               </Text>
             </View>
 
@@ -1577,5 +1748,96 @@ const styles = StyleSheet.create({
     ...typography.bodyMd,
     fontSize: 11,
     lineHeight: 15,
+  },
+  authGateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
+  authGateCard: {
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    padding: 24,
+    alignItems: 'center',
+    gap: 12,
+  },
+  authGateIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  authGateTitle: {
+    ...typography.headlineSm,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 19,
+    textAlign: 'center',
+  },
+  authGateSubtitle: {
+    ...typography.bodyMd,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+  },
+  authGateError: {
+    ...typography.bodyMd,
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  authGateButton: {
+    marginTop: 6,
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: radius.lg,
+  },
+  authGateButtonDisabled: {
+    opacity: 0.7,
+  },
+  authGateButtonText: {
+    ...typography.labelMd,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 14,
+  },
+  authGateSecondaryButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  authGateSecondaryText: {
+    ...typography.labelMd,
+    fontFamily: 'Manrope_600SemiBold',
+    fontSize: 13,
+  },
+  offlineSyncBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  offlineSyncBannerText: {
+    flex: 1,
+    ...typography.labelMd,
+    fontSize: 12,
+    fontFamily: 'Manrope_600SemiBold',
+  },
+  offlineSyncBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+  },
+  offlineSyncBtnText: {
+    ...typography.labelMd,
+    fontSize: 11,
+    fontFamily: 'Manrope_700Bold',
   },
 });

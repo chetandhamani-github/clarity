@@ -6,6 +6,7 @@ export * from './Loader';
 export * from './Input';
 export * from './EmptyState';
 export * from './ErrorState';
+export * from './ErrorBoundary';
 export * from './ProgressBar';
 export * from './IconButton';
 export * from './NotificationCard';

@@ -11,6 +11,7 @@ import {
     getTopMerchants,
     getTransactions,
 } from '@/services/database/transaction-dao';
+import { getLocalTodayYmd } from '@/utils/date';
 import { getCurrencySymbol } from '@/utils/format';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -81,7 +82,7 @@ export async function exportTransactionsToCSV(): Promise<{
     });
 
     const csvContent = [headers.join(','), ...rows].join('\n');
-    const filename = `clarity_transactions_${new Date().toISOString().split('T')[0]}.csv`;
+    const filename = `clarity_transactions_${getLocalTodayYmd()}.csv`;
     const fileUri = `${FileSystem.cacheDirectory}${filename}`;
 
     await FileSystem.writeAsStringAsync(fileUri, csvContent, {
@@ -112,7 +113,7 @@ export async function exportFullBackupToJSON(): Promise<{
     const snapshot = await generateDatabaseSnapshot();
 
     const jsonString = JSON.stringify(snapshot, null, 2);
-    const filename = `clarity_full_backup_${new Date().toISOString().split('T')[0]}.json`;
+    const filename = `clarity_full_backup_${getLocalTodayYmd()}.json`;
     const fileUri = `${FileSystem.cacheDirectory}${filename}`;
 
     await FileSystem.writeAsStringAsync(fileUri, jsonString, {
@@ -312,7 +313,7 @@ export async function exportCustomStatement(options: StatementExportOptions): Pr
       });
 
       const csvContent = [headers.join(','), ...rows].join('\n');
-      const filename = `clarity_statement_${new Date().toISOString().split('T')[0]}.csv`;
+      const filename = `clarity_statement_${getLocalTodayYmd()}.csv`;
       const fileUri = `${FileSystem.cacheDirectory}${filename}`;
 
       await FileSystem.writeAsStringAsync(fileUri, csvContent, {

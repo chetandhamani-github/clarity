@@ -190,7 +190,7 @@ export function AddPersonScreen() {
               <Text style={[styles.inputLabel, { color: colors.onSurface }]}>
                 Google / Clarity Email{' '}
                 <Text style={[styles.optionalTag, { color: colors.onSurfaceVariant }]}>
-                  Optional (for auto-sync)
+                  Optional (needed to share groups)
                 </Text>
               </Text>
             </View>

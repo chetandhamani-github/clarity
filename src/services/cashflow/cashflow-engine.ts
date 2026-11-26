@@ -5,6 +5,7 @@ import { getUpcomingBills as getUpcomingBillsDao } from '@/services/database/bil
 import { getActiveRecurringTransactions } from '@/services/database/recurring-dao';
 import { getAllInvestmentHoldings } from '@/services/database/investment-dao';
 import { getCurrentBudgetPlan } from '@/services/database/budget-dao';
+import { isLiabilityAccountType, isLiquidAccountType } from '@/utils/account-metrics';
 import { calculateNextDate } from '@/utils/date';
 import type {
   SafeToSpendSummary,
@@ -308,7 +309,20 @@ export async function calculateSafeToSpend(
   }
 
   let committedRecurringTotal = 0;
+  const accountById = new Map(accounts.map((acc) => [acc.id, acc]));
+  const projectedDebtPaidByAccount = new Map<string, number>();
+
   for (const rt of activeRecurring) {
+    const srcAcc = accountById.get(rt.accountId);
+    const dstAcc = rt.toAccountId ? accountById.get(rt.toAccountId) : undefined;
+    const isDebtTransfer = Boolean(
+      rt.type === 'transfer' &&
+        srcAcc &&
+        dstAcc &&
+        isLiquidAccountType(srcAcc.type) &&
+        isLiabilityAccountType(dstAcc.type)
+    );
+
     const dates = getRecurringDatesInRange(
       rt.nextProcessDate,
       rt.frequency,
@@ -317,8 +331,20 @@ export async function calculateSafeToSpend(
     );
 
     for (const item of dates) {
-      if (item.dateStr <= nextPaydayDate && rt.type === 'expense') {
-        committedRecurringTotal += rt.amount;
+      let outflowAmount = rt.amount;
+      if (isDebtTransfer && dstAcc) {
+        const initialDebt = dstAcc.balance < 0 ? Math.abs(dstAcc.balance) : 0;
+        const alreadyProjected = projectedDebtPaidByAccount.get(dstAcc.id) ?? 0;
+        const remainingDebt = Math.max(0, Math.round((initialDebt - alreadyProjected) * 100) / 100);
+        if (remainingDebt <= 0) {
+          break;
+        }
+        outflowAmount = Math.min(rt.amount, remainingDebt);
+        projectedDebtPaidByAccount.set(dstAcc.id, alreadyProjected + outflowAmount);
+      }
+
+      if (item.dateStr <= nextPaydayDate && (rt.type === 'expense' || isDebtTransfer)) {
+        committedRecurringTotal += outflowAmount;
       }
 
       if (item.dateStr >= todayStr && item.dateStr <= maxProjectionDate) {
@@ -332,17 +358,23 @@ export async function calculateSafeToSpend(
             date: item.dateStr,
           });
           bucket.totalInflow += rt.amount;
-        } else if (rt.type === 'expense') {
+        } else if (rt.type === 'expense' || isDebtTransfer) {
+          const customLabel =
+            rt.merchant && rt.merchant.trim().toLowerCase() !== 'transfer'
+              ? rt.merchant.trim()
+              : dstAcc
+              ? `Pay ${dstAcc.name}`
+              : 'Recurring Expense';
+          const baseName =
+            rt.type === 'expense' ? rt.merchant || 'Recurring Expense' : customLabel;
           bucket.outflows.push({
             id: `rec_${rt.id}_${item.dateStr}`,
-            name: item.isOverdue
-              ? `${rt.merchant || 'Recurring Expense'} (Overdue)`
-              : (rt.merchant || 'Recurring Expense'),
+            name: item.isOverdue ? `${baseName} (Overdue)` : baseName,
             type: 'recurring',
-            amount: rt.amount,
+            amount: outflowAmount,
             date: item.dateStr,
           });
-          bucket.totalOutflow += rt.amount;
+          bucket.totalOutflow += outflowAmount;
         }
       }
     }

@@ -12,6 +12,10 @@ public interface SplitGroupMemberRepository extends JpaRepository<SplitGroupMemb
 
     List<SplitGroupMember> findByGroupId(String groupId);
 
+    List<SplitGroupMember> findByMemberEmailIgnoreCase(String memberEmail);
+
+    boolean existsByGroupIdAndMemberEmailIgnoreCase(String groupId, String memberEmail);
+
     Optional<SplitGroupMember> findByGroupIdAndPersonId(String groupId, String personId);
 
     void deleteByGroupId(String groupId);

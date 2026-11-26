@@ -15,7 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAccount, useClearAccountData, useDeleteAccount } from '@/hooks/use-accounts';
-import { useTransactions, useAccountHistory } from '@/hooks/use-transactions';
+import { usePaginatedTransactions, useAccountHistory } from '@/hooks/use-transactions';
 import { useAccountReconciliation, useCreateAdjustmentEntry } from '@/hooks/use-reconciliation';
 import { useToast, useAlert, DiscrepancyBanner } from '@/components/ui';
 import { LineChart } from 'react-native-gifted-charts';
@@ -38,7 +38,11 @@ export default function AccountDetailsScreen() {
   const { accountId } = useLocalSearchParams<{ accountId: string }>();
 
   const { account, isLoading } = useAccount(accountId);
-  const { transactions, isLoading: isTxLoading } = useTransactions({ accountId });
+  const {
+    transactions,
+    totalCount,
+    isLoading: isTxLoading,
+  } = usePaginatedTransactions({ accountId }, 5, Boolean(accountId));
   const { history, isLoading: isHistoryLoading } = useAccountHistory(accountId, 30);
   const { reconciliation } = useAccountReconciliation(accountId);
   const { mutate: createAdjustment, isPending: isAdjusting } = useCreateAdjustmentEntry();
@@ -838,7 +842,7 @@ export default function AccountDetailsScreen() {
                             </TouchableOpacity>
                           );
                         })}
-                        {transactions.length > 5 && (
+                        {totalCount > 5 && (
                           <TouchableOpacity
                             style={styles.viewAllBtn}
                             onPress={() => {

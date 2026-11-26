@@ -1,10 +1,9 @@
 import React from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import TransactionsScreen from './(tabs)/transactions';
-import type { DatePreset } from '@/components/modals/TransactionFilterModal';
+import { VALID_DATE_PRESETS, type DatePreset } from '@/components/modals/TransactionFilterModal';
 
 const VALID_TYPES = new Set(['all', 'expense', 'income', 'transfer']);
-const VALID_PRESETS = new Set(['all', 'this_month', 'last_month', 'last_90_days']);
 
 export default function TransactionsStackRoute() {
   const params = useLocalSearchParams<{
@@ -22,7 +21,7 @@ export default function TransactionsStackRoute() {
       ? (rawType as 'all' | 'expense' | 'income' | 'transfer')
       : undefined;
   const initialDatePreset =
-    rawPreset && VALID_PRESETS.has(rawPreset)
+    rawPreset && VALID_DATE_PRESETS.has(rawPreset as DatePreset)
       ? (rawPreset as DatePreset)
       : undefined;
 

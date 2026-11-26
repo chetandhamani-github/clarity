@@ -7,7 +7,14 @@ server:
 
 clarity:
   admin:
-    secret-key: ${ADMIN_SECRET_KEY:clarity-admin-2026}
+    secret-key: ${ADMIN_SECRET_KEY:}
+  auth:
+    allow-unverified-fallback: ${AUTH_ALLOW_UNVERIFIED_FALLBACK:false}
+    google-client-id: ${GOOGLE_CLIENT_ID:}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+  security:
+    require-client-identity: ${REQUIRE_CLIENT_IDENTITY:true}
   ai:
     gemini:
       api-key: ${GEMINI_API_KEY:}
@@ -60,8 +67,10 @@ management:
 
 springdoc:
   api-docs:
+    enabled: ${SPRINGDOC_ENABLED:false}
     path: /v3/api-docs
   swagger-ui:
+    enabled: ${SPRINGDOC_ENABLED:false}
     path: /swagger-ui.html
     operations-sorter: method
     tags-sorter: alpha

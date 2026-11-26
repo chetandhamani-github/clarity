@@ -2,9 +2,16 @@ package com.clarity.splitwise;
 
 import com.clarity.splitwise.dto.*;
 import com.clarity.splitwise.entity.SplitDebt;
+import com.clarity.splitwise.entity.SplitExpense;
+import com.clarity.splitwise.entity.SplitGroup;
+import com.clarity.splitwise.entity.SplitGroupMember;
 import com.clarity.splitwise.entity.SplitPerson;
 import com.clarity.splitwise.entity.SplitSettlement;
 import com.clarity.splitwise.repository.SplitDebtRepository;
+import com.clarity.splitwise.repository.SplitExpenseRepository;
+import com.clarity.splitwise.repository.SplitExpenseSplitRepository;
+import com.clarity.splitwise.repository.SplitGroupMemberRepository;
+import com.clarity.splitwise.repository.SplitGroupRepository;
 import com.clarity.splitwise.repository.SplitPersonRepository;
 import com.clarity.splitwise.repository.SplitSettlementRepository;
 import com.clarity.splitwise.service.SplitwiseServiceImpl;
@@ -37,6 +44,18 @@ class SplitwiseServiceImplTest {
 
     @Mock
     private SplitSettlementRepository splitSettlementRepository;
+
+    @Mock
+    private SplitGroupRepository splitGroupRepository;
+
+    @Mock
+    private SplitGroupMemberRepository splitGroupMemberRepository;
+
+    @Mock
+    private SplitExpenseRepository splitExpenseRepository;
+
+    @Mock
+    private SplitExpenseSplitRepository splitExpenseSplitRepository;
 
     @Mock
     private com.clarity.auth.repository.UserRepository userRepository;
@@ -124,8 +143,8 @@ class SplitwiseServiceImplTest {
     }
 
     @Test
-    @DisplayName("sync: collaboratively mirrors debt when user and friend emails exist")
-    void syncShouldMirrorDebtCollaboratively() {
+    @DisplayName("sync: keeps 1-on-1 debts private to creator and does not mirror to friend")
+    void syncShouldKeepOneOnOneDebtsPrivate() {
         com.clarity.auth.entity.User userAlice = com.clarity.auth.entity.User.builder()
                 .email("alice@gmail.com")
                 .name("Alice")
@@ -153,11 +172,94 @@ class SplitwiseServiceImplTest {
         SplitSyncResponse response = splitwiseService.sync(installationId, request, "Bearer token-alice");
 
         assertThat(response.isSuccess()).isTrue();
-        // Verify mirrored inverse debt was saved for Bob
-        verify(splitDebtRepository, atLeastOnce()).save(argThat(debt ->
-                "bob@gmail.com".equals(debt.getOwnerEmail()) &&
-                "I_OWE".equals(debt.getType()) &&
-                debt.getId().endsWith("_inv")
+        verify(splitDebtRepository, times(1)).save(argThat(debt ->
+                "alice@gmail.com".equals(debt.getOwnerEmail()) &&
+                "OWE_ME".equals(debt.getType()) &&
+                "d1".equals(debt.getId())
         ));
+        verify(splitDebtRepository, never()).save(argThat(debt ->
+                "bob@gmail.com".equals(debt.getOwnerEmail()) || debt.getId().endsWith("_inv")
+        ));
+    }
+
+    @Test
+    @DisplayName("sync: canonicalizes current_user and shares groups and expenses with group members by email")
+    void syncShouldShareGroupAndExpensesAcrossMembersByEmail() {
+        com.clarity.auth.entity.User userBob = com.clarity.auth.entity.User.builder()
+                .email("bob@gmail.com")
+                .name("Bob")
+                .authToken("token-bob")
+                .build();
+
+        when(userRepository.findByAuthToken("token-bob")).thenReturn(Optional.of(userBob));
+
+        SplitGroup sharedGroup = SplitGroup.builder()
+                .id("g-trip")
+                .installationId("inst-alice")
+                .name("Goa Trip")
+                .currency("INR")
+                .ownerEmail("alice@gmail.com")
+                .isArchived(false)
+                .isDeleted(false)
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
+
+        SplitGroupMember aliceMember = SplitGroupMember.builder()
+                .id("gm-1")
+                .groupId("g-trip")
+                .personId("user_alice@gmail.com")
+                .memberEmail("alice@gmail.com")
+                .memberName("Alice")
+                .role("admin")
+                .build();
+
+        SplitGroupMember bobMember = SplitGroupMember.builder()
+                .id("gm-2")
+                .groupId("g-trip")
+                .personId("p-bob")
+                .memberEmail("bob@gmail.com")
+                .memberName("Bob")
+                .role("member")
+                .build();
+
+        SplitExpense sharedExpense = SplitExpense.builder()
+                .id("exp-1")
+                .installationId("inst-alice")
+                .groupId("g-trip")
+                .payerId("user_alice@gmail.com")
+                .payerEmail("alice@gmail.com")
+                .payerName("Alice")
+                .description("Hotel")
+                .amount(new BigDecimal("4000.00"))
+                .currency("INR")
+                .ownerEmail("alice@gmail.com")
+                .isDeleted(false)
+                .date(Instant.now())
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
+
+        when(splitGroupMemberRepository.findByMemberEmailIgnoreCase("bob@gmail.com")).thenReturn(List.of(bobMember));
+        when(splitGroupRepository.findAllById(any())).thenReturn(List.of(sharedGroup));
+        when(splitGroupMemberRepository.findByGroupId("g-trip")).thenReturn(List.of(aliceMember, bobMember));
+        when(splitExpenseRepository.findByGroupIdIn(any())).thenReturn(List.of(sharedExpense));
+        when(splitExpenseSplitRepository.findByExpenseId("exp-1")).thenReturn(List.of());
+
+        SplitSyncRequest bobSyncRequest = SplitSyncRequest.builder()
+                .installationId("inst-bob")
+                .people(List.of())
+                .debts(List.of())
+                .settlements(List.of())
+                .build();
+
+        SplitSyncResponse response = splitwiseService.sync("inst-bob", bobSyncRequest, "Bearer token-bob");
+
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(response.getGroups()).hasSize(1);
+        assertThat(response.getGroups().get(0).getId()).isEqualTo("g-trip");
+        assertThat(response.getGroups().get(0).getMembers()).hasSize(2);
+        assertThat(response.getExpenses()).hasSize(1);
+        assertThat(response.getExpenses().get(0).getPayerEmail()).isEqualTo("alice@gmail.com");
     }
 }

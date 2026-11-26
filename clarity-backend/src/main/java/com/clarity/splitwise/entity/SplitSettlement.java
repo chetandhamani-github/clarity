@@ -39,6 +39,9 @@ public class SplitSettlement {
     @Column(name = "owner_email", length = 255)
     private String ownerEmail;
 
+    @Column(name = "group_id", length = 255)
+    private String groupId;
+
     @Column(name = "amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal amount;
 

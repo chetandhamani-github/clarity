@@ -1,9 +1,11 @@
 import { DeviceEventEmitter } from 'react-native';
 import { getDatabase } from './index';
+import { getAccountById } from './account-dao';
 import { insertTransaction } from './transaction-dao';
 import { insertNotification } from './notification-dao';
 import { evaluateTransactionBudgetAlerts } from '@/services/notifications/alert-engine';
 import { queueAutoBackup } from '@/services/cloud/google-drive-service';
+import { isLiabilityAccountType } from '@/utils/account-metrics';
 import { formatCurrency } from '@/utils/format';
 import type {
   RecurringTransaction,
@@ -129,7 +131,7 @@ export async function getAllRecurringTransactions(): Promise<RecurringTransactio
      FROM recurring_transactions rt
      LEFT JOIN accounts a ON rt.account_id = a.id
      LEFT JOIN accounts ta ON rt.to_account_id = ta.id
-     ORDER BY rt.next_process_date ASC`
+     ORDER BY rt.is_active DESC, rt.next_process_date ASC`
   );
   return rows.map(mapRow);
 }
@@ -155,6 +157,8 @@ import { calculateNextDate } from '@/utils/date';
 
 let isProcessingRecurring = false;
 
+const round2 = (value: number): number => Math.round(value * 100) / 100;
+
 export async function processDueRecurringTransactions(): Promise<number> {
   if (isProcessingRecurring) {
     return 0;
@@ -162,6 +166,7 @@ export async function processDueRecurringTransactions(): Promise<number> {
 
   isProcessingRecurring = true;
   let totalProcessed = 0;
+  let stateChanged = false;
 
   try {
     const db = getDatabase();
@@ -193,11 +198,46 @@ export async function processDueRecurringTransactions(): Promise<number> {
           }
         }
 
+        let toAccount: Awaited<ReturnType<typeof getAccountById>> = null;
+        let trackedLiabilityDebt: number | null = null;
+        if (rt.type === 'transfer' && rt.to_account_id) {
+          try {
+            toAccount = await getAccountById(rt.to_account_id);
+          } catch {
+            toAccount = null;
+          }
+          if (toAccount && isLiabilityAccountType(toAccount.type)) {
+            trackedLiabilityDebt = toAccount.balance < 0 ? round2(Math.abs(toAccount.balance)) : 0;
+          }
+        }
+
+        if (trackedLiabilityDebt !== null && trackedLiabilityDebt <= 0.005) {
+          await db.runAsync('UPDATE recurring_transactions SET is_active = 0 WHERE id = ?', [rt.id]);
+          await insertNotification({
+            title: 'Loan / Debt Already Paid Off',
+            description: `Recurring transfer to "${toAccount?.name || rt.merchant || 'Account'}" was paused because the balance is already settled.`,
+            type: 'bill',
+            actionUrl: '/(app)/(tabs)/transactions',
+          });
+          stateChanged = true;
+          continue;
+        }
+
         let createdTxCount = 0;
+        let lastInsertedAmount = rt.amount;
+        let shouldAutoPause = false;
 
         while (currentDate <= today && count < MAX_CYCLES) {
+          if (trackedLiabilityDebt !== null && trackedLiabilityDebt <= 0.005) {
+            shouldAutoPause = true;
+            break;
+          }
+
+          const cycleAmount =
+            trackedLiabilityDebt !== null ? round2(Math.min(rt.amount, trackedLiabilityDebt)) : rt.amount;
+
           // Check if an SMS or manual transaction already captured this recurring charge for this cycle
-          // Window: within 2 days of scheduled date, matching amount, account, and exact/clean merchant
+          // Window: within 2 days of scheduled date, matching amount, account, recipient (for transfers), and merchant/category
           const cleanMerchant = (rt.merchant || '').toLowerCase().trim();
           const hasMerchant = cleanMerchant.length > 0;
           const merchantFilter = hasMerchant
@@ -206,12 +246,17 @@ export async function processDueRecurringTransactions(): Promise<number> {
           const merchantParams = hasMerchant
             ? [`%${cleanMerchant}%`, cleanMerchant]
             : [rt.category];
+          const transferRecipientFilter =
+            rt.type === 'transfer' && rt.to_account_id ? 'AND to_account_id = ?' : '';
+          const transferRecipientParams =
+            rt.type === 'transfer' && rt.to_account_id ? [rt.to_account_id] : [];
 
           const existingTx = await db.getFirstAsync<{ id: string; is_recurring: number }>(
             `SELECT id, is_recurring FROM transactions
              WHERE account_id = ?
                AND ABS(amount - ?) <= 0.01
                AND type = ?
+               ${transferRecipientFilter}
                AND (
                  date(date) BETWEEN date(?, '-2 days') AND date(?, '+2 days')
                  OR date LIKE ?
@@ -220,8 +265,9 @@ export async function processDueRecurringTransactions(): Promise<number> {
              LIMIT 1`,
             [
               rt.account_id,
-              rt.amount,
+              cycleAmount,
               rt.type,
+              ...transferRecipientParams,
               currentDate,
               currentDate,
               `${currentDate}%`,
@@ -235,17 +281,24 @@ export async function processDueRecurringTransactions(): Promise<number> {
                 existingTx.id,
               ]);
             }
+            if (trackedLiabilityDebt !== null) {
+              trackedLiabilityDebt = round2(Math.max(0, trackedLiabilityDebt - cycleAmount));
+            }
             lastProcessed = currentDate;
             currentDate = calculateNextDate(currentDate, rt.frequency as RecurringFrequency, targetDay);
             count++;
             totalProcessed++;
+            if (trackedLiabilityDebt !== null && trackedLiabilityDebt <= 0.005) {
+              shouldAutoPause = true;
+              break;
+            }
             continue;
           }
 
           const newTx = await insertTransaction({
             accountId: rt.account_id,
             toAccountId: rt.to_account_id,
-            amount: rt.amount,
+            amount: cycleAmount,
             type: rt.type as TransactionType,
             merchant: rt.merchant,
             category: rt.category,
@@ -262,36 +315,70 @@ export async function processDueRecurringTransactions(): Promise<number> {
             evaluateTransactionBudgetAlerts(newTx).catch(() => {});
           }
 
+          if (trackedLiabilityDebt !== null) {
+            trackedLiabilityDebt = round2(Math.max(0, trackedLiabilityDebt - cycleAmount));
+          }
+
+          lastInsertedAmount = cycleAmount;
           createdTxCount++;
           lastProcessed = currentDate;
           currentDate = calculateNextDate(currentDate, rt.frequency as RecurringFrequency, targetDay);
           count++;
           totalProcessed++;
+
+          if (trackedLiabilityDebt !== null && trackedLiabilityDebt <= 0.005) {
+            shouldAutoPause = true;
+            break;
+          }
         }
 
-        if (count > 0) {
-          if (createdTxCount > 0) {
+        if (count > 0 || shouldAutoPause) {
+          if (createdTxCount > 0 && shouldAutoPause) {
+            await insertNotification({
+              title: 'Loan / Debt Paid Off!',
+              description: `Final recurring payment of ${formatCurrency(lastInsertedAmount)} settled "${toAccount?.name || rt.merchant || 'Account'}". Recurring schedule paused automatically.`,
+              type: 'milestone',
+              actionUrl: '/(app)/(tabs)/transactions',
+            });
+          } else if (createdTxCount > 0) {
             await insertNotification({
               title: 'Recurring Transaction Processed',
-              description: `Scheduled ${rt.type} of ${formatCurrency(rt.amount)} for "${rt.merchant}" was automatically recorded${createdTxCount > 1 ? ` (${createdTxCount} cycles)` : ''}.`,
+              description: `Scheduled ${rt.type} of ${formatCurrency(lastInsertedAmount)} for "${rt.merchant}" was automatically recorded${createdTxCount > 1 ? ` (${createdTxCount} cycles)` : ''}.`,
               type: 'bill',
+              actionUrl: '/(app)/(tabs)/transactions',
+            });
+          } else if (shouldAutoPause) {
+            await insertNotification({
+              title: 'Loan / Debt Paid Off!',
+              description: `Recurring transfer to "${toAccount?.name || rt.merchant || 'Account'}" was paused automatically after settling the balance.`,
+              type: 'milestone',
               actionUrl: '/(app)/(tabs)/transactions',
             });
           }
 
-          await db.runAsync(
-            `UPDATE recurring_transactions 
-             SET last_processed_date = ?, next_process_date = ? 
-             WHERE id = ?`,
-            [lastProcessed, currentDate, rt.id]
-          );
+          if (shouldAutoPause) {
+            await db.runAsync(
+              `UPDATE recurring_transactions 
+               SET last_processed_date = ?, next_process_date = ?, is_active = 0 
+               WHERE id = ?`,
+              [lastProcessed, currentDate, rt.id]
+            );
+            stateChanged = true;
+          } else {
+            await db.runAsync(
+              `UPDATE recurring_transactions 
+               SET last_processed_date = ?, next_process_date = ? 
+               WHERE id = ?`,
+              [lastProcessed, currentDate, rt.id]
+            );
+          }
         }
       } catch {
         // Failed to process recurring transaction
       }
     }
 
-    if (totalProcessed > 0) {
+    if (totalProcessed > 0 || stateChanged) {
       DeviceEventEmitter.emit('transactionsUpdated');
       DeviceEventEmitter.emit('notificationsUpdated');
       queueAutoBackup('recurring-processed');

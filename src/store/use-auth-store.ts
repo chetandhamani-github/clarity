@@ -79,8 +79,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       const idToken = signInResult.data?.idToken;
       const googleUser = signInResult.data?.user;
 
-      if (!idToken && !googleUser?.email) {
-        throw new Error('Google Sign-In did not return valid credentials');
+      if (!idToken && (!__DEV__ || !googleUser?.email)) {
+        throw new Error('Google Sign-In did not return a valid ID token');
       }
 
       // Exchange with Spring Boot backend

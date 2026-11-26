@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -18,6 +19,8 @@ public interface SplitExpenseRepository extends JpaRepository<SplitExpense, Stri
     Optional<SplitExpense> findByIdAndInstallationId(String id, String installationId);
 
     List<SplitExpense> findByGroupId(String groupId);
+
+    List<SplitExpense> findByGroupIdIn(Collection<String> groupIds);
 
     List<SplitExpense> findByOwnerEmail(String ownerEmail);
 

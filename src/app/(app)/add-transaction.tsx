@@ -21,8 +21,14 @@ import type { ParsedVoiceTransaction } from '@/services/voice/voice-parser';
 import { useNetworkStore } from '@/store/use-network-store';
 import { isNetworkError } from '@/services/network/network.service';
 import { ThemeColors, typography, radius, useTheme } from '@/theme';
-import type { RecurringFrequency, TransactionType } from '@/types';
-import { formatLocalDate, getCurrencySymbol } from '@/utils/format';
+import type { Account, RecurringFrequency, TransactionType } from '@/types';
+import { formatCurrency, formatLocalDate, getCurrencySymbol } from '@/utils/format';
+import {
+  computeTransferImpact,
+  getAccountTypeShortLabel,
+  isLiabilityAccountType,
+  pickDefaultSourceAccountId,
+} from '@/utils/account-metrics';
 import { getAccountTypeIcon, getCategoryIcon } from '@/utils/icons';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -74,6 +80,7 @@ export default function AddTransactionScreen() {
     merchant?: string;
     category?: string;
     note?: string;
+    recurring?: string;
   }>();
   const id = params.id;
   const isEditing = !!id;
@@ -112,7 +119,9 @@ export default function AddTransactionScreen() {
   const [accountId, setAccountId] = useState<string | null>(params.accountId || null);
   const [toAccountId, setToAccountId] = useState<string | null>(params.toAccountId || null);
   const [note, setNote] = useState(params.note || '');
-  const [isRecurring, setIsRecurring] = useState(false);
+  const [isRecurring, setIsRecurring] = useState(
+    params.recurring === '1' || params.recurring === 'true'
+  );
   const [recurringFreq, setRecurringFreq] = useState<RecurringFrequency>('monthly');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isScanningReceipt, setIsScanningReceipt] = useState(false);
@@ -232,7 +241,11 @@ export default function AddTransactionScreen() {
     if (isEditing && transaction && !initialized) {
       setType(transaction.type);
       setAmountStr(transaction.amount.toString());
-      setMerchant(transaction.merchant);
+      setMerchant(
+        transaction.type === 'transfer' && transaction.merchant === 'Transfer'
+          ? ''
+          : transaction.merchant
+      );
       setCategory(transaction.category);
       setDate(transaction.date ? transaction.date.split('T')[0] : formatLocalDate(new Date()));
       setAccountId(transaction.accountId);
@@ -263,11 +276,19 @@ export default function AddTransactionScreen() {
   // Set default account once accounts load
   React.useEffect(() => {
     if (accounts.length > 0 && !accountId && !isEditing) {
-      setAccountId(params.accountId || accounts[0].id);
+      if (params.accountId) {
+        setAccountId(params.accountId);
+        return;
+      }
+      if (params.type === 'transfer' || params.toAccountId) {
+        setAccountId(pickDefaultSourceAccountId(accounts, params.toAccountId || toAccountId));
+        return;
+      }
+      setAccountId(accounts[0].id);
     }
-  }, [accounts, accountId, isEditing, params.accountId]);
+  }, [accounts, accountId, isEditing, params.accountId, params.type, params.toAccountId, toAccountId]);
 
-  // Sync params when navigated with pre-filled voice or quick action data
+  // Sync params when navigated with pre-filled voice, debt payoff, or recurring schedule data
   React.useEffect(() => {
     if (!isEditing) {
       if (params.amount) setAmountStr(params.amount);
@@ -281,8 +302,68 @@ export default function AddTransactionScreen() {
       if (params.note) setNote(params.note);
       if (params.type) setType(params.type);
       if (params.accountId) setAccountId(params.accountId);
+      if (params.toAccountId) {
+        setToAccountId(params.toAccountId);
+        if (!params.accountId && accounts.length > 0 && accountId === params.toAccountId) {
+          setAccountId(pickDefaultSourceAccountId(accounts, params.toAccountId));
+        }
+      }
+      if (params.recurring === '1' || params.recurring === 'true') {
+        setIsRecurring(true);
+      }
     }
-  }, [params.amount, params.merchant, params.category, params.note, params.type, params.accountId, isEditing]);
+  }, [
+    params.amount,
+    params.merchant,
+    params.category,
+    params.note,
+    params.type,
+    params.accountId,
+    params.toAccountId,
+    params.recurring,
+    accounts,
+    accountId,
+    isEditing,
+  ]);
+
+  const handleTypeChange = (nextType: TransactionType) => {
+    if (nextType === 'transfer') {
+      const currentAcc = accounts.find((a) => a.id === accountId);
+      if (
+        currentAcc &&
+        isLiabilityAccountType(currentAcc.type) &&
+        (!toAccountId || toAccountId === currentAcc.id)
+      ) {
+        setToAccountId(currentAcc.id);
+        const suggestedSource = pickDefaultSourceAccountId(accounts, currentAcc.id);
+        if (suggestedSource) {
+          setAccountId(suggestedSource);
+        }
+      } else if (toAccountId && toAccountId === accountId) {
+        setToAccountId(null);
+      }
+    }
+    setType(nextType);
+  };
+
+  const handleSwitchToLoanPayment = (targetAccount: Account) => {
+    const currentAcc = accounts.find((a) => a.id === accountId);
+    const nextSourceId =
+      currentAcc && !isLiabilityAccountType(currentAcc.type) && currentAcc.id !== targetAccount.id
+        ? currentAcc.id
+        : pickDefaultSourceAccountId(accounts, targetAccount.id);
+    if (nextSourceId) {
+      setAccountId(nextSourceId);
+    }
+    setToAccountId(targetAccount.id);
+    setType('transfer');
+  };
+
+  const handleSwapTransferAccounts = () => {
+    if (!accountId || !toAccountId || accountId === toAccountId) return;
+    setAccountId(toAccountId);
+    setToAccountId(accountId);
+  };
 
   const handleSave = () => {
     Keyboard.dismiss();
@@ -350,7 +431,7 @@ export default function AddTransactionScreen() {
       toAccountId: type === 'transfer' ? toAccountId || undefined : undefined,
       amount,
       type,
-      merchant: type === 'transfer' ? 'Transfer' : (merchant.trim() || category),
+      merchant: type === 'transfer' ? (merchant.trim() || 'Transfer') : (merchant.trim() || category),
       category: type === 'transfer' ? 'Transfer' : category,
       date: finalDate,
       isRecurring,
@@ -420,7 +501,7 @@ export default function AddTransactionScreen() {
         }
 
         if (isRecurring) {
-          const nextDate = calculateNextDate(date, recurringFreq);
+          const nextDate = calculateNextDate(normalizedDate, recurringFreq);
           const recData = {
             accountId,
             toAccountId: type === 'transfer' ? toAccountId || undefined : undefined,
@@ -430,7 +511,7 @@ export default function AddTransactionScreen() {
             category: txData.category,
             frequency: recurringFreq,
             nextProcessDate: nextDate,
-            lastProcessedDate: date,
+            lastProcessedDate: normalizedDate,
             splits: splitsToSave,
           };
           createRecurring(recData, {
@@ -666,6 +747,48 @@ export default function AddTransactionScreen() {
   };
 
   const selectedAccount = accounts.find((a) => a.id === accountId);
+  const selectedToAccount = accounts.find((a) => a.id === toAccountId);
+  const liabilityAccounts = useMemo(
+    () => accounts.filter((a) => isLiabilityAccountType(a.type)),
+    [accounts]
+  );
+  const parsedAmount = parseFloat(amountStr) || 0;
+  const transferPreview = useMemo(() => {
+    if (
+      type !== 'transfer' ||
+      !selectedAccount ||
+      !selectedToAccount ||
+      selectedAccount.id === selectedToAccount.id ||
+      parsedAmount <= 0
+    ) {
+      return null;
+    }
+    return computeTransferImpact(selectedAccount, selectedToAccount, parsedAmount);
+  }, [type, selectedAccount, selectedToAccount, parsedAmount]);
+
+  const isSelectedExpenseLoanOrBorrowed =
+    type === 'expense' &&
+    Boolean(
+      selectedAccount && (selectedAccount.type === 'loan' || selectedAccount.type === 'borrowed')
+    );
+
+  const looksLikeDebtPayment =
+    type === 'expense' &&
+    liabilityAccounts.length > 0 &&
+    !isSelectedExpenseLoanOrBorrowed &&
+    (isRecurring ||
+      /\b(loan|emi|debt|mortgage|repay|credit|card|installment)\b/i.test(
+        `${merchant} ${category} ${note}`
+      ));
+
+  const formatAccountBalanceLabel = (acc: Account): string => {
+    if (isLiabilityAccountType(acc.type)) {
+      if (acc.balance < 0) return `${formatCurrency(Math.abs(acc.balance))} owed`;
+      if (acc.balance === 0) return `${formatCurrency(0)} settled`;
+      return `${formatCurrency(acc.balance)} credit`;
+    }
+    return formatCurrency(acc.balance);
+  };
 
   return (
     <View
@@ -807,7 +930,7 @@ export default function AddTransactionScreen() {
               <TouchableOpacity
                 key={t}
                 style={[styles.typeButton, type === t && styles.typeButtonActive]}
-                onPress={() => setType(t)}
+                onPress={() => handleTypeChange(t)}
               >
                 <Text style={[styles.typeButtonText, type === t && styles.typeButtonTextActive]}>
                   {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -857,61 +980,278 @@ export default function AddTransactionScreen() {
           {/* Form Fields */}
           <View style={styles.formGroup}>
             {type === 'transfer' ? (
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>To Account</Text>
+              <>
+                <View style={styles.transferRouteCard}>
+                  {/* From Account (Deduct from) */}
+                  <View style={styles.inputContainer}>
+                    <View style={styles.transferLabelRow}>
+                      <Text style={styles.inputLabel}>From Account</Text>
+                      <Text style={styles.transferRoleHint}>Money deducted from</Text>
+                    </View>
 
-                {isLoadingAccounts ? (
-                  <SkeletonBox height={52} borderRadius={radius.lg} />
-                ) : accounts.length === 0 ? (
-                  <View style={[styles.textInput, { justifyContent: 'center' }]}>
-                    <Text style={{ color: colors.error }}>No accounts available.</Text>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.textInputWrapper}
-                    onPress={() => {
-                      Keyboard.dismiss();
-                      setShowToAccountMenu(true);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <MaterialIcons
-                      name={
-                        toAccountId && accounts.find((a) => a.id === toAccountId)
-                          ? getAccountTypeIcon(accounts.find((a) => a.id === toAccountId)!.type)
-                          : 'account-balance'
-                      }
-                      size={24}
-                      color={colors.primary}
-                      style={styles.inputIcon}
-                    />
-                    <View style={[styles.textInput, { justifyContent: 'center' }]}>
-                      <Text
-                        style={{
-                          color:
-                            toAccountId && accounts.find((a) => a.id === toAccountId)
-                              ? colors.onSurface
-                              : colors.outline,
+                    {isLoadingAccounts ? (
+                      <SkeletonBox height={52} borderRadius={radius.lg} />
+                    ) : accounts.length === 0 ? (
+                      <View style={[styles.textInput, { justifyContent: 'center' }]}>
+                        <Text style={{ color: colors.error }}>No accounts available.</Text>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.textInputWrapper}
+                        onPress={() => {
+                          Keyboard.dismiss();
+                          setShowAccountMenu(true);
                         }}
+                        activeOpacity={0.7}
                       >
-                        {toAccountId && accounts.find((a) => a.id === toAccountId)
-                          ? `${accounts.find((a) => a.id === toAccountId)!.name}${
-                              accounts.find((a) => a.id === toAccountId)!.lastFour
-                                ? ` (...${accounts.find((a) => a.id === toAccountId)!.lastFour})`
-                                : ''
-                            }`
-                          : 'Select destination account'}
+                        <MaterialIcons
+                          name={
+                            selectedAccount
+                              ? getAccountTypeIcon(selectedAccount.type)
+                              : 'account-balance'
+                          }
+                          size={22}
+                          color={colors.primary}
+                          style={styles.inputIcon}
+                        />
+                        <View style={[styles.textInput, styles.accountSelectContent]}>
+                          <Text
+                            style={{
+                              color: selectedAccount ? colors.onSurface : colors.outline,
+                              flex: 1,
+                              ...typography.bodyMd,
+                            }}
+                            numberOfLines={1}
+                          >
+                            {selectedAccount
+                              ? `${selectedAccount.name}${
+                                  selectedAccount.lastFour ? ` (...${selectedAccount.lastFour})` : ''
+                                }`
+                              : 'Select paying account'}
+                          </Text>
+                          {selectedAccount && (
+                            <Text style={styles.accountSelectBalance} numberOfLines={1}>
+                              {formatAccountBalanceLabel(selectedAccount)}
+                            </Text>
+                          )}
+                        </View>
+                        <MaterialIcons
+                          name="expand-more"
+                          size={24}
+                          color={colors.onSurfaceVariant}
+                          style={styles.inputRightIcon}
+                        />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Route Direction & Swap */}
+                  <View style={styles.transferSwapRow}>
+                    <View style={styles.transferRouteDivider} />
+                    <TouchableOpacity
+                      style={styles.transferSwapBtn}
+                      onPress={handleSwapTransferAccounts}
+                      disabled={!accountId || !toAccountId || accountId === toAccountId}
+                      activeOpacity={0.75}
+                      accessibilityLabel="Swap From and To accounts"
+                    >
+                      <MaterialIcons
+                        name={accountId && toAccountId ? 'swap-vert' : 'arrow-downward'}
+                        size={16}
+                        color={colors.primary}
+                      />
+                      <Text style={styles.transferSwapText}>
+                        {accountId && toAccountId ? 'Swap' : 'To'}
+                      </Text>
+                    </TouchableOpacity>
+                    <View style={styles.transferRouteDivider} />
+                  </View>
+
+                  {/* To Account (Recipient / Loan / Card) */}
+                  <View style={styles.inputContainer}>
+                    <View style={styles.transferLabelRow}>
+                      <Text style={styles.inputLabel}>To Account</Text>
+                      <Text style={styles.transferRoleHint}>
+                        {selectedToAccount && isLiabilityAccountType(selectedToAccount.type)
+                          ? 'Reduces debt balance'
+                          : 'Recipient / Loan / Card'}
                       </Text>
                     </View>
+
+                    {isLoadingAccounts ? (
+                      <SkeletonBox height={52} borderRadius={radius.lg} />
+                    ) : accounts.length === 0 ? (
+                      <View style={[styles.textInput, { justifyContent: 'center' }]}>
+                        <Text style={{ color: colors.error }}>No accounts available.</Text>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.textInputWrapper}
+                        onPress={() => {
+                          Keyboard.dismiss();
+                          setShowToAccountMenu(true);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <MaterialIcons
+                          name={
+                            selectedToAccount
+                              ? getAccountTypeIcon(selectedToAccount.type)
+                              : 'handshake'
+                          }
+                          size={22}
+                          color={colors.primary}
+                          style={styles.inputIcon}
+                        />
+                        <View style={[styles.textInput, styles.accountSelectContent]}>
+                          <Text
+                            style={{
+                              color: selectedToAccount ? colors.onSurface : colors.outline,
+                              flex: 1,
+                              ...typography.bodyMd,
+                            }}
+                            numberOfLines={1}
+                          >
+                            {selectedToAccount
+                              ? `${selectedToAccount.name}${
+                                  selectedToAccount.lastFour
+                                    ? ` (...${selectedToAccount.lastFour})`
+                                    : ''
+                                }`
+                              : 'Select recipient / loan account'}
+                          </Text>
+                          {selectedToAccount && (
+                            <Text
+                              style={[
+                                styles.accountSelectBalance,
+                                isLiabilityAccountType(selectedToAccount.type) &&
+                                  selectedToAccount.balance < 0 && { color: colors.error },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {formatAccountBalanceLabel(selectedToAccount)}
+                            </Text>
+                          )}
+                        </View>
+                        <MaterialIcons
+                          name="expand-more"
+                          size={24}
+                          color={colors.onSurfaceVariant}
+                          style={styles.inputRightIcon}
+                        />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Live Double-Entry Balance Impact Preview */}
+                  {transferPreview && selectedAccount && selectedToAccount && (
+                    <View style={styles.impactPreviewCard}>
+                      <View style={styles.impactPreviewHeader}>
+                        <MaterialIcons
+                          name={transferPreview.isToLiability ? 'verified' : 'compare-arrows'}
+                          size={15}
+                          color={colors.primary}
+                        />
+                        <Text style={styles.impactPreviewTitle}>
+                          {transferPreview.isToLiability
+                            ? 'Debt Paydown Preview'
+                            : 'Balance Impact Preview'}
+                        </Text>
+                      </View>
+
+                      <View style={styles.impactPreviewRow}>
+                        <Text style={styles.impactAccountName} numberOfLines={1}>
+                          {selectedAccount.name}
+                        </Text>
+                        <View style={styles.impactValuesCol}>
+                          <Text style={styles.impactTransitionText} numberOfLines={1}>
+                            {`${formatCurrency(transferPreview.fromBefore)} → ${formatCurrency(transferPreview.fromAfter)}`}
+                          </Text>
+                          <Text style={[styles.impactDeltaBadge, { color: colors.error }]}>
+                            {`-${formatCurrency(parsedAmount)}`}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.impactPreviewRow}>
+                        <Text style={styles.impactAccountName} numberOfLines={1}>
+                          {selectedToAccount.name}
+                        </Text>
+                        <View style={styles.impactValuesCol}>
+                          {transferPreview.isToLiability ? (
+                            <>
+                              <Text style={styles.impactTransitionText} numberOfLines={1}>
+                                {`${
+                                  transferPreview.debtBefore > 0
+                                    ? `${formatCurrency(transferPreview.debtBefore)} owed`
+                                    : formatCurrency(transferPreview.toBefore)
+                                } → ${
+                                  transferPreview.debtAfter > 0
+                                    ? `${formatCurrency(transferPreview.debtAfter)} owed`
+                                    : transferPreview.toAfter === 0
+                                    ? 'Settled'
+                                    : `+${formatCurrency(transferPreview.toAfter)}`
+                                }`}
+                              </Text>
+                              <Text style={[styles.impactDeltaBadge, { color: '#10B981' }]}>
+                                {transferPreview.debtReduced > 0
+                                  ? `Debt -${formatCurrency(transferPreview.debtReduced)}`
+                                  : `+${formatCurrency(parsedAmount)}`}
+                              </Text>
+                            </>
+                          ) : (
+                            <>
+                              <Text style={styles.impactTransitionText} numberOfLines={1}>
+                                {`${formatCurrency(transferPreview.toBefore)} → ${formatCurrency(transferPreview.toAfter)}`}
+                              </Text>
+                              <Text style={[styles.impactDeltaBadge, { color: '#10B981' }]}>
+                                {`+${formatCurrency(parsedAmount)}`}
+                              </Text>
+                            </>
+                          )}
+                        </View>
+                      </View>
+
+                      {transferPreview.exceedsDebtBy > 0 && (
+                        <View style={styles.impactWarningRow}>
+                          <MaterialIcons name="info-outline" size={14} color="#D97706" />
+                          <Text style={styles.impactWarningText}>
+                            Exceeds remaining {selectedToAccount.name} debt by{' '}
+                            {formatCurrency(transferPreview.exceedsDebtBy)}.
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+
+                {/* Optional Payment Label for Transfers / EMIs */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>
+                    Payment Label{' '}
+                    <Text style={{ color: colors.outline, fontWeight: '400' }}>(Optional)</Text>
+                  </Text>
+                  <View style={styles.textInputWrapper}>
                     <MaterialIcons
-                      name="expand-more"
-                      size={24}
+                      name="label-outline"
+                      size={22}
                       color={colors.onSurfaceVariant}
-                      style={styles.inputRightIcon}
+                      style={styles.inputIcon}
                     />
-                  </TouchableOpacity>
-                )}
-              </View>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder={
+                        selectedToAccount && isLiabilityAccountType(selectedToAccount.type)
+                          ? `e.g. ${selectedToAccount.name} EMI`
+                          : 'e.g. Monthly Transfer, Card Payment'
+                      }
+                      placeholderTextColor={colors.outline}
+                      value={merchant}
+                      onChangeText={setMerchant}
+                    />
+                  </View>
+                </View>
+              </>
             ) : (
               <>
                 {/* Merchant */}
@@ -1124,55 +1464,153 @@ export default function AddTransactionScreen() {
               onClose={() => setShowDatePicker(false)}
             />
 
-            {/* Account Selector */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Account</Text>
+            {/* Account Selector (for Expense / Income — Transfer uses the From → To Route Card above) */}
+            {type !== 'transfer' && (
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>
+                  {type === 'expense' ? 'Pay From Account' : 'Deposit To Account'}
+                </Text>
 
-              {isLoadingAccounts ? (
-                <SkeletonBox height={52} borderRadius={radius.lg} />
-              ) : accounts.length === 0 ? (
-                <View style={[styles.textInput, { justifyContent: 'center' }]}>
-                  <Text style={{ color: colors.error }}>
-                    No accounts available. Please add one first.
-                  </Text>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  style={styles.textInputWrapper}
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    setShowAccountMenu(true);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <MaterialIcons
-                    name={
-                      selectedAccount
-                        ? getAccountTypeIcon(selectedAccount.type)
-                        : 'account-balance'
-                    }
-                    size={24}
-                    color={colors.primary}
-                    style={styles.inputIcon}
-                  />
+                {isLoadingAccounts ? (
+                  <SkeletonBox height={52} borderRadius={radius.lg} />
+                ) : accounts.length === 0 ? (
                   <View style={[styles.textInput, { justifyContent: 'center' }]}>
-                    <Text style={{ color: selectedAccount ? colors.onSurface : colors.outline }}>
-                      {selectedAccount
-                        ? `${selectedAccount.name}${
-                            selectedAccount.lastFour ? ` (...${selectedAccount.lastFour})` : ''
-                          }`
-                        : 'Select an account'}
+                    <Text style={{ color: colors.error }}>
+                      No accounts available. Please add one first.
                     </Text>
                   </View>
-                  <MaterialIcons
-                    name="expand-more"
-                    size={24}
-                    color={colors.onSurfaceVariant}
-                    style={styles.inputRightIcon}
-                  />
-                </TouchableOpacity>
-              )}
-            </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.textInputWrapper}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setShowAccountMenu(true);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialIcons
+                      name={
+                        selectedAccount
+                          ? getAccountTypeIcon(selectedAccount.type)
+                          : 'account-balance'
+                      }
+                      size={24}
+                      color={colors.primary}
+                      style={styles.inputIcon}
+                    />
+                    <View style={[styles.textInput, styles.accountSelectContent]}>
+                      <Text
+                        style={{
+                          color: selectedAccount ? colors.onSurface : colors.outline,
+                          flex: 1,
+                          ...typography.bodyMd,
+                        }}
+                        numberOfLines={1}
+                      >
+                        {selectedAccount
+                          ? `${selectedAccount.name}${
+                              selectedAccount.lastFour ? ` (...${selectedAccount.lastFour})` : ''
+                            }`
+                          : 'Select an account'}
+                      </Text>
+                      {selectedAccount && (
+                        <Text style={styles.accountSelectBalance} numberOfLines={1}>
+                          {formatAccountBalanceLabel(selectedAccount)}
+                        </Text>
+                      )}
+                    </View>
+                    <MaterialIcons
+                      name="expand-more"
+                      size={24}
+                      color={colors.onSurfaceVariant}
+                      style={styles.inputRightIcon}
+                    />
+                  </TouchableOpacity>
+                )}
+
+                {isSelectedExpenseLoanOrBorrowed && selectedAccount && (
+                  <View style={styles.debtHelperCardWarn}>
+                    <View style={styles.debtHelperHeaderRow}>
+                      <MaterialIcons name="info-outline" size={18} color="#D97706" />
+                      <Text style={styles.debtHelperTitle}>
+                        Paying down {selectedAccount.name} from your bank?
+                      </Text>
+                    </View>
+                    <Text style={styles.debtHelperBody}>
+                      Recording an expense directly on a loan increases your debt. Switch to a Bank → Loan payment to deduct from your bank and reduce this loan balance.
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.debtHelperPrimaryBtn}
+                      onPress={() => handleSwitchToLoanPayment(selectedAccount)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.debtHelperPrimaryBtnText}>
+                        Switch to Bank → Loan Payment
+                      </Text>
+                      <MaterialIcons name="arrow-forward" size={16} color={colors.onPrimary} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {looksLikeDebtPayment && (
+                  <View style={styles.debtHelperCardInfo}>
+                    <View style={styles.debtHelperHeaderRow}>
+                      <MaterialIcons name="account-balance" size={17} color={colors.primary} />
+                      <Text style={styles.debtHelperTitle}>
+                        Paying a Loan, EMI, or Credit Card?
+                      </Text>
+                    </View>
+                    <Text style={styles.debtHelperBody}>
+                      Select the recipient debt account below so deducting from{' '}
+                      {selectedAccount?.name || 'your bank'} also reduces that debt automatically:
+                    </Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{ gap: 8, paddingTop: 6 }}
+                    >
+                      {liabilityAccounts.map((acc) => (
+                        <TouchableOpacity
+                          key={acc.id}
+                          style={styles.debtQuickTargetChip}
+                          onPress={() => handleSwitchToLoanPayment(acc)}
+                          activeOpacity={0.75}
+                        >
+                          <MaterialIcons
+                            name={getAccountTypeIcon(acc.type)}
+                            size={14}
+                            color={colors.primary}
+                          />
+                          <Text style={styles.debtQuickTargetText} numberOfLines={1}>
+                            {acc.name} ({formatAccountBalanceLabel(acc)})
+                          </Text>
+                          <MaterialIcons name="arrow-forward" size={14} color={colors.primary} />
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {type === 'expense' &&
+                  liabilityAccounts.length > 0 &&
+                  !isSelectedExpenseLoanOrBorrowed &&
+                  !looksLikeDebtPayment && (
+                    <TouchableOpacity
+                      style={styles.debtInlineLink}
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        setShowToAccountMenu(true);
+                      }}
+                      activeOpacity={0.75}
+                    >
+                      <MaterialIcons name="handshake" size={15} color={colors.primary} />
+                      <Text style={styles.debtInlineLinkText}>
+                        Paying a Loan or Credit Card? Link recipient account →
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+              </View>
+            )}
 
             {/* Receipt / Document Attachment */}
             <View style={styles.attachmentSection}>
@@ -1239,9 +1677,15 @@ export default function AddTransactionScreen() {
 
             {/* Recurring Toggle */}
             <View style={styles.recurringContainer}>
-              <View>
+              <View style={{ flex: 1, paddingRight: 12 }}>
                 <Text style={styles.recurringLabel}>Recurring Transaction</Text>
-                <Text style={styles.recurringSubtext}>Mark if this happens regularly</Text>
+                <Text style={styles.recurringSubtext}>
+                  {type === 'transfer' && selectedAccount && selectedToAccount
+                    ? isLiabilityAccountType(selectedToAccount.type)
+                      ? `Auto-deducts from ${selectedAccount.name} & reduces ${selectedToAccount.name} debt on schedule`
+                      : `Auto-transfers from ${selectedAccount.name} to ${selectedToAccount.name} on schedule`
+                    : 'Mark if this happens regularly'}
+                </Text>
               </View>
               <Switch
                 value={isRecurring}
@@ -1557,7 +2001,9 @@ export default function AddTransactionScreen() {
                 <View style={styles.categoryIconBoxHeader}>
                   <MaterialIcons name="account-balance" size={20} color={colors.onPrimaryContainer} />
                 </View>
-                <Text style={styles.modalTitle}>Select Account</Text>
+                <Text style={styles.modalTitle}>
+                  {type === 'transfer' ? 'Select From Account' : 'Select Account'}
+                </Text>
               </View>
               <TouchableOpacity
                 style={styles.modalCloseBtn}
@@ -1581,12 +2027,15 @@ export default function AddTransactionScreen() {
                     key={acc.id}
                     style={[styles.categoryOption, isSelected && styles.categoryOptionSelected]}
                     onPress={() => {
+                      if (type === 'transfer' && acc.id === toAccountId) {
+                        setToAccountId(accountId && accountId !== acc.id ? accountId : null);
+                      }
                       setAccountId(acc.id);
                       setShowAccountMenu(false);
                     }}
                     activeOpacity={0.7}
                   >
-                    <View style={styles.categoryOptionLeft}>
+                    <View style={[styles.categoryOptionLeft, { flex: 1 }]}>
                       <View
                         style={[
                           styles.categoryIconBox,
@@ -1599,29 +2048,44 @@ export default function AddTransactionScreen() {
                           color={isSelected ? colors.onPrimary : colors.onSurfaceVariant}
                         />
                       </View>
-                      <View>
+                      <View style={{ flex: 1 }}>
                         <Text
                           style={[
                             styles.categoryOptionText,
                             isSelected && { color: colors.primary, fontWeight: '700' },
                           ]}
+                          numberOfLines={1}
                         >
                           {acc.name}
                         </Text>
-                        {acc.lastFour && (
-                          <Text
-                            style={{
-                              ...typography.labelMd,
-                              color: colors.onSurfaceVariant,
-                              fontSize: 11,
-                            }}
-                          >
-                            Account ending in ...{acc.lastFour}
-                          </Text>
-                        )}
+                        <Text
+                          style={{
+                            ...typography.labelMd,
+                            color: colors.onSurfaceVariant,
+                            fontSize: 11,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {getAccountTypeShortLabel(acc.type)}
+                          {acc.lastFour ? ` • ...${acc.lastFour}` : ''}
+                        </Text>
                       </View>
                     </View>
-                    {isSelected && <MaterialIcons name="check" size={20} color={colors.primary} />}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text
+                        style={{
+                          ...typography.labelMd,
+                          fontSize: 12,
+                          color:
+                            isLiabilityAccountType(acc.type) && acc.balance < 0
+                              ? colors.error
+                              : colors.onSurfaceVariant,
+                        }}
+                      >
+                        {formatAccountBalanceLabel(acc)}
+                      </Text>
+                      {isSelected && <MaterialIcons name="check" size={20} color={colors.primary} />}
+                    </View>
                   </TouchableOpacity>
                 );
               })}
@@ -1649,9 +2113,14 @@ export default function AddTransactionScreen() {
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderTitleRow}>
                 <View style={styles.categoryIconBoxHeader}>
-                  <MaterialIcons name="account-balance" size={20} color={colors.onPrimaryContainer} />
+                  <MaterialIcons name="handshake" size={20} color={colors.onPrimaryContainer} />
                 </View>
-                <Text style={styles.modalTitle}>Select Destination Account</Text>
+                <View>
+                  <Text style={styles.modalTitle}>Select Recipient Account</Text>
+                  <Text style={{ ...typography.labelMd, fontSize: 11, color: colors.onSurfaceVariant }}>
+                    Loan, credit card, or destination account
+                  </Text>
+                </View>
               </View>
               <TouchableOpacity
                 style={styles.modalCloseBtn}
@@ -1669,18 +2138,31 @@ export default function AddTransactionScreen() {
               keyboardShouldPersistTaps="handled"
             >
               {accounts.map((acc) => {
-                const isSelected = acc.id === toAccountId;
+                const isSelected = type === 'transfer' && acc.id === toAccountId;
+                const isSameAsSource = acc.id === accountId;
                 return (
                   <TouchableOpacity
                     key={acc.id}
-                    style={[styles.categoryOption, isSelected && styles.categoryOptionSelected]}
+                    style={[
+                      styles.categoryOption,
+                      isSelected && styles.categoryOptionSelected,
+                      isSameAsSource && { opacity: 0.5 },
+                    ]}
                     onPress={() => {
-                      setToAccountId(acc.id);
+                      if (isSameAsSource) {
+                        showToast('Source and recipient accounts must be different', 'info');
+                        return;
+                      }
+                      if (type !== 'transfer') {
+                        handleSwitchToLoanPayment(acc);
+                      } else {
+                        setToAccountId(acc.id);
+                      }
                       setShowToAccountMenu(false);
                     }}
                     activeOpacity={0.7}
                   >
-                    <View style={styles.categoryOptionLeft}>
+                    <View style={[styles.categoryOptionLeft, { flex: 1 }]}>
                       <View
                         style={[
                           styles.categoryIconBox,
@@ -1693,29 +2175,47 @@ export default function AddTransactionScreen() {
                           color={isSelected ? colors.onPrimary : colors.onSurfaceVariant}
                         />
                       </View>
-                      <View>
+                      <View style={{ flex: 1 }}>
                         <Text
                           style={[
                             styles.categoryOptionText,
                             isSelected && { color: colors.primary, fontWeight: '700' },
                           ]}
+                          numberOfLines={1}
                         >
                           {acc.name}
                         </Text>
-                        {acc.lastFour && (
-                          <Text
-                            style={{
-                              ...typography.labelMd,
-                              color: colors.onSurfaceVariant,
-                              fontSize: 11,
-                            }}
-                          >
-                            Account ending in ...{acc.lastFour}
-                          </Text>
-                        )}
+                        <Text
+                          style={{
+                            ...typography.labelMd,
+                            color: colors.onSurfaceVariant,
+                            fontSize: 11,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {isSameAsSource
+                            ? 'Currently selected as From Account'
+                            : `${getAccountTypeShortLabel(acc.type)}${
+                                acc.lastFour ? ` • ...${acc.lastFour}` : ''
+                              }`}
+                        </Text>
                       </View>
                     </View>
-                    {isSelected && <MaterialIcons name="check" size={20} color={colors.primary} />}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text
+                        style={{
+                          ...typography.labelMd,
+                          fontSize: 12,
+                          color:
+                            isLiabilityAccountType(acc.type) && acc.balance < 0
+                              ? colors.error
+                              : colors.onSurfaceVariant,
+                        }}
+                      >
+                        {formatAccountBalanceLabel(acc)}
+                      </Text>
+                      {isSelected && <MaterialIcons name="check" size={20} color={colors.primary} />}
+                    </View>
                   </TouchableOpacity>
                 );
               })}
@@ -2398,6 +2898,210 @@ const getStyles = (colors: ThemeColors) => {
     fullscreenImage: {
       width: '100%',
       height: '100%',
+    },
+    transferRouteCard: {
+      backgroundColor: colors.surfaceContainerLow,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      padding: 12,
+      gap: 10,
+    },
+    transferLabelRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingRight: 4,
+    },
+    transferRoleHint: {
+      ...typography.labelMd,
+      fontSize: 11,
+      color: colors.onSurfaceVariant,
+    },
+    accountSelectContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8,
+      paddingRight: 42,
+    },
+    accountSelectBalance: {
+      ...typography.labelMd,
+      fontSize: 12,
+      color: colors.onSurfaceVariant,
+      flexShrink: 0,
+    },
+    transferSwapRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    transferRouteDivider: {
+      flex: 1,
+      height: 1,
+      backgroundColor: colors.surfaceContainerHigh,
+    },
+    transferSwapBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 14,
+      backgroundColor: colors.primaryContainer + '55',
+      borderWidth: 1,
+      borderColor: colors.primary + '35',
+    },
+    transferSwapText: {
+      ...typography.labelMd,
+      fontSize: 11,
+      fontFamily: 'Manrope_700Bold',
+      color: colors.primary,
+    },
+    impactPreviewCard: {
+      backgroundColor: colors.surfaceContainerLowest,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      padding: 10,
+      gap: 7,
+      marginTop: 2,
+    },
+    impactPreviewHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    impactPreviewTitle: {
+      ...typography.labelMd,
+      fontSize: 11,
+      fontFamily: 'Manrope_700Bold',
+      color: colors.primary,
+    },
+    impactPreviewRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10,
+    },
+    impactAccountName: {
+      ...typography.bodyMd,
+      fontSize: 12,
+      fontFamily: 'Manrope_600SemiBold',
+      color: colors.onSurface,
+      flex: 1,
+    },
+    impactValuesCol: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      flexShrink: 0,
+    },
+    impactTransitionText: {
+      ...typography.labelMd,
+      fontSize: 11,
+      color: colors.onSurfaceVariant,
+    },
+    impactDeltaBadge: {
+      ...typography.labelMd,
+      fontSize: 11,
+      fontFamily: 'Manrope_700Bold',
+    },
+    impactWarningRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingTop: 4,
+      borderTopWidth: 1,
+      borderTopColor: colors.surfaceContainer,
+    },
+    impactWarningText: {
+      ...typography.labelMd,
+      fontSize: 11,
+      color: '#D97706',
+      flex: 1,
+    },
+    debtHelperCardWarn: {
+      marginTop: 8,
+      backgroundColor: 'rgba(217, 119, 6, 0.08)',
+      borderWidth: 1,
+      borderColor: 'rgba(217, 119, 6, 0.35)',
+      borderRadius: 12,
+      padding: 12,
+      gap: 8,
+    },
+    debtHelperCardInfo: {
+      marginTop: 8,
+      backgroundColor: colors.primaryContainer + '35',
+      borderWidth: 1,
+      borderColor: colors.primary + '35',
+      borderRadius: 12,
+      padding: 12,
+      gap: 6,
+    },
+    debtHelperHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    debtHelperTitle: {
+      ...typography.labelMd,
+      fontSize: 12,
+      fontFamily: 'Manrope_700Bold',
+      color: colors.onSurface,
+      flex: 1,
+    },
+    debtHelperBody: {
+      ...typography.bodyMd,
+      fontSize: 12,
+      color: colors.onSurfaceVariant,
+      lineHeight: 17,
+    },
+    debtHelperPrimaryBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      backgroundColor: colors.primary,
+      borderRadius: 10,
+      paddingVertical: 9,
+      paddingHorizontal: 12,
+    },
+    debtHelperPrimaryBtnText: {
+      ...typography.labelMd,
+      fontSize: 12,
+      fontFamily: 'Manrope_700Bold',
+      color: colors.onPrimary,
+    },
+    debtQuickTargetChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: colors.surfaceContainerLowest,
+      borderWidth: 1,
+      borderColor: colors.primary + '45',
+      borderRadius: 16,
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+    },
+    debtQuickTargetText: {
+      ...typography.labelMd,
+      fontSize: 11,
+      fontFamily: 'Manrope_600SemiBold',
+      color: colors.primary,
+    },
+    debtInlineLink: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingTop: 6,
+      paddingHorizontal: 4,
+    },
+    debtInlineLinkText: {
+      ...typography.labelMd,
+      fontSize: 12,
+      color: colors.primary,
+      fontFamily: 'Manrope_600SemiBold',
     },
   });
   return styles;

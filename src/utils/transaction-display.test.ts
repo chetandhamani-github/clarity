@@ -25,4 +25,22 @@ describe('transaction display helpers', () => {
     expect(hasMeaningfulMerchant(transaction)).toBe(true);
     expect(getTransactionDisplayName(transaction)).toBe('Swiggy');
   });
+
+  it('shows meaningful transfer labels while falling back to Transfer for generic labels', () => {
+    expect(
+      getTransactionDisplayName({
+        type: 'transfer',
+        merchant: 'Home Loan EMI',
+        category: 'Transfer',
+      })
+    ).toBe('Home Loan EMI');
+
+    expect(
+      getTransactionDisplayName({
+        type: 'transfer',
+        merchant: 'Transfer',
+        category: 'Transfer',
+      })
+    ).toBe('Transfer');
+  });
 });

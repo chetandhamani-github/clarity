@@ -23,12 +23,11 @@ export function AppLockModal({ visible, onUnlock }: AppLockModalProps) {
     setErrorMessage(null);
 
     try {
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
       const enrolledLevel = await LocalAuthentication.getEnrolledLevelAsync();
 
-      // If no lock security or biometrics is configured on the device at all
-      if (!hasHardware && !isEnrolled && enrolledLevel === LocalAuthentication.SecurityLevel.NONE) {
+      // If no device passcode or biometrics is enrolled at all, avoid locking the user out
+      if (!isEnrolled && enrolledLevel === LocalAuthentication.SecurityLevel.NONE) {
         onUnlock();
         return;
       }
