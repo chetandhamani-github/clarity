@@ -1,5 +1,11 @@
 import { LocalCategorizerEngine } from '@/modules/sms/categorizer/localCategorizerEngine';
 import type { TransactionType } from '@/types';
+import {
+  extractOpeningBalanceFromText,
+  inferDirectionFromNarration,
+  resolveDirectionByRunningBalance,
+  type DirectionConfidence,
+} from './statement-direction-helper';
 
 export interface ParsedCsvTransaction {
   date: string; // YYYY-MM-DD
@@ -331,39 +337,44 @@ function detectHeaderColumns(rows: string[][]): CsvColumnMap | null {
       ) {
         colDesc = c;
       }
-      const isTypeHeader =
-        /^(?:txn\s*|trans(?:action)?\s*)?type$|cr\s*\/\s*dr|dr\s*\/\s*cr|d\s*\/\s*c|debit\s*\/\s*credit/.test(
+      const isAmountLikeHeader = /\b(?:amount|amt\.?|balance|bal\.?)\b/.test(h);
+      const matchesDebitWord =
+        /withdraw(?:al|n)?s?|debits?|\bdr\.?\b|dr\s*amt|dr\s*amount|debit\s*amt|paid\s*out|outflow|money\s*out/.test(
           h
         );
+      const matchesCreditWord =
+        /deposits?|credits?|\bcr\.?\b|cr\s*amt|cr\s*amount|credit\s*amt|paid\s*in|inflow|money\s*in|received/.test(
+          h
+        );
+      const isDualDirectionHeader = matchesDebitWord && matchesCreditWord;
+      const isTypeHeader =
+        !isAmountLikeHeader &&
+        (/^(?:txn\s*|trans(?:action)?\s*|tx\s*|entry\s*)?type(?:\s*\(.*\))?$|^(?:cr\s*\/\s*dr|dr\s*\/\s*cr|d\s*\/\s*c|c\s*\/\s*d|debit\s*\/\s*credit|credit\s*\/\s*debit)(?:\s*(?:flag|indicator|ind\.?|type))?$/.test(
+          h
+        ) ||
+          isDualDirectionHeader);
       if (isTypeHeader) {
         if (colType === -1) colType = c;
         continue;
       }
 
-      if (
-        /withdrawal|debit|dr\.?\b|dr\s*amt|dr\s*amount|debit\s*amt|paid\s*out|outflow|withdrawn/.test(
-          h
-        ) &&
-        colDebit === -1
-      ) {
+      if (!isDualDirectionHeader && matchesDebitWord && colDebit === -1) {
         colDebit = c;
       }
-      if (
-        /deposit|credit|cr\.?\b|cr\s*amt|cr\s*amount|credit\s*amt|paid\s*in|inflow|deposited/.test(
-          h
-        ) &&
-        colCredit === -1
-      ) {
+      if (!isDualDirectionHeader && matchesCreditWord && colCredit === -1) {
         colCredit = c;
       }
       if (
-        /^(?:txn\s*|trans(?:action)?\s*|tran\s*|net\s*)?(?:amount|amt\.?)(?:\s*\(.*\))?$/.test(h) &&
+        (/^(?:txn\s*|trans(?:action)?\s*|tran\s*|net\s*|tx\s*)?(?:amount|amt\.?)(?:\s*(?:in\s*)?(?:rs\.?|inr|usd|eur|gbp|₹|\$|€|£))?(?:\s*\(.*\))?$/.test(
+          h
+        ) ||
+          (isAmountLikeHeader && isDualDirectionHeader && !/\bbal(?:ance)?\b/.test(h))) &&
         colAmount === -1
       ) {
         colAmount = c;
       }
       if (
-        /(?:closing|available|clear|net|running|led(?:ger)?)\s*bal(?:ance)?|^bal(?:ance)?(?:\s*\(.*\))?\.?$/.test(
+        /(?:closing|available|clear|net|running|led(?:ger)?)\s*bal(?:ance)?(?:\s*\(.*\))?\.?$|^bal(?:ance)?(?:\s*\(.*\))?\.?$/.test(
           h
         ) &&
         colBalance === -1
@@ -435,8 +446,20 @@ export function parseBankStatementCsv(csvText: string): CsvParseResult {
     columnMap;
 
   const transactions: ParsedCsvTransaction[] = [];
+  const confidences: DirectionConfidence[] = [];
   let ignoredRows = 0;
   const errors: string[] = [];
+
+  const hasSignedNegativeAmounts =
+    colAmount !== -1 &&
+    rows.slice(headerIndex + 1).some((r) => {
+      const s = (r[colAmount] || '').trim();
+      return (
+        /^-\s*(?:₹|rs\.?|inr|\$|\d)/i.test(s) ||
+        /^\(.*\)$/.test(s) ||
+        /\b(?:DR|DEBIT)\b/i.test(s)
+      );
+    });
 
   for (let r = headerIndex + 1; r < rows.length; r++) {
     const row = rows[r];
@@ -455,22 +478,30 @@ export function parseBankStatementCsv(csvText: string): CsvParseResult {
     const rawDesc = colDesc !== -1 ? row[colDesc] : 'Statement Transaction';
     let amount = 0;
     let type: TransactionType = 'expense';
+    let confidence: DirectionConfidence = 'default';
 
-    if (colDebit !== -1 && colCredit !== -1) {
+    if (colDebit !== -1 && colCredit !== -1 && colDebit !== colCredit) {
       const debitVal = cleanAmount(row[colDebit]);
       const creditVal = cleanAmount(row[colCredit]);
 
-      if (debitVal > 0) {
+      if (debitVal > 0 && creditVal === 0) {
         amount = debitVal;
         type = 'expense';
-      } else if (creditVal > 0) {
+        confidence = 'explicit';
+      } else if (creditVal > 0 && debitVal === 0) {
         amount = creditVal;
         type = 'income';
+        confidence = 'explicit';
+      } else if (debitVal > 0 && creditVal > 0) {
+        const narrDir = inferDirectionFromNarration(rawDesc);
+        type = narrDir ?? 'expense';
+        amount = type === 'income' ? creditVal : debitVal;
+        confidence = narrDir ? 'inferred' : 'default';
       } else {
         ignoredRows++;
         continue;
       }
-    } else if (colDebit !== -1) {
+    } else if (colDebit !== -1 && colDebit !== colCredit) {
       const debitVal = cleanAmount(row[colDebit]);
       if (debitVal === 0) {
         ignoredRows++;
@@ -478,7 +509,8 @@ export function parseBankStatementCsv(csvText: string): CsvParseResult {
       }
       amount = debitVal;
       type = 'expense';
-    } else if (colCredit !== -1) {
+      confidence = 'explicit';
+    } else if (colCredit !== -1 && colCredit !== colDebit) {
       const creditVal = cleanAmount(row[colCredit]);
       if (creditVal === 0) {
         ignoredRows++;
@@ -486,9 +518,13 @@ export function parseBankStatementCsv(csvText: string): CsvParseResult {
       }
       amount = creditVal;
       type = 'income';
+      confidence = 'explicit';
     } else if (colAmount !== -1) {
       const rawAmtStr = (row[colAmount] || '').trim();
-      const isNegativeOrParen = rawAmtStr.includes('-') || /^\(.*\)$/.test(rawAmtStr);
+      const isNegativeOrParen =
+        /^-\s*(?:₹|rs\.?|inr|\$|\d)/i.test(rawAmtStr) ||
+        /\d\s*-$/.test(rawAmtStr) ||
+        /^\(.*\)$/.test(rawAmtStr);
       const val = cleanAmount(rawAmtStr);
       if (val === 0) {
         ignoredRows++;
@@ -496,19 +532,54 @@ export function parseBankStatementCsv(csvText: string): CsvParseResult {
       }
       amount = val;
 
+      let resolvedFromTypeCol = false;
       if (colType !== -1) {
-        const typeStr = (row[colType] || '').toUpperCase();
-        if (/\b(?:CR|CREDIT|DEP|DEPOSIT|C)\b/.test(typeStr)) {
+        const typeStr = (row[colType] || '').trim().toUpperCase();
+        if (
+          /\b(?:CR|CREDIT|CREDITED|DEP|DEPOSIT|DEPOSITED|IN|INFLOW|RECEIPT|RECEIVED|INCOME|REFUND|CASHBACK|C)\b/.test(
+            typeStr
+          ) ||
+          typeStr === '+'
+        ) {
           type = 'income';
-        } else {
+          confidence = 'explicit';
+          resolvedFromTypeCol = true;
+        } else if (
+          /\b(?:DR|DEBIT|DEBITED|WDL|WITHDRAWAL|WITHDRAWN|OUT|OUTFLOW|EXPENSE|SPENT|PAYMENT|PAID|D)\b/.test(
+            typeStr
+          ) ||
+          typeStr === '-'
+        ) {
           type = 'expense';
+          confidence = 'explicit';
+          resolvedFromTypeCol = true;
         }
-      } else if (/\b(?:CR|CREDIT|C)\.?\s*\)?$/i.test(rawAmtStr) || rawAmtStr.includes('+')) {
-        type = 'income';
-      } else if (/\b(?:DR|DEBIT|D)\.?\s*\)?$/i.test(rawAmtStr) || isNegativeOrParen) {
-        type = 'expense';
-      } else {
-        type = 'expense';
+      }
+
+      if (!resolvedFromTypeCol) {
+        if (
+          /\b(?:CR|CREDIT|C)\.?\s*\)?$/i.test(rawAmtStr) ||
+          /^(?:CR|CREDIT)\b/i.test(rawAmtStr) ||
+          rawAmtStr.includes('+')
+        ) {
+          type = 'income';
+          confidence = 'explicit';
+        } else if (
+          /\b(?:DR|DEBIT|D)\.?\s*\)?$/i.test(rawAmtStr) ||
+          /^(?:DR|DEBIT)\b/i.test(rawAmtStr) ||
+          isNegativeOrParen
+        ) {
+          type = 'expense';
+          confidence = 'explicit';
+        } else if (hasSignedNegativeAmounts) {
+          // Signed single-amount column: negative rows are expenses, unsigned positive rows are credits/income.
+          type = 'income';
+          confidence = colBalance !== -1 ? 'inferred' : 'explicit';
+        } else {
+          const narrDir = inferDirectionFromNarration(rawDesc);
+          type = narrDir ?? 'expense';
+          confidence = narrDir ? 'inferred' : 'default';
+        }
       }
     } else {
       ignoredRows++;
@@ -532,6 +603,26 @@ export function parseBankStatementCsv(csvText: string): CsvParseResult {
       note: rawDesc,
       ...(rowBalance !== undefined ? { balance: rowBalance } : {}),
     });
+    confidences.push(confidence);
+  }
+
+  const introText = rows
+    .slice(0, headerIndex)
+    .map((r) => r.join(' '))
+    .join('\n');
+  const openingBalance = extractOpeningBalanceFromText(introText);
+  const resolvedByBalance = resolveDirectionByRunningBalance(
+    transactions,
+    confidences,
+    openingBalance
+  );
+  for (let i = 0; i < transactions.length; i++) {
+    if (resolvedByBalance[i]) {
+      transactions[i].category = LocalCategorizerEngine.categorize({
+        merchant: transactions[i].merchant,
+        type: transactions[i].type === 'income' ? 'CREDIT' : 'DEBIT',
+      });
+    }
   }
 
   // Determine closing balance from transactions:

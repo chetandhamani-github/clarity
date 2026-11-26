@@ -2,18 +2,17 @@ import {
     isMeaningfulDatabaseSnapshot,
     type ClarityBackupPayload,
 } from '@/services/database/backup-restore-service';
-import {
-    encryptBackupPayload,
-    decryptBackupPayload,
-    isEncryptedBackup,
-    generateSecureDeviceKey,
-} from './backup-crypto';
+import { useAppStore } from '@/store/use-app-store';
 import {
     GoogleSignin,
     statusCodes,
 } from '@react-native-google-signin/google-signin';
 import * as SecureStore from 'expo-secure-store';
-import { useAppStore } from '@/store/use-app-store';
+import {
+    decryptBackupPayload,
+    encryptBackupPayload,
+    isEncryptedBackup,
+} from './backup-crypto';
 
 const SECURE_KEYS = {
   ACCESS_TOKEN: 'gdrive_access_token',
@@ -120,6 +119,7 @@ export async function clearTokens(): Promise<void> {
   await SecureStore.deleteItemAsync(SECURE_KEYS.REFRESH_TOKEN);
   await SecureStore.deleteItemAsync(SECURE_KEYS.EXPIRES_AT);
   await SecureStore.deleteItemAsync(SECURE_KEYS.USER_EMAIL);
+  await SecureStore.deleteItemAsync(SECURE_KEYS.BACKUP_PASSPHRASE);
   await SecureStore.deleteItemAsync(SECURE_KEYS.HAS_CUSTOM_PASSPHRASE);
   useAppStore.getState().setHasCustomBackupPassphrase(false);
 
@@ -204,17 +204,18 @@ export async function checkHasCustomBackupPassphrase(): Promise<boolean> {
 }
 
 /**
- * Retrieve existing passphrase or generate a cryptographically secure 256-bit device key.
- * Guarantees that ALL backups to Google Drive are encrypted from day one.
+ * Returns the stored passphrase only if the user explicitly configured a custom password.
+ * Legacy auto-generated 64-char device keys are ignored for new uploads so backups never
+ * get silently encrypted without a user-known password.
  */
-export async function getOrCreateDefaultBackupKey(): Promise<string> {
-  const existing = await getStoredBackupPassphrase();
-  if (existing && existing.trim().length >= 4) {
-    return existing;
+export async function getCustomBackupPassphrase(): Promise<string | null> {
+  const hasCustom = await checkHasCustomBackupPassphrase();
+  if (!hasCustom) {
+    return null;
   }
-  const generatedKey = generateSecureDeviceKey();
-  await setStoredBackupPassphrase(generatedKey, false);
-  return generatedKey;
+  const existing = await getStoredBackupPassphrase();
+  const trimmed = existing?.trim();
+  return trimmed && trimmed.length >= 4 ? trimmed : null;
 }
 
 /**
@@ -438,8 +439,14 @@ export async function findBackupFile(accessToken: string): Promise<GoogleDriveBa
  */
 export async function uploadBackup(
   snapshot: ClarityBackupPayload,
-  options?: { allowEmptyOverwrite?: boolean; allowInteractive?: boolean; passphrase?: string; pinRevision?: boolean }
-): Promise<{ success: boolean; modifiedTime?: string; error?: string }> {
+  options?: {
+    allowEmptyOverwrite?: boolean;
+    allowInteractive?: boolean;
+    passphrase?: string;
+    disableEncryption?: boolean;
+    pinRevision?: boolean;
+  }
+): Promise<{ success: boolean; modifiedTime?: string; encrypted?: boolean; error?: string }> {
   try {
     const allowInteractive = options?.allowInteractive ?? true;
     let accessToken = await getValidAccessToken(false, allowInteractive);
@@ -478,19 +485,28 @@ export async function uploadBackup(
     // prevent silent auto-overwrite to avoid replacing a populated cloud backup with a near-blank test database.
     const localTxCount = Array.isArray(snapshot.data?.transactions) ? snapshot.data.transactions.length : 0;
 
-    // Enforce AES-256-GCM encryption client-side before sending to Google Drive
-    // Guarantees zero unencrypted/plain-text financial records on Google Cloud
-    const encryptionPassphrase =
-      options?.passphrase ||
-      (await getStoredBackupPassphrase()) ||
-      (await getOrCreateDefaultBackupKey());
-
-    if (options?.passphrase) {
-      await setStoredBackupPassphrase(options.passphrase, true);
+    // Encrypt only when the user explicitly provides or previously set a backup password.
+    // Without a user password, upload plain JSON to private Drive AppData so restore works across reinstalls.
+    let activePassphrase: string | null = null;
+    if (!options?.disableEncryption) {
+      if (options?.passphrase !== undefined) {
+        const trimmed = options.passphrase.trim();
+        if (trimmed.length < 4) {
+          return {
+            success: false,
+            error: 'Backup password must be at least 4 characters long.',
+          };
+        }
+        activePassphrase = trimmed;
+      } else {
+        activePassphrase = await getCustomBackupPassphrase();
+      }
     }
 
-    const encryptedPayload = await encryptBackupPayload(snapshot, encryptionPassphrase);
-    const jsonContent = JSON.stringify(encryptedPayload, null, 2);
+    const payloadToUpload = activePassphrase
+      ? await encryptBackupPayload(snapshot, activePassphrase)
+      : snapshot;
+    const jsonContent = JSON.stringify(payloadToUpload, null, 2);
 
     if (
       existingFile &&
@@ -584,6 +600,12 @@ export async function uploadBackup(
       return { success: false, error: `Google Drive upload failed (${response.status}): ${errText}` };
     }
 
+    if (options?.disableEncryption) {
+      await clearStoredBackupPassphrase();
+    } else if (options?.passphrase && activePassphrase) {
+      await setStoredBackupPassphrase(activePassphrase, true);
+    }
+
     const resData = await response.json();
     const modifiedTime = resData.modifiedTime || new Date().toISOString();
     const fileId = resData.id || existingFile?.fileId;
@@ -611,7 +633,7 @@ export async function uploadBackup(
       }
     }
 
-    return { success: true, modifiedTime };
+    return { success: true, modifiedTime, encrypted: Boolean(activePassphrase) };
   } catch (error: any) {
     return { success: false, error: error?.message || 'Failed to upload backup to Google Drive.' };
   }
@@ -748,6 +770,9 @@ export async function downloadBackup(passphrase?: string): Promise<{
                   if (isEncryptedBackup(revRaw)) {
                     if (!keyToUse) continue;
                     revPayload = await decryptBackupPayload<ClarityBackupPayload>(revRaw, keyToUse);
+                    if (passphrase) {
+                      await setStoredBackupPassphrase(passphrase, true);
+                    }
                   } else {
                     revPayload = revRaw;
                   }

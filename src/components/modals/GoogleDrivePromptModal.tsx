@@ -30,6 +30,7 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
 
   const [step, setStep] = useState<ModalStep>('intro');
   const [passphrase, setPassphrase] = useState('');
+  const [confirmPassphrase, setConfirmPassphrase] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [existingBackupDate, setExistingBackupDate] = useState<string | null>(null);
   const [inlineError, setInlineError] = useState<string | null>(null);
@@ -38,6 +39,7 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
     connect,
     isConnecting,
     backupNow,
+    syncInitialBackupIfMeaningful,
     isBackingUp,
     restoreFromDrive,
     isRestoring,
@@ -48,6 +50,7 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
     if (visible) {
       setStep('intro');
       setPassphrase('');
+      setConfirmPassphrase('');
       setShowPassword(false);
       setInlineError(null);
       setExistingBackupDate(null);
@@ -56,9 +59,18 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
 
   if (!visible) return null;
 
+  const trimmedSetupPassword = passphrase.trim();
+  const trimmedSetupConfirm = confirmPassphrase.trim();
+  const isSetupLengthValid = trimmedSetupPassword.length >= 4;
+  const isSetupPasswordValid =
+    isSetupLengthValid && trimmedSetupPassword === trimmedSetupConfirm;
+  const showSetupLengthError = passphrase.length > 0 && !isSetupLengthValid;
+  const showSetupMismatchError =
+    confirmPassphrase.length > 0 && trimmedSetupPassword !== trimmedSetupConfirm;
+
   const handleConnect = async () => {
     setInlineError(null);
-    const res = await connect();
+    const res = await connect({ deferInitialUpload: true });
     if (!res.success) {
       return;
     }
@@ -66,9 +78,15 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
     setHasSeenDrivePrompt(true);
 
     if (res.needsPassphraseToRestore) {
+      setPassphrase('');
+      setConfirmPassphrase('');
+      setShowPassword(false);
       setExistingBackupDate(res.existingBackupDate || null);
       setStep('restore_passphrase');
     } else if (!res.hasExistingBackup) {
+      setPassphrase('');
+      setConfirmPassphrase('');
+      setShowPassword(false);
       setStep('setup_passphrase');
     } else {
       onDismiss();
@@ -76,14 +94,17 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
   };
 
   const handleSetPassphraseSubmit = async () => {
-    if (passphrase.trim().length < 4) {
-      setInlineError('Passphrase must be at least 4 characters long.');
+    if (trimmedSetupPassword.length < 4) {
+      setInlineError('Password must be at least 4 characters long.');
+      return;
+    }
+    if (trimmedSetupPassword !== trimmedSetupConfirm) {
+      setInlineError('Passwords do not match.');
       return;
     }
     setInlineError(null);
-    const success = await backupNow(passphrase.trim());
+    const success = await backupNow(trimmedSetupPassword);
     if (success) {
-      showToast('Recovery passphrase set & cloud backup encrypted!', 'success');
       onDismiss();
     } else {
       setInlineError('Failed to save backup. Please try again.');
@@ -91,7 +112,11 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
   };
 
   const handleSkipPassphrase = () => {
-    showToast('Using device-only key. You can set a recovery passphrase anytime in Settings.', 'info');
+    void syncInitialBackupIfMeaningful();
+    showToast(
+      'Backups will be saved without encryption. You can set a password anytime in Cloud Backup.',
+      'info'
+    );
     onDismiss();
   };
 
@@ -115,7 +140,18 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleInitialSkip}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={
+        step === 'setup_passphrase'
+          ? handleSkipPassphrase
+          : step === 'restore_passphrase'
+          ? onDismiss
+          : handleInitialSkip
+      }
+    >
       <TouchableWithoutFeedback onPress={step === 'intro' ? handleInitialSkip : undefined}>
         <View style={styles.overlay}>
           <KeyboardAvoidingView
@@ -132,16 +168,16 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
                       </View>
                     </View>
 
-                    <Text style={styles.title}>Encrypted Cloud Backup</Text>
+                    <Text style={styles.title}>Google Drive Cloud Backup</Text>
                     <Text style={styles.subtitle}>
-                      Connect Clarity to your private Google Drive with client-side AES-256-GCM encryption.
-                      Set a passphrase so you can restore your data if you switch or lose your phone.
+                      Back up your accounts and transactions to your private Google Drive AppData folder.
+                      You can optionally set a password to encrypt your backups.
                     </Text>
 
                     <View style={styles.featuresList}>
                       <View style={styles.featureItem}>
                         <MaterialIcons name="lock-outline" size={20} color={colors.primary} />
-                        <Text style={styles.featureText}>AES-256-GCM client-side encryption</Text>
+                        <Text style={styles.featureText}>Optional AES-256-GCM password encryption</Text>
                       </View>
                       <View style={styles.featureItem}>
                         <MaterialIcons name="restore" size={20} color={colors.primary} />
@@ -149,7 +185,7 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
                       </View>
                       <View style={styles.featureItem}>
                         <MaterialIcons name="sync" size={20} color={colors.primary} />
-                        <Text style={styles.featureText}>Automatic encrypted cloud sync</Text>
+                        <Text style={styles.featureText}>Automatic background cloud sync</Text>
                       </View>
                     </View>
 
@@ -193,17 +229,17 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
                       </View>
                     </View>
 
-                    <Text style={styles.title}>Set Recovery Passphrase</Text>
+                    <Text style={styles.title}>Set Backup Password</Text>
                     <Text style={styles.subtitle}>
-                      Set a secret passphrase to encrypt your cloud backup. You will need this passphrase to
-                      restore your financial records if your phone is lost or replaced.
+                      Optionally set a password to encrypt your backups with AES-256-GCM. You will
+                      need this password when restoring after reinstalling or changing phones.
                     </Text>
 
                     <View style={styles.inputWrapper}>
                       <MaterialIcons name="lock" size={20} color={colors.onSurfaceVariant} />
                       <TextInput
                         style={styles.input}
-                        placeholder="Enter passphrase (min 4 characters)"
+                        placeholder="Enter password (min 4 characters)"
                         placeholderTextColor={colors.outline}
                         secureTextEntry={!showPassword}
                         value={passphrase}
@@ -213,6 +249,7 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
                         }}
                         autoCapitalize="none"
                         autoFocus
+                        returnKeyType="next"
                       />
                       <TouchableOpacity
                         onPress={() => setShowPassword(!showPassword)}
@@ -226,6 +263,46 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
                       </TouchableOpacity>
                     </View>
 
+                    <View style={styles.inputWrapper}>
+                      <MaterialIcons name="lock" size={20} color={colors.onSurfaceVariant} />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Confirm password"
+                        placeholderTextColor={colors.outline}
+                        secureTextEntry={!showPassword}
+                        value={confirmPassphrase}
+                        onChangeText={(txt) => {
+                          setConfirmPassphrase(txt);
+                          if (inlineError) setInlineError(null);
+                        }}
+                        autoCapitalize="none"
+                        returnKeyType="done"
+                        onSubmitEditing={handleSetPassphraseSubmit}
+                      />
+                      <TouchableOpacity
+                        onPress={() => setShowPassword(!showPassword)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <MaterialIcons
+                          name={showPassword ? 'visibility-off' : 'visibility'}
+                          size={20}
+                          color={colors.outline}
+                        />
+                      </TouchableOpacity>
+                    </View>
+
+                    {showSetupLengthError && !inlineError ? (
+                      <Text style={[styles.errorText, { color: colors.error }]}>
+                        Password must be at least 4 characters
+                      </Text>
+                    ) : null}
+
+                    {showSetupMismatchError && !inlineError ? (
+                      <Text style={[styles.errorText, { color: colors.error }]}>
+                        Passwords do not match
+                      </Text>
+                    ) : null}
+
                     {inlineError ? (
                       <Text style={[styles.errorText, { color: colors.error }]}>{inlineError}</Text>
                     ) : null}
@@ -235,10 +312,10 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
                         style={[
                           styles.primaryButton,
                           { backgroundColor: colors.primary },
-                          (passphrase.trim().length < 4 || isBackingUp) && { opacity: 0.5 },
+                          (!isSetupPasswordValid || isBackingUp) && { opacity: 0.5 },
                         ]}
                         onPress={handleSetPassphraseSubmit}
-                        disabled={passphrase.trim().length < 4 || isBackingUp}
+                        disabled={!isSetupPasswordValid || isBackingUp}
                         activeOpacity={0.85}
                       >
                         {isBackingUp ? (
@@ -259,7 +336,7 @@ export function GoogleDrivePromptModal({ visible, onDismiss }: Props) {
                         disabled={isBackingUp}
                       >
                         <Text style={[styles.skipButtonText, { color: colors.onSurfaceVariant }]}>
-                          Skip for now (device-only key)
+                          Skip — Back up without encryption
                         </Text>
                       </TouchableOpacity>
                     </View>

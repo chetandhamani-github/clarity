@@ -2,6 +2,12 @@ import type { TransactionType } from '@/types';
 import * as FileSystem from 'expo-file-system/legacy';
 import forge from 'node-forge';
 import pako from 'pako';
+import {
+  extractOpeningBalanceFromText,
+  inferDirectionFromNarration,
+  resolveDirectionByRunningBalance,
+  type DirectionConfidence,
+} from './statement-direction-helper';
 
 export interface ParsedPdfTransaction {
   date: string; // YYYY-MM-DD
@@ -1848,8 +1854,14 @@ function extractObjectsFromObjStm(
   return objects;
 }
 
+export interface CoordTextFragment {
+  x: number;
+  text: string;
+}
+
 export interface ExtractedStreamContent {
   coordRows: string[];
+  coordRowItems?: CoordTextFragment[][];
   seqLines: string[];
 }
 
@@ -2160,10 +2172,13 @@ export function extractTextFromStream(
       clusters.push(currentCluster);
     }
 
+    const coordRowItems: CoordTextFragment[][] = [];
     for (const row of clusters) {
       row.sort((a, b) => (vertical ? a.y - b.y : a.x - b.x));
       coordRows.push(row.map((g) => g.text).join(' '));
+      coordRowItems.push(row.map((g) => ({ x: g.x, text: g.text })));
     }
+    return { coordRows, coordRowItems, seqLines };
   }
 
   return { coordRows, seqLines };
@@ -2338,31 +2353,32 @@ function resolveAmountTag(suffix?: string, sign?: string): 'DR' | 'CR' | null {
 
 function extractAmountTokens(text: string): ExtractedAmountToken[] {
   const results: ExtractedAmountToken[] = [];
+  // Require [+-] to attach directly to currency/digits so an empty Debit "-" placeholder never marks a Credit amount as DR.
   const tokenRegex =
-    /(?:^|[\s|(/:\[])([+-])?\s*(?:₹|rs\.?|inr)?\s*(\d{1,3}(?:,\d{2,3})*\.\d{2}|\d+\.\d{2})\s*(?:\(?\s*(CR|DR|C|D)\.?\s*\)?)?(?=$|[\s|,;)\]])/gi;
+    /(?:^|[\s|(/:\[])(?:(CR|DR)\s+)?([+-](?=(?:₹|rs\.?|inr)?\d))?(?:₹|rs\.?|inr)?\s*(\d{1,3}(?:,\d{2,3})*\.\d{2}|\d+\.\d{2})\s*(?:\(?\s*(CR|DR|C|D)\.?\s*\)?)?(?=$|[\s|,;)\]])/gi;
 
   let m: RegExpExecArray | null;
   while ((m = tokenRegex.exec(text)) !== null) {
-    const val = parseFloat(m[2].replace(/,/g, ''));
+    const val = parseFloat(m[3].replace(/,/g, ''));
     if (isNaN(val) || val < 0 || val >= 100000000) continue;
 
     results.push({
       value: val,
       raw: m[0].replace(/^[\s|(/:\[]+/, '').trim(),
-      tag: resolveAmountTag(m[3], m[1]),
+      tag: resolveAmountTag(m[4] || m[1], m[2]),
     });
   }
 
   if (results.length === 0) {
     const fallbackRegex =
-      /(?:^|[\s|(/:\[])([+-])?\s*(?:₹|rs\.?|inr)?\s*(\d{1,3}(?:,\d{2,3})+)\s*(?:\(?\s*(CR|DR|C|D)\.?\s*\)?)?(?=$|[\s|,;)\]])/gi;
+      /(?:^|[\s|(/:\[])(?:(CR|DR)\s+)?([+-](?=(?:₹|rs\.?|inr)?\d))?(?:₹|rs\.?|inr)?\s*(\d{1,3}(?:,\d{2,3})+)\s*(?:\(?\s*(CR|DR|C|D)\.?\s*\)?)?(?=$|[\s|,;)\]])/gi;
     while ((m = fallbackRegex.exec(text)) !== null) {
-      const val = parseFloat(m[2].replace(/,/g, ''));
+      const val = parseFloat(m[3].replace(/,/g, ''));
       if (isNaN(val) || val <= 0 || val >= 100000000) continue;
       results.push({
         value: val,
         raw: m[0].replace(/^[\s|(/:\[]+/, '').trim(),
-        tag: resolveAmountTag(m[3], m[1]),
+        tag: resolveAmountTag(m[4] || m[1], m[2]),
       });
     }
   }
@@ -2370,7 +2386,12 @@ function extractAmountTokens(text: string): ExtractedAmountToken[] {
   return results;
 }
 
-function parseTransactionRow(rowText: string): ParsedPdfTransaction | null {
+interface ParsedPdfRowResult {
+  transaction: ParsedPdfTransaction;
+  confidence: DirectionConfidence;
+}
+
+function parseTransactionRowWithMeta(rowText: string): ParsedPdfRowResult | null {
   const dateMatch = rowText.match(DATE_REGEX);
   if (!dateMatch) return null;
 
@@ -2394,6 +2415,7 @@ function parseTransactionRow(rowText: string): ParsedPdfTransaction | null {
   let type: TransactionType = 'expense';
   let rowBalance: number | undefined;
   let txTag: 'DR' | 'CR' | null = null;
+  let confidence: DirectionConfidence = 'default';
 
   if (amountTokens.length >= 3) {
     const debit = amountTokens[0];
@@ -2404,10 +2426,12 @@ function parseTransactionRow(rowText: string): ParsedPdfTransaction | null {
       txAmount = credit.value;
       type = 'income';
       txTag = credit.tag;
+      confidence = 'explicit';
     } else if (debit.value > 0 && credit.value === 0) {
       txAmount = debit.value;
       type = 'expense';
       txTag = debit.tag;
+      confidence = 'explicit';
     } else if (credit.value > 0 && debit.value > 0) {
       txAmount = credit.value;
       type = 'income';
@@ -2431,26 +2455,21 @@ function parseTransactionRow(rowText: string): ParsedPdfTransaction | null {
   for (const tok of amountTokens) {
     narration = narration.replace(tok.raw, ' ');
   }
+  // Remove standalone trailing CR/DR markers left over from separated closing-balance cells.
+  narration = narration.replace(/(?:^|\s|\|)(?:CR|DR)\.?\s*$/i, ' ').trim();
 
-  const lowerNarr = narration.toLowerCase();
   if (txTag === 'CR') {
     type = 'income';
+    confidence = 'explicit';
   } else if (txTag === 'DR') {
     type = 'expense';
-  } else if (
-    /\b(?:cr|credit|credited|deposit|salary|refund|interest|dividend|cashback)\b/i.test(lowerNarr) ||
-    lowerNarr.includes('upi/cr') ||
-    lowerNarr.includes('/cr/') ||
-    /\bby\s+(?:transfer|cash|clearing|clg|neft|imps|rtgs|upi)/i.test(lowerNarr)
-  ) {
-    type = 'income';
-  } else if (
-    /\b(?:dr|debit|debited|withdrawal|spent)\b/i.test(lowerNarr) ||
-    lowerNarr.includes('upi/dr') ||
-    lowerNarr.includes('/dr/') ||
-    /\bto\s+(?:transfer|cash|clearing|neft|imps|rtgs|upi)/i.test(lowerNarr)
-  ) {
-    type = 'expense';
+    confidence = 'explicit';
+  } else if (confidence !== 'explicit') {
+    const narrDir = inferDirectionFromNarration(narration);
+    if (narrDir) {
+      type = narrDir;
+      confidence = 'inferred';
+    }
   }
 
   narration = narration
@@ -2464,13 +2483,16 @@ function parseTransactionRow(rowText: string): ParsedPdfTransaction | null {
   const merchant = narration.split(' ').slice(0, 4).join(' ');
 
   return {
-    date: normalizedDate,
-    merchant,
-    amount: txAmount,
-    type,
-    category: inferCategory(narration),
-    note: narration,
-    ...(rowBalance !== undefined ? { balance: rowBalance } : {}),
+    transaction: {
+      date: normalizedDate,
+      merchant,
+      amount: txAmount,
+      type,
+      category: inferCategory(narration),
+      note: narration,
+      ...(rowBalance !== undefined ? { balance: rowBalance } : {}),
+    },
+    confidence,
   };
 }
 
@@ -2549,8 +2571,15 @@ const DUAL_DATE_ONLY_REGEX = new RegExp(
   'i'
 );
 
-export function parseBankStatementPdfText(text: string): PdfParseResult {
+interface InternalPdfParseResult {
+  result: PdfParseResult;
+  confidences: DirectionConfidence[];
+  resolvedByBalance: boolean[];
+}
+
+function parseBankStatementPdfTextWithMeta(text: string): InternalPdfParseResult {
   const transactions: ParsedPdfTransaction[] = [];
+  const confidences: DirectionConfidence[] = [];
   const errors: string[] = [];
 
   const lines = mergeSplitDateLines(
@@ -2571,7 +2600,7 @@ export function parseBankStatementPdfText(text: string): PdfParseResult {
     }
 
     if (LEADING_DATE_REGEX.test(line) && !SINGLE_DATE_REGEX.test(line) && !DUAL_DATE_ONLY_REGEX.test(line)) {
-      const immediateParsed = parseTransactionRow(line);
+      const immediateParsed = parseTransactionRowWithMeta(line);
       if (immediateParsed) {
         // Attach up to 3 pure narration continuation lines (no date, no decimal amounts)
         let extra = '';
@@ -2588,9 +2617,17 @@ export function parseBankStatementPdfText(text: string): PdfParseResult {
         }
         if (extra.trim()) {
           const cleanExtra = extra.replace(/[\/\\|:_\-\t]+/g, ' ').replace(/\s+/g, ' ').trim();
-          immediateParsed.note = `${immediateParsed.note} ${cleanExtra}`.trim();
+          immediateParsed.transaction.note = `${immediateParsed.transaction.note} ${cleanExtra}`.trim();
+          if (immediateParsed.confidence === 'default') {
+            const extraDir = inferDirectionFromNarration(cleanExtra);
+            if (extraDir) {
+              immediateParsed.transaction.type = extraDir;
+              immediateParsed.confidence = 'inferred';
+            }
+          }
         }
-        transactions.push(immediateParsed);
+        transactions.push(immediateParsed.transaction);
+        confidences.push(immediateParsed.confidence);
         i = k;
         continue;
       }
@@ -2600,16 +2637,17 @@ export function parseBankStatementPdfText(text: string): PdfParseResult {
       let matched = false;
       for (let look = 1; look <= 8 && i + look < lines.length; look++) {
         const nextLine = lines[i + look];
-        if (STATEMENT_NOISE_LINE_REGEX.test(nextLine) || parseTransactionRow(nextLine) !== null) {
+        if (STATEMENT_NOISE_LINE_REGEX.test(nextLine) || parseTransactionRowWithMeta(nextLine) !== null) {
           break;
         }
         if (LEADING_DATE_REGEX.test(nextLine) && !(look === 1 && SINGLE_DATE_REGEX.test(nextLine))) {
           break;
         }
         merged += ` ${nextLine}`;
-        const parsedWrapped = parseTransactionRow(merged);
+        const parsedWrapped = parseTransactionRowWithMeta(merged);
         if (parsedWrapped) {
-          transactions.push(parsedWrapped);
+          transactions.push(parsedWrapped.transaction);
+          confidences.push(parsedWrapped.confidence);
           i += look + 1;
           matched = true;
           break;
@@ -2617,9 +2655,10 @@ export function parseBankStatementPdfText(text: string): PdfParseResult {
       }
       if (matched) continue;
     } else if (line.length >= 8 && DATE_REGEX.test(line) && !SINGLE_DATE_REGEX.test(line)) {
-      const parsedMid = parseTransactionRow(line);
+      const parsedMid = parseTransactionRowWithMeta(line);
       if (parsedMid) {
-        transactions.push(parsedMid);
+        transactions.push(parsedMid.transaction);
+        confidences.push(parsedMid.confidence);
       }
     }
 
@@ -2675,33 +2714,84 @@ export function parseBankStatementPdfText(text: string): PdfParseResult {
           let txAmount = 0;
           let isIncome = false;
           let rowBalance: number | undefined;
+          let confidence: DirectionConfidence = 'default';
 
-          const validNumeric = parsedAmounts.filter((p): p is ColumnarAmountCell => p !== null);
-          if (validNumeric.length === 1) {
-            txAmount = validNumeric[0].val;
-            isIncome = validNumeric[0].isCredit;
-          } else if (validNumeric.length >= 2) {
-            rowBalance = validNumeric[validNumeric.length - 1].val;
-            txAmount = validNumeric[0].val;
-            isIncome = validNumeric[0].isCredit;
+          // Preserve null ("-") column placeholders so [null, credit, balance] stays identifiable.
+          if (parsedAmounts.length >= 3) {
+            const debitCell = parsedAmounts[0];
+            const creditCell = parsedAmounts[1];
+            const balCell = parsedAmounts[parsedAmounts.length - 1];
+            if (balCell !== null) {
+              rowBalance = balCell.val;
+            }
+
+            if ((debitCell === null || debitCell.val === 0) && creditCell && creditCell.val > 0) {
+              txAmount = creditCell.val;
+              isIncome = true;
+              confidence = 'explicit';
+            } else if (debitCell && debitCell.val > 0 && (creditCell === null || creditCell.val === 0)) {
+              txAmount = debitCell.val;
+              isIncome = false;
+              confidence = 'explicit';
+            } else {
+              const positiveCells = parsedAmounts.filter(
+                (p): p is ColumnarAmountCell => p !== null && p.val > 0
+              );
+              if (positiveCells.length >= 2) {
+                rowBalance = positiveCells[positiveCells.length - 1].val;
+                txAmount = positiveCells[0].val;
+                isIncome = positiveCells[0].isCredit;
+                if (positiveCells[0].isCredit || positiveCells[0].isDebit) {
+                  confidence = 'explicit';
+                }
+              } else if (positiveCells.length === 1) {
+                txAmount = positiveCells[0].val;
+                isIncome = positiveCells[0].isCredit;
+                if (positiveCells[0].isCredit || positiveCells[0].isDebit) {
+                  confidence = 'explicit';
+                }
+              }
+            }
+          } else if (parsedAmounts.length === 2) {
+            const col0 = parsedAmounts[0];
+            const col1 = parsedAmounts[1];
+            if (col0 === null && col1 && col1.val > 0) {
+              txAmount = col1.val;
+              isIncome = true;
+              confidence = 'explicit';
+            } else if (col0 && col0.val > 0 && col1 === null) {
+              txAmount = col0.val;
+              isIncome = false;
+              confidence = 'explicit';
+            } else if (col0 && col1 && col0.val > 0) {
+              txAmount = col0.val;
+              rowBalance = col1.val;
+              isIncome = col0.isCredit;
+              if (col0.isCredit || col0.isDebit) {
+                confidence = 'explicit';
+              }
+            } else if (col1 && col1.val > 0) {
+              txAmount = col1.val;
+              isIncome = col1.isCredit;
+              if (col1.isCredit || col1.isDebit) {
+                confidence = 'explicit';
+              }
+            }
+          } else if (parsedAmounts[0] && parsedAmounts[0].val > 0) {
+            txAmount = parsedAmounts[0].val;
+            isIncome = parsedAmounts[0].isCredit;
+            if (parsedAmounts[0].isCredit || parsedAmounts[0].isDebit) {
+              confidence = 'explicit';
+            }
           }
 
           if (txAmount > 0) {
-            const lowerNarr = narration.toLowerCase();
-            if (
-              /\b(?:cr|credit|credited|deposit|salary|refund|interest|dividend|cashback)\b/i.test(lowerNarr) ||
-              lowerNarr.includes('upi/cr') ||
-              lowerNarr.includes('/cr/') ||
-              /\bby\s+(?:transfer|tfr|cash|clearing|clg|neft|imps|rtgs|upi)/i.test(lowerNarr)
-            ) {
-              isIncome = true;
-            } else if (
-              /\b(?:dr|debit|debited|withdrawal|spent)\b/i.test(lowerNarr) ||
-              lowerNarr.includes('upi/dr') ||
-              lowerNarr.includes('/dr/') ||
-              /\bto\s+(?:transfer|tfr|cash|clearing|clg|neft|imps|rtgs|upi)/i.test(lowerNarr)
-            ) {
-              isIncome = false;
+            if (confidence !== 'explicit') {
+              const narrDir = inferDirectionFromNarration(narration);
+              if (narrDir) {
+                isIncome = narrDir === 'income';
+                confidence = 'inferred';
+              }
             }
 
             const cleanNarr =
@@ -2718,6 +2808,7 @@ export function parseBankStatementPdfText(text: string): PdfParseResult {
               note: cleanNarr,
               ...(rowBalance !== undefined ? { balance: rowBalance } : {}),
             });
+            confidences.push(confidence);
           }
         }
 
@@ -2727,6 +2818,13 @@ export function parseBankStatementPdfText(text: string): PdfParseResult {
       }
     }
   }
+
+  const openingBalance = extractOpeningBalanceFromText(text);
+  const resolvedByBalance = resolveDirectionByRunningBalance(
+    transactions,
+    confidences,
+    openingBalance
+  );
 
   let closingBalance: number | undefined;
   let statementDate: string | undefined;
@@ -2756,13 +2854,21 @@ export function parseBankStatementPdfText(text: string): PdfParseResult {
   }
 
   return {
-    success: transactions.length > 0,
-    isEncrypted: false,
-    transactions,
-    errors,
-    closingBalance,
-    statementDate,
+    result: {
+      success: transactions.length > 0,
+      isEncrypted: false,
+      transactions,
+      errors,
+      closingBalance,
+      statementDate,
+    },
+    confidences,
+    resolvedByBalance,
   };
+}
+
+export function parseBankStatementPdfText(text: string): PdfParseResult {
+  return parseBankStatementPdfTextWithMeta(text).result;
 }
 
 interface FontResourceMap {
@@ -3067,6 +3173,112 @@ function collectFontResourceMappings(
   return { fontNameToCMap, fontsWithoutCMap, perStreamFonts };
 }
 
+function median(nums: number[]): number {
+  const sorted = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/**
+ * Uses PDF X-coordinates of amount fragments to resolve Debit vs Credit for rows
+ * whose direction wasn't established by explicit markers or running-balance deltas
+ * (e.g., first row without opening balance or balance-less PDF statements).
+ */
+function applyPdfCoordinateColumnHints(
+  transactions: ParsedPdfTransaction[],
+  coordRowItems: CoordTextFragment[][],
+  confidences: readonly DirectionConfidence[],
+  resolvedByBalance: readonly boolean[]
+): void {
+  if (transactions.length === 0 || coordRowItems.length === 0) return;
+
+  let headerColumns: { debitCenterX: number; creditCenterX: number } | null = null;
+  for (const row of coordRowItems) {
+    let debitX: number | null = null;
+    let creditX: number | null = null;
+    for (const frag of row) {
+      const lower = frag.text.trim().toLowerCase();
+      if (debitX === null && /\b(?:withdrawal|withdrawals|debit|debits|dr)\b/.test(lower)) {
+        debitX = frag.x + frag.text.length * 2.5;
+      } else if (creditX === null && /\b(?:deposit|deposits|credit|credits|cr)\b/.test(lower)) {
+        creditX = frag.x + frag.text.length * 2.5;
+      }
+    }
+    if (debitX !== null && creditX !== null && Math.abs(creditX - debitX) >= 20) {
+      headerColumns = { debitCenterX: debitX, creditCenterX: creditX };
+      break;
+    }
+  }
+
+  const matchedAmountXs = new Array<number | null>(transactions.length).fill(null);
+  let rowSearchStart = 0;
+
+  for (let i = 0; i < transactions.length; i++) {
+    const tx = transactions[i];
+    for (let r = rowSearchStart; r < coordRowItems.length; r++) {
+      const rowFrags = coordRowItems[r];
+      const rowText = rowFrags.map((f) => f.text).join(' ');
+      const dateMatch = rowText.match(DATE_REGEX);
+      if (!dateMatch || normalizeDate(dateMatch[0]) !== tx.date) continue;
+
+      let matchedX: number | null = null;
+      for (const frag of rowFrags) {
+        const toks = extractAmountTokens(frag.text);
+        if (toks.some((t) => Math.abs(t.value - tx.amount) < 0.01)) {
+          matchedX = frag.x;
+          break;
+        }
+      }
+
+      if (matchedX !== null) {
+        matchedAmountXs[i] = matchedX;
+        rowSearchStart = r + 1;
+        break;
+      }
+    }
+  }
+
+  const confirmedDebitXs: number[] = [];
+  const confirmedCreditXs: number[] = [];
+  for (let i = 0; i < transactions.length; i++) {
+    const x = matchedAmountXs[i];
+    if (x === null) continue;
+    if (resolvedByBalance[i] || confidences[i] === 'explicit') {
+      if (transactions[i].type === 'income') confirmedCreditXs.push(x);
+      else confirmedDebitXs.push(x);
+    }
+  }
+
+  let refDebitX: number | null = null;
+  let refCreditX: number | null = null;
+
+  if (confirmedDebitXs.length > 0 && confirmedCreditXs.length > 0) {
+    const dMed = median(confirmedDebitXs);
+    const cMed = median(confirmedCreditXs);
+    if (Math.abs(cMed - dMed) >= 15) {
+      refDebitX = dMed;
+      refCreditX = cMed;
+    }
+  } else if (headerColumns && Math.abs(headerColumns.creditCenterX - headerColumns.debitCenterX) >= 30) {
+    refDebitX = headerColumns.debitCenterX;
+    refCreditX = headerColumns.creditCenterX;
+  }
+
+  if (refDebitX === null || refCreditX === null) return;
+
+  for (let i = 0; i < transactions.length; i++) {
+    if (confidences[i] === 'explicit' || resolvedByBalance[i]) continue;
+    const x = matchedAmountXs[i];
+    if (x === null) continue;
+
+    const distDebit = Math.abs(x - refDebitX);
+    const distCredit = Math.abs(x - refCreditX);
+    if (Math.abs(distDebit - distCredit) < 8) continue;
+
+    transactions[i].type = distCredit < distDebit ? 'income' : 'expense';
+  }
+}
+
 export async function parseBankStatementPdf(
   fileUri: string,
   options?: { password?: string }
@@ -3268,6 +3480,7 @@ export async function parseBankStatementPdf(
 
     const extractStreamsWithOptions = (opts?: ExtractTextOptions) => {
       const coordRowsCombined: string[] = [];
+      const coordRowItemsCombined: CoordTextFragment[][] = [];
       const seqLinesCombined: string[] = [];
 
       for (const { stream, text } of textStreams) {
@@ -3296,6 +3509,9 @@ export async function parseBankStatementPdf(
         );
         if (extracted.coordRows.length > 0) {
           coordRowsCombined.push(...extracted.coordRows);
+          if (extracted.coordRowItems) {
+            coordRowItemsCombined.push(...extracted.coordRowItems);
+          }
         }
         if (extracted.seqLines.length > 0) {
           seqLinesCombined.push(...extracted.seqLines);
@@ -3313,35 +3529,53 @@ export async function parseBankStatementPdf(
             opts
           );
           coordRowsCombined.push(...rawExtracted.coordRows);
+          if (rawExtracted.coordRowItems) {
+            coordRowItemsCombined.push(...rawExtracted.coordRowItems);
+          }
           seqLinesCombined.push(...rawExtracted.seqLines);
         }
       }
 
-      return { coordRowsCombined, seqLinesCombined };
+      return { coordRowsCombined, coordRowItemsCombined, seqLinesCombined };
     };
 
     const primary = extractStreamsWithOptions({ yTolerance: 4.5, axis: 'horizontal' });
-    let parsed = parseBankStatementPdfText(primary.coordRowsCombined.join('\n'));
+    let activeMeta = parseBankStatementPdfTextWithMeta(primary.coordRowsCombined.join('\n'));
+    let activeCoordRowItems: CoordTextFragment[][] = primary.coordRowItemsCombined;
 
-    if (parsed.transactions.length === 0 && primary.seqLinesCombined.length > 0) {
-      parsed = parseBankStatementPdfText(primary.seqLinesCombined.join('\n'));
+    if (activeMeta.result.transactions.length === 0 && primary.seqLinesCombined.length > 0) {
+      activeMeta = parseBankStatementPdfTextWithMeta(primary.seqLinesCombined.join('\n'));
+      activeCoordRowItems = [];
     }
 
-    if (parsed.transactions.length === 0 && textStreams.length > 0) {
+    if (activeMeta.result.transactions.length === 0 && textStreams.length > 0) {
       const relaxed = extractStreamsWithOptions({ yTolerance: 6.5, axis: 'horizontal' });
-      const relaxedParsed = parseBankStatementPdfText(relaxed.coordRowsCombined.join('\n'));
-      if (relaxedParsed.transactions.length > 0) {
-        parsed = relaxedParsed;
+      const relaxedMeta = parseBankStatementPdfTextWithMeta(relaxed.coordRowsCombined.join('\n'));
+      if (relaxedMeta.result.transactions.length > 0) {
+        activeMeta = relaxedMeta;
+        activeCoordRowItems = relaxed.coordRowItemsCombined;
       }
     }
 
-    if (parsed.transactions.length === 0 && textStreams.length > 0) {
+    if (activeMeta.result.transactions.length === 0 && textStreams.length > 0) {
       const rotated = extractStreamsWithOptions({ yTolerance: 4.5, axis: 'vertical' });
-      const rotatedParsed = parseBankStatementPdfText(rotated.coordRowsCombined.join('\n'));
-      if (rotatedParsed.transactions.length > 0) {
-        parsed = rotatedParsed;
+      const rotatedMeta = parseBankStatementPdfTextWithMeta(rotated.coordRowsCombined.join('\n'));
+      if (rotatedMeta.result.transactions.length > 0) {
+        activeMeta = rotatedMeta;
+        activeCoordRowItems = rotated.coordRowItemsCombined;
       }
     }
+
+    if (activeMeta.result.transactions.length > 0 && activeCoordRowItems.length > 0) {
+      applyPdfCoordinateColumnHints(
+        activeMeta.result.transactions,
+        activeCoordRowItems,
+        activeMeta.confidences,
+        activeMeta.resolvedByBalance
+      );
+    }
+
+    const parsed = activeMeta.result;
 
     if (parsed.transactions.length === 0) {
       const fltSuffix =

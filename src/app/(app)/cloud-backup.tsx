@@ -43,6 +43,8 @@ export default function CloudBackupScreen() {
     connect: connectDrive,
     disconnect: disconnectDrive,
     backupNow: backupDriveNow,
+    syncInitialBackupIfMeaningful,
+    disableBackupEncryption,
     restoreFromDrive,
     getDriveRevisions,
     restoreRevisionFromDrive,
@@ -51,19 +53,22 @@ export default function CloudBackupScreen() {
 
   const [passphraseModalVisible, setPassphraseModalVisible] = useState(false);
   const [passphraseMode, setPassphraseMode] = useState<'encrypt' | 'decrypt'>('decrypt');
+  const [pendingInitialSetup, setPendingInitialSetup] = useState(false);
   const [revisionsModalVisible, setRevisionsModalVisible] = useState(false);
   const [driveRevisions, setDriveRevisions] = useState<GoogleDriveRevisionInfo[]>([]);
   const [isLoadingRevisions, setIsLoadingRevisions] = useState(false);
   const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null);
 
   const handleConnectDrive = async () => {
-    const res = await connectDrive();
+    const res = await connectDrive({ deferInitialUpload: true });
     if (!res || !res.success) return;
 
     if (res.needsPassphraseToRestore) {
+      setPendingInitialSetup(false);
       setPassphraseMode('decrypt');
       setPassphraseModalVisible(true);
     } else if (!res.hasExistingBackup && !hasCustomBackupPassphrase) {
+      setPendingInitialSetup(true);
       setPassphraseMode('encrypt');
       setPassphraseModalVisible(true);
     }
@@ -195,12 +200,42 @@ export default function CloudBackupScreen() {
         showToast(res.error || 'Incorrect passphrase', 'error');
       }
     } else {
+      setPendingInitialSetup(false);
       setPassphraseModalVisible(false);
-      const success = await backupDriveNow(passphrase);
-      if (success) {
-        showToast('Recovery passphrase updated & encrypted backup saved!', 'success');
-      }
+      await backupDriveNow(passphrase);
     }
+  };
+
+  const handleSkipOrCancelEncryptModal = () => {
+    const shouldUploadUnencrypted = pendingInitialSetup;
+    setPendingInitialSetup(false);
+    setPassphraseModalVisible(false);
+    if (shouldUploadUnencrypted) {
+      void syncInitialBackupIfMeaningful();
+    }
+    if (passphraseMode === 'encrypt') {
+      showToast(
+        'No password set — backups will be saved without encryption.',
+        'info'
+      );
+    }
+  };
+
+  const handleDisableEncryption = () => {
+    showAlert(
+      'Remove Backup Password?',
+      'Cloud backups will no longer be encrypted with a password, and an unencrypted snapshot will be saved to Google Drive so you can restore on any install without a password.',
+      [
+        { text: 'Keep Password', style: 'cancel' },
+        {
+          text: 'Remove Password',
+          style: 'destructive',
+          onPress: async () => {
+            await disableBackupEncryption();
+          },
+        },
+      ]
+    );
   };
 
   const handleDeleteDriveBackups = () => {
@@ -254,15 +289,24 @@ export default function CloudBackupScreen() {
 
               {isDriveConnected && (
                 <View style={styles.badgeRow}>
-                  <View style={styles.badge}>
-                    <MaterialIcons name="lock" size={13} color={colors.primary} />
-                    <Text style={styles.badgeText} numberOfLines={1}>AES-256-GCM</Text>
-                  </View>
-                  {hasCustomBackupPassphrase && (
-                    <View style={[styles.badge, { backgroundColor: colors.secondaryContainer }]}>
-                      <MaterialIcons name="vpn-key" size={13} color={colors.onSecondaryContainer} />
-                      <Text style={[styles.badgeText, { color: colors.onSecondaryContainer }]} numberOfLines={1}>
-                        Passphrase Protected
+                  {hasCustomBackupPassphrase ? (
+                    <>
+                      <View style={styles.badge}>
+                        <MaterialIcons name="lock" size={13} color={colors.primary} />
+                        <Text style={styles.badgeText} numberOfLines={1}>AES-256-GCM</Text>
+                      </View>
+                      <View style={[styles.badge, { backgroundColor: colors.secondaryContainer }]}>
+                        <MaterialIcons name="vpn-key" size={13} color={colors.onSecondaryContainer} />
+                        <Text style={[styles.badgeText, { color: colors.onSecondaryContainer }]} numberOfLines={1}>
+                          Password Protected
+                        </Text>
+                      </View>
+                    </>
+                  ) : (
+                    <View style={[styles.badge, { backgroundColor: colors.surfaceContainerHigh }]}>
+                      <MaterialIcons name="lock-open" size={13} color={colors.onSurfaceVariant} />
+                      <Text style={[styles.badgeText, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
+                        Unencrypted Backup
                       </Text>
                     </View>
                   )}
@@ -330,7 +374,9 @@ export default function CloudBackupScreen() {
                 <View style={{ flex: 1, paddingRight: 12 }}>
                   <Text style={styles.rowTitle}>Automatic Cloud Sync</Text>
                   <Text style={styles.rowSub}>
-                    Silently uploads encrypted snapshots in background after changes
+                    {hasCustomBackupPassphrase
+                      ? 'Silently uploads password-encrypted snapshots in background after changes'
+                      : 'Silently uploads unencrypted backups in background after changes'}
                   </Text>
                 </View>
                 <Switch
@@ -379,15 +425,18 @@ export default function CloudBackupScreen() {
                   ) : (
                     <View style={styles.btnRow}>
                       <MaterialIcons name="cloud-upload" size={18} color={colors.onPrimary} />
-                      <Text style={styles.btnPrimaryText}>BACKUP NOW (ENCRYPTED)</Text>
+                      <Text style={styles.btnPrimaryText}>
+                        {hasCustomBackupPassphrase ? 'BACKUP NOW (ENCRYPTED)' : 'BACKUP NOW'}
+                      </Text>
                     </View>
                   )}
                 </TouchableOpacity>
 
-                {/* Set / Change Passphrase */}
+                {/* Set / Change Password */}
                 <TouchableOpacity
                   style={styles.btnSecondary}
                   onPress={() => {
+                    setPendingInitialSetup(false);
                     setPassphraseMode('encrypt');
                     setPassphraseModalVisible(true);
                   }}
@@ -396,10 +445,25 @@ export default function CloudBackupScreen() {
                   <View style={styles.btnRow}>
                     <MaterialIcons name="vpn-key" size={18} color={colors.primary} />
                     <Text style={[styles.btnSecondaryText, { color: colors.primary }]}>
-                      {hasCustomBackupPassphrase ? 'CHANGE RECOVERY PASSPHRASE' : 'SET RECOVERY PASSPHRASE'}
+                      {hasCustomBackupPassphrase ? 'CHANGE BACKUP PASSWORD' : 'SET BACKUP PASSWORD (ENCRYPT)'}
                     </Text>
                   </View>
                 </TouchableOpacity>
+
+                {hasCustomBackupPassphrase && (
+                  <TouchableOpacity
+                    style={styles.btnSecondary}
+                    onPress={handleDisableEncryption}
+                    disabled={isBackingUpDrive || isRestoringDrive || isDeletingDriveBackups}
+                  >
+                    <View style={styles.btnRow}>
+                      <MaterialIcons name="no-encryption" size={18} color={colors.onSurfaceVariant} />
+                      <Text style={[styles.btnSecondaryText, { color: colors.onSurfaceVariant }]}>
+                        REMOVE ENCRYPTION PASSWORD
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
 
                 {/* Restore Latest */}
                 <TouchableOpacity
@@ -461,9 +525,9 @@ export default function CloudBackupScreen() {
           </View>
 
           <View style={styles.infoItem}>
-            <Text style={styles.infoPointTitle}>• Client-Side Encryption</Text>
+            <Text style={styles.infoPointTitle}>• Optional Password Encryption</Text>
             <Text style={styles.infoPointDesc}>
-              Financial records are encrypted on your phone with AES-256-GCM before uploading. Google never sees plain text.
+              Without a password, backups are stored unencrypted in your private Google Drive AppData folder. If you set a backup password, your data is encrypted client-side with AES-256-GCM before uploading.
             </Text>
           </View>
 
@@ -486,24 +550,29 @@ export default function CloudBackupScreen() {
       {/* Modals */}
       <PassphraseModal
         visible={passphraseModalVisible}
-        title={passphraseMode === 'encrypt' ? 'Set Recovery Passphrase' : 'Enter Backup Passphrase'}
+        title={passphraseMode === 'encrypt' ? 'Set Backup Password' : 'Enter Backup Password'}
         description={
           passphraseMode === 'encrypt'
-            ? 'Set a secret passphrase to encrypt your cloud backup. You will need this passphrase to restore your financial data if your device is lost or replaced.'
-            : 'This backup is client-side encrypted with AES-256-GCM. Enter your secret passphrase to decrypt and restore.'
+            ? 'Set a password to encrypt your cloud backups with AES-256-GCM before uploading. You will need this password to restore if you uninstall or switch phones.'
+            : 'This backup is encrypted with AES-256-GCM. Enter your password to decrypt and restore.'
         }
         confirmText={passphraseMode === 'encrypt' ? 'Encrypt & Backup' : 'Unlock & Restore'}
+        requireConfirmation={passphraseMode === 'encrypt'}
         onSkip={
           passphraseMode === 'encrypt'
-            ? () => {
-                setPassphraseModalVisible(false);
-                showToast('Using device-only key. You can set a recovery passphrase anytime.', 'info');
-              }
+            ? handleSkipOrCancelEncryptModal
             : undefined
         }
-        skipText="Skip for now"
+        skipText="Skip — Back up without encryption"
         isLoading={isBackingUpDrive || isRestoringDrive}
-        onClose={() => setPassphraseModalVisible(false)}
+        onClose={() => {
+          if (passphraseMode === 'encrypt' && pendingInitialSetup) {
+            handleSkipOrCancelEncryptModal();
+          } else {
+            setPendingInitialSetup(false);
+            setPassphraseModalVisible(false);
+          }
+        }}
         onSubmit={handlePassphraseSubmit}
       />
 

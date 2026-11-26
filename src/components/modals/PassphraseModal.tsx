@@ -22,6 +22,7 @@ interface Props {
   cancelText?: string;
   skipText?: string;
   onSkip?: () => void;
+  requireConfirmation?: boolean;
   isLoading?: boolean;
   onClose: () => void;
   onSubmit: (passphrase: string) => void;
@@ -35,6 +36,7 @@ export function PassphraseModal({
   cancelText = 'Cancel',
   skipText = 'Skip for now',
   onSkip,
+  requireConfirmation = false,
   isLoading = false,
   onClose,
   onSubmit,
@@ -42,22 +44,29 @@ export function PassphraseModal({
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const [passphrase, setPassphrase] = useState('');
+  const [confirmPassphrase, setConfirmPassphrase] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setPassphrase('');
+      setConfirmPassphrase('');
       setShowPassword(false);
     }
-  }, [visible]);
+  }, [visible, requireConfirmation]);
 
   if (!visible) return null;
 
-  const isValid = passphrase.trim().length >= 4;
+  const trimmed = passphrase.trim();
+  const trimmedConfirm = confirmPassphrase.trim();
+  const isLengthValid = trimmed.length >= 4;
+  const isMatchValid = !requireConfirmation || trimmed === trimmedConfirm;
+  const isValid = isLengthValid && isMatchValid;
+  const showMismatchError = requireConfirmation && confirmPassphrase.length > 0 && !isMatchValid;
 
   const handleSubmit = () => {
     if (!isValid) return;
-    onSubmit(passphrase.trim());
+    onSubmit(trimmed);
   };
 
   return (
@@ -81,13 +90,15 @@ export function PassphraseModal({
                   <MaterialIcons name="vpn-key" size={20} color={colors.onSurfaceVariant} />
                   <TextInput
                     style={styles.input}
-                    placeholder="Enter passphrase (min 4 characters)"
+                    placeholder="Enter password (min 4 characters)"
                     placeholderTextColor={colors.outline}
                     secureTextEntry={!showPassword}
                     value={passphrase}
                     onChangeText={setPassphrase}
                     autoCapitalize="none"
                     autoFocus
+                    returnKeyType={requireConfirmation ? 'next' : 'done'}
+                    onSubmitEditing={requireConfirmation ? undefined : handleSubmit}
                   />
                   <TouchableOpacity
                     onPress={() => setShowPassword(!showPassword)}
@@ -101,10 +112,45 @@ export function PassphraseModal({
                   </TouchableOpacity>
                 </View>
 
-                {passphrase.length > 0 && !isValid && (
+                {passphrase.length > 0 && !isLengthValid && (
                   <Text style={[styles.helperError, { color: colors.error }]}>
-                    Passphrase must be at least 4 characters
+                    Password must be at least 4 characters
                   </Text>
+                )}
+
+                {requireConfirmation && (
+                  <>
+                    <View style={[styles.inputWrapper, { marginTop: 2 }]}>
+                      <MaterialIcons name="vpn-key" size={20} color={colors.onSurfaceVariant} />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Confirm password"
+                        placeholderTextColor={colors.outline}
+                        secureTextEntry={!showPassword}
+                        value={confirmPassphrase}
+                        onChangeText={setConfirmPassphrase}
+                        autoCapitalize="none"
+                        returnKeyType="done"
+                        onSubmitEditing={handleSubmit}
+                      />
+                      <TouchableOpacity
+                        onPress={() => setShowPassword(!showPassword)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <MaterialIcons
+                          name={showPassword ? 'visibility-off' : 'visibility'}
+                          size={20}
+                          color={colors.outline}
+                        />
+                      </TouchableOpacity>
+                    </View>
+
+                    {showMismatchError && (
+                      <Text style={[styles.helperError, { color: colors.error }]}>
+                        Passwords do not match
+                      </Text>
+                    )}
+                  </>
                 )}
 
                 <View style={styles.actions}>

@@ -1,4 +1,5 @@
 import {
+  clearAccountData,
   getAllAccounts,
   getAccountById,
   insertAccount,
@@ -7,8 +8,21 @@ import {
 } from './account-dao';
 import { getDatabase } from './index';
 
+const mockDeleteReceiptImage = jest.fn().mockResolvedValue(undefined);
+const mockClearDuplicateCache = jest.fn();
+
 jest.mock('./index', () => ({
   getDatabase: jest.fn(),
+}));
+
+jest.mock('@/services/storage/receipt-storage', () => ({
+  deleteReceiptImage: (...args: unknown[]) => mockDeleteReceiptImage(...args),
+}));
+
+jest.mock('@/modules/sms/duplicate/duplicateDetectionEngine', () => ({
+  DuplicateDetectionEngine: {
+    clearCache: (...args: unknown[]) => mockClearDuplicateCache(...args),
+  },
 }));
 
 describe('account-dao and reordering', () => {
@@ -152,6 +166,75 @@ describe('account-dao and reordering', () => {
     }
 
     expect(newAll.map((a) => a.id)).toEqual(['a3', 'l1', 'a1', 'a2', 'l2']);
+  });
+
+  it('clearAccountData wipes account transactions, parsed links, receipts, recurring schedules, goal contributions, unlinks holdings, and resets balance to 0', async () => {
+    mockDb.getAllAsync
+      .mockResolvedValueOnce([
+        {
+          id: 'tx-1',
+          parsed_tx_id: 'ptx-1',
+          receipt_uri: 'file:///receipts/tx-1.jpg',
+        },
+        {
+          id: 'tx-2',
+          parsed_tx_id: null,
+          receipt_uri: null,
+        },
+      ])
+      .mockResolvedValueOnce([{ id: 'gc-1', goal_id: 'goal-1', amount: 1500 }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    await clearAccountData('acc-1');
+
+    expect(mockDb.execAsync).toHaveBeenCalledWith('BEGIN TRANSACTION');
+    expect(mockDb.runAsync).toHaveBeenCalledWith(
+      'UPDATE goals SET current_amount = MAX(0, current_amount - ?) WHERE id = ?',
+      [1500, 'goal-1']
+    );
+    expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM goal_contributions WHERE id = ?', [
+      'gc-1',
+    ]);
+    expect(mockDb.runAsync).toHaveBeenCalledWith(
+      expect.stringContaining("duplicate_of = 'USER_DELETED'"),
+      ['tx-1', 'tx-2']
+    );
+    expect(mockDb.runAsync).toHaveBeenCalledWith(
+      expect.stringContaining("duplicate_of = 'USER_DELETED'"),
+      ['ptx-1']
+    );
+    expect(mockDb.runAsync).toHaveBeenCalledWith(
+      'UPDATE transactions SET to_account_id = NULL WHERE to_account_id = ?',
+      ['acc-1']
+    );
+    expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM transactions WHERE account_id = ?', [
+      'acc-1',
+    ]);
+    expect(mockDb.runAsync).toHaveBeenCalledWith(
+      'DELETE FROM recurring_transactions WHERE to_account_id = ? OR account_id = ?',
+      ['acc-1', 'acc-1']
+    );
+    expect(mockDb.runAsync).toHaveBeenCalledWith(
+      'UPDATE investment_holdings SET account_id = NULL WHERE account_id = ?',
+      ['acc-1']
+    );
+    expect(mockDb.runAsync).toHaveBeenCalledWith(
+      'UPDATE accounts SET balance = 0, updated_at = ? WHERE id = ?',
+      [expect.any(String), 'acc-1']
+    );
+    expect(mockDb.execAsync).toHaveBeenCalledWith('COMMIT');
+    expect(mockDeleteReceiptImage).toHaveBeenCalledWith('file:///receipts/tx-1.jpg');
+    expect(mockClearDuplicateCache).toHaveBeenCalled();
+  });
+
+  it('clearAccountData rolls back transaction if a query fails', async () => {
+    mockDb.getAllAsync.mockRejectedValueOnce(new Error('SQLITE_BUSY'));
+
+    await expect(clearAccountData('acc-1')).rejects.toThrow('SQLITE_BUSY');
+    expect(mockDb.execAsync).toHaveBeenCalledWith('BEGIN TRANSACTION');
+    expect(mockDb.execAsync).toHaveBeenCalledWith('ROLLBACK');
+    expect(mockDeleteReceiptImage).not.toHaveBeenCalled();
   });
 });
 

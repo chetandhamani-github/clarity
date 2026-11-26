@@ -176,5 +176,81 @@ ORDER",UPI123,450.00,,45005.50
         balance: 1750,
       });
     });
+
+    it('treats unsigned positive rows as income in signed Amount CSVs alongside negative debits', () => {
+      const signedCsv = [
+        'Date,Description,Amount',
+        '2026-11-01,NEFT ACME CORP,75000.00',
+        '2026-11-02,SWIGGY ORDER,-450.00',
+        '2026-11-03,UPI RAHUL,1200.00',
+        '2026-11-04,AMAZON,(999.00)',
+      ].join('\n');
+
+      const result = parseBankStatementCsv(signedCsv);
+      expect(result.transactions).toHaveLength(4);
+      expect(result.transactions.map((t) => [t.amount, t.type])).toEqual([
+        [75000, 'income'],
+        [450, 'expense'],
+        [1200, 'income'],
+        [999, 'expense'],
+      ]);
+    });
+
+    it('infers income vs expense from running balance in chronological and reverse-chronological CSVs', () => {
+      const chronoCsv = [
+        'Opening Balance :,10000.00',
+        'Date,Narration,Amount,Balance',
+        '2026-11-01,UPI P2A PRIYA,5000.00,15000.00',
+        '2026-11-02,ZOMATO,450.00,14550.00',
+        '2026-11-03,NEFT CLIENT,12000.00,26550.00',
+      ].join('\n');
+
+      const chronoRes = parseBankStatementCsv(chronoCsv);
+      expect(chronoRes.transactions.map((t) => [t.amount, t.type])).toEqual([
+        [5000, 'income'],
+        [450, 'expense'],
+        [12000, 'income'],
+      ]);
+
+      const reverseCsv = [
+        'Opening Balance :,10000.00',
+        'Date,Narration,Amount,Balance',
+        '2026-11-03,NEFT CLIENT,12000.00,26550.00',
+        '2026-11-02,ZOMATO,450.00,14550.00',
+        '2026-11-01,UPI P2A PRIYA,5000.00,15000.00',
+      ].join('\n');
+
+      const reverseRes = parseBankStatementCsv(reverseCsv);
+      expect(reverseRes.transactions.map((t) => [t.amount, t.type])).toEqual([
+        [12000, 'income'],
+        [450, 'expense'],
+        [5000, 'income'],
+      ]);
+    });
+
+    it('handles Amount (Dr/Cr), Credit/Debit type headers, and Balance (Dr/Cr) without classifying all rows as expense', () => {
+      const mixedHeaderCsv = [
+        'Txn Date,Narration,Amount (INR),Credit/Debit,Balance (Dr/Cr)',
+        '10/11/2026,UPI MERCHANT,350.00,DEBITED,9650.00',
+        '11/11/2026,P2A TRANSFER,2500.00,CREDITED,12150.00',
+      ].join('\n');
+
+      const mixedRes = parseBankStatementCsv(mixedHeaderCsv);
+      expect(mixedRes.transactions).toHaveLength(2);
+      expect(mixedRes.transactions[0]).toMatchObject({ amount: 350, type: 'expense', balance: 9650 });
+      expect(mixedRes.transactions[1]).toMatchObject({ amount: 2500, type: 'income', balance: 12150 });
+
+      const mergedAmtCsv = [
+        'Txn Date,Description,Amount (Dr/Cr)',
+        '10/11/2026,GROCERY,420.00 Dr',
+        '11/11/2026,CASHBACK,150.00 Cr',
+      ].join('\n');
+
+      const mergedRes = parseBankStatementCsv(mergedAmtCsv);
+      expect(mergedRes.transactions.map((t) => [t.amount, t.type])).toEqual([
+        [420, 'expense'],
+        [150, 'income'],
+      ]);
+    });
   });
 });

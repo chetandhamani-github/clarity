@@ -1,4 +1,9 @@
 import type { Account } from '@/types';
+import {
+  resyncRevertedBills,
+  revertLinkedBillsForTransactions,
+  type RevertedBillsSummary,
+} from './bill-dao';
 import { getDatabase } from './index';
 
 function generateId(): string {
@@ -189,24 +194,173 @@ export async function updateAccountsOrder(orderedIds: string[]): Promise<void> {
   }
 }
 
-export async function deleteAccount(id: string): Promise<void> {
-  const db = getDatabase();
-  const executeDelete = async () => {
-    // 1. Revert and clean up goal contributions linked to this account's transactions
-    const contributions = await db.getAllAsync<{ id: string; goal_id: string; amount: number }>(
+const SQLITE_VAR_CHUNK_SIZE = 400;
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+async function revertAccountGoalContributions(
+  db: ReturnType<typeof getDatabase>,
+  accountId: string
+): Promise<void> {
+  const contributions =
+    (await db.getAllAsync<{ id: string; goal_id: string; amount: number }>(
       `SELECT gc.id, gc.goal_id, gc.amount 
        FROM goal_contributions gc
        JOIN transactions t ON gc.transaction_id = t.id
        WHERE t.account_id = ?`,
-      [id]
+      [accountId]
+    )) ?? [];
+
+  for (const gc of contributions) {
+    await db.runAsync('UPDATE goals SET current_amount = MAX(0, current_amount - ?) WHERE id = ?', [
+      gc.amount,
+      gc.goal_id,
+    ]);
+    await db.runAsync('DELETE FROM goal_contributions WHERE id = ?', [gc.id]);
+  }
+}
+
+export async function clearAccountData(id: string): Promise<void> {
+  const db = getDatabase();
+  let receiptUris: string[] = [];
+  let revertedBills: RevertedBillsSummary = { modernBills: [], legacyCount: 0 };
+
+  const executeClear = async () => {
+    const txRows =
+      (await db.getAllAsync<{
+        id: string;
+        parsed_tx_id?: string | null;
+        receipt_uri?: string | null;
+      }>('SELECT id, parsed_tx_id, receipt_uri FROM transactions WHERE account_id = ?', [id])) ?? [];
+
+    const txIds = txRows.map((row) => row.id);
+    const parsedTxIds = Array.from(
+      new Set(
+        txRows
+          .map((row) => row.parsed_tx_id)
+          .filter((parsedId): parsedId is string => Boolean(parsedId))
+      )
     );
-    for (const gc of contributions) {
-      await db.runAsync('UPDATE goals SET current_amount = MAX(0, current_amount - ?) WHERE id = ?', [
-        gc.amount,
-        gc.goal_id,
-      ]);
-      await db.runAsync('DELETE FROM goal_contributions WHERE id = ?', [gc.id]);
+    receiptUris = Array.from(
+      new Set(
+        txRows
+          .map((row) => row.receipt_uri)
+          .filter((uri): uri is string => Boolean(uri))
+      )
+    );
+
+    // 1. Revert linked goal contributions & settled bills before deleting transactions
+    await revertAccountGoalContributions(db, id);
+    revertedBills = await revertLinkedBillsForTransactions(db, txIds);
+
+    // 2. Mark imported SMS/notification records as user-deleted so they don't re-prompt on next launch
+    try {
+      for (const chunk of chunkArray(txIds, SQLITE_VAR_CHUNK_SIZE)) {
+        const placeholders = chunk.map(() => '?').join(',');
+        await db.runAsync(
+          `UPDATE parsed_transactions
+           SET is_duplicate = 1,
+               duplicate_of = 'USER_DELETED',
+               transaction_id = NULL
+           WHERE transaction_id IN (${placeholders})`,
+          chunk
+        );
+      }
+      for (const chunk of chunkArray(parsedTxIds, SQLITE_VAR_CHUNK_SIZE)) {
+        const placeholders = chunk.map(() => '?').join(',');
+        await db.runAsync(
+          `UPDATE parsed_transactions
+           SET is_duplicate = 1,
+               duplicate_of = 'USER_DELETED',
+               transaction_id = NULL
+           WHERE id IN (${placeholders})`,
+          chunk
+        );
+      }
+    } catch {
+      // parsed_transactions table may not exist in isolated unit tests
     }
+
+    // 3. Remove transaction tag mappings, detach incoming transfers, and delete transactions
+    try {
+      for (const chunk of chunkArray(txIds, SQLITE_VAR_CHUNK_SIZE)) {
+        const placeholders = chunk.map(() => '?').join(',');
+        await db.runAsync(
+          `DELETE FROM transaction_tags WHERE transaction_id IN (${placeholders})`,
+          chunk
+        );
+      }
+    } catch {
+      // transaction_tags table may not exist in isolated unit tests
+    }
+
+    await db.runAsync('UPDATE transactions SET to_account_id = NULL WHERE to_account_id = ?', [id]);
+    await db.runAsync('DELETE FROM transactions WHERE account_id = ?', [id]);
+
+    // 4. Delete recurring schedules & unlink investment holdings
+    await db.runAsync(
+      'DELETE FROM recurring_transactions WHERE to_account_id = ? OR account_id = ?',
+      [id, id]
+    );
+
+    try {
+      await db.runAsync('UPDATE investment_holdings SET account_id = NULL WHERE account_id = ?', [
+        id,
+      ]);
+    } catch {
+      // investment_holdings table may not exist in isolated unit tests
+    }
+
+    // 5. Reset the account balance while preserving account metadata
+    const now = new Date().toISOString();
+    await db.runAsync('UPDATE accounts SET balance = 0, updated_at = ? WHERE id = ?', [now, id]);
+  };
+
+  if (typeof db.withTransactionAsync === 'function') {
+    await db.withTransactionAsync(executeClear);
+  } else {
+    await db.execAsync('BEGIN TRANSACTION');
+    try {
+      await executeClear();
+      await db.execAsync('COMMIT');
+    } catch (error) {
+      await db.execAsync('ROLLBACK');
+      throw error;
+    }
+  }
+
+  await resyncRevertedBills(revertedBills);
+
+  if (receiptUris.length > 0) {
+    try {
+      const { deleteReceiptImage } = await import('@/services/storage/receipt-storage');
+      await Promise.all(receiptUris.map((uri) => deleteReceiptImage(uri)));
+    } catch {
+      // Ignore receipt file cleanup failures
+    }
+  }
+
+  try {
+    const { DuplicateDetectionEngine } = await import(
+      '@/modules/sms/duplicate/duplicateDetectionEngine'
+    );
+    DuplicateDetectionEngine.clearCache();
+  } catch {
+    // Ignore in isolated environments
+  }
+}
+
+export async function deleteAccount(id: string): Promise<void> {
+  const db = getDatabase();
+  const executeDelete = async () => {
+    // 1. Revert and clean up goal contributions linked to this account's transactions
+    await revertAccountGoalContributions(db, id);
 
     await db.runAsync('UPDATE transactions SET to_account_id = NULL WHERE to_account_id = ?', [id]);
     await db.runAsync('DELETE FROM recurring_transactions WHERE to_account_id = ? OR account_id = ?', [id, id]);

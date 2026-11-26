@@ -374,4 +374,177 @@ describe('google-drive-service', () => {
       expect(result.count).toBe(0);
     });
   });
+
+  describe('opt-in backup encryption', () => {
+    const createSampleSnapshot = (): ClarityBackupPayload => ({
+      version: 1,
+      appName: 'Clarity',
+      exportedAt: '2026-09-03T10:00:00Z',
+      data: {
+        accounts: [{ id: 'acc-1', name: 'Savings', balance: 25000 } as any],
+        transactions: [{ id: 'tx-1', amount: 500, merchant: 'Cafe' } as any],
+        goals: [],
+        goal_contributions: [],
+        budget_plans: [],
+        budget_categories: [],
+        recurring_transactions: [],
+        notifications: [],
+      },
+    });
+
+    it('uploads unencrypted JSON when no custom backup password is set', async () => {
+      const SecureStore = require('expo-secure-store');
+      const legacyDeviceKey = 'a'.repeat(64);
+      SecureStore.getItemAsync.mockImplementation((key: string) => {
+        if (key === 'gdrive_access_token') return Promise.resolve('valid-token');
+        if (key === 'gdrive_token_expires_at') return Promise.resolve(String(Date.now() + 3600000));
+        if (key === 'gdrive_backup_passphrase') return Promise.resolve(legacyDeviceKey);
+        if (key === 'gdrive_has_custom_passphrase') return Promise.resolve('false');
+        return Promise.resolve(null);
+      });
+
+      let uploadedBody = '';
+      const mockFetch = jest.fn().mockImplementation((url: string, options?: RequestInit) => {
+        if (options?.method === 'POST') {
+          uploadedBody = String(options.body || '');
+          return Promise.resolve({
+            status: 200,
+            ok: true,
+            json: async () => ({ id: 'file-new', modifiedTime: '2026-09-03T11:00:00Z' }),
+          });
+        }
+        return Promise.resolve({
+          status: 200,
+          ok: true,
+          json: async () => ({ files: [] }),
+        });
+      });
+      globalThis.fetch = mockFetch as unknown as typeof fetch;
+
+      const res = await uploadBackup(createSampleSnapshot());
+
+      expect(res.success).toBe(true);
+      expect(res.encrypted).toBe(false);
+      expect(uploadedBody).toContain('"appName": "Clarity"');
+      expect(uploadedBody).not.toContain('"algorithm": "AES-256-GCM"');
+      expect(SecureStore.setItemAsync).not.toHaveBeenCalledWith('gdrive_backup_passphrase', expect.anything());
+    });
+
+    it('encrypts with AES-256-GCM and persists custom password on upload', async () => {
+      const SecureStore = require('expo-secure-store');
+      SecureStore.getItemAsync.mockImplementation((key: string) => {
+        if (key === 'gdrive_access_token') return Promise.resolve('valid-token');
+        if (key === 'gdrive_token_expires_at') return Promise.resolve(String(Date.now() + 3600000));
+        return Promise.resolve(null);
+      });
+
+      let uploadedBody = '';
+      const mockFetch = jest.fn().mockImplementation((_url: string, options?: RequestInit) => {
+        if (options?.method === 'POST') {
+          uploadedBody = String(options.body || '');
+          return Promise.resolve({
+            status: 200,
+            ok: true,
+            json: async () => ({ id: 'file-enc', modifiedTime: '2026-09-03T11:30:00Z' }),
+          });
+        }
+        return Promise.resolve({
+          status: 200,
+          ok: true,
+          json: async () => ({ files: [] }),
+        });
+      });
+      globalThis.fetch = mockFetch as unknown as typeof fetch;
+
+      const res = await uploadBackup(createSampleSnapshot(), { passphrase: 'my-secret-password' });
+
+      expect(res.success).toBe(true);
+      expect(res.encrypted).toBe(true);
+      expect(uploadedBody).toContain('"encrypted": true');
+      expect(uploadedBody).toContain('"algorithm": "AES-256-GCM"');
+      expect(uploadedBody).not.toContain('Cafe');
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith('gdrive_backup_passphrase', 'my-secret-password');
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith('gdrive_has_custom_passphrase', 'true');
+    });
+
+    it('continues encrypting subsequent auto-backups when a custom password was previously set', async () => {
+      const SecureStore = require('expo-secure-store');
+      SecureStore.getItemAsync.mockImplementation((key: string) => {
+        if (key === 'gdrive_access_token') return Promise.resolve('valid-token');
+        if (key === 'gdrive_token_expires_at') return Promise.resolve(String(Date.now() + 3600000));
+        if (key === 'gdrive_backup_passphrase') return Promise.resolve('my-secret-password');
+        if (key === 'gdrive_has_custom_passphrase') return Promise.resolve('true');
+        return Promise.resolve(null);
+      });
+
+      let patchedBody = '';
+      const mockFetch = jest.fn().mockImplementation((_url: string, options?: RequestInit) => {
+        if (options?.method === 'PATCH') {
+          patchedBody = String(options.body || '');
+          return Promise.resolve({
+            status: 200,
+            ok: true,
+            json: async () => ({ modifiedTime: '2026-09-03T12:00:00Z' }),
+          });
+        }
+        return Promise.resolve({
+          status: 200,
+          ok: true,
+          json: async () => ({
+            files: [{ id: 'file-enc', name: 'clarity_backup.json', modifiedTime: '2026-09-03T11:30:00Z' }],
+          }),
+        });
+      });
+      globalThis.fetch = mockFetch as unknown as typeof fetch;
+
+      const res = await uploadBackup(createSampleSnapshot(), { allowInteractive: false });
+
+      expect(res.success).toBe(true);
+      expect(res.encrypted).toBe(true);
+      const parsed = JSON.parse(patchedBody);
+      expect(parsed.encrypted).toBe(true);
+      expect(parsed.algorithm).toBe('AES-256-GCM');
+    });
+
+    it('clears stored password and uploads unencrypted when disableEncryption is true', async () => {
+      const SecureStore = require('expo-secure-store');
+      SecureStore.getItemAsync.mockImplementation((key: string) => {
+        if (key === 'gdrive_access_token') return Promise.resolve('valid-token');
+        if (key === 'gdrive_token_expires_at') return Promise.resolve(String(Date.now() + 3600000));
+        if (key === 'gdrive_backup_passphrase') return Promise.resolve('my-secret-password');
+        if (key === 'gdrive_has_custom_passphrase') return Promise.resolve('true');
+        return Promise.resolve(null);
+      });
+
+      let patchedBody = '';
+      const mockFetch = jest.fn().mockImplementation((_url: string, options?: RequestInit) => {
+        if (options?.method === 'PATCH') {
+          patchedBody = String(options.body || '');
+          return Promise.resolve({
+            status: 200,
+            ok: true,
+            json: async () => ({ modifiedTime: '2026-09-03T13:00:00Z' }),
+          });
+        }
+        return Promise.resolve({
+          status: 200,
+          ok: true,
+          json: async () => ({
+            files: [{ id: 'file-enc', name: 'clarity_backup.json', modifiedTime: '2026-09-03T12:00:00Z' }],
+          }),
+        });
+      });
+      globalThis.fetch = mockFetch as unknown as typeof fetch;
+
+      const res = await uploadBackup(createSampleSnapshot(), { disableEncryption: true });
+
+      expect(res.success).toBe(true);
+      expect(res.encrypted).toBe(false);
+      const parsed = JSON.parse(patchedBody);
+      expect(parsed.appName).toBe('Clarity');
+      expect(parsed.encrypted).toBeUndefined();
+      expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('gdrive_backup_passphrase');
+      expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('gdrive_has_custom_passphrase');
+    });
+  });
 });

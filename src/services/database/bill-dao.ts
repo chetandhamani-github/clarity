@@ -5,6 +5,7 @@ import { formatCurrency } from '@/utils/format';
 import {
   calculateNextDate,
   formatLocalDateYmd,
+  getLocalTodayYmd,
   shiftMonthsPreserveDay,
   shiftYmdDays,
 } from '@/utils/date';
@@ -731,4 +732,133 @@ export async function getMonthlyBillSummary(
     upcomingCount,
     paidCount,
   };
+}
+
+export interface RevertedBillInfo {
+  id: string;
+  title: string;
+  provider: string;
+  amount: number;
+  dueDate: string;
+  reminderDays: number;
+  status: string;
+}
+
+export interface RevertedBillsSummary {
+  modernBills: RevertedBillInfo[];
+  legacyCount: number;
+}
+
+const BILL_SQLITE_CHUNK_SIZE = 400;
+
+export async function revertLinkedBillsForTransactions(
+  db: ReturnType<typeof getDatabase>,
+  txIds: string[]
+): Promise<RevertedBillsSummary> {
+  if (txIds.length === 0) {
+    return { modernBills: [], legacyCount: 0 };
+  }
+
+  const todayLocal = getLocalTodayYmd();
+  const nowIso = new Date().toISOString();
+  const modernBills: RevertedBillInfo[] = [];
+
+  for (let i = 0; i < txIds.length; i += BILL_SQLITE_CHUNK_SIZE) {
+    const chunk = txIds.slice(i, i + BILL_SQLITE_CHUNK_SIZE);
+    const placeholders = chunk.map(() => '?').join(',');
+
+    try {
+      const linkedModern =
+        (await db.getAllAsync<{
+          id: string;
+          title: string;
+          provider: string;
+          amount: number;
+          due_date: string;
+          reminder_days: number | null;
+        }>(
+          `SELECT id, title, provider, amount, due_date, reminder_days FROM bills WHERE paid_transaction_id IN (${placeholders})`,
+          chunk
+        )) ?? [];
+
+      for (const row of linkedModern) {
+        const nextStatus = row.due_date < todayLocal ? 'overdue' : 'upcoming';
+        await db.runAsync(
+          `UPDATE bills
+           SET status = ?, last_paid_date = NULL, paid_transaction_id = NULL, updated_at = ?
+           WHERE id = ?`,
+          [nextStatus, nowIso, row.id]
+        );
+        modernBills.push({
+          id: row.id,
+          title: row.title,
+          provider: row.provider,
+          amount: row.amount,
+          dueDate: row.due_date,
+          reminderDays: row.reminder_days ?? 3,
+          status: nextStatus,
+        });
+      }
+    } catch {
+      // Table may not exist in older/isolated setups
+    }
+  }
+
+  let legacyCount = 0;
+  for (let i = 0; i < txIds.length; i += BILL_SQLITE_CHUNK_SIZE) {
+    const chunk = txIds.slice(i, i + BILL_SQLITE_CHUNK_SIZE);
+    const placeholders = chunk.map(() => '?').join(',');
+
+    try {
+      const linkedLegacy =
+        (await db.getAllAsync<{ id: string; due_date: string }>(
+          `SELECT id, due_date FROM bill_reminders WHERE paid_transaction_id IN (${placeholders})`,
+          chunk
+        )) ?? [];
+
+      for (const row of linkedLegacy) {
+        const nextStatus = row.due_date < todayLocal ? 'OVERDUE' : 'UNPAID';
+        await db.runAsync(
+          `UPDATE bill_reminders
+           SET status = ?, paid_date = NULL, paid_transaction_id = NULL
+           WHERE id = ?`,
+          [nextStatus, row.id]
+        );
+        legacyCount++;
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  return { modernBills, legacyCount };
+}
+
+export async function revertLinkedBillsForTransaction(
+  db: ReturnType<typeof getDatabase>,
+  txId: string
+): Promise<RevertedBillsSummary> {
+  return revertLinkedBillsForTransactions(db, [txId]);
+}
+
+export async function resyncRevertedBills(reverted: RevertedBillsSummary): Promise<void> {
+  if (reverted.modernBills.length === 0 && reverted.legacyCount === 0) return;
+
+  try {
+    const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
+    for (const bill of reverted.modernBills) {
+      await BillAlertEngine.scheduleNativeBillReminder({
+        id: bill.id,
+        billerName: bill.provider || bill.title,
+        amountDue: bill.amount,
+        dueDate: bill.dueDate,
+        reminderDaysBefore: bill.reminderDays,
+        status: bill.status,
+      });
+    }
+  } catch {
+    // Ignore
+  }
+
+  DeviceEventEmitter.emit('billsUpdated');
 }

@@ -4,6 +4,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
+  Modal,
   Platform,
   useWindowDimensions,
 } from 'react-native';
@@ -12,7 +14,7 @@ import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useAccount, useDeleteAccount } from '@/hooks/use-accounts';
+import { useAccount, useClearAccountData, useDeleteAccount } from '@/hooks/use-accounts';
 import { useTransactions, useAccountHistory } from '@/hooks/use-transactions';
 import { useAccountReconciliation, useCreateAdjustmentEntry } from '@/hooks/use-reconciliation';
 import { useToast, useAlert, DiscrepancyBanner } from '@/components/ui';
@@ -40,6 +42,7 @@ export default function AccountDetailsScreen() {
   const { history, isLoading: isHistoryLoading } = useAccountHistory(accountId, 30);
   const { reconciliation } = useAccountReconciliation(accountId);
   const { mutate: createAdjustment, isPending: isAdjusting } = useCreateAdjustmentEntry();
+  const { mutate: clearAccountData, isPending: isClearingData } = useClearAccountData();
   const { mutate: deleteAccount, isPending: isDeleting } = useDeleteAccount();
   const [showMenu, setShowMenu] = useState(false);
   const { showToast } = useToast();
@@ -60,29 +63,60 @@ export default function AccountDetailsScreen() {
     );
   };
 
-  const handleDelete = () => {
+  const handleClearData = () => {
     setShowMenu(false);
-    showAlert(
-      'Delete Account',
-      'Are you sure you want to delete this account? All associated transactions will be removed.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            if (accountId) {
-              deleteAccount(accountId, {
+    if (!account) return;
+    setTimeout(() => {
+      showAlert(
+        'Clear Account Data?',
+        `This will permanently delete all transactions, recurring schedules, and receipt photos for "${account.name}", and reset its balance to ${formatCurrency(0)}.\n\nThe account itself will stay in Clarity. This cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Clear Data',
+            style: 'destructive',
+            onPress: () => {
+              if (isClearingData || isDeleting) return;
+              clearAccountData(account.id, {
                 onSuccess: () => {
-                  showToast('Account deleted', 'success');
-                  router.back();
+                  showToast('Account data cleared', 'success');
+                },
+                onError: () => {
+                  showToast('Failed to clear account data', 'error');
                 },
               });
-            }
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    }, 80);
+  };
+
+  const handleDelete = () => {
+    setShowMenu(false);
+    setTimeout(() => {
+      showAlert(
+        'Delete Account',
+        'Are you sure you want to delete this account? All associated transactions will be removed.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => {
+              if (accountId) {
+                deleteAccount(accountId, {
+                  onSuccess: () => {
+                    showToast('Account deleted', 'success');
+                    router.back();
+                  },
+                });
+              }
+            },
+          },
+        ]
+      );
+    }, 80);
   };
 
   const handleEdit = () => {
@@ -224,21 +258,29 @@ export default function AccountDetailsScreen() {
         showBack
         title="Account Details"
         rightNode={
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={styles.headerRightActions} collapsable={false}>
             <TouchableOpacity
               style={styles.iconButton}
               onPress={handleEdit}
               disabled={!account}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              activeOpacity={0.6}
+              accessibilityRole="button"
+              accessibilityLabel="Edit account"
             >
               <MaterialIcons name="edit" size={22} color={colors.onSurface} />
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.iconButton}
-              onPress={() => setShowMenu((prev) => !prev)}
+              onPress={() => setShowMenu(true)}
               disabled={!account}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              activeOpacity={0.6}
+              accessibilityRole="button"
+              accessibilityLabel="Account options"
             >
-              <MaterialIcons name="more-vert" size={24} color={colors.onSurfaceVariant} />
+              <MaterialIcons name="more-vert" size={24} color={colors.onSurface} />
             </TouchableOpacity>
           </View>
         }
@@ -820,14 +862,18 @@ export default function AccountDetailsScreen() {
               </ScrollView>
             )}
 
-      {showMenu && account && (
-        <View style={styles.menuOverlay} pointerEvents="box-none">
-          <TouchableOpacity
-            style={styles.menuBackdrop}
-            activeOpacity={1}
-            onPress={() => setShowMenu(false)}
-          />
-          <View style={[styles.menuPopup, { top: insets.top + 52 }]}>
+      <Modal
+        visible={showMenu && Boolean(account)}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowMenu(false)}
+      >
+        <Pressable style={styles.menuModalBackdrop} onPress={() => setShowMenu(false)}>
+          <Pressable
+            style={[styles.menuPopup, { top: insets.top + 56 }]}
+            onPress={(e) => e.stopPropagation()}
+          >
             {canImportStatement && (
               <TouchableOpacity style={styles.menuItem} onPress={handleImportStatement}>
                 <MaterialIcons name="upload-file" size={20} color={colors.primary} />
@@ -838,13 +884,27 @@ export default function AccountDetailsScreen() {
               <MaterialIcons name="edit" size={20} color={colors.onSurface} />
               <Text style={styles.menuItemText}>Edit Account</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={handleClearData}
+              disabled={isClearingData || isDeleting}
+            >
+              <MaterialIcons name="delete-sweep" size={20} color={colors.error} />
+              <Text style={[styles.menuItemText, { color: colors.error }]}>
+                {isClearingData ? 'Clearing Data...' : 'Clear Account Data'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={handleDelete}
+              disabled={isClearingData || isDeleting}
+            >
               <MaterialIcons name="delete" size={20} color={colors.error} />
               <Text style={[styles.menuItemText, { color: colors.error }]}>Delete Account</Text>
             </TouchableOpacity>
-          </View>
-        </View>
-      )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -856,30 +916,36 @@ const getStyles = (colors: ThemeColors) => {
       backgroundColor: colors.background,
     },
 
+    headerRightActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
     iconButton: {
-      padding: 8,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
-    menuOverlay: {
-      ...StyleSheet.absoluteFillObject,
-      zIndex: 50,
-    },
-    menuBackdrop: {
-      ...StyleSheet.absoluteFillObject,
+    menuModalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.18)',
     },
     menuPopup: {
       position: 'absolute',
       right: 16,
       backgroundColor: colors.surfaceContainerHigh,
-      borderRadius: 12,
+      borderRadius: 14,
       borderWidth: 1,
-      borderColor: colors.surfaceVariant,
+      borderColor: colors.outlineVariant,
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.12,
-      shadowRadius: 12,
-      elevation: 6,
-      minWidth: 196,
-      zIndex: 51,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.16,
+      shadowRadius: 16,
+      elevation: 12,
+      minWidth: 220,
+      overflow: 'hidden',
     },
     menuItem: {
       flexDirection: 'row',

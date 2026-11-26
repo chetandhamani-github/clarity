@@ -5,12 +5,14 @@ import {
   getAccountById,
   insertAccount,
   updateAccount as updateAccountDao,
+  clearAccountData as clearAccountDataDao,
   deleteAccount as deleteAccountDao,
   updateAccountsOrder,
   getTotalBalance,
 } from '@/services/database/account-dao';
 import { queueAutoBackup } from '@/services/cloud/google-drive-service';
 import { invalidateAnalyticsAndHealthQueries } from '@/hooks/use-financial-health';
+import { useSmsStore } from '@/store/useSmsStore';
 
 export function useAccounts() {
   const { data, isLoading, refetch } = useQuery({
@@ -79,6 +81,41 @@ export function useDeleteAccount() {
   return {
     mutate: (id: string, options?: { onSuccess?: () => void }) => {
       mutation.mutate(id, { onSuccess: options?.onSuccess });
+    },
+    isPending: mutation.isPending,
+  };
+}
+
+export function useClearAccountData() {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: (id: string) => clearAccountDataDao(id),
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+      queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
+      queryClient.invalidateQueries({ queryKey: ['goals'] });
+      queryClient.invalidateQueries({ queryKey: ['goalContributions'] });
+      queryClient.invalidateQueries({ queryKey: ['recurring'] });
+      queryClient.invalidateQueries({ queryKey: ['reconciliation', id] });
+      queryClient.invalidateQueries({ queryKey: ['bills'] });
+      queryClient.invalidateQueries({ queryKey: ['investments'] });
+      queryClient.invalidateQueries({ queryKey: ['portfolioSummary'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
+      useSmsStore.getState().refreshAnalytics().catch(() => {});
+      useSmsStore.getState().refreshReviewQueueCount().catch(() => {});
+      queueAutoBackup('clear-account-data');
+    },
+  });
+
+  return {
+    mutate: (
+      id: string,
+      options?: { onSuccess?: () => void; onError?: (error: Error) => void }
+    ) => {
+      mutation.mutate(id, { onSuccess: options?.onSuccess, onError: options?.onError });
     },
     isPending: mutation.isPending,
   };

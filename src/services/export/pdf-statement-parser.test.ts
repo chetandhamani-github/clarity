@@ -104,6 +104,58 @@ describe('pdf-statement-parser', () => {
       expect(result.success).toBe(false);
       expect(result.transactions).toHaveLength(0);
     });
+
+    it('infers income vs expense from running balance even when blank Debit leaves 2 tokens and neutral narration', () => {
+      const text = `
+        Opening Balance: Rs. 10,000.00
+        01/11/2026 NEFT-ACME TECHNOLOGIES 50,000.00 60,000.00
+        02/11/2026 TRANSFER TO CREDIT CARD 12,000.00 48,000.00
+        03/11/2026 UPI-RAHUL-OKICICI - 2,500.00 50,500.00
+      `;
+      const result = parseBankStatementPdfText(text);
+      expect(result.success).toBe(true);
+      expect(result.transactions).toHaveLength(3);
+      expect(result.transactions.map((t) => [t.amount, t.type, t.balance])).toEqual([
+        [50000, 'income', 60000],
+        [12000, 'expense', 48000],
+        [2500, 'income', 50500],
+      ]);
+    });
+
+    it('resolves reverse-chronological PDF rows using running balance differences', () => {
+      const text = `
+        05/11/2026 UPI-MOM-OKAXIS 3,000.00 22,500.00
+        04/11/2026 SWIGGY ORDER 500.00 19,500.00
+        01/11/2026 IMPS-CLIENT-4321 20,000.00 20,000.00
+      `;
+      const result = parseBankStatementPdfText(text);
+      expect(result.success).toBe(true);
+      expect(result.transactions).toHaveLength(3);
+      expect(result.transactions[0]).toMatchObject({ amount: 3000, type: 'income', balance: 22500 });
+      expect(result.transactions[1]).toMatchObject({ amount: 500, type: 'expense', balance: 19500 });
+    });
+
+    it('preserves blank "-" and 0.00 column placeholders in Pass 2 sequential tokens without neutral narration fallback', () => {
+      const text = `
+        01/11/2026
+        01/11/2026
+        UPI/P2A/98765/RAHUL
+        -
+        2,500.00
+        12,500.00
+        02/11/2026
+        02/11/2026
+        UPI/P2A/11111/AMIT
+        0.00
+        1,500.00
+        14,000.00
+      `;
+      const result = parseBankStatementPdfText(text);
+      expect(result.success).toBe(true);
+      expect(result.transactions).toHaveLength(2);
+      expect(result.transactions[0]).toMatchObject({ amount: 2500, type: 'income', balance: 12500 });
+      expect(result.transactions[1]).toMatchObject({ amount: 1500, type: 'income', balance: 14000 });
+    });
   });
 
   describe('parseBankStatementPdf', () => {
@@ -1013,6 +1065,38 @@ endobj
         amount: 999,
         balance: 8001,
       });
+    });
+
+    it('uses PDF X-coordinates of Debit/Credit columns when Balance column is absent and columns are sparse', async () => {
+      const streamContent = `
+BT
+1 0 0 1 40 760 Tm (Date) Tj
+1 0 0 1 120 760 Tm (Particulars) Tj
+1 0 0 1 360 760 Tm (Withdrawal) Tj
+1 0 0 1 460 760 Tm (Deposit) Tj
+ET
+BT
+1 0 0 1 40 730 Tm (05/11/2026) Tj
+1 0 0 1 120 730 Tm (UPI/ZOMATO) Tj
+1 0 0 1 365 730 Tm (450.00) Tj
+ET
+BT
+1 0 0 1 40 700 Tm (06/11/2026) Tj
+1 0 0 1 120 700 Tm (NEFT-ACME CORP) Tj
+1 0 0 1 465 700 Tm (55,000.00) Tj
+ET
+`;
+      const compressed = pako.deflate(Buffer.from(streamContent, 'latin1'));
+      const mockPdf = `%PDF-1.4\n1 0 obj\n<< /Length ${compressed.length} /Filter /FlateDecode >>\nstream\n${Buffer.from(compressed).toString('binary')}\nendstream\nendobj\n`;
+      (FileSystem.readAsStringAsync as jest.Mock).mockResolvedValueOnce(
+        Buffer.from(mockPdf, 'binary').toString('base64')
+      );
+
+      const result = await parseBankStatementPdf('file:///no_balance_cols.pdf');
+      expect(result.success).toBe(true);
+      expect(result.transactions).toHaveLength(2);
+      expect(result.transactions[0]).toMatchObject({ amount: 450, type: 'expense' });
+      expect(result.transactions[1]).toMatchObject({ amount: 55000, type: 'income' });
     });
   });
 

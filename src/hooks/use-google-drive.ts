@@ -2,6 +2,7 @@ import { useToast } from '@/components/ui';
 import {
     authenticateWithGoogle,
     checkHasCustomBackupPassphrase,
+    clearStoredBackupPassphrase,
     clearTokens,
     deleteAllBackups,
     downloadBackup,
@@ -132,7 +133,11 @@ export function useGoogleDrive() {
    * Connect with Google Drive OAuth and check for existing cloud backups safely.
    */
   const connect = useCallback(
-    async (options?: { silent?: boolean; autoRestoreIfEmpty?: boolean }): Promise<{
+    async (options?: {
+      silent?: boolean;
+      autoRestoreIfEmpty?: boolean;
+      deferInitialUpload?: boolean;
+    }): Promise<{
       success: boolean;
       needsPassphraseToRestore?: boolean;
       hasExistingBackup?: boolean;
@@ -198,12 +203,14 @@ export function useGoogleDrive() {
             }
           }
 
-          // If no cloud backup exists, only perform initial backup if local DB has real data
-          const snapshot = await generateDatabaseSnapshot();
-          if (isMeaningfulDatabaseSnapshot(snapshot)) {
-            const uploadRes = await uploadBackup(snapshot);
-            if (uploadRes.success && uploadRes.modifiedTime) {
-              setLastCloudBackupTime(uploadRes.modifiedTime);
+          // If no cloud backup exists, only perform initial backup automatically unless caller defers it for password setup
+          if (!options?.deferInitialUpload) {
+            const snapshot = await generateDatabaseSnapshot();
+            if (isMeaningfulDatabaseSnapshot(snapshot)) {
+              const uploadRes = await uploadBackup(snapshot);
+              if (uploadRes.success && uploadRes.modifiedTime) {
+                setLastCloudBackupTime(uploadRes.modifiedTime);
+              }
             }
           }
         } catch {
@@ -237,14 +244,11 @@ export function useGoogleDrive() {
   }, [setGoogleDriveConnected, showToast]);
 
   /**
-   * Trigger manual client-side encrypted backup to Google Drive.
+   * Trigger manual backup to Google Drive (encrypted if a password is provided or previously set).
    */
   const backupNow = useCallback(async (passphrase?: string) => {
     setIsBackingUp(true);
     try {
-      if (passphrase) {
-        await setStoredBackupPassphrase(passphrase);
-      }
       const snapshot = await generateDatabaseSnapshot();
       const result = await uploadBackup(snapshot, { passphrase, pinRevision: true });
 
@@ -256,10 +260,88 @@ export function useGoogleDrive() {
       useAppStore.getState().setPostResetLocked(false);
       const nowStr = result.modifiedTime || new Date().toISOString();
       setLastCloudBackupTime(nowStr);
-      showToast('Encrypted backup saved to Google Drive!', 'success');
+      showToast(
+        result.encrypted
+          ? 'Encrypted backup saved to Google Drive!'
+          : 'Backup saved to Google Drive!',
+        'success'
+      );
       return true;
     } catch (error: any) {
       showToast(error?.message || 'Error uploading backup', 'error');
+      return false;
+    } finally {
+      setIsBackingUp(false);
+    }
+  }, [setLastCloudBackupTime, showToast]);
+
+  /**
+   * Uploads initial unencrypted snapshot in the background when skipping optional password setup.
+   */
+  const syncInitialBackupIfMeaningful = useCallback(async (): Promise<boolean> => {
+    try {
+      const state = useAppStore.getState();
+      if (!state.googleDriveConnected || state.isPostResetLocked) {
+        return false;
+      }
+      const snapshot = await generateDatabaseSnapshot();
+      if (!isMeaningfulDatabaseSnapshot(snapshot)) {
+        return false;
+      }
+      const result = await uploadBackup(snapshot, { allowInteractive: false });
+      if (result.success && result.modifiedTime) {
+        setLastCloudBackupTime(result.modifiedTime);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }, [setLastCloudBackupTime]);
+
+  /**
+   * Removes backup password protection and uploads a fresh unencrypted snapshot when possible.
+   */
+  const disableBackupEncryption = useCallback(async (): Promise<boolean> => {
+    setIsBackingUp(true);
+    try {
+      const snapshot = await generateDatabaseSnapshot();
+      const hasMeaningfulLocal = isMeaningfulDatabaseSnapshot(snapshot);
+      const { accessToken } = await getSavedTokens();
+      const existingFile = accessToken ? await findBackupFile(accessToken).catch(() => null) : null;
+
+      if (!existingFile && !hasMeaningfulLocal) {
+        await clearStoredBackupPassphrase();
+        showToast('Backup password removed.', 'info');
+        return true;
+      }
+
+      if (existingFile && !hasMeaningfulLocal) {
+        showToast(
+          'Local database is empty. Restore your backup or add data before removing cloud password encryption.',
+          'error'
+        );
+        return false;
+      }
+
+      const result = await uploadBackup(snapshot, {
+        disableEncryption: true,
+        pinRevision: true,
+      });
+
+      if (!result.success) {
+        showToast(result.error || 'Failed to update cloud backup', 'error');
+        return false;
+      }
+
+      useAppStore.getState().setPostResetLocked(false);
+      if (result.modifiedTime) {
+        setLastCloudBackupTime(result.modifiedTime);
+      }
+      showToast('Backup password removed & unencrypted backup saved to Google Drive!', 'success');
+      return true;
+    } catch (error: any) {
+      showToast(error?.message || 'Error updating backup encryption', 'error');
       return false;
     } finally {
       setIsBackingUp(false);
@@ -443,6 +525,8 @@ export function useGoogleDrive() {
     connect,
     disconnect,
     backupNow,
+    syncInitialBackupIfMeaningful,
+    disableBackupEncryption,
     performSilentAutoBackup,
     restoreFromDrive,
     getDriveRevisions,

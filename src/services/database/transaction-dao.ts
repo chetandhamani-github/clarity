@@ -11,6 +11,11 @@ import type {
 import { DeviceEventEmitter } from 'react-native';
 import { getLocalTodayYmd, shiftYmdDays } from '@/utils/date';
 import { formatLocalDate, parseDateSafely } from '@/utils/format';
+import {
+  revertLinkedBillsForTransaction,
+  resyncRevertedBills,
+  type RevertedBillInfo,
+} from './bill-dao';
 import { getAccountById } from './account-dao';
 import { getDatabase } from './index';
 import {
@@ -427,107 +432,6 @@ export async function insertTransaction(
   }
 
   return { id, ...data, category: finalCategory, note: finalNote, source, status, createdAt };
-}
-
-interface RevertedBillInfo {
-  id: string;
-  title: string;
-  provider: string;
-  amount: number;
-  dueDate: string;
-  reminderDays: number;
-  status: string;
-}
-
-async function revertLinkedBillsForTransaction(
-  db: ReturnType<typeof getDatabase>,
-  txId: string
-): Promise<{ modernBills: RevertedBillInfo[]; legacyCount: number }> {
-  const todayLocal = getLocalTodayYmd();
-  const nowIso = new Date().toISOString();
-  const modernBills: RevertedBillInfo[] = [];
-
-  try {
-    const linkedModern = await db.getAllAsync<{
-      id: string;
-      title: string;
-      provider: string;
-      amount: number;
-      due_date: string;
-      reminder_days: number | null;
-    }>(
-      `SELECT id, title, provider, amount, due_date, reminder_days FROM bills WHERE paid_transaction_id = ?`,
-      [txId]
-    );
-
-    for (const row of linkedModern) {
-      const nextStatus = row.due_date < todayLocal ? 'overdue' : 'upcoming';
-      await db.runAsync(
-        `UPDATE bills
-         SET status = ?, last_paid_date = NULL, paid_transaction_id = NULL, updated_at = ?
-         WHERE id = ?`,
-        [nextStatus, nowIso, row.id]
-      );
-      modernBills.push({
-        id: row.id,
-        title: row.title,
-        provider: row.provider,
-        amount: row.amount,
-        dueDate: row.due_date,
-        reminderDays: row.reminder_days ?? 3,
-        status: nextStatus,
-      });
-    }
-  } catch {
-    // Table may not exist in older/isolated setups
-  }
-
-  let legacyCount = 0;
-  try {
-    const linkedLegacy = await db.getAllAsync<{ id: string; due_date: string }>(
-      `SELECT id, due_date FROM bill_reminders WHERE paid_transaction_id = ?`,
-      [txId]
-    );
-    for (const row of linkedLegacy) {
-      const nextStatus = row.due_date < todayLocal ? 'OVERDUE' : 'UNPAID';
-      await db.runAsync(
-        `UPDATE bill_reminders
-         SET status = ?, paid_date = NULL, paid_transaction_id = NULL
-         WHERE id = ?`,
-        [nextStatus, row.id]
-      );
-      legacyCount++;
-    }
-  } catch {
-    // Ignore
-  }
-
-  return { modernBills, legacyCount };
-}
-
-async function resyncRevertedBills(reverted: {
-  modernBills: RevertedBillInfo[];
-  legacyCount: number;
-}): Promise<void> {
-  if (reverted.modernBills.length === 0 && reverted.legacyCount === 0) return;
-
-  try {
-    const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
-    for (const bill of reverted.modernBills) {
-      await BillAlertEngine.scheduleNativeBillReminder({
-        id: bill.id,
-        billerName: bill.provider || bill.title,
-        amountDue: bill.amount,
-        dueDate: bill.dueDate,
-        reminderDaysBefore: bill.reminderDays,
-        status: bill.status,
-      });
-    }
-  } catch {
-    // Ignore
-  }
-
-  DeviceEventEmitter.emit('billsUpdated');
 }
 
 export async function updateTransaction(
