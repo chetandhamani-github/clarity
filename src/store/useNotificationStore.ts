@@ -260,7 +260,10 @@ export const useNotificationStore = create<NotificationStoreState>((set, get) =>
             parseTransactions,
             parseBills,
           });
-          if (notif.id) {
+          if (
+            notif.id &&
+            !(result.type === 'IGNORED' && result.reason === 'APP_RESET_IN_PROGRESS')
+          ) {
             ackedIds.push(notif.id);
           }
           if (result.type === 'BILL' && result.isNew !== false) {

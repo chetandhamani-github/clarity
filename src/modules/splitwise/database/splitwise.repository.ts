@@ -339,6 +339,8 @@ export class SplitwiseRepository {
     }
 
     trackDeletedRecord(id, 'person');
+    await db.runAsync(`DELETE FROM splitwise_group_members WHERE person_id = ?`, [id]);
+    await db.runAsync(`DELETE FROM splitwise_expense_splits WHERE person_id = ?`, [id]);
     await db.runAsync(`DELETE FROM splitwise_debts WHERE person_id = ?`, [id]);
     await db.runAsync(`DELETE FROM splitwise_settlements WHERE person_id = ?`, [id]);
     await db.runAsync(`DELETE FROM splitwise_people WHERE id = ?`, [id]);
@@ -951,9 +953,95 @@ export class SplitwiseRepository {
       }
     }
 
-    const remainingReceivable = Math.max(0, totalOwedToMe - (settledByThem ?? 0));
-    const remainingPayable = Math.max(0, totalIOwe - (settledByYou ?? 0));
-    const netBalance = remainingReceivable - remainingPayable;
+    const perPersonDebtRows =
+      (await db.getAllAsync<{ person_id: string; type: string; total_amount: number | null }>(
+        `SELECT person_id, type, SUM(amount) AS total_amount
+         FROM splitwise_debts
+         GROUP BY person_id, type`
+      )) ?? [];
+
+    const perPersonExpenseRows =
+      (await db.getAllAsync<{
+        person_id: string;
+        payer_id: string;
+        total_owed: number | null;
+      }>(
+        `SELECT es.person_id, e.payer_id, SUM(es.owed_amount) AS total_owed
+         FROM splitwise_expense_splits es
+         JOIN splitwise_expenses e ON es.expense_id = e.id
+         WHERE e.payer_id = ? OR es.person_id = ?
+         GROUP BY es.person_id, e.payer_id`,
+        [CURRENT_USER_ID, CURRENT_USER_ID]
+      )) ?? [];
+
+    const perPersonSettlementRows =
+      (await db.getAllAsync<{ person_id: string; settlement_type: string | null; total_amount: number | null }>(
+        `SELECT person_id, settlement_type, SUM(amount) AS total_amount
+         FROM splitwise_settlements
+         GROUP BY person_id, settlement_type`
+      )) ?? [];
+
+    const hasPerPersonRows =
+      perPersonDebtRows.length > 0 ||
+      perPersonExpenseRows.length > 0 ||
+      perPersonSettlementRows.length > 0;
+
+    let remainingReceivable = 0;
+    let remainingPayable = 0;
+
+    if (hasPerPersonRows) {
+      const perPerson = new Map<
+        string,
+        { owedToMe: number; iOwe: number; settledByThem: number; settledByYou: number }
+      >();
+      const ensurePersonEntry = (pid: string) => {
+        let entry = perPerson.get(pid);
+        if (!entry) {
+          entry = { owedToMe: 0, iOwe: 0, settledByThem: 0, settledByYou: 0 };
+          perPerson.set(pid, entry);
+        }
+        return entry;
+      };
+
+      for (const row of perPersonDebtRows) {
+        const entry = ensurePersonEntry(row.person_id);
+        const amt = row.total_amount ?? 0;
+        if (row.type === 'OWE_ME') entry.owedToMe += amt;
+        else if (row.type === 'I_OWE') entry.iOwe += amt;
+      }
+      for (const row of perPersonExpenseRows) {
+        const amt = row.total_owed ?? 0;
+        if (row.payer_id === CURRENT_USER_ID && row.person_id !== CURRENT_USER_ID) {
+          ensurePersonEntry(row.person_id).owedToMe += amt;
+        } else if (row.person_id === CURRENT_USER_ID && row.payer_id !== CURRENT_USER_ID) {
+          ensurePersonEntry(row.payer_id).iOwe += amt;
+        }
+      }
+      for (const row of perPersonSettlementRows) {
+        const entry = ensurePersonEntry(row.person_id);
+        const amt = row.total_amount ?? 0;
+        if (row.settlement_type === 'YOU_PAID') entry.settledByYou += amt;
+        else entry.settledByThem += amt;
+      }
+
+      for (const entry of perPerson.values()) {
+        // Compute net direction per person cleanly before clamping
+        const rawPersonNet =
+          entry.owedToMe - entry.iOwe - entry.settledByThem + entry.settledByYou;
+        if (rawPersonNet > 0) {
+          remainingReceivable += rawPersonNet;
+        } else if (rawPersonNet < 0) {
+          remainingPayable += Math.abs(rawPersonNet);
+        }
+      }
+      remainingReceivable = Math.round(remainingReceivable * 100) / 100;
+      remainingPayable = Math.round(remainingPayable * 100) / 100;
+    } else {
+      remainingReceivable = Math.max(0, totalOwedToMe - (settledByThem ?? 0));
+      remainingPayable = Math.max(0, totalIOwe - (settledByYou ?? 0));
+    }
+
+    const netBalance = Math.round((remainingReceivable - remainingPayable) * 100) / 100;
     const peopleCount = peopleCountRow?.count ?? 0;
 
     const groupCountRow = await db.getFirstAsync<{ count: number }>(
@@ -1396,13 +1484,19 @@ export class SplitwiseRepository {
     );
 
     if (updates.memberIds && Array.isArray(updates.memberIds)) {
+      const existingRoleMap = new Map(
+        (existing.members || []).map((m) => [m.personId, m.role] as const)
+      );
       await db.runAsync(`DELETE FROM splitwise_group_members WHERE group_id = ?`, [id]);
       for (const personId of updates.memberIds) {
         const memberId = generateId();
+        const preservedRole =
+          existingRoleMap.get(personId) ??
+          (personId === CURRENT_USER_ID ? 'admin' : 'member');
         await db.runAsync(
           `INSERT INTO splitwise_group_members (id, group_id, person_id, role, joined_at, sync_status)
-           VALUES (?, ?, ?, 'member', ?, 'LOCAL_ONLY')`,
-          [memberId, id, personId, now]
+           VALUES (?, ?, ?, ?, ?, 'LOCAL_ONLY')`,
+          [memberId, id, personId, preservedRole, now]
         );
       }
     }

@@ -107,6 +107,7 @@ export default function AddTransactionScreen() {
   }, [dbCategories]);
 
   const isPending = isCreating || isUpdating || isDeleting || isCreatingRecurring;
+  const paramsInitializedSignatureRef = React.useRef<string | null>(null);
 
   const [type, setType] = useState<TransactionType>(params.type || 'expense');
   const [amountStr, setAmountStr] = useState(params.amount || '');
@@ -289,29 +290,56 @@ export default function AddTransactionScreen() {
     }
   }, [accounts, accountId, isEditing, params.accountId, params.type, params.toAccountId, toAccountId]);
 
-  // Sync params when navigated with pre-filled voice, debt payoff, or recurring schedule data
+  // Sync params once per unique navigation payload when pre-filled from voice, debt payoff, or recurring
   React.useEffect(() => {
-    if (!isEditing) {
-      if (params.amount) setAmountStr(params.amount);
-      if (params.merchant) setMerchant(params.merchant);
-      if (params.category) {
-        const matched = CATEGORIES.find(
-          (c) => c.toLowerCase() === params.category?.toLowerCase()
-        );
-        setCategory(matched || params.category);
-      }
-      if (params.note) setNote(params.note);
-      if (params.type) setType(params.type);
-      if (params.accountId) setAccountId(params.accountId);
-      if (params.toAccountId) {
-        setToAccountId(params.toAccountId);
-        if (!params.accountId && accounts.length > 0 && accountId === params.toAccountId) {
-          setAccountId(pickDefaultSourceAccountId(accounts, params.toAccountId));
+    if (isEditing) return;
+    const signature = JSON.stringify({
+      amount: params.amount ?? null,
+      merchant: params.merchant ?? null,
+      category: params.category ?? null,
+      note: params.note ?? null,
+      type: params.type ?? null,
+      accountId: params.accountId ?? null,
+      toAccountId: params.toAccountId ?? null,
+      recurring: params.recurring ?? null,
+    });
+    const hasAnyPrefill =
+      Boolean(params.amount) ||
+      Boolean(params.merchant) ||
+      Boolean(params.category) ||
+      Boolean(params.note) ||
+      Boolean(params.type) ||
+      Boolean(params.accountId) ||
+      Boolean(params.toAccountId) ||
+      params.recurring === '1' ||
+      params.recurring === 'true';
+
+    if (!hasAnyPrefill) return;
+    if (paramsInitializedSignatureRef.current === signature) return;
+
+    paramsInitializedSignatureRef.current = signature;
+    if (params.amount) setAmountStr(params.amount);
+    if (params.merchant) setMerchant(params.merchant);
+    if (params.category) {
+      const matched = CATEGORIES.find(
+        (c) => c.toLowerCase() === params.category?.toLowerCase()
+      );
+      setCategory(matched || params.category);
+    }
+    if (params.note) setNote(params.note);
+    if (params.type) setType(params.type);
+    if (params.accountId) setAccountId(params.accountId);
+    if (params.toAccountId) {
+      setToAccountId(params.toAccountId);
+      if (!params.accountId && accounts.length > 0) {
+        const currentSelected = pickDefaultSourceAccountId(accounts, params.toAccountId);
+        if (currentSelected) {
+          setAccountId(currentSelected);
         }
       }
-      if (params.recurring === '1' || params.recurring === 'true') {
-        setIsRecurring(true);
-      }
+    }
+    if (params.recurring === '1' || params.recurring === 'true') {
+      setIsRecurring(true);
     }
   }, [
     params.amount,
@@ -323,7 +351,6 @@ export default function AddTransactionScreen() {
     params.toAccountId,
     params.recurring,
     accounts,
-    accountId,
     isEditing,
   ]);
 

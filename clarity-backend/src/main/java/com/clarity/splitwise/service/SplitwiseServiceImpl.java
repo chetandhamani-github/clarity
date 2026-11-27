@@ -45,20 +45,13 @@ public class SplitwiseServiceImpl implements SplitwiseService {
         }
 
         // 0. Extract current authenticated user if Authorization token is provided
-        String parsedUserEmail = null;
-        String parsedUserName = null;
-        if (authHeader != null && !authHeader.trim().isEmpty()) {
-            String token = authHeader.trim().startsWith("Bearer ")
-                    ? authHeader.trim().substring(7).trim()
-                    : authHeader.trim();
-            Optional<User> userOpt = userRepository.findByAuthToken(token);
-            if (userOpt.isPresent()) {
-                parsedUserEmail = userOpt.get().getEmail().toLowerCase().trim();
-                parsedUserName = userOpt.get().getName();
-            }
-        }
-        final String currentUserEmail = parsedUserEmail;
-        final String currentUserName = parsedUserName;
+        User authenticatedUser = resolveAuthenticatedUser(authHeader);
+        final String currentUserEmail = authenticatedUser != null
+                ? authenticatedUser.getEmail().toLowerCase().trim()
+                : null;
+        final String currentUserName = authenticatedUser != null
+                ? authenticatedUser.getName()
+                : null;
 
         Instant syncTimestamp = Instant.now();
         Set<String> confirmedIds = new HashSet<>();
@@ -130,10 +123,12 @@ public class SplitwiseServiceImpl implements SplitwiseService {
                 Instant recordUpdatedAt = parseInstant(d.getUpdatedAt(), syncTimestamp);
                 Instant recordCreatedAt = parseInstant(d.getCreatedAt(), syncTimestamp);
 
-                // Determine friend's email
+                // Determine friend's email (only from caller's authorized person records)
                 String friendEmail = d.getFriendEmail() != null ? d.getFriendEmail().trim().toLowerCase() : personEmailMap.get(d.getPersonId());
-                if (friendEmail == null) {
-                    friendEmail = splitPersonRepository.findById(d.getPersonId()).map(SplitPerson::getEmail).orElse(null);
+                if (friendEmail == null && d.getPersonId() != null) {
+                    friendEmail = findAuthorizedPerson(d.getPersonId(), installationId, currentUserEmail)
+                            .map(SplitPerson::getEmail)
+                            .orElse(null);
                 }
 
                 Optional<SplitDebt> existingOpt = findAuthorizedDebt(d.getId(), installationId, currentUserEmail);
@@ -197,7 +192,10 @@ public class SplitwiseServiceImpl implements SplitwiseService {
                     friendEmail = personEmailMap.get(s.getPersonId());
                 }
                 if (friendEmail == null && s.getPersonId() != null) {
-                    friendEmail = normalizeEmail(splitPersonRepository.findById(s.getPersonId()).map(SplitPerson::getEmail).orElse(null));
+                    friendEmail = normalizeEmail(
+                            findAuthorizedPerson(s.getPersonId(), installationId, currentUserEmail)
+                                    .map(SplitPerson::getEmail)
+                                    .orElse(null));
                 }
                 String normalizedGroupId = (s.getGroupId() != null && !s.getGroupId().trim().isEmpty())
                         ? s.getGroupId().trim()
@@ -369,9 +367,14 @@ public class SplitwiseServiceImpl implements SplitwiseService {
                 Instant recordCreatedAt = parseInstant(e.getCreatedAt(), syncTimestamp);
 
                 Optional<SplitExpense> existingOpt = splitExpenseRepository.findById(e.getId());
-                String targetGroupId = existingOpt.map(SplitExpense::getGroupId).orElse(e.getGroupId());
-                if (!isAuthorizedForExpense(existingOpt.orElse(null), targetGroupId, installationId, currentUserEmail)) {
+                String existingGroupId = existingOpt.map(SplitExpense::getGroupId).orElse(null);
+                if (!isAuthorizedForExpense(existingOpt.orElse(null), existingGroupId, installationId, currentUserEmail)) {
                     continue;
+                }
+                if (!e.isDeleted() && e.getGroupId() != null && !e.getGroupId().equals(existingGroupId)) {
+                    if (!isAuthorizedForExpense(existingOpt.orElse(null), e.getGroupId(), installationId, currentUserEmail)) {
+                        continue;
+                    }
                 }
 
                 if (e.isDeleted()) {
@@ -474,31 +477,41 @@ public class SplitwiseServiceImpl implements SplitwiseService {
         Map<String, SplitGroup> serverGroupsMap = new LinkedHashMap<>();
         Map<String, SplitExpense> serverExpensesMap = new LinkedHashMap<>();
 
-        // By installation ID
+        // By installation ID (never expose account-owned records to unauthenticated device headers)
         List<SplitPerson> pInst = (since != null)
                 ? splitPersonRepository.findByInstallationIdAndUpdatedAtAfter(installationId, since)
                 : splitPersonRepository.findByInstallationId(installationId);
-        pInst.forEach(p -> serverPeopleMap.put(p.getId(), p));
+        pInst.stream()
+                .filter(p -> isRecordOwnerOrDevice(p.getOwnerEmail(), p.getInstallationId(), installationId, currentUserEmail))
+                .forEach(p -> serverPeopleMap.put(p.getId(), p));
 
         List<SplitDebt> dInst = (since != null)
                 ? splitDebtRepository.findByInstallationIdAndUpdatedAtAfter(installationId, since)
                 : splitDebtRepository.findByInstallationId(installationId);
-        dInst.forEach(d -> serverDebtsMap.put(d.getId(), d));
+        dInst.stream()
+                .filter(d -> isRecordOwnerOrDevice(d.getOwnerEmail(), d.getInstallationId(), installationId, currentUserEmail))
+                .forEach(d -> serverDebtsMap.put(d.getId(), d));
 
         List<SplitSettlement> sInst = (since != null)
                 ? splitSettlementRepository.findByInstallationIdAndUpdatedAtAfter(installationId, since)
                 : splitSettlementRepository.findByInstallationId(installationId);
-        sInst.forEach(s -> serverSettlementsMap.put(s.getId(), s));
+        sInst.stream()
+                .filter(s -> isRecordOwnerOrDevice(s.getOwnerEmail(), s.getInstallationId(), installationId, currentUserEmail))
+                .forEach(s -> serverSettlementsMap.put(s.getId(), s));
 
         List<SplitGroup> gInst = (since != null)
                 ? splitGroupRepository.findByInstallationIdAndUpdatedAtAfter(installationId, since)
                 : splitGroupRepository.findByInstallationId(installationId);
-        gInst.forEach(g -> serverGroupsMap.put(g.getId(), g));
+        gInst.stream()
+                .filter(g -> isAuthorizedForGroup(g, installationId, currentUserEmail))
+                .forEach(g -> serverGroupsMap.put(g.getId(), g));
 
         List<SplitExpense> expInst = (since != null)
                 ? splitExpenseRepository.findByInstallationIdAndUpdatedAtAfter(installationId, since)
                 : splitExpenseRepository.findByInstallationId(installationId);
-        expInst.forEach(e -> serverExpensesMap.put(e.getId(), e));
+        expInst.stream()
+                .filter(e -> isAuthorizedForExpense(e, e.getGroupId(), installationId, currentUserEmail))
+                .forEach(e -> serverExpensesMap.put(e.getId(), e));
 
         // By authenticated owner email (collaborative updates)
         if (currentUserEmail != null) {
@@ -609,35 +622,67 @@ public class SplitwiseServiceImpl implements SplitwiseService {
                 .build();
     }
 
+    private User resolveAuthenticatedUser(String authHeader) {
+        if (authHeader == null || authHeader.trim().isEmpty()) {
+            return null;
+        }
+        String trimmed = authHeader.trim();
+        String token = trimmed.startsWith("Bearer ") ? trimmed.substring(7).trim() : trimmed;
+        if (token.isEmpty()) {
+            throw new ApiException("Invalid or expired authentication token", HttpStatus.UNAUTHORIZED);
+        }
+        return userRepository.findByAuthToken(token)
+                .orElseThrow(() -> new ApiException("Invalid or expired authentication token", HttpStatus.UNAUTHORIZED));
+    }
+
+    private boolean isVisibleToRequester(
+            String recordOwnerEmail,
+            String recordInstallationId,
+            String requestInstallationId,
+            String currentUserEmail) {
+        if (recordOwnerEmail != null && !recordOwnerEmail.isBlank()) {
+            return currentUserEmail != null && currentUserEmail.equalsIgnoreCase(recordOwnerEmail);
+        }
+        return recordInstallationId == null || requestInstallationId.equals(recordInstallationId);
+    }
+
+    private boolean isRecordOwnerOrDevice(
+            String recordOwnerEmail,
+            String recordInstallationId,
+            String requestInstallationId,
+            String currentUserEmail) {
+        if (recordOwnerEmail != null && !recordOwnerEmail.isBlank()) {
+            return currentUserEmail != null && currentUserEmail.equalsIgnoreCase(recordOwnerEmail);
+        }
+        return requestInstallationId.equals(recordInstallationId);
+    }
+
     private Optional<SplitPerson> findAuthorizedPerson(String id, String installationId, String currentUserEmail) {
         return splitPersonRepository.findById(id)
-                .filter(p -> installationId.equals(p.getInstallationId())
-                        || (currentUserEmail != null && currentUserEmail.equalsIgnoreCase(p.getOwnerEmail())));
+                .filter(p -> isRecordOwnerOrDevice(p.getOwnerEmail(), p.getInstallationId(), installationId, currentUserEmail));
     }
 
     private Optional<SplitDebt> findAuthorizedDebt(String id, String installationId, String currentUserEmail) {
         return splitDebtRepository.findById(id)
-                .filter(d -> installationId.equals(d.getInstallationId())
-                        || (currentUserEmail != null && currentUserEmail.equalsIgnoreCase(d.getOwnerEmail())));
+                .filter(d -> isRecordOwnerOrDevice(d.getOwnerEmail(), d.getInstallationId(), installationId, currentUserEmail));
     }
 
     private Optional<SplitSettlement> findAuthorizedSettlement(String id, String installationId, String currentUserEmail) {
         return splitSettlementRepository.findById(id)
-                .filter(s -> installationId.equals(s.getInstallationId())
-                        || (currentUserEmail != null && currentUserEmail.equalsIgnoreCase(s.getOwnerEmail())));
+                .filter(s -> isRecordOwnerOrDevice(s.getOwnerEmail(), s.getInstallationId(), installationId, currentUserEmail));
     }
 
     private boolean isAuthorizedForGroup(SplitGroup group, String installationId, String currentUserEmail) {
-        if (installationId.equals(group.getInstallationId())) {
-            return true;
+        if (currentUserEmail != null) {
+            if (currentUserEmail.equalsIgnoreCase(group.getOwnerEmail())) {
+                return true;
+            }
+            if (splitGroupMemberRepository.existsByGroupIdAndMemberEmailIgnoreCase(group.getId(), currentUserEmail)) {
+                return true;
+            }
         }
-        if (currentUserEmail == null) {
-            return false;
-        }
-        if (currentUserEmail.equalsIgnoreCase(group.getOwnerEmail())) {
-            return true;
-        }
-        return splitGroupMemberRepository.existsByGroupIdAndMemberEmailIgnoreCase(group.getId(), currentUserEmail);
+        return (group.getOwnerEmail() == null || group.getOwnerEmail().isBlank())
+                && installationId.equals(group.getInstallationId());
     }
 
     private boolean isAuthorizedForExpense(SplitExpense existing, String groupId, String installationId, String currentUserEmail) {
@@ -646,12 +691,12 @@ public class SplitwiseServiceImpl implements SplitwiseService {
             if (groupOpt.isPresent()) {
                 return isAuthorizedForGroup(groupOpt.get(), installationId, currentUserEmail);
             }
+            return false;
         }
         if (existing == null) {
             return true;
         }
-        return installationId.equals(existing.getInstallationId())
-                || (currentUserEmail != null && currentUserEmail.equalsIgnoreCase(existing.getOwnerEmail()));
+        return isRecordOwnerOrDevice(existing.getOwnerEmail(), existing.getInstallationId(), installationId, currentUserEmail);
     }
 
     private String normalizeEmail(String email) {
@@ -683,8 +728,11 @@ public class SplitwiseServiceImpl implements SplitwiseService {
         if (resolvedEmail == null) {
             resolvedEmail = isCurrentUser ? currentUserEmail : personEmailMap.get(canonicalId);
         }
+        Optional<SplitPerson> authorizedExisting = !isCurrentUser
+                ? findAuthorizedPerson(canonicalId, installationId, currentUserEmail)
+                : Optional.empty();
         if (resolvedEmail == null && !isCurrentUser) {
-            resolvedEmail = normalizeEmail(splitPersonRepository.findById(canonicalId).map(SplitPerson::getEmail).orElse(null));
+            resolvedEmail = normalizeEmail(authorizedExisting.map(SplitPerson::getEmail).orElse(null));
         }
 
         String resolvedName = (explicitName != null && !explicitName.isBlank()) ? explicitName.trim() : null;
@@ -696,7 +744,7 @@ public class SplitwiseServiceImpl implements SplitwiseService {
             } else {
                 resolvedName = personNameMap.get(canonicalId);
                 if (resolvedName == null) {
-                    resolvedName = splitPersonRepository.findById(canonicalId).map(SplitPerson::getName).orElse(null);
+                    resolvedName = authorizedExisting.map(SplitPerson::getName).orElse(null);
                 }
             }
         }
@@ -785,21 +833,41 @@ public class SplitwiseServiceImpl implements SplitwiseService {
     @Override
     @Transactional(readOnly = true)
     public SplitwiseSummaryResponse getSummary(String installationId) {
+        return getSummary(installationId, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SplitwiseSummaryResponse getSummary(String installationId, String authHeader) {
         if (installationId == null || installationId.trim().isEmpty()) {
             throw new ApiException("Installation ID is required", HttpStatus.BAD_REQUEST);
         }
+        User authenticatedUser = resolveAuthenticatedUser(authHeader);
+        final String currentUserEmail = authenticatedUser != null
+                ? authenticatedUser.getEmail().toLowerCase().trim()
+                : null;
 
-        long totalPeople = splitPersonRepository.countByInstallationIdAndIsDeletedFalse(installationId);
-        long totalDebts = splitDebtRepository.countByInstallationIdAndIsDeletedFalse(installationId);
-        long totalSettlements = splitSettlementRepository.countByInstallationIdAndIsDeletedFalse(installationId);
+        List<SplitPerson> allPeopleForInstall = splitPersonRepository.findByInstallationId(installationId);
+        List<SplitPerson> visiblePeople = allPeopleForInstall.stream()
+                .filter(p -> !p.isDeleted())
+                .filter(p -> isVisibleToRequester(p.getOwnerEmail(), p.getInstallationId(), installationId, currentUserEmail))
+                .toList();
 
-        List<SplitDebt> activeDebts = splitDebtRepository.findByInstallationId(installationId).stream()
+        List<SplitDebt> allDebtsForInstall = splitDebtRepository.findByInstallationId(installationId);
+        List<SplitDebt> activeDebts = allDebtsForInstall.stream()
                 .filter(d -> !d.isDeleted())
+                .filter(d -> isVisibleToRequester(d.getOwnerEmail(), d.getInstallationId(), installationId, currentUserEmail))
                 .toList();
 
-        List<SplitSettlement> activeSettlements = splitSettlementRepository.findByInstallationId(installationId).stream()
+        List<SplitSettlement> allSettlementsForInstall = splitSettlementRepository.findByInstallationId(installationId);
+        List<SplitSettlement> activeSettlements = allSettlementsForInstall.stream()
                 .filter(s -> !s.isDeleted())
+                .filter(s -> isVisibleToRequester(s.getOwnerEmail(), s.getInstallationId(), installationId, currentUserEmail))
                 .toList();
+
+        long totalPeople = visiblePeople.size();
+        long totalDebts = activeDebts.size();
+        long totalSettlements = activeSettlements.size();
 
         Map<String, BigDecimal> debtsOwedToMe = new HashMap<>();
         Map<String, BigDecimal> debtsIOwe = new HashMap<>();

@@ -214,6 +214,14 @@ export function ReminderCard({
             <MaterialIcons name="check-circle-outline" size={16} color={colors.primary} />
             <Text style={[styles.primaryBtnText, { color: colors.primary }]}>MARK DONE</Text>
           </TouchableOpacity>
+          {item.linkedType && item.linkedId ? (
+            <TouchableOpacity
+              style={[styles.linkedBtn, { borderColor: colors.outlineVariant }]}
+              onPress={() => router.navigate(item.actionUrl as never)}
+            >
+              <MaterialIcons name="open-in-new" size={16} color={colors.onSurfaceVariant} />
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             style={[styles.moreBtn, { borderColor: colors.outlineVariant }]}
             onPress={handleMore}
@@ -247,10 +255,10 @@ export function CompletedReminderCard({ reminder, onDelete }: CompletedReminderC
     <View
       style={[
         styles.card,
+        styles.completedCard,
         {
           backgroundColor: colors.surfaceContainerLow,
           borderColor: colors.outlineVariant,
-          opacity: 0.85,
         },
       ]}
     >
@@ -298,6 +306,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 14,
     marginBottom: 12,
+  },
+  completedCard: {
+    opacity: 0.85,
   },
   topRow: {
     flexDirection: 'row',
@@ -348,16 +359,20 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
+    flexShrink: 0,
   },
   pillText: {
     ...typography.labelMd,
     fontSize: 11,
+    lineHeight: 16,
     fontFamily: fontFamilies.semiBold,
     textTransform: 'capitalize',
+    flexShrink: 0,
   },
   actionRow: {
     flexDirection: 'row',
@@ -383,6 +398,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   moreBtn: {
+    padding: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  linkedBtn: {
     padding: 7,
     borderRadius: 8,
     borderWidth: 1,

@@ -220,9 +220,24 @@ function extractTransactionLocally(
   }
 
   // 2. Extract Amount
-  // Matches "350", "350.50", "rs 350", "350 rupees", "$50", "₹1,200", "₹1,50,000"
+  // First try explicitly currency-tagged or payment-verb-anchored amounts (so "HDFC 4242 paid 500" picks 500, not 4242).
   let amount = 0;
-  const amountMatch = lower.match(/(?:rs\.?|inr|₹|\$)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)\s*(?:rs\.?|inr|rupees|bucks)?/i);
+  const numPattern = '([0-9]{1,3}(?:,[0-9]{2,3})+(?:\\.[0-9]{1,2})?|[0-9]+(?:\\.[0-9]{1,2})?)';
+  const currencyPrefixRegex = new RegExp(`(?:rs\\.?|inr|₹|\\$)\\s*${numPattern}`, 'i');
+  const currencySuffixRegex = new RegExp(`${numPattern}\\s*(?:rs\\.?|inr|rupees|bucks)\\b`, 'i');
+  const strippedAccountRefs = lower.replace(
+    /\b(?:hdfc|sbi|icici|axis|kotak|idfc|indusind|yes|bob|pnb|canara|card|account|acct|a\/c|xx+|ending|last)\s*(?:no\.?\s*)?\d{4}\b/gi,
+    ' '
+  );
+
+  const amountMatch =
+    lower.match(currencyPrefixRegex) ||
+    lower.match(currencySuffixRegex) ||
+    strippedAccountRefs.match(new RegExp(numPattern, 'i')) ||
+    lower.match(
+      new RegExp(`(?:rs\\.?|inr|₹|\\$)?\\s*${numPattern}\\s*(?:rs\\.?|inr|rupees|bucks)?`, 'i')
+    );
+
   if (amountMatch && amountMatch[1]) {
     const parsed = parseFloat(amountMatch[1].replace(/,/g, ''));
     if (!isNaN(parsed) && parsed > 0) {
@@ -274,7 +289,7 @@ function extractTransactionLocally(
         merchant,
         type: type === 'income' ? 'CREDIT' : 'DEBIT',
       })
-    : (type === 'income' ? 'Salary' : 'General');
+    : (type === 'income' ? 'Salary' : 'Other');
 
   const confidence = (amount > 0 && merchant.length > 2) ? (matchedAccountId ? 0.9 : 0.85) : (amount > 0 ? 0.5 : 0.2);
 

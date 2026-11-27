@@ -13,6 +13,7 @@ import {
   UserAccountRef,
 } from '@/services/voice/voice-parser';
 import { ThemeColors, typography, useTheme } from '@/theme';
+import { pickDefaultAccountId } from '@/utils/account-metrics';
 import { getCurrencySymbol } from '@/utils/format';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
@@ -262,7 +263,7 @@ export function VoiceTransactionModal({
     }
   };
 
-  const currentAccountId = parsedResult?.accountId || accounts[0]?.id;
+  const currentAccountId = parsedResult?.accountId || pickDefaultAccountId(accounts) || undefined;
   const selectedAccount = accounts.find((a) => a.id === currentAccountId);
 
   const handleApply = () => {

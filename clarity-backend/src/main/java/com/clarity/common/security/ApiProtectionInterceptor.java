@@ -17,15 +17,18 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 
 @Component
 public class ApiProtectionInterceptor implements HandlerInterceptor {
 
     private static final long WINDOW_MS = 60_000L;
     private static final int AI_LIMIT_PER_MIN = 30;
+    private static final int AI_IP_LIMIT_PER_MIN = 45;
     private static final int AUTH_LIMIT_PER_MIN = 20;
     private static final int SPLITWISE_LIMIT_PER_MIN = 60;
     private static final int MAX_BUCKET_ENTRIES = 10_000;
+    private static final Pattern INSTALLATION_ID_PATTERN = Pattern.compile("^[A-Za-z0-9._-]{8,128}$");
 
     private final ObjectProvider<DeviceRepository> deviceRepositoryProvider;
     private final ObjectProvider<UserRepository> userRepositoryProvider;
@@ -52,8 +55,12 @@ public class ApiProtectionInterceptor implements HandlerInterceptor {
         String authHeader = trimToNull(request.getHeader("Authorization"));
 
         if (requireClientIdentity && (path.startsWith("/api/v1/ai") || path.startsWith("/api/v1/splitwise"))) {
-            boolean hasValidInstall = installationId != null && installationId.length() >= 6;
-            boolean hasValidAuth = hasValidBearerToken(authHeader);
+            if (authHeader != null && !hasValidBearerToken(authHeader)) {
+                throw new ApiException("Invalid or expired authentication token", HttpStatus.UNAUTHORIZED);
+            }
+
+            boolean hasValidInstall = isValidInstallationId(installationId);
+            boolean hasValidAuth = authHeader != null;
 
             if (!hasValidInstall && !hasValidAuth) {
                 throw new ApiException("Missing or invalid client credentials", HttpStatus.UNAUTHORIZED);
@@ -94,6 +101,14 @@ public class ApiProtectionInterceptor implements HandlerInterceptor {
             throw new ApiException("Too many requests. Please wait a moment and try again.", HttpStatus.TOO_MANY_REQUESTS);
         }
 
+        if ("ai".equals(group) && installationId != null) {
+            String ipKey = "ai:ip:" + resolveClientIp(request);
+            if (!allowRequest(ipKey, AI_IP_LIMIT_PER_MIN)) {
+                response.setHeader("Retry-After", "60");
+                throw new ApiException("Too many AI requests from this network. Please wait a moment.", HttpStatus.TOO_MANY_REQUESTS);
+            }
+        }
+
         return true;
     }
 
@@ -128,13 +143,43 @@ public class ApiProtectionInterceptor implements HandlerInterceptor {
     }
 
     private static String resolveClientIp(HttpServletRequest request) {
-        String forwarded = trimToNull(request.getHeader("X-Forwarded-For"));
-        if (forwarded != null) {
-            int commaIdx = forwarded.indexOf(',');
-            return commaIdx > 0 ? forwarded.substring(0, commaIdx).trim() : forwarded;
-        }
         String remoteAddr = request.getRemoteAddr();
+        if (isTrustedProxy(remoteAddr)) {
+            String forwarded = trimToNull(request.getHeader("X-Forwarded-For"));
+            if (forwarded != null) {
+                int commaIdx = forwarded.indexOf(',');
+                return commaIdx > 0 ? forwarded.substring(0, commaIdx).trim() : forwarded;
+            }
+        }
         return remoteAddr != null ? remoteAddr : "unknown";
+    }
+
+    private static boolean isTrustedProxy(String remoteAddr) {
+        if (remoteAddr == null || remoteAddr.isBlank()) {
+            return false;
+        }
+        if ("127.0.0.1".equals(remoteAddr) || "::1".equals(remoteAddr) || "0:0:0:0:0:0:0:1".equals(remoteAddr)) {
+            return true;
+        }
+        if (remoteAddr.startsWith("10.") || remoteAddr.startsWith("192.168.")) {
+            return true;
+        }
+        if (remoteAddr.startsWith("172.")) {
+            String[] parts = remoteAddr.split("\\.");
+            if (parts.length >= 2) {
+                try {
+                    int second = Integer.parseInt(parts[1]);
+                    return second >= 16 && second <= 31;
+                } catch (NumberFormatException ignored) {
+                    return false;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean isValidInstallationId(String installationId) {
+        return installationId != null && INSTALLATION_ID_PATTERN.matcher(installationId).matches();
     }
 
     private static String trimToNull(String value) {

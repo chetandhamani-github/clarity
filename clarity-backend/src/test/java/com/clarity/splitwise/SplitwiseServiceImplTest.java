@@ -118,9 +118,9 @@ class SplitwiseServiceImplTest {
     @Test
     @DisplayName("getSummary: accurately calculates remaining receivables, payables, and net balance")
     void getSummaryShouldAccuratelyCalculateBalances() {
-        when(splitPersonRepository.countByInstallationIdAndIsDeletedFalse(installationId)).thenReturn(2L);
-        when(splitDebtRepository.countByInstallationIdAndIsDeletedFalse(installationId)).thenReturn(2L);
-        when(splitSettlementRepository.countByInstallationIdAndIsDeletedFalse(installationId)).thenReturn(1L);
+        SplitPerson p1 = SplitPerson.builder().id("p1").installationId(installationId).name("P1").isDeleted(false).build();
+        SplitPerson p2 = SplitPerson.builder().id("p2").installationId(installationId).name("P2").isDeleted(false).build();
+        when(splitPersonRepository.findByInstallationId(installationId)).thenReturn(List.of(p1, p2));
 
         // Person 1: owes me 100, settles 40 -> remaining receivable = 60
         SplitDebt d1 = SplitDebt.builder().personId("p1").amount(new BigDecimal("100.00")).type("OWE_ME").isDeleted(false).build();
@@ -261,5 +261,85 @@ class SplitwiseServiceImplTest {
         assertThat(response.getGroups().get(0).getMembers()).hasSize(2);
         assertThat(response.getExpenses()).hasSize(1);
         assertThat(response.getExpenses().get(0).getPayerEmail()).isEqualTo("alice@gmail.com");
+    }
+
+    @Test
+    @DisplayName("sync: blocks spoofed X-Installation-Id from modifying or reading account-owned records")
+    void syncShouldProtectAccountOwnedRecordsFromSpoofedInstallationId() {
+        SplitDebt aliceOwnedDebt = SplitDebt.builder()
+                .id("d-alice")
+                .installationId("shared-install-id")
+                .personId("p-1")
+                .amount(new BigDecimal("500.00"))
+                .type("OWE_ME")
+                .description("Secret debt")
+                .ownerEmail("alice@gmail.com")
+                .isDeleted(false)
+                .build();
+
+        when(splitDebtRepository.findById("d-alice")).thenReturn(Optional.of(aliceOwnedDebt));
+        when(splitDebtRepository.findByInstallationId("shared-install-id")).thenReturn(List.of(aliceOwnedDebt));
+
+        SplitSyncRequest attackerSync = SplitSyncRequest.builder()
+                .installationId("shared-install-id")
+                .debts(List.of(SplitDebtDTO.builder().id("d-alice").isDeleted(true).build()))
+                .build();
+
+        SplitSyncResponse response = splitwiseService.sync("shared-install-id", attackerSync, null);
+
+        assertThat(aliceOwnedDebt.isDeleted()).isFalse();
+        assertThat(response.getDebts()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("sync: blocks updating an owned expense to move it into another user's group")
+    void syncShouldBlockMovingOwnedExpenseIntoUnauthorizedGroup() {
+        com.clarity.auth.entity.User alice = com.clarity.auth.entity.User.builder()
+                .email("alice@gmail.com")
+                .name("Alice")
+                .authToken("token-alice")
+                .build();
+        when(userRepository.findByAuthToken("token-alice")).thenReturn(Optional.of(alice));
+
+        SplitExpense aliceExpense = SplitExpense.builder()
+                .id("exp-alice")
+                .installationId("inst-alice")
+                .ownerEmail("alice@gmail.com")
+                .payerId("user_alice@gmail.com")
+                .groupId(null)
+                .description("Coffee")
+                .amount(new BigDecimal("100.00"))
+                .currency("INR")
+                .isDeleted(false)
+                .build();
+        SplitGroup bobGroup = SplitGroup.builder()
+                .id("g-bob")
+                .installationId("inst-bob")
+                .ownerEmail("bob@gmail.com")
+                .name("Bob Private")
+                .currency("INR")
+                .isDeleted(false)
+                .build();
+
+        when(splitExpenseRepository.findById("exp-alice")).thenReturn(Optional.of(aliceExpense));
+        when(splitGroupRepository.findById("g-bob")).thenReturn(Optional.of(bobGroup));
+        when(splitGroupMemberRepository.existsByGroupIdAndMemberEmailIgnoreCase("g-bob", "alice@gmail.com"))
+                .thenReturn(false);
+
+        SplitSyncRequest req = SplitSyncRequest.builder()
+                .installationId("inst-alice")
+                .expenses(List.of(SplitExpenseDTO.builder()
+                        .id("exp-alice")
+                        .payerId("current_user")
+                        .groupId("g-bob")
+                        .description("Injected")
+                        .amount(new BigDecimal("100.00"))
+                        .build()))
+                .build();
+
+        splitwiseService.sync("inst-alice", req, "Bearer token-alice");
+
+        assertThat(aliceExpense.getGroupId()).isNull();
+        verify(splitExpenseRepository, never()).save(argThat(exp -> "g-bob".equals(exp.getGroupId())));
     }
 }

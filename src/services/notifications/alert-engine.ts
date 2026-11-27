@@ -224,7 +224,7 @@ export async function evaluateGoalMilestoneAlerts(
 }
 
 export async function checkUpcomingBillReminders(
-  options: { force?: boolean } = {}
+  options: { force?: boolean; skipNativeSync?: boolean } = {}
 ): Promise<void> {
   if (billRemindersInFlight) {
     return billRemindersInFlight;
@@ -358,10 +358,12 @@ export async function checkUpcomingBillReminders(
         });
       }
 
-      try {
-        await BillAlertEngine.syncAllNativeBillReminders();
-      } catch {
-        // Ignore
+      if (!options.skipNativeSync) {
+        try {
+          await BillAlertEngine.syncAllNativeBillReminders();
+        } catch {
+          // Ignore
+        }
       }
 
       lastBillReminderCheckAt = Date.now();
@@ -435,6 +437,7 @@ export async function evaluateAccountBalanceAlerts(account: {
     const db = getDatabase();
 
     if (account.type === 'credit') {
+      if (!getNotificationPreferences().cardDueAlertsEnabled) return;
       let limit = account.creditLimit;
       let paymentDueDay = account.dueDay;
       if (limit === undefined || paymentDueDay === undefined) {

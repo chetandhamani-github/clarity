@@ -257,6 +257,24 @@ export default function GoalDetailsScreen() {
         title={goal?.name ?? 'Goal Details'}
         rightNode={
           <View style={styles.headerActions}>
+            {goal && goal.currentAmount < goal.targetAmount && (
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={() =>
+                  router.navigate({
+                    pathname: '/(app)/add-reminder',
+                    params: {
+                      title: `Save for ${goal.name}`,
+                      category: 'investment',
+                      linkedType: 'goal',
+                      linkedId: goal.id,
+                    },
+                  })
+                }
+              >
+                <MaterialIcons name="add-alarm" size={22} color={colors.primary} />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={styles.iconButton}
               onPress={handleOpenEditModal}

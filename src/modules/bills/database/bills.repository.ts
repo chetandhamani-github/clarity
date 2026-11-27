@@ -42,6 +42,7 @@ interface BillRow {
   notes: string | null;
   is_recurring: number;
   frequency: string | null;
+  anchor_day?: number | null;
   last_paid_date: string | null;
   paid_transaction_id: string | null;
   payment_url: string | null;
@@ -83,6 +84,7 @@ function mapBillRow(row: BillRow): Bill {
     notes: row.notes ?? undefined,
     isRecurring: Boolean(row.is_recurring),
     frequency: (row.frequency as BillFrequency) || 'one_time',
+    anchorDay: row.anchor_day ?? undefined,
     lastPaidDate: row.last_paid_date ?? undefined,
     paidTransactionId: row.paid_transaction_id ?? undefined,
     paymentUrl: row.payment_url ?? undefined,
@@ -115,6 +117,7 @@ function mapSubscriptionRow(row: SubscriptionRow): Subscription {
 
 export class BillsRepository {
   private static schemaInitialized = false;
+  private static markPaidInFlight = new Map<string, Promise<{ updatedBill: Bill; nextBill?: Bill }>>();
 
   public static resetSchemaCache(): void {
     this.schemaInitialized = false;
@@ -141,6 +144,7 @@ export class BillsRepository {
         notes TEXT DEFAULT '',
         is_recurring INTEGER NOT NULL DEFAULT 0,
         frequency TEXT CHECK(frequency IN ('one_time', 'weekly', 'monthly', 'quarterly', 'yearly')) DEFAULT 'one_time',
+        anchor_day INTEGER,
         last_paid_date TEXT,
         paid_transaction_id TEXT,
         payment_url TEXT,
@@ -176,6 +180,11 @@ export class BillsRepository {
       CREATE INDEX IF NOT EXISTS idx_subscriptions_renewal ON subscriptions(next_renewal_date ASC);
       CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
     `);
+      try {
+        await db.execAsync(`ALTER TABLE bills ADD COLUMN anchor_day INTEGER;`);
+      } catch {
+        // Column already exists
+      }
       this.schemaInitialized = true;
     }
   }
@@ -270,14 +279,17 @@ export class BillsRepository {
     const frequency = dto.frequency || 'one_time';
     const reminderDays = dto.reminderDays ?? 3;
     const provider = dto.provider || dto.title;
+    const parsedDay = parseInt(dto.dueDate.split('-')[2] || '', 10);
+    const anchorDay =
+      dto.anchorDay ?? (!isNaN(parsedDay) && parsedDay >= 1 && parsedDay <= 31 ? parsedDay : undefined);
 
     await db.runAsync(
       `INSERT INTO bills (
         id, title, provider, category, amount, min_amount, due_date,
-        reminder_days, status, notes, is_recurring, frequency,
+        reminder_days, status, notes, is_recurring, frequency, anchor_day,
         last_paid_date, paid_transaction_id,
         payment_url, account_reference, source, sms_id, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         dto.title.trim(),
@@ -291,6 +303,7 @@ export class BillsRepository {
         dto.notes?.trim() || '',
         isRecurring,
         frequency,
+        anchorDay ?? null,
         dto.paidDate || null,
         dto.paidTransactionId || null,
         dto.paymentUrl?.trim() || null,
@@ -317,6 +330,7 @@ export class BillsRepository {
       notes: dto.notes?.trim() || '',
       isRecurring: Boolean(isRecurring),
       frequency,
+      anchorDay,
       lastPaidDate: dto.paidDate,
       paidTransactionId: dto.paidTransactionId,
       paymentUrl: dto.paymentUrl?.trim() || undefined,
@@ -378,6 +392,16 @@ export class BillsRepository {
       sets.push('frequency = ?');
       params.push(updates.frequency);
     }
+    if (updates.anchorDay !== undefined) {
+      sets.push('anchor_day = ?');
+      params.push(updates.anchorDay ?? null);
+    } else if (updates.dueDate !== undefined) {
+      const parsedUpdatedDay = parseInt(updates.dueDate.split('-')[2] || '', 10);
+      if (!isNaN(parsedUpdatedDay) && parsedUpdatedDay >= 1 && parsedUpdatedDay <= 31) {
+        sets.push('anchor_day = ?');
+        params.push(parsedUpdatedDay);
+      }
+    }
     if (updates.lastPaidDate !== undefined) {
       sets.push('last_paid_date = ?');
       params.push(updates.lastPaidDate);
@@ -428,63 +452,114 @@ export class BillsRepository {
     paidDate?: string,
     paidTransactionId?: string
   ): Promise<{ updatedBill: Bill; nextBill?: Bill }> {
+    const existingFlight = this.markPaidInFlight.get(id);
+    if (existingFlight) {
+      return existingFlight;
+    }
+
+    const work = this.executeMarkBillAsPaid(id, paidDate, paidTransactionId).finally(() => {
+      this.markPaidInFlight.delete(id);
+    });
+    this.markPaidInFlight.set(id, work);
+    return work;
+  }
+
+  private static async executeMarkBillAsPaid(
+    id: string,
+    paidDate?: string,
+    paidTransactionId?: string
+  ): Promise<{ updatedBill: Bill; nextBill?: Bill }> {
     await this.ensureSchema();
     const db = getDatabase();
-    const bill = await this.getBillById(id);
-    if (!bill) {
-      throw new Error(`Bill not found: ${id}`);
-    }
-
-    const effectivePaidDate = paidDate || getLocalTodayYmd();
-
-    await db.runAsync(
-      `UPDATE bills 
-       SET status = 'paid', last_paid_date = ?, paid_transaction_id = ?, updated_at = datetime('now') 
-       WHERE id = ?`,
-      [effectivePaidDate, paidTransactionId || null, id]
-    );
-
-    const updatedBill: Bill = {
-      ...bill,
-      status: 'paid',
-      lastPaidDate: effectivePaidDate,
-      paidTransactionId: paidTransactionId || bill.paidTransactionId,
-      updatedAt: new Date().toISOString(),
-    };
-
+    let updatedBill!: Bill;
     let nextBill: Bill | undefined;
+    let alreadyPaid = false;
 
-    // If recurring, advance past stale missed cycles while preserving anchor billing day
-    if (bill.isRecurring && bill.frequency && bill.frequency !== 'one_time') {
-      const anchorDay = parseInt(bill.dueDate.split('-')[2] || '', 10) || undefined;
-      let nextDueDate = this.calculateNextOccurrence(bill.dueDate, bill.frequency, anchorDay);
-      let cycleGuard = 0;
-      while (nextDueDate <= effectivePaidDate && cycleGuard < 120) {
-        const stepped = this.calculateNextOccurrence(nextDueDate, bill.frequency, anchorDay);
-        if (stepped <= nextDueDate) break;
-        nextDueDate = stepped;
-        cycleGuard++;
+    const executeMarkPaid = async () => {
+      const bill = await this.getBillById(id);
+      if (!bill) {
+        throw new Error(`Bill not found: ${id}`);
+      }
+      if (bill.status === 'paid') {
+        updatedBill = bill;
+        alreadyPaid = true;
+        return;
       }
 
-      nextBill = await this.insertBill({
-        title: bill.title,
-        provider: bill.provider,
-        category: bill.category,
-        amount: bill.amount,
-        minAmount: bill.minAmount,
-        dueDate: nextDueDate,
-        reminderDays: bill.reminderDays,
-        isRecurring: true,
-        frequency: bill.frequency,
-        paymentUrl: bill.paymentUrl,
-        accountReference: bill.accountReference,
-        notes: bill.notes,
-        source: bill.source,
-        status: 'upcoming',
-      });
+      const effectivePaidDate = paidDate || getLocalTodayYmd();
+
+      const updateResult = (await db.runAsync(
+        `UPDATE bills 
+         SET status = 'paid', last_paid_date = ?, paid_transaction_id = ?, updated_at = datetime('now') 
+         WHERE id = ? AND status != 'paid'`,
+        [effectivePaidDate, paidTransactionId || null, id]
+      )) as { changes?: number } | undefined;
+
+      if (updateResult && typeof updateResult.changes === 'number' && updateResult.changes === 0) {
+        updatedBill = (await this.getBillById(id)) || bill;
+        alreadyPaid = true;
+        return;
+      }
+
+      updatedBill = {
+        ...bill,
+        status: 'paid',
+        lastPaidDate: effectivePaidDate,
+        paidTransactionId: paidTransactionId || bill.paidTransactionId,
+        updatedAt: new Date().toISOString(),
+      };
+
+      // If recurring, advance past stale missed cycles while preserving original anchor billing day
+      if (bill.isRecurring && bill.frequency && bill.frequency !== 'one_time') {
+        const fallbackDay = parseInt(bill.dueDate.split('-')[2] || '', 10) || undefined;
+        const anchorDay = bill.anchorDay ?? fallbackDay;
+        let nextDueDate = this.calculateNextOccurrence(bill.dueDate, bill.frequency, anchorDay);
+        let cycleGuard = 0;
+        while (nextDueDate <= effectivePaidDate && cycleGuard < 120) {
+          const stepped = this.calculateNextOccurrence(nextDueDate, bill.frequency, anchorDay);
+          if (stepped <= nextDueDate) break;
+          nextDueDate = stepped;
+          cycleGuard++;
+        }
+
+        nextBill = await this.insertBill({
+          title: bill.title,
+          provider: bill.provider,
+          category: bill.category,
+          amount: bill.amount,
+          minAmount: bill.minAmount,
+          dueDate: nextDueDate,
+          reminderDays: bill.reminderDays,
+          isRecurring: true,
+          frequency: bill.frequency,
+          anchorDay,
+          paymentUrl: bill.paymentUrl,
+          accountReference: bill.accountReference,
+          notes: bill.notes,
+          source: bill.source,
+          status: 'upcoming',
+        });
+      }
+    };
+
+    if (typeof db.withTransactionAsync === 'function') {
+      await db.withTransactionAsync(executeMarkPaid);
+    } else if (typeof db.execAsync === 'function') {
+      await db.execAsync('BEGIN TRANSACTION');
+      try {
+        await executeMarkPaid();
+        await db.execAsync('COMMIT');
+      } catch (error) {
+        await db.execAsync('ROLLBACK');
+        throw error;
+      }
+    } else {
+      await executeMarkPaid();
     }
 
-    DeviceEventEmitter.emit('billsUpdated');
+    if (!alreadyPaid) {
+      DeviceEventEmitter.emit('billsUpdated');
+    }
     return { updatedBill, nextBill };
   }
 

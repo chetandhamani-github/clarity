@@ -154,10 +154,13 @@ export function AddExpenseScreen() {
     }
 
     if (splitType === SplitType.SHARES) {
-      const splits = participantIds.map((id) => ({
-        personId: id,
-        shares: parseFloat(shareInputs[id] || '1') || 1,
-      }));
+      const splits = participantIds.map((id) => {
+        const parsed = parseFloat(shareInputs[id] ?? '');
+        return {
+          personId: id,
+          shares: Number.isFinite(parsed) && parsed >= 0 ? parsed : 1,
+        };
+      });
       return BalanceCalculator.calculateSharesSplits({
         totalAmount: parsedTotalAmount,
         payerId,

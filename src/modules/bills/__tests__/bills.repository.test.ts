@@ -167,4 +167,79 @@ describe('BillsRepository', () => {
     expect(summary.monthlySubscriptionSpend).toBe(649);
     expect(summary.activeSubscriptionCount).toBe(1);
   });
+
+  it('preserves anchorDay 31 across short months and prevents double markBillAsPaid', async () => {
+    // Jan 31 bill paid -> Feb 28 (anchorDay kept at 31); then Feb 28 bill with anchorDay 31 -> Mar 31
+    mockDb.getFirstAsync.mockResolvedValueOnce({
+      id: 'bill-feb',
+      title: 'Gym',
+      provider: 'Cult',
+      category: 'subscription',
+      amount: 1500,
+      due_date: '2026-02-28',
+      reminder_days: 3,
+      status: 'upcoming',
+      is_recurring: 1,
+      frequency: 'monthly',
+      anchor_day: 31,
+      source: 'manual',
+      created_at: '2026-01-31T00:00:00Z',
+      updated_at: '2026-01-31T00:00:00Z',
+    });
+
+    const res = await BillsRepository.markBillAsPaid('bill-feb', '2026-02-28');
+    expect(res.nextBill?.dueDate).toBe('2026-03-31');
+    expect(res.nextBill?.anchorDay).toBe(31);
+
+    // Calling markBillAsPaid again on an already paid bill is an idempotent no-op
+    mockDb.getFirstAsync.mockResolvedValueOnce({
+      id: 'bill-feb',
+      title: 'Gym',
+      provider: 'Cult',
+      category: 'subscription',
+      amount: 1500,
+      due_date: '2026-02-28',
+      reminder_days: 3,
+      status: 'paid',
+      is_recurring: 1,
+      frequency: 'monthly',
+      anchor_day: 31,
+      source: 'manual',
+      created_at: '2026-01-31T00:00:00Z',
+      updated_at: '2026-01-31T00:00:00Z',
+    });
+
+    const dup = await BillsRepository.markBillAsPaid('bill-feb', '2026-02-28');
+    expect(dup.nextBill).toBeUndefined();
+  });
+
+  it('deduplicates concurrent markBillAsPaid calls so only one recurring cycle is created', async () => {
+    mockDb.getFirstAsync.mockResolvedValue({
+      id: 'bill-concurrent',
+      title: 'Internet',
+      provider: 'Jio',
+      category: 'internet',
+      amount: 999,
+      due_date: '2026-10-15',
+      reminder_days: 3,
+      status: 'upcoming',
+      is_recurring: 1,
+      frequency: 'monthly',
+      anchor_day: 15,
+      source: 'manual',
+      created_at: '2026-10-01T00:00:00Z',
+      updated_at: '2026-10-01T00:00:00Z',
+    });
+
+    const [first, second] = await Promise.all([
+      BillsRepository.markBillAsPaid('bill-concurrent', '2026-10-15'),
+      BillsRepository.markBillAsPaid('bill-concurrent', '2026-10-15'),
+    ]);
+
+    expect(first).toBe(second);
+    const insertCalls = (mockDb.runAsync as jest.Mock).mock.calls.filter(([sql]) =>
+      String(sql).includes('INSERT INTO bills')
+    );
+    expect(insertCalls).toHaveLength(1);
+  });
 });

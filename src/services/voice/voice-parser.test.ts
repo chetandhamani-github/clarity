@@ -77,6 +77,9 @@ describe('voice-parser', () => {
     const res = await parseVoiceTranscript('Paid 900 for groceries with card 4455', cardAccounts);
     expect(res.amount).toBe(900);
     expect(res.accountId).toBe('card-2');
+
+    const cardFirst = await parseVoiceTranscript('HDFC 4242 paid 500 for dinner', cardAccounts);
+    expect(cardFirst.amount).toBe(500);
   });
 
   it('handles empty input gracefully', async () => {

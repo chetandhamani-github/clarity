@@ -35,7 +35,7 @@ Clarity currently implements financial alerts and reminders across several disco
      - `sub-reminder-<id>`: Active subscriptions
      - `cc-reminder-<id>`: Credit card due dates
      - `goal-reminder-<id>`: Goal target deadlines
-     - `daily-pulse`: Daily Financial Pulse recurring trigger
+     - `daily-pulse-scheduled`: Daily Financial Pulse recurring trigger
 
 ---
 
@@ -127,7 +127,7 @@ src/modules/reminders/
 ├── database/
 │   └── reminders.repository.ts
 ├── services/
-│   ├── ReminderService.ts         # CRUD + recurrence advancement + unified projection
+│   ├── RemindersService.ts        # CRUD + recurrence advancement + unified projection
 │   └── ReminderScheduler.ts       # OS notification trigger sync, prefix cleanup, snooze
 ├── hooks/
 │   └── useReminders.ts            # TanStack Query queries/mutations + DeviceEventEmitter sync
@@ -135,6 +135,7 @@ src/modules/reminders/
 │   └── reminders.store.ts         # Client UI tab / category / search state
 ├── components/
 │   ├── ReminderCard.tsx
+│   ├── TimePickerModal.tsx
 │   └── UpcomingRemindersWidget.tsx
 ├── screens/
 │   ├── RemindersScreen.tsx
@@ -147,12 +148,12 @@ src/modules/reminders/
 
 ### 5.1 Unified Read-Through Timeline
 
-`ReminderService.getUnifiedFeed()` merges:
+`RemindersService.getUnifiedFeed()` merges:
 1. **Custom Reminders** (`reminders` table, `status IN ('pending', 'snoozed')`, plus completed history tab).
 2. **Upcoming & Overdue Bills** (`BillsRepository.getUpcomingBills(45)`).
 3. **Active Subscriptions** (`BillsRepository.getAllSubscriptions()`, status `'active'`).
 4. **Credit Card Due Dates** (`accounts` where `type = 'credit' AND due_day IS NOT NULL AND balance < 0`).
-5. **Goal Target Deadlines** (`goals` where `current_amount < target_amount` and `target_date` within 30 days).
+5. **Goal Target Deadlines** (`goals` where `current_amount < target_amount` and `target_date` within 45 days).
 
 Users can view everything in **All Upcoming** or filter specifically to **Custom**, **Bills & Cards**, **Snoozed**, or **Completed**, and jump straight to the underlying detail screen (`/(app)/bill-details`, `/(app)/account-details`, `/(app)/goal-details`, `/(app)/splitwise-person-details`) or mark custom reminders done in one tap.
 
@@ -196,8 +197,8 @@ Users can view everything in **All Upcoming** or filter specifically to **Custom
 - [x] Build `ReminderCard.tsx`, `TimePickerModal.tsx`, `UpcomingRemindersWidget.tsx`, `RemindersScreen.tsx`, and `AddReminderScreen.tsx`.
 - [x] Register routes `src/app/(app)/reminders.tsx`, `src/app/(app)/add-reminder.tsx`, and stack entries in `src/app/(app)/_layout.tsx`.
 - [x] Add **Reminders & Alerts** section to `src/app/(app)/settings.tsx` (default time picker, Daily Pulse toggle & time, category toggles, quick link to Reminders).
-- [x] Add entry points from `notifications.tsx` and Home dashboard.
+- [x] Add entry points from `notifications.tsx`, Home dashboard, `plan.tsx`, Splitwise `PersonDetailsScreen`, and `goal-details.tsx`.
 
 ### Phase 4: Verification
-- [ ] Run `npm run typecheck`, `npm run lint`, and targeted/full Jest tests (`npm test`).
-- [ ] Confirm all checklist items and tests pass without introducing regressions.
+- [x] Run `npm run typecheck`, `npm run lint` on touched files, and Jest tests (`npm test`).
+- [x] Confirm all checklist items and new/related reminder, bill, notification, backup, and app-reset suites pass without regressions (note: pre-existing unrelated failure in `src/services/export/pdf-statement-parser.test.ts`).

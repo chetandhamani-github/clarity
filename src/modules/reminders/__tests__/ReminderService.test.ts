@@ -181,5 +181,34 @@ describe('RemindersService', () => {
     ]);
     expect(feed.unifiedUpcoming[0].isOverdue).toBe(true);
     expect(feed.unifiedUpcoming[1].remindTime).toBe('09:30');
+    expect(feed.unifiedUpcoming[1].actionUrl).toBe('/(app)/account-details?accountId=cc1');
+  });
+
+  it('resolves actionUrl for custom reminders linked to splitwise people and goals', async () => {
+    (RemindersRepository.getAllReminders as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 'r-iou',
+        title: 'Collect dinner split',
+        notes: '',
+        category: 'splitwise',
+        amount: 600,
+        remindAtDate: '2026-11-29',
+        remindAtTime: '18:00',
+        repeatRule: 'none',
+        advanceDays: 0,
+        status: 'pending',
+        linkedType: 'splitwise_person',
+        linkedId: 'person-7',
+        createdAt: '2026-11-27T00:00:00Z',
+        updatedAt: '2026-11-27T00:00:00Z',
+      },
+    ]);
+
+    const feed = await RemindersService.getUnifiedFeed(45, '09:00');
+    expect(feed.unifiedUpcoming[0].actionUrl).toBe(
+      '/(app)/splitwise-person-details?personId=person-7'
+    );
+    expect(feed.unifiedUpcoming[0].linkedType).toBe('splitwise_person');
   });
 });
+

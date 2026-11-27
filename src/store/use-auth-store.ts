@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { loginWithGoogleApi, fetchCurrentUserApi, logoutApi } from '@/services/api/auth.api';
-import { apiClient } from '@/services/api/client';
+import { ApiError, apiClient } from '@/services/api/client';
 import { UserDTO } from '@/services/api/types';
 
 const SECURE_AUTH_TOKEN_KEY = 'clarity_auth_session_token';
@@ -60,8 +60,16 @@ export const useAuthStore = create<AuthState>((set) => ({
             set({ user: freshUser });
             SecureStore.setItemAsync(SECURE_AUTH_USER_KEY, JSON.stringify(freshUser)).catch(() => {});
           })
-          .catch(() => {
-            // Keep existing cached session for offline resilience
+          .catch(async (err: unknown) => {
+            if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+              await Promise.all([
+                SecureStore.deleteItemAsync(SECURE_AUTH_TOKEN_KEY),
+                SecureStore.deleteItemAsync(SECURE_AUTH_USER_KEY),
+              ]).catch(() => {});
+              apiClient.setAuthToken(null);
+              set({ user: null, token: null, isAuthenticated: false, error: null });
+            }
+            // Otherwise keep cached session for offline resilience
           });
       }
     } catch {

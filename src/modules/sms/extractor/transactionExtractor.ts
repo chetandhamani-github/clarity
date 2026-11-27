@@ -10,13 +10,13 @@ export class TransactionExtractor {
     /(?:(?:₹|\$|€|£|(?:rs|inr|usd|eur|gbp)\.?|amt\.?|amount)\s*[:.-]?\s*([\d][\d,]*(?:\.\d{1,2})?)|([\d][\d,]*(?:\.\d{1,2})?)\s*(?:\/-\s*)?(?:₹|\$|€|£|(?:rs|inr|usd|eur|gbp)\.?|\/-))/gi;
 
   private static readonly TRANSACTION_CONTEXT_REGEX =
-    /\b(?:debited?|credited?|spent|paid|withdraw(?:n|al)?|transferred?|deducted|sent|purchas(?:e|ed)?|charged|used|using|use|swiped|received|deposited|refunded?|refund|cashback|added|reversed?|disbursed|transaction|txn)\b/i;
+    /\b(?:debited?|credited?|spent|paid|withdraw(?:n|al)?|transferred?|deducted|sent|purchas(?:e|ed)?|charged|used|using|use|utili[sz]ed|swiped|received|deposited|refunded?|refund|cashback|added|reversed?|disbursed|transaction|txn)\b/i;
 
   private static readonly AMOUNT_BEFORE_TRANSACTION_REGEX =
-    /(?:\b(?:debited?|credited?|spent|paid|withdraw(?:n|al)?|transferred?|deducted|sent|purchas(?:e|ed)?|charged|used|using|use|swiped|received|deposited|refunded?|refund|cashback|added|reversed?|disbursed|transaction|txn|payment|done)\b)[\s\S]{0,100}?\s*(?:by|of|for|with|at|to|in|worth|value)?\s*$/i;
+    /(?:\b(?:debited?|credited?|spent|paid|withdraw(?:n|al)?|transferred?|deducted|sent|purchas(?:e|ed)?|charged|used|using|use|utili[sz]ed|swiped|received|deposited|refunded?|refund|cashback|added|reversed?|disbursed|transaction|txn|payment|done)\b)[\s\S]{0,100}?\s*(?:by|of|for|with|at|to|in|worth|value)?\s*$/i;
 
   private static readonly AMOUNT_AFTER_TRANSACTION_REGEX =
-    /^\s*(?:(?:has\s+been|was|is)\s+)?(?:debited?|credited?|spent|paid|withdraw(?:n|al)?|transferred?|deducted|sent|purchas(?:e|ed)?|charged|used|swiped|received|deposited|refunded?|cashback|added|reversed?|disbursed|done)\b|^\s*(?:on|from|towards|for)\s+[\s\S]{0,60}?\b(?:debited?|credited?|spent|paid|charged|used|swiped|deducted|done)\b/i;
+    /^\s*(?:(?:has\s+been|was|is)\s+)?(?:debited?|credited?|spent|paid|withdraw(?:n|al)?|transferred?|deducted|sent|purchas(?:e|ed)?|charged|used|utili[sz]ed|swiped|received|deposited|refunded?|cashback|added|reversed?|disbursed|done)\b|^\s*(?:on|from|towards|for)\s+[\s\S]{0,60}?\b(?:debited?|credited?|spent|paid|charged|used|utili[sz]ed|swiped|deducted|done)\b/i;
 
   private static readonly BALANCE_BEFORE_AMOUNT_REGEX =
     /(?:(?:total\s+)?(?:avl\.?|avail(?:able)?|current|clear|closing|account|acct|remaining)?\s*(?:bal(?:ance)?(?:\s*\/\s*(?:lmt|limit))?|lmt|limit|credit\s*limit|bal\s*limit|bal\s*lmt)|limit\s*(?:available|avl)|card\s*limit\s*available)\s*(?:is|was|:|-)?\s*(?:rs\.?|inr|usd|eur|gbp|₹|\$|€|£)?\s*$/i;
@@ -53,7 +53,7 @@ export class TransactionExtractor {
   ];
 
   private static readonly MERCHANT_PATTERNS = [
-    /\b(?:credited|received|deposited|(?:paid|sent|transferred)\s+you)\b[\s\S]{0,80}?\b(?:from|by)\s+([A-Za-z0-9@*.\-'&_\s]{2,80}?)(?:\s+(?:on|via|using|completed|credited|debited|upi\s+ref|ref|rrn|utr|avl\.?\s*bal|available\s+bal(?:ance)?|bal(?:ance)?)|[.;\n|]|$)/i,
+    /\b(?:credited|received|deposited|refund(?:ed)?|(?:paid|sent|transferred)\s+you)\b[\s\S]{0,80}?\b(?:from|by)\s+([A-Za-z0-9@*.\-'&_\s]{2,80}?)(?:\s+(?:on|via|using|completed|credited|debited|upi\s+ref|ref|rrn|utr|avl\.?\s*bal|available\s+bal(?:ance)?|bal(?:ance)?)|[.;\n|]|$)/i,
     /(?:at|to|towards|vpa|paid to|transferred to|trf to|info\/)\s+([A-Za-z0-9@*.\-'&_\s]{2,40}?)(?:\s+on\b|\s+for\b|\s+from\b|\s+dated\b|\s+completed\b|\s+credited\b|\s+debited\b|\s+upi\s+ref|\s+ref|\s+avl|\s+not you|\s+via|\s+using|[.;\n|]|$)/i,
     /(?:info[:\s]+)([A-Za-z0-9@*.\-'&_\s]{2,40}?)(?:\s+on\b|\s+for\b|\s+from\b|\s+upi\s+ref|\s+ref|\s+avl|[.;\n|]|$)/i,
   ];
@@ -166,7 +166,7 @@ export class TransactionExtractor {
     }
 
     const directionalAmount = body.match(
-      /\b(?:debited?|credited?|spent|paid|withdraw(?:n|al)?|transferred?|deducted|sent|purchas(?:e|ed)|charged|used|received|deposited|refunded?|cashback|added|reversed?|disbursed)\b(?:\s+\w+){0,3}?\s*(?:by|of|for|with)?\s*(?:rs\.?|inr|₹)?\s*([\d][\d,]*(?:\.\d{1,2})?)/i
+      /\b(?:debited?|credited?|spent|paid|withdraw(?:n|al)?|transferred?|deducted|sent|purchas(?:e|ed)|charged|used|utili[sz]ed|received|deposited|refunded?|cashback|added|reversed?|disbursed)\b(?:\s+\w+){0,3}?\s*(?:by|of|for|with)?\s*(?:rs\.?|inr|₹)?\s*([\d][\d,]*(?:\.\d{1,2})?)/i
     );
     if (directionalAmount?.[1]) {
       const amount = Number.parseFloat(directionalAmount[1].replace(/,/g, ''));
@@ -197,9 +197,9 @@ export class TransactionExtractor {
     const isTransferToOwnAccount =
       /\b(?:transferred?|remitted)\s+to\s+your\s+(?:a\/?c|account)\b/i.test(body);
     const debitPattern =
-      /\b(?:debited?|auto[- ]debit|spent|paid|withdraw(?:n|al)?|deducted|sent|purchas(?:e|ed)|charged|used|using|use|swiped|dr)\b/i;
+      /\b(?:debited?|auto[- ]debit|spent|paid|withdraw(?:n|al)?|deducted|sent|purchas(?:e|ed)|charged|used|using|use|utili[sz]ed|swiped|dr)\b/i;
     const creditPattern =
-      /\b(?:credited?|received|deposited|refunded?|cashback|added|reversed?|disbursed|cr)\b/i;
+      /\b(?:credited?|received|deposited|refund(?:ed|s)?|cashback|added|reversed?|disbursed|cr)\b/i;
 
     const debitIndex = isTransferToOwnAccount ? -1 : body.search(debitPattern);
     const creditIndex = isTransferToOwnAccount

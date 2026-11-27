@@ -3,19 +3,29 @@ import { runMigrations } from './migrations';
 import { seedDatabase } from './seed';
 
 let db: SQLite.SQLiteDatabase | null = null;
+let initPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
 export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
   if (db) return db;
+  if (initPromise) return initPromise;
 
-  db = await SQLite.openDatabaseAsync('clarity.db');
-  await db.execAsync('PRAGMA journal_mode = WAL;');
-  await db.execAsync('PRAGMA foreign_keys = ON;');
-  await db.execAsync('PRAGMA busy_timeout = 5000;');
+  initPromise = (async () => {
+    const opened = await SQLite.openDatabaseAsync('clarity.db');
+    await opened.execAsync('PRAGMA journal_mode = WAL;');
+    await opened.execAsync('PRAGMA foreign_keys = ON;');
+    await opened.execAsync('PRAGMA busy_timeout = 5000;');
 
-  await runMigrations(db);
-  await seedDatabase(db);
+    await runMigrations(opened);
+    await seedDatabase(opened);
 
-  return db;
+    db = opened;
+    return opened;
+  })().catch((err) => {
+    initPromise = null;
+    throw err;
+  });
+
+  return initPromise;
 }
 
 export function getDatabase(): SQLite.SQLiteDatabase {

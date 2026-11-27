@@ -227,6 +227,8 @@ const EXECUTED_PAYMENT_OR_NOISE_PATTERNS: RegExp[] = [
   /\b(?:offer|discount|cashback|win\s+up\s+to|reward\s+points?|voucher|coupon|pre-approved|apply\s+now|refer\s+and\s+earn|scratch\s+card|spin\s+and\s+win|save\s+up\s+to)\b/i,
   /\b(?:thank\s+you\s+for\s+(?:your\s+)?payment|thanks\s+for\s+paying|payment\s+(?:was\s+)?(?:received|successful)|paid\s+successfully|successfully\s+paid|bill\s+paid)\b/i,
   /\b(?:you\s+paid|paid\s+(?:rs\.?|inr|₹)|sent\s+(?:rs\.?|inr|₹))\b/i,
+  /\b(?:rs\.?|inr|₹)\s*\d[\d,]*(?:\.\d{1,2})?\s+(?:has\s+been\s+|was\s+|is\s+)?paid\b/i,
+  /\bpaid\s+(?:on\b|via\b|using\b|through\b|at\b|to\b|successfully)/i,
   /\b(?:credited\s+to\s+(?:your\s+)?a\/c|deposited\s+in)\b/i,
   /\b(?:has\s+requested|requested\s+(?:money|rs\.?|inr|₹)|collect\s+request)\b/i,
 ];
@@ -237,7 +239,8 @@ const EXECUTED_DEBIT_REGEX =
 const STRONG_BILL_TRIGGER_PATTERNS: RegExp[] = [
   /\btotal\s+(?:amt|amount)?\s*due\b/i,
   /\bmin(?:imum)?\s+(?:amt|amount)?\s*due\b/i,
-  /\b(?:statement|bill)\s+(?:is\s+)?(?:generated|ready|issued)\b/i,
+  /\b(?:statement|bill)(?:\s+of\s+[^\n.]{1,24})?\s+(?:is\s+|has\s+been\s+)?(?:generated|ready|issued)\b/i,
+  /\blast\s+date(?:\s+(?:of\s+payment|to\s+pay))?\b/i,
   /\bamount\s+(?:due|payable)\b|\bamt\s+payable\b|\bnet\s+payable\b/i,
   /\b(?:is|are)\s+due\s+(?:on|by|today|tomorrow|in\s+\d+)\b/i,
   /\bdue\s+(?:date|on|by|today|tomorrow|in\s+\d+)\b/i,

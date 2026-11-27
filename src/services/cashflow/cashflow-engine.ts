@@ -134,16 +134,47 @@ export async function calculateSafeToSpend(
   maxProjDateObj.setDate(today.getDate() + 29);
   const maxProjectionDate = formatDateString(maxProjDateObj);
 
-  // Check if salary was already received in the last 4 days (prevents premature cycle push on payday)
+  // Check if regular salary/major paycheck was received in the last 4 local days (prevents cashback/refund/settlement noise)
   let hasReceivedSalaryRecently = false;
   try {
-    const recentSalary = await db.getFirstAsync<{ id: string }>(
-      `SELECT id FROM transactions 
-       WHERE type = 'income' 
-         AND date >= date('now', '-4 days')
-       LIMIT 1`
-    );
-    hasReceivedSalaryRecently = Boolean(recentSalary);
+    const lookbackDate = new Date(today);
+    lookbackDate.setDate(today.getDate() - 4);
+    const lookbackYmd = formatDateString(lookbackDate);
+
+    const recentIncomes =
+      (await db.getAllAsync<{
+        id: string;
+        amount: number;
+        category?: string | null;
+        merchant?: string | null;
+        note?: string | null;
+        date?: string | null;
+      }>(
+        `SELECT id, amount, category, merchant, note, date FROM transactions 
+         WHERE type = 'income' 
+           AND SUBSTR(date, 1, 10) >= ?
+         ORDER BY date DESC
+         LIMIT 20`,
+        [lookbackYmd]
+      )) ?? [];
+
+    const budgetPlan = await getCurrentBudgetPlan();
+    const minSalaryThreshold =
+      budgetPlan && budgetPlan.monthlyIncome > 0 ? budgetPlan.monthlyIncome * 0.35 : 5000;
+
+    hasReceivedSalaryRecently = recentIncomes.some((tx) => {
+      const cat = (tx.category || '').toLowerCase();
+      const text = `${tx.merchant || ''} ${tx.note || ''}`.toLowerCase();
+      const isNonSalaryNoise =
+        /\b(?:refund|cashback|reward|revers(?:ed|al)|splitwise|settlement|interest|dividend)\b/i.test(
+          `${cat} ${text}`
+        );
+      if (isNonSalaryNoise) return false;
+      if (cat === 'salary' || /\b(?:salary|payroll|stipend|wages)\b/i.test(text)) {
+        return true;
+      }
+      return (tx.amount || 0) >= minSalaryThreshold;
+    });
   } catch {
     // fallback
   }

@@ -293,6 +293,24 @@ describe('BillService', () => {
         expect(matched).not.toBeNull();
         expect(matched?.id).toBe('bill-hdfc-unpaid');
       });
+
+      it('marks unpaid bills overdue > 30 days as overdue rather than silently paid', async () => {
+        mockDb.getAllAsync.mockResolvedValue([]);
+        mockDb.getFirstAsync.mockResolvedValue(null);
+
+        const res = await BillService.mergeOrInsertExternalBill({
+          title: 'Old Water Bill',
+          provider: 'BWSSB',
+          category: 'water',
+          amount: 950,
+          dueDate: '2025-01-10',
+          source: 'sms',
+          smsId: 'sms-old-overdue',
+        });
+
+        expect(res.isNew).toBe(true);
+        expect(res.bill.status).toBe('overdue');
+      });
     });
   });
 });

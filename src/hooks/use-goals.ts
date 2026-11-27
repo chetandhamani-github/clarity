@@ -63,6 +63,10 @@ export function useDeleteGoal() {
     mutationFn: (id: string) => goalDao.deleteGoal(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['goals'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['categorySpending'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('delete-goal');
     },
   });

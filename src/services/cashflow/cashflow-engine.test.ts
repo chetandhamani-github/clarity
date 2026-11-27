@@ -128,5 +128,37 @@ describe('cashflow-engine recurring debt transfers', () => {
       }),
     ]);
   });
+
+  it('does not treat small cashback/refund income as monthly salary delaying next payday', async () => {
+    (getAllAccounts as jest.Mock).mockResolvedValue([
+      {
+        id: 'bank-1',
+        name: 'Main Bank',
+        type: 'savings',
+        balance: 20000,
+        institution: 'HDFC',
+        lastFour: '1111',
+        createdAt: '2026-01-01T00:00:00Z',
+      },
+    ]);
+    (getActiveRecurringTransactions as jest.Mock).mockResolvedValue([]);
+    (getDatabase as jest.Mock).mockReturnValue({
+      getFirstAsync: jest.fn().mockResolvedValue(null),
+      getAllAsync: jest.fn().mockResolvedValue([
+        {
+          id: 'tx-cb',
+          amount: 120,
+          category: 'Other',
+          merchant: 'Amazon Cashback',
+          note: 'Reward',
+          date: '2026-09-04',
+        },
+      ]),
+    });
+
+    // System time is 2026-09-05, payday is day 10 -> next payday should stay 2026-09-10, not jump to Oct 10
+    const summary = await calculateSafeToSpend(10, 0);
+    expect(summary.nextPaydayDate).toBe('2026-09-10');
+  });
 });
 

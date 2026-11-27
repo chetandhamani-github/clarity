@@ -300,9 +300,14 @@ export default function PlanScreen({ showBack = false }: PlanScreenProps = {}) {
           )
         }
         rightNode={
-          <TouchableOpacity style={styles.iconButton} onPress={() => router.navigate('/reports')}>
-            <MaterialIcons name="assessment" size={24} color={colors.onSurface} />
-          </TouchableOpacity>
+          <View style={styles.headerRightActions}>
+            <TouchableOpacity style={styles.iconButton} onPress={() => router.navigate('/reminders')}>
+              <MaterialIcons name="alarm" size={22} color={colors.onSurface} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.iconButton} onPress={() => router.navigate('/reports')}>
+              <MaterialIcons name="assessment" size={24} color={colors.onSurface} />
+            </TouchableOpacity>
+          </View>
         }
       />
 
@@ -1067,6 +1072,11 @@ const getStyles = (colors: ThemeColors) => {
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: 22,
+    },
+    headerRightActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
     },
     editBtn: {
       backgroundColor: colors.primary,

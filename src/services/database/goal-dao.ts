@@ -1,5 +1,6 @@
-import { getDatabase } from './index';
 import type { Goal, GoalContribution } from '@/types';
+import { getDatabase } from './index';
+import { deleteTransaction } from './transaction-dao';
 
 function generateId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -119,6 +120,18 @@ export async function updateGoal(
 
 export async function deleteGoal(id: string): Promise<void> {
   const db = getDatabase();
+  const linkedContributions =
+    (await db.getAllAsync<{ transaction_id?: string | null }>(
+      'SELECT transaction_id FROM goal_contributions WHERE goal_id = ? AND transaction_id IS NOT NULL;',
+      [id]
+    )) ?? [];
+
+  for (const row of linkedContributions) {
+    if (row.transaction_id) {
+      await deleteTransaction(row.transaction_id);
+    }
+  }
+
   await db.runAsync('DELETE FROM goals WHERE id = ?;', [id]);
 }
 
@@ -154,14 +167,15 @@ export async function addGoalContribution(
 
     // Insert transaction if accountId is provided
     if (accountId && goal) {
-      const account = await db.getFirstAsync<any>('SELECT balance FROM accounts WHERE id = ?;', [
+      const account = await db.getFirstAsync<any>('SELECT id FROM accounts WHERE id = ?;', [
         accountId,
       ]);
       if (account) {
         transId = Math.random().toString(36).substring(2, 9);
+        const nowIso = new Date().toISOString();
         await db.runAsync(
-          `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO transactions (id, account_id, amount, type, merchant, category, date, is_recurring, note, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             transId,
             accountId,
@@ -172,10 +186,13 @@ export async function addGoalContribution(
             contribution.date,
             0,
             contribution.description || 'Goal Contribution',
+            nowIso,
           ]
         );
-        const newBalance = account.balance - contribution.amount;
-        await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [newBalance, accountId]);
+        await db.runAsync(
+          'UPDATE accounts SET balance = ROUND(COALESCE(balance, 0) - ?, 2) WHERE id = ?',
+          [contribution.amount, accountId]
+        );
       }
     }
 
@@ -208,36 +225,24 @@ export async function addGoalContribution(
 
 export async function deleteGoalContribution(contributionId: string): Promise<void> {
   const db = getDatabase();
+  const contrib = await db.getFirstAsync<any>(
+    'SELECT * FROM goal_contributions WHERE id = ?;',
+    [contributionId]
+  );
+  if (!contrib) return;
+
+  if (contrib.transaction_id) {
+    // deleteTransaction atomically reverts the account balance, goal current_amount,
+    // goal_contributions row, linked bills, and parsed notification link.
+    await deleteTransaction(contrib.transaction_id);
+    return;
+  }
+
   await db.withTransactionAsync(async () => {
-    const contrib = await db.getFirstAsync<any>(
-      'SELECT * FROM goal_contributions WHERE id = ?;',
-      [contributionId]
+    await db.runAsync(
+      'UPDATE goals SET current_amount = MAX(0, current_amount - ?) WHERE id = ?;',
+      [contrib.amount, contrib.goal_id]
     );
-    if (!contrib) return;
-
-    if (contrib.transaction_id) {
-      const trans = await db.getFirstAsync<any>(
-        'SELECT * FROM transactions WHERE id = ?;',
-        [contrib.transaction_id]
-      );
-      if (trans && trans.account_id) {
-        await db.runAsync('UPDATE accounts SET balance = balance + ? WHERE id = ?;', [
-          trans.amount,
-          trans.account_id,
-        ]);
-        await db.runAsync('DELETE FROM transactions WHERE id = ?;', [contrib.transaction_id]);
-      }
-    }
-
-    const goal = await getGoalById(contrib.goal_id);
-    if (goal) {
-      const newAmount = Math.max(0, goal.currentAmount - contrib.amount);
-      await db.runAsync('UPDATE goals SET current_amount = ? WHERE id = ?;', [
-        newAmount,
-        contrib.goal_id,
-      ]);
-    }
-
     await db.runAsync('DELETE FROM goal_contributions WHERE id = ?;', [contributionId]);
   });
 }

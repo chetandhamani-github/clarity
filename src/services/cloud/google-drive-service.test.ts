@@ -546,5 +546,30 @@ describe('google-drive-service', () => {
       expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('gdrive_backup_passphrase');
       expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('gdrive_has_custom_passphrase');
     });
+
+    it('deleteAllBackups uses fetched access token when called without an explicit token', async () => {
+      const SecureStore = require('expo-secure-store');
+      SecureStore.getItemAsync.mockResolvedValue(null);
+      const mockFetch = jest
+        .fn()
+        .mockResolvedValueOnce({
+          status: 200,
+          ok: true,
+          json: async () => ({
+            files: [{ id: 'f-1', name: 'clarity_backup.json' }],
+          }),
+        })
+        .mockResolvedValueOnce({
+          status: 204,
+          ok: true,
+        });
+      globalThis.fetch = mockFetch as unknown as typeof fetch;
+
+      const res = await deleteAllBackups();
+      expect(res).toEqual({ success: true, count: 1 });
+      expect(mockFetch.mock.calls[0][1]).toMatchObject({
+        headers: { Authorization: 'Bearer test-access-token' },
+      });
+    });
   });
 });

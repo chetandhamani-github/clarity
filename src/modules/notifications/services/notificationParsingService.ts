@@ -131,6 +131,13 @@ export class NotificationParsingService {
 
     const extracted = NotificationExtractor.extract(notification, body, classification);
     if (!extracted) {
+      if (classification.reasons.includes('Account balance snapshot or statement alert')) {
+        return {
+          type: 'IGNORED',
+          reason: 'BALANCE_SNAPSHOT_ONLY',
+          classification,
+        };
+      }
       return {
         type: 'REVIEW',
         reviewItem: createReviewItem(rawRecord, 'UNRECOGNIZED_FORMAT', classification.confidence),

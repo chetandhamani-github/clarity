@@ -378,7 +378,7 @@ export default function SecurityPrivacyScreen() {
               <View style={styles.listItemTextContent}>
                 <Text style={styles.cardTitle}>Download Personal Archive</Text>
                 <Text style={styles.cardSubtitle}>
-                  Export complete encrypted JSON package of transactions and balance history.
+                  Export a complete local JSON archive of your accounts, transactions, and balance history.
                 </Text>
               </View>
               <TouchableOpacity

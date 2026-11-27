@@ -70,8 +70,10 @@ export class SmsClassificationEngine {
     /\bdr\b/i,
     /\bpurchas(?:e|ed)\b/i,
     /\bcharged\b/i,
+    /\butili[sz]ed\b/i,
+    /\bswiped\b/i,
     /\b(?:card|debit card)\s+(?:was\s+)?used\b/i,
-    /\b(?:transaction|txn)\s+(?:was\s+)?(?:done|made|successful)\b/i,
+    /\b(?:transaction|txn|order|purchase)\s+(?:of\s+[\s\S]{0,60}?)?(?:is\s+|was\s+)?(?:done|made|successful|completed|processed|approved)\b/i,
   ];
 
   private static readonly CREDIT_VERBS = [
@@ -79,7 +81,7 @@ export class SmsClassificationEngine {
     /\breceived\b/i,
     /\bdeposited\b/i,
     /\badded\b/i,
-    /\brefunded?\b/i,
+    /\brefund(?:ed|s)?\b/i,
     /\bcr\b/i,
     /\bcashback\b/i,
   ];
@@ -119,11 +121,14 @@ export class SmsClassificationEngine {
     /\b(?:pos purchase|pos swipe|swiped at|spent on card)\b/i,
   ];
 
+  private static readonly REVERSAL_CREDIT_REGEX =
+    /\b(?:reversed\s+(?:and\s+|to\s+(?:your\s+)?(?:a\/?c|account|card|source)\s*)?(?:credited)?|refund(?:ed)?(?:\s+of)?(?:\s+(?:rs\.?|inr|₹)?\s*[\d,.]+)?\s+(?:to|in|credited|processed|initiated)|(?:rs\.?|inr|₹)\s*[\d,.]+\s+refund(?:ed)?)\b/i;
+
   /**
    * Fast check to see if text can possibly be a financial transaction.
    */
   public static isPotentiallyFinancial(body: string): boolean {
-    const isReversalCredit = /\b(?:reversed\s+(?:and\s+)?credited|refund(?:ed)?\s+(?:to|in)\s+your)\b/i.test(body);
+    const isReversalCredit = this.REVERSAL_CREDIT_REGEX.test(body);
     if (!isReversalCredit && this.FAILED_PATTERNS.some((p) => p.test(body))) {
       return false;
     }
@@ -191,7 +196,7 @@ export class SmsClassificationEngine {
     }
 
     // 3.5 Check Failed / Declined Transactions
-    const isReversalCredit = /\b(?:reversed\s+(?:and\s+)?credited|refund(?:ed)?\s+(?:to|in)\s+your)\b/i.test(body);
+    const isReversalCredit = this.REVERSAL_CREDIT_REGEX.test(body);
     if (!isReversalCredit && this.FAILED_PATTERNS.some((p) => p.test(body))) {
       reasons.push('Transaction failed, declined, or was cancelled');
       return {

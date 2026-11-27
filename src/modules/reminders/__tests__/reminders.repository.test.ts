@@ -97,6 +97,35 @@ describe('RemindersRepository', () => {
     expect(result.nextReminder?.status).toBe('pending');
   });
 
+  it('advances overdue recurring habit reminder to a non-past occurrence when completed', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date(2026, 10, 27, 10, 0, 0));
+
+    mockDb.getFirstAsync.mockResolvedValueOnce({
+      id: 'rem-daily-overdue',
+      title: 'Log daily expenses',
+      notes: '',
+      category: 'daily_log',
+      amount: null,
+      remind_at_date: '2026-11-20',
+      remind_at_time: '20:00',
+      repeat_rule: 'daily',
+      advance_days: 0,
+      status: 'pending',
+      snooze_until: null,
+      linked_type: null,
+      linked_id: null,
+      completed_at: null,
+      created_at: '2026-11-19T00:00:00Z',
+      updated_at: '2026-11-19T00:00:00Z',
+    });
+
+    const result = await RemindersRepository.markReminderCompleted('rem-daily-overdue');
+    jest.useRealTimers();
+
+    expect(result.nextReminder?.remindAtDate).toBe('2026-11-27');
+  });
+
   it('expires elapsed snoozes before listing reminders', async () => {
     await RemindersRepository.getAllReminders();
 
@@ -106,3 +135,4 @@ describe('RemindersRepository', () => {
     );
   });
 });
+

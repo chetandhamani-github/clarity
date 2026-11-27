@@ -523,7 +523,29 @@ export default function SettingsScreen() {
               </View>
               <Switch
                 value={dailyPulseEnabled}
-                onValueChange={(enabled) => {
+                onValueChange={async (enabled) => {
+                  if (enabled && Platform.OS !== 'web') {
+                    try {
+                      const Notifications = require('expo-notifications');
+                      if (typeof Notifications?.getPermissionsAsync === 'function') {
+                        const existing = await Notifications.getPermissionsAsync();
+                        if (
+                          existing.status !== 'granted' &&
+                          typeof Notifications.requestPermissionsAsync === 'function'
+                        ) {
+                          const req = await Notifications.requestPermissionsAsync();
+                          if (req.status !== 'granted') {
+                            showToast(
+                              'Allow notification permissions in system settings to receive Daily Pulse',
+                              'info'
+                            );
+                          }
+                        }
+                      }
+                    } catch {
+                      // Ignore in headless/Expo Go environments
+                    }
+                  }
                   setDailyPulseEnabled(enabled);
                   ReminderScheduler.syncDailyPulseSchedule().catch(() => {});
                 }}

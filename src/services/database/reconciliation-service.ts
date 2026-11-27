@@ -1,6 +1,8 @@
 import { getDatabase } from './index';
 import { getAccountById } from './account-dao';
 import { insertTransaction } from './transaction-dao';
+import { shiftYmdDays } from '@/utils/date';
+import { formatLocalDate } from '@/utils/format';
 import type { Transaction } from '@/types';
 
 export interface AccountReconciliationStatus {
@@ -12,6 +14,64 @@ export interface AccountReconciliationStatus {
   currentBalance: number;
   discrepancy: number; // account.balance - calculatedBalance
   hasDiscrepancy: boolean;
+}
+
+/**
+ * Determines whether a ledger transaction occurred after an account balance snapshot,
+ * handling mixed ISO-8601 timestamps and date-only (`YYYY-MM-DD`) manual/goal/bill entries.
+ */
+function parseSnapshotCompareMs(raw?: string | null): number | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (trimmed.includes('T')) {
+    const ms = Date.parse(trimmed);
+    return Number.isNaN(ms) ? null : ms;
+  }
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(trimmed)) {
+    const ms = Date.parse(`${trimmed.replace(' ', 'T')}Z`);
+    return Number.isNaN(ms) ? null : ms;
+  }
+  return null;
+}
+
+export function isTransactionAfterSnapshot(
+  txDate?: string | null,
+  txCreatedAt?: string | null,
+  snapshotTxDate?: string | null
+): boolean {
+  if (!snapshotTxDate) return true;
+  if (!txDate && !txCreatedAt) return true;
+
+  const snapshotMs = parseSnapshotCompareMs(snapshotTxDate);
+  const snapshotYmd =
+    snapshotMs !== null ? formatLocalDate(new Date(snapshotMs)) : snapshotTxDate.slice(0, 10);
+
+  if (txDate) {
+    if (txDate.includes('T')) {
+      const txMs = parseSnapshotCompareMs(txDate);
+      if (txMs !== null && snapshotMs !== null) {
+        return txMs > snapshotMs;
+      }
+      return txDate > snapshotTxDate;
+    }
+
+    const txYmd = txDate.slice(0, 10);
+    if (txYmd > snapshotYmd) return true;
+    if (txYmd < snapshotYmd) return false;
+
+    const createdMs = parseSnapshotCompareMs(txCreatedAt);
+    if (createdMs !== null && snapshotMs !== null) {
+      return createdMs > snapshotMs;
+    }
+    return true;
+  }
+
+  const createdMs = parseSnapshotCompareMs(txCreatedAt);
+  if (createdMs !== null && snapshotMs !== null) {
+    return createdMs > snapshotMs;
+  }
+  return true;
 }
 
 /**
@@ -74,20 +134,33 @@ export async function getAccountReconciliationStatus(
     };
   }
 
-  // 2. Fetch all subsequent transactions recorded after this SMS balance snapshot
-  const subsequentTxs = await db.getAllAsync<{
-    id: string;
-    amount: number;
-    type: string;
-    account_id: string;
-    to_account_id?: string;
-  }>(
-    `SELECT id, amount, type, account_id, to_account_id
-     FROM transactions
-     WHERE (account_id = ? OR to_account_id = ?)
-       AND date > ?
-       AND (id != ? OR ? IS NULL)`,
-    [accountId, accountId, latestSms.transaction_date, latestSms.transaction_id, latestSms.transaction_id]
+  // 2. Fetch transactions from the local snapshot calendar day onward (1-day buffer for TZ shifts)
+  const parsedSnapMs = parseSnapshotCompareMs(latestSms.transaction_date);
+  const snapshotLocalYmd =
+    parsedSnapMs !== null
+      ? formatLocalDate(new Date(parsedSnapMs))
+      : latestSms.transaction_date.slice(0, 10);
+  const candidateStartYmd = shiftYmdDays(snapshotLocalYmd, -1);
+  const candidateTxs =
+    (await db.getAllAsync<{
+      id: string;
+      amount: number;
+      type: string;
+      account_id: string;
+      to_account_id?: string;
+      date?: string;
+      created_at?: string;
+    }>(
+      `SELECT id, amount, type, account_id, to_account_id, date, created_at
+       FROM transactions
+       WHERE (account_id = ? OR to_account_id = ?)
+         AND SUBSTR(date, 1, 10) >= ?
+         AND (id != ? OR ? IS NULL)`,
+      [accountId, accountId, candidateStartYmd, latestSms.transaction_id, latestSms.transaction_id]
+    )) ?? [];
+
+  const subsequentTxs = candidateTxs.filter((tx) =>
+    isTransactionAfterSnapshot(tx.date, tx.created_at, latestSms.transaction_date)
   );
 
   let deltaSinceStatement = 0;

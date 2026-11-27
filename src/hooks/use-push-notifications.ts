@@ -4,6 +4,7 @@ import * as Device from 'expo-device';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { insertNotification } from '@/services/database/notification-dao';
+import { initDatabase } from '@/services/database';
 import { setupNotificationChannelsAndCategories } from '@/services/notifications/system-notification';
 import { mmkv } from '@/lib/storage';
 import { queryClient } from '@/lib/query-client';
@@ -120,6 +121,7 @@ export function usePushNotifications(options: UsePushNotificationsOptions = {}) 
         dismissTrayNotification(reqId);
         if (data?.reminderId) {
           try {
+            await initDatabase();
             const { RemindersService } = await import('@/modules/reminders/services/RemindersService');
             await RemindersService.completeReminder(data.reminderId);
             await queryClient.invalidateQueries({ queryKey: ['reminders'] });
@@ -135,6 +137,7 @@ export function usePushNotifications(options: UsePushNotificationsOptions = {}) 
         dismissTrayNotification(reqId);
         if (data?.reminderId) {
           try {
+            await initDatabase();
             const { RemindersService } = await import('@/modules/reminders/services/RemindersService');
             await RemindersService.snoozeReminder(data.reminderId, 24);
             await queryClient.invalidateQueries({ queryKey: ['reminders'] });
@@ -157,6 +160,7 @@ export function usePushNotifications(options: UsePushNotificationsOptions = {}) 
         dismissTrayNotification(reqId);
         if (data?.billId) {
           try {
+            await initDatabase();
             const { BillService } = await import('@/modules/bills/services/BillService');
             await BillService.markBillPaid(data.billId);
             const { useBillsStore } = await import('@/modules/bills/store/bills.store');

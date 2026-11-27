@@ -8,17 +8,21 @@ import { Text } from './Text';
 interface AppLockModalProps {
   visible: boolean;
   onUnlock: () => void;
+  onAuthActiveChange?: (active: boolean) => void;
 }
 
-export function AppLockModal({ visible, onUnlock }: AppLockModalProps) {
+export function AppLockModal({ visible, onUnlock, onAuthActiveChange }: AppLockModalProps) {
   const { colors } = useTheme();
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const isRunningRef = useRef(false);
+  const onAuthActiveChangeRef = useRef(onAuthActiveChange);
+  onAuthActiveChangeRef.current = onAuthActiveChange;
 
   const handleAuthenticate = async () => {
     if (isRunningRef.current) return;
     isRunningRef.current = true;
+    onAuthActiveChangeRef.current?.(true);
     setIsAuthenticating(true);
     setErrorMessage(null);
 
@@ -52,6 +56,7 @@ export function AppLockModal({ visible, onUnlock }: AppLockModalProps) {
     } finally {
       setIsAuthenticating(false);
       isRunningRef.current = false;
+      onAuthActiveChangeRef.current?.(false);
     }
   };
 

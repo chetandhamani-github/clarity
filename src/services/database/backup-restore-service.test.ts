@@ -3,8 +3,10 @@ import {
   isMeaningfulDatabaseSnapshot,
   generateDatabaseSnapshot,
   restoreDatabaseFromSnapshot,
+  restoreFromLocalJSONString,
   type ClarityBackupPayload,
 } from './backup-restore-service';
+import { encryptBackupPayload } from '@/services/cloud/backup-crypto';
 import { getDatabase } from './index';
 import { mmkv } from '@/lib/storage';
 
@@ -398,6 +400,30 @@ describe('backup-restore-service', () => {
         expect.stringContaining('INSERT INTO reminders'),
         expect.arrayContaining(['rem-1', 'Advance Tax', '', 'tax', 15000, '2026-12-15', '10:00'])
       );
+    });
+
+    it('restores passphrase-encrypted local JSON backup string without double-parsing objects', async () => {
+      const payload: ClarityBackupPayload = {
+        version: 1,
+        appName: 'Clarity',
+        exportedAt: '2026-11-27T10:00:00.000Z',
+        data: {
+          accounts: [{ id: 'acc-1', name: 'Main Bank', type: 'savings', balance: 5000 }],
+          transactions: [],
+          goals: [],
+          goal_contributions: [],
+          budget_plans: [],
+          budget_categories: [],
+          recurring_transactions: [],
+          notifications: [],
+        },
+      };
+
+      const envelope = await encryptBackupPayload(payload, 'strong-passphrase-123');
+      const res = await restoreFromLocalJSONString(JSON.stringify(envelope), 'strong-passphrase-123');
+
+      expect(res.success).toBe(true);
+      expect(res.summary?.accountCount).toBe(1);
     });
   });
 });

@@ -269,4 +269,88 @@ describe('Notification parsing corpus (end-to-end)', () => {
       dueDate: '2026-11-28',
     });
   });
+
+  it('ignores balance-snapshot-only notifications instead of queueing review items, and captures utilised card spends & cancelled-order refunds', async () => {
+    const balanceOnly = await NotificationParsingService.parseTransactionCandidate(
+      {
+        id: 'notif_bal_only',
+        packageName: 'com.snapwork.hdfc',
+        appName: 'HDFC Bank',
+        title: 'Balance Alert',
+        text: 'Your HDFC Bank A/c XX1234 Avl Bal is Rs. 45,230.00',
+        postTime: 1732000000000,
+      },
+      { checkDatabaseDuplicates: false }
+    );
+    expect(balanceOnly.type).toBe('IGNORED');
+
+    const cardUtilised = await NotificationParsingService.parseTransactionCandidate(
+      {
+        id: 'notif_card_utilised',
+        packageName: 'com.snapwork.hdfc',
+        appName: 'HDFC Bank',
+        title: 'Card Alert',
+        text: 'INR 2,400.00 utilised on HDFC Credit Card XX4521 at Flipkart',
+        postTime: 1732000000000,
+      },
+      { checkDatabaseDuplicates: false }
+    );
+    expect(cardUtilised.type).toBe('PARSED');
+    if (cardUtilised.type === 'PARSED') {
+      expect(cardUtilised.transaction.type).toBe('DEBIT');
+      expect(cardUtilised.transaction.amount).toBe(2400);
+      expect(cardUtilised.transaction.bank).toBe('HDFC Bank');
+      expect(cardUtilised.transaction.accountMask).toBe('4521');
+    }
+
+    const cancelledRefund = await NotificationParsingService.parseTransactionCandidate(
+      {
+        id: 'notif_refund_cancelled',
+        packageName: 'com.csam.icici.bank.imobile',
+        appName: 'ICICI Bank',
+        title: 'Refund Alert',
+        text: 'Order cancelled. Refund of Rs. 450.00 processed to ICICI A/c XX9988 from Swiggy',
+        postTime: 1732000000000,
+      },
+      { checkDatabaseDuplicates: false }
+    );
+    expect(cancelledRefund.type).toBe('PARSED');
+    if (cancelledRefund.type === 'PARSED') {
+      expect(cancelledRefund.transaction.type).toBe('CREDIT');
+      expect(cancelledRefund.transaction.amount).toBe(450);
+      expect(cancelledRefund.transaction.bank).toBe('ICICI Bank');
+      expect(cancelledRefund.transaction.accountMask).toBe('9988');
+    }
+  });
+
+  it('deduplicates GPay named merchant alert with bank alert using opaque QR VPA handle', async () => {
+    const first = await NotificationParsingService.parseTransactionCandidate(
+      {
+        id: 'notif_gpay_qr_1',
+        packageName: 'com.google.android.apps.nbu.paisa.user',
+        appName: 'Google Pay',
+        title: 'Chai Point',
+        text: 'You paid ₹180',
+        postTime: 1732000000000,
+      },
+      { checkDatabaseDuplicates: false }
+    );
+    expect(first.type).toBe('PARSED');
+
+    const second = await NotificationParsingService.parseTransactionCandidate(
+      {
+        id: 'notif_hdfc_qr_2',
+        packageName: 'com.snapwork.hdfc',
+        appName: 'HDFC Bank',
+        title: 'HDFC Bank Alert',
+        text: 'Rs.180.00 debited from A/c XX1234 to VPA vyapar.16912345@hdfcbank (UPI Ref 412345678902)',
+        postTime: 1732000005000,
+      },
+      { checkDatabaseDuplicates: false }
+    );
+    expect(second.type).toBe('PARSED');
+    if (second.type === 'PARSED') {
+      expect(second.transaction.isDuplicate).toBe(true);
+    }
+  });
 });

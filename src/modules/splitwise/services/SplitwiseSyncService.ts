@@ -29,6 +29,7 @@ const SPLITWISE_LAST_SYNCED_KEY = 'clarity_splitwise_last_synced_at';
 
 export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
   private static instance: SplitwiseSyncService;
+  private syncInFlightPromise: Promise<SplitwiseSyncResult> | null = null;
 
   public static getInstance(): SplitwiseSyncService {
     if (!SplitwiseSyncService.instance) {
@@ -257,6 +258,16 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
    * Synchronizes local SQLite database with Clarity Spring Boot backend.
    */
   public async syncWithCloud(): Promise<SplitwiseSyncResult> {
+    if (this.syncInFlightPromise) {
+      return this.syncInFlightPromise;
+    }
+    this.syncInFlightPromise = this.performCloudSync().finally(() => {
+      this.syncInFlightPromise = null;
+    });
+    return this.syncInFlightPromise;
+  }
+
+  private async performCloudSync(): Promise<SplitwiseSyncResult> {
     try {
       await SplitwiseRepository.ensureSchema();
       const lastSyncedAt = mmkv.getString(SPLITWISE_LAST_SYNCED_KEY) ?? null;
@@ -489,6 +500,8 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
           if (Array.isArray(response.people)) {
             for (const p of response.people) {
               if (p.isDeleted) {
+                await db.runAsync('DELETE FROM splitwise_group_members WHERE person_id = ?', [p.id]);
+                await db.runAsync('DELETE FROM splitwise_expense_splits WHERE person_id = ?', [p.id]);
                 await db.runAsync('DELETE FROM splitwise_debts WHERE person_id = ?', [p.id]);
                 await db.runAsync('DELETE FROM splitwise_settlements WHERE person_id = ?', [p.id]);
                 await db.runAsync('DELETE FROM splitwise_people WHERE id = ?', [p.id]);
@@ -514,15 +527,22 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
               if (d.isDeleted) {
                 await db.runAsync('DELETE FROM splitwise_debts WHERE id = ?', [d.id]);
               } else {
+                const localPersonId = await resolveLocalPersonId(
+                  d.personId,
+                  d.friendEmail ?? undefined,
+                  undefined,
+                  d.createdAt
+                );
                 await db.runAsync(
                   `INSERT INTO splitwise_debts (id, person_id, amount, type, description, friend_email, created_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(id) DO UPDATE SET
+                     person_id = excluded.person_id,
                      amount = excluded.amount,
                      type = excluded.type,
                      description = excluded.description,
                      friend_email = excluded.friend_email;`,
-                  [d.id, d.personId, d.amount, d.type, d.description, d.friendEmail ?? null, d.createdAt || new Date().toISOString()]
+                  [d.id, localPersonId, d.amount, d.type, d.description, d.friendEmail ?? null, d.createdAt || new Date().toISOString()]
                 );
               }
               serverAppliedCount.debts++;
@@ -571,6 +591,12 @@ export class SplitwiseSyncService implements ISplitwiseCloudSyncService {
           if (Array.isArray(response.groups)) {
             for (const g of response.groups) {
               if (g.isDeleted) {
+                await db.runAsync(
+                  `DELETE FROM splitwise_expense_splits
+                   WHERE expense_id IN (SELECT id FROM splitwise_expenses WHERE group_id = ?)`,
+                  [g.id]
+                );
+                await db.runAsync('DELETE FROM splitwise_expenses WHERE group_id = ?', [g.id]);
                 await db.runAsync('DELETE FROM splitwise_group_members WHERE group_id = ?', [g.id]);
                 await db.runAsync('DELETE FROM splitwise_groups WHERE id = ?', [g.id]);
               } else {

@@ -23,7 +23,7 @@ const NOTIFICATION_NOISE_PATTERNS: RegExp[] = [
 ];
 
 const EXECUTED_PAYMENT_REGEX =
-  /\b(?:upi\s+)?payment\s+(?:of\s+[\s\S]{0,40}?)?(?:is\s+|was\s+)?(?:successful|completed|done|processed)\b/i;
+  /\b(?:upi\s+)?(?:payment|txn|transaction|transfer)\s+(?:of\s+[\s\S]{0,60}?)?(?:is\s+|was\s+)?(?:successful|completed|done|processed|approved)\b/i;
 
 const BANK_KEYWORD_RULES: Array<{ pattern: RegExp; canonical: string }> = [
   { pattern: /\bhdfc\b/i, canonical: 'HDFC Bank' },
@@ -72,7 +72,7 @@ const BANK_KEYWORD_RULES: Array<{ pattern: RegExp; canonical: string }> = [
 ];
 
 const SOURCE_BANK_SPAN_REGEX =
-  /\b(?:debited\s+from|deducted\s+from|withdrawn\s+from|paid\s+from|sent\s+from|transferred\s+from|drawn\s+on|charged\s+(?:to|on)|spent\s+on|used\s+on|completed\s+(?:via|using)|paid\s+(?:via|using)|via|using|from|credited\s+to|deposited\s+(?:in|to)|transferred\s+to\s+your|remitted\s+to\s+your|refunded\s+to)\s+(?:your\s+)?([^\n.;|]{1,60})/gi;
+  /\b(?:debited\s+from|deducted\s+from|withdrawn\s+from|paid\s+from|sent\s+from|transferred\s+from|drawn\s+on|charged\s+(?:to|on)|spent\s+on|used\s+on|completed\s+(?:via|using)|paid\s+(?:via|using)|via|using|from|credited\s+to|deposited\s+(?:in|to)|transferred\s+to\s+your|remitted\s+to\s+your|refunded\s+to|processed\s+to|reversed\s+to|added\s+to|returned\s+to|received\s+in)\s+(?:your\s+)?([^\n.;|]{1,60})/gi;
 
 const OWN_ACCOUNT_BANK_SPAN_REGEX =
   /(?:^|\n|[.,;|]\s*|\byour\s+)([A-Za-z][A-Za-z0-9\s&.-]{1,40}?)\s*(?:a\/?c|acct?\.?|account|credit\s*card|debit\s*card|card|upi|:|-)/gi;
@@ -83,7 +83,7 @@ const PAYEE_OR_ACTION_SPAN_REGEX =
 const PAYEE_CLAUSE_SPLIT_REGEX = /\b(?:to|towards|at|for|against)\b/i;
 
 const SOURCE_MASK_CONTEXT_REGEX =
-  /(?:debited\s+from|deducted\s+from|withdrawn\s+from|paid\s+from|drawn\s+on|charged\s+(?:to|on)|spent\s+on|using|via|from|credited\s+to(?:\s+your)?|deposited\s+(?:in|to)(?:\s+your)?|transferred\s+to\s+your|remitted\s+to\s+your|refunded\s+to(?:\s+your)?)\s+(?:your\s+)?(?:[A-Za-z]+\s+){0,4}?(?:a\/?c|acct?\.?|account|credit\s*card|debit\s*card|card)\s*(?:no\.?|number)?\s*(?:ending(?:\s+(?:with|in))?)?\s*(?:[:#-]\s*|(?:\.{2,}\s*)|\s+)([xX*•#-]*\d{3,18})\b/gi;
+  /(?:debited\s+from|deducted\s+from|withdrawn\s+from|paid\s+from|drawn\s+on|charged\s+(?:to|on)|spent\s+on|using|via|from|credited\s+to(?:\s+your)?|deposited\s+(?:in|to)(?:\s+your)?|transferred\s+to\s+your|remitted\s+to\s+your|refunded\s+to(?:\s+your)?|processed\s+to(?:\s+your)?|reversed\s+to(?:\s+your)?|added\s+to(?:\s+your)?|returned\s+to(?:\s+your)?|received\s+in(?:\s+your)?)\s+(?:your\s+)?(?:[A-Za-z]+\s+){0,6}?(?:a\/?c|acct?\.?|account|credit\s*card|debit\s*card|card)\s*(?:no\.?|number)?\s*(?:ending(?:\s+(?:with|in))?)?\s*(?:[:#-]\s*|(?:\.{2,}\s*)|\s+)([xX*•#-]*\d{3,18})\b/gi;
 
 const BANK_SEPARATOR_MASK_REGEX =
   /\b(?:debited\s+from|deducted\s+from|paid\s+from|completed\s+(?:via|using)|paid\s+(?:via|using)|via|using|from|credited\s+to(?:\s+your)?)\s+(?:your\s+)?([A-Za-z][A-Za-z\s]{1,30}?)\s*(?:-\s*|:\s*|\.{2,}\s*|[xX*•]+\s*)(\d{3,4})\b/gi;
@@ -291,7 +291,7 @@ export class NotificationExtractor {
       const fullSpan = match[0];
       //Strip leading preposition ("credited to", "charged to", "from", etc.) before checking payee words
       const innerSpan = fullSpan.replace(
-        /^(?:debited\s+from|deducted\s+from|withdrawn\s+from|paid\s+from|drawn\s+on|charged\s+(?:to|on)|spent\s+on|using|via|from|credited\s+to|deposited\s+(?:in|to)|transferred\s+to(?:\s+your)?|remitted\s+to(?:\s+your)?|refunded\s+to(?:\s+your)?)\s+/i,
+        /^(?:debited\s+from|deducted\s+from|withdrawn\s+from|paid\s+from|drawn\s+on|charged\s+(?:to|on)|spent\s+on|using|via|from|credited\s+to|deposited\s+(?:in|to)|transferred\s+to(?:\s+your)?|remitted\s+to(?:\s+your)?|refunded\s+to(?:\s+your)?|processed\s+to(?:\s+your)?|reversed\s+to(?:\s+your)?|added\s+to(?:\s+your)?|returned\s+to(?:\s+your)?|received\s+in(?:\s+your)?)\s+/i,
         ''
       );
       if (/\b(?:to|towards|for|at|against)\b/i.test(innerSpan)) {
@@ -334,8 +334,13 @@ export class NotificationExtractor {
         const prefixWindow = body.slice(Math.max(0, match.index - 65), match.index);
         const clausePrefix = prefixWindow.split(/[\n.;|]/).pop() ?? prefixWindow;
         const payeeMatch = clausePrefix.match(/\b(?:to|towards|beneficiary|payee)\b(.*)$/i);
+        const isIncomingOwnAccountDestination =
+          /\b(?:credited|deposited|refund(?:ed)?|reversed|added|returned|processed)\b[\s\S]{0,40}\b(?:to|in)\b/i.test(
+            clausePrefix
+          );
         if (
           payeeMatch &&
+          !isIncomingOwnAccountDestination &&
           !/\b(?:from|via|using|debited\s+from|paid\s+from|on)\b/i.test(payeeMatch[1] || '')
         ) {
           continue;

@@ -179,19 +179,19 @@ object NotificationListenerBridge {
             recordLastEventLocked(appName, if (postTime > 0L) postTime else System.currentTimeMillis())
         }
 
+        // Persist durably before emitting so notifications are never lost if JS is killed or paused
+        persistToBuffer(notificationData)
+
         val ctx = reactContext
         if (ctx != null && ctx.hasActiveReactInstance() && hasActiveJsListeners() && isJsListenerReady) {
             try {
                 val map = Arguments.fromBundle(notificationData)
                 ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
                     ?.emit("onNotificationReceived", map)
-                return
             } catch (_: Exception) {
-                // Fall through to durable buffer if emit fails
+                // Remains safely in durable buffer until processed & acked
             }
         }
-
-        persistToBuffer(notificationData)
     }
 
     fun peekPendingNotifications(context: Context? = null): List<Bundle> {

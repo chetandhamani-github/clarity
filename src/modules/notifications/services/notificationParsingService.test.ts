@@ -297,4 +297,21 @@ describe('NotificationParsingService', () => {
     });
     expect(incoming).toBe('Paid you ₹500 from Rahul Sharma');
   });
+
+  it('ignores balance-snapshot-only notifications without dumping them into ReviewQueue', async () => {
+    (NotificationBillExtractor.extractBill as jest.Mock).mockReturnValue(null);
+
+    const result = await NotificationParsingService.processNotification({
+      id: 'notif_bal_snapshot_1',
+      packageName: 'com.snapwork.hdfc',
+      appName: 'HDFC Bank',
+      title: 'Available Balance',
+      text: 'Your HDFC Bank A/c XX1234 Avl Bal is Rs. 45,230.00',
+      postTime: 1732000000000,
+    });
+
+    expect(result).toEqual({ type: 'IGNORED', reason: 'BALANCE_SNAPSHOT_ONLY' });
+    expect(SmsDao.saveReviewQueueBatch).not.toHaveBeenCalled();
+    expect(SmsDao.saveParsedTransactionsBatch).not.toHaveBeenCalled();
+  });
 });

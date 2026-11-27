@@ -5,19 +5,20 @@ import { useCreateTransaction } from '@/hooks/use-transactions';
 import { ParsedPaymentIntent, parsePaymentClipboard } from '@/services/clipboard/payment-clipboard-parser';
 import { useAppStore } from '@/store/use-app-store';
 import { radius, ThemeColors, typography, useTheme } from '@/theme';
+import { pickDefaultAccountId } from '@/utils/account-metrics';
 import { formatCurrency, formatLocalDate } from '@/utils/format';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    Animated,
-    AppState,
-    AppStateStatus,
-    DeviceEventEmitter,
-    StyleSheet,
-    TouchableOpacity,
-    View,
+  Animated,
+  AppState,
+  AppStateStatus,
+  DeviceEventEmitter,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 export function SmartClipboardPrompt() {
@@ -28,6 +29,7 @@ export function SmartClipboardPrompt() {
   const { showToast } = useToast();
 
   const clipboardDetectionEnabled = useAppStore((state) => state.clipboardDetectionEnabled);
+  const isLockScreenActive = useAppStore((state) => state.isLockScreenActive);
   const setLastDismissedClipboardHash = useAppStore((state) => state.setLastDismissedClipboardHash);
 
   const { accounts } = useAccounts();
@@ -38,7 +40,13 @@ export function SmartClipboardPrompt() {
   const isChecking = useRef(false);
 
   const checkClipboard = useCallback(async () => {
-    if (!clipboardDetectionEnabled || isChecking.current) return;
+    if (
+      !clipboardDetectionEnabled ||
+      isChecking.current ||
+      useAppStore.getState().isLockScreenActive
+    ) {
+      return;
+    }
     isChecking.current = true;
 
     try {
@@ -67,12 +75,17 @@ export function SmartClipboardPrompt() {
   }, [clipboardDetectionEnabled, slideAnim]);
 
   useEffect(() => {
-    // Check on mount
+    if (isLockScreenActive) {
+      setIntent(null);
+      slideAnim.setValue(140);
+      return;
+    }
+    // Check on mount and whenever AppLock unlocks
     checkClipboard();
 
     // Check when returning from background (e.g. after returning from GPay / PhonePe)
     const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
-      if (nextState === 'active') {
+      if (nextState === 'active' && !useAppStore.getState().isLockScreenActive) {
         checkClipboard();
       }
     });
@@ -86,7 +99,7 @@ export function SmartClipboardPrompt() {
       subscription.remove();
       resetSub.remove();
     };
-  }, [checkClipboard, slideAnim]);
+  }, [checkClipboard, isLockScreenActive, slideAnim]);
 
   const handleDismiss = () => {
     if (intent) {
@@ -102,11 +115,8 @@ export function SmartClipboardPrompt() {
   const handleQuickSave = async () => {
     if (!intent) return;
 
-    // Pick primary account, first valid liquid bank account, or fallback
-    const targetAccount =
-      accounts.find((a) => a.isPrimary) ||
-      accounts.find((a) => ['savings', 'checking', 'current', 'wallet'].includes(a.type)) ||
-      accounts[0];
+    const defaultId = pickDefaultAccountId(accounts);
+    const targetAccount = defaultId ? accounts.find((a) => a.id === defaultId) : undefined;
 
     if (!targetAccount) {
       showToast('Please create an account first to log expenses', 'error');
@@ -120,7 +130,7 @@ export function SmartClipboardPrompt() {
         amount: intent.amount,
         type: 'expense',
         merchant: intent.merchant,
-        category: 'Food & Dining', // Smart rules engine will automatically override if a rule matches!
+        category: 'Dining', // Smart rules engine will automatically override if a rule matches!
         date: intent.dateStr === formatLocalDate(new Date()) ? new Date().toISOString() : intent.dateStr,
         isRecurring: false,
         note: intent.upiRef ? `UPI Ref: ${intent.upiRef}` : 'Logged via Quick Clipboard',

@@ -28,10 +28,22 @@ export function getAccountTypeShortLabel(type: AccountType | string): string {
   return ACCOUNT_TYPE_SHORT_LABELS[type] ?? 'Account';
 }
 
-export function pickDefaultAccountId(accounts: Account[]): string | null {
+export function pickDefaultAccountId<
+  T extends { id: string; type?: string; isPrimary?: boolean },
+>(accounts: T[]): string | null {
   if (accounts.length === 0) return null;
   const primary = accounts.find((acc) => acc.isPrimary);
-  return primary ? primary.id : accounts[0].id;
+  if (primary) return primary.id;
+
+  const liquid = accounts.find((acc) => acc.type && isLiquidAccountType(acc.type));
+  if (liquid) return liquid.id;
+
+  const spendingOrCredit = accounts.find(
+    (acc) => acc.type && acc.type !== 'lent' && acc.type !== 'loan' && acc.type !== 'borrowed'
+  );
+  if (spendingOrCredit) return spendingOrCredit.id;
+
+  return accounts[0].id;
 }
 
 export function pickDefaultSourceAccountId(

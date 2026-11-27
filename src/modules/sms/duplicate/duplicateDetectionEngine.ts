@@ -36,9 +36,25 @@ const NOISE_TOKENS = new Set([
   'kotak',
   'idfc',
   'paytm',
+  'paytmqr',
   'gpay',
+  'googlepay',
   'phonepe',
+  'phonepeqr',
   'cred',
+  'bharatpe',
+  'vyapar',
+  'pinelabs',
+  'razorpay',
+  'rzp',
+  'cashfree',
+  'billdesk',
+  'easebuzz',
+  'ccavenue',
+  'payu',
+  'airpay',
+  'setu',
+  'mswipe',
   'ltd',
   'pvt',
   'private',
@@ -50,6 +66,7 @@ const NOISE_TOKENS = new Set([
   'okicici',
   'okhdfcbank',
   'okaxis',
+  'okbizaxis',
   'oksbi',
   'ybl',
   'ibl',
@@ -88,7 +105,12 @@ export function normalizeMerchantTokens(merchant?: string): string[] {
   const withoutVpaDomain = trimmed.split('@')[0];
   const tokens = withoutVpaDomain
     .split(/[^a-z0-9]+/)
-    .filter((token) => token.length >= 2 && !NOISE_TOKENS.has(token) && !/^\d{5,}$/.test(token));
+    .filter(
+      (token) =>
+        token.length >= 2 &&
+        !NOISE_TOKENS.has(token) &&
+        !/^(?:\d{4,}|q\d{4,})$/i.test(token)
+    );
 
   return Array.from(new Set(tokens));
 }

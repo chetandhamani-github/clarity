@@ -85,4 +85,33 @@ describe('balance history DAOs', () => {
       { date: '2026-11-26', value: 15000 },
     ]);
   });
+
+  it('excludes future-dated transactions (> today) when reconstructing today and prior history', async () => {
+    (getAccountById as jest.Mock).mockResolvedValueOnce({
+      id: 'acc-1',
+      name: 'Checking',
+      type: 'checking',
+      balance: 9000, // Already reduced by future-dated 1000 expense on 2026-11-28
+    });
+    mockDb.getAllAsync.mockResolvedValueOnce([
+      {
+        account_id: 'acc-1',
+        amount: 1000,
+        type: 'expense',
+        date: '2026-11-28',
+      },
+      {
+        account_id: 'acc-1',
+        amount: 500,
+        type: 'income',
+        date: '2026-11-26',
+      },
+    ]);
+
+    const accHistory = await getAccountHistory('acc-1', 2);
+    expect(accHistory).toEqual([
+      { date: '2026-11-25', value: 9500 },
+      { date: '2026-11-26', value: 10000 },
+    ]);
+  });
 });

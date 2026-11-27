@@ -11,4 +11,6 @@ public interface SplitwiseService {
     SplitSyncResponse sync(String installationId, SplitSyncRequest request, String authHeader);
 
     SplitwiseSummaryResponse getSummary(String installationId);
+
+    SplitwiseSummaryResponse getSummary(String installationId, String authHeader);
 }

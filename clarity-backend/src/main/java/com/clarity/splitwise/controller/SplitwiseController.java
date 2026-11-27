@@ -42,9 +42,13 @@ public class SplitwiseController {
             description = "Returns count of people, debts, settlements, and net balance")
     public ResponseEntity<SplitwiseSummaryResponse> getSummary(
             @Parameter(description = "Device installation ID", required = true)
-            @RequestHeader("X-Installation-Id") String installationId) {
+            @RequestHeader("X-Installation-Id") String installationId,
+            @Parameter(description = "User authentication bearer token")
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
 
-        SplitwiseSummaryResponse summary = splitwiseService.getSummary(installationId);
+        SplitwiseSummaryResponse summary = authHeader != null && !authHeader.isBlank()
+                ? splitwiseService.getSummary(installationId, authHeader)
+                : splitwiseService.getSummary(installationId);
         return ResponseEntity.ok(summary);
     }
 }

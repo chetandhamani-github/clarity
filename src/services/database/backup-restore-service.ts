@@ -1,4 +1,5 @@
 import { mmkv } from '@/lib/storage';
+import { decryptBackupPayload } from '@/services/cloud/backup-crypto';
 import { useAppStore } from '@/store/use-app-store';
 import { getLocalTodayYmd } from '@/utils/date';
 import { getDatabase } from './index';
@@ -1239,27 +1240,35 @@ export async function restoreFromLocalJSONString(
   try {
     let jsonToParse = rawContent.trim();
 
-    // Check if payload is encrypted with AES-256-GCM
+    let parsedCheck: any = null;
     let isEncrypted = false;
     try {
-      const parsedCheck = JSON.parse(jsonToParse);
+      parsedCheck = JSON.parse(jsonToParse);
       if (parsedCheck && parsedCheck.salt && parsedCheck.iv && parsedCheck.ciphertext) {
         isEncrypted = true;
       }
     } catch {
-      // Not JSON
+      return {
+        success: false,
+        error: 'Selected file is not valid JSON.',
+      };
     }
 
+    let payload: any = parsedCheck;
     if (isEncrypted) {
       if (!passphrase) {
         return { success: false, isEncrypted: true };
       }
-      const { decryptBackupPayload } = await import('@/services/cloud/backup-crypto');
-      const encryptedObj = JSON.parse(jsonToParse);
-      jsonToParse = await decryptBackupPayload(encryptedObj, passphrase);
+      const decrypted = await decryptBackupPayload<unknown>(parsedCheck, passphrase);
+      payload = typeof decrypted === 'string' ? JSON.parse(decrypted) : decrypted;
     }
 
-    const payload = JSON.parse(jsonToParse);
+    if (!payload || typeof payload !== 'object') {
+      return {
+        success: false,
+        error: 'Backup file does not contain a valid Clarity backup payload.',
+      };
+    }
 
     // Normalize legacy or alternative shapes if needed
     let canonicalPayload: ClarityBackupPayload = payload;

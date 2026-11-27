@@ -2383,7 +2383,15 @@ function resolveAmountTag(suffix?: string, sign?: string): 'DR' | 'CR' | null {
 }
 
 function extractAmountTokens(text: string): ExtractedAmountToken[] {
-  const results: ExtractedAmountToken[] = [];
+  const matchedTokens: Array<{
+    start: number;
+    end: number;
+    token: ExtractedAmountToken;
+  }> = [];
+
+  const overlapsExisting = (start: number, end: number): boolean =>
+    matchedTokens.some((existing) => start < existing.end && end > existing.start);
+
   // Require [+-] to attach directly to currency/digits so an empty Debit "-" placeholder never marks a Credit amount as DR.
   const tokenRegex =
     /(?:^|[\s|(/:[])(?:(CR|DR)\s+)?([+-](?=(?:₹|rs\.?|inr)?\d))?(?:₹|rs\.?|inr)?\s*(\d{1,3}(?:,\d{2,3})*\.\d{2}|\d+\.\d{2})\s*(?:\(?\s*(CR|DR|C|D)\.?\s*\)?)?(?=$|[\s|,;)\]])/gi;
@@ -2393,46 +2401,69 @@ function extractAmountTokens(text: string): ExtractedAmountToken[] {
     const val = parseFloat(m[3].replace(/,/g, ''));
     if (isNaN(val) || val < 0 || val >= 100000000) continue;
 
-    results.push({
-      value: val,
-      raw: m[0].replace(/^[\s|(/:[]+/, '').trim(),
-      tag: resolveAmountTag(m[4] || m[1], m[2]),
+    const raw = m[0].replace(/^[\s|(/:[]+/, '').trim();
+    const start = m.index + (m[0].length - m[0].replace(/^[\s|(/:[]+/, '').length);
+    const end = m.index + m[0].length;
+    matchedTokens.push({
+      start,
+      end,
+      token: {
+        value: val,
+        raw,
+        tag: resolveAmountTag(m[4] || m[1], m[2]),
+      },
     });
   }
 
-  if (results.length === 0) {
-    const fallbackRegex =
-      /(?:^|[\s|(/:[])(?:(CR|DR)\s+)?([+-](?=(?:₹|rs\.?|inr)?\d))?(?:₹|rs\.?|inr)?\s*(\d{1,3}(?:,\d{2,3})+)\s*(?:\(?\s*(CR|DR|C|D)\.?\s*\)?)?(?=$|[\s|,;)\]])/gi;
-    while ((m = fallbackRegex.exec(text)) !== null) {
-      const val = parseFloat(m[3].replace(/,/g, ''));
-      if (isNaN(val) || val <= 0 || val >= 100000000) continue;
-      results.push({
+  // Extract comma-separated integers (e.g. 25,000) and explicitly currency/tag-anchored integers
+  // (e.g. ₹500 or 500 DR) even when a decimal closing balance (e.g. 10,000.00) is on the same row.
+  const commaIntegerRegex =
+    /(?:^|[\s|(/:[])(?:(CR|DR)\s+)?([+-](?=(?:₹|rs\.?|inr)?\d))?(?:₹|rs\.?|inr)?\s*(\d{1,3}(?:,\d{2,3})+)\s*(?:\(?\s*(CR|DR|C|D)\.?\s*\)?)?(?=$|[\s|,;)\]])/gi;
+  while ((m = commaIntegerRegex.exec(text)) !== null) {
+    const raw = m[0].replace(/^[\s|(/:[]+/, '').trim();
+    const start = m.index + (m[0].length - m[0].replace(/^[\s|(/:[]+/, '').length);
+    const end = m.index + m[0].length;
+    if (overlapsExisting(start, end)) continue;
+
+    const val = parseFloat(m[3].replace(/,/g, ''));
+    if (isNaN(val) || val <= 0 || val >= 100000000) continue;
+    matchedTokens.push({
+      start,
+      end,
+      token: {
         value: val,
-        raw: m[0].replace(/^[\s|(/:[]+/, '').trim(),
+        raw,
         tag: resolveAmountTag(m[4] || m[1], m[2]),
-      });
-    }
+      },
+    });
   }
 
-  if (results.length === 0) {
-    // Allow plain integers under 1,000 when explicitly anchored by currency symbol or CR/DR marker.
-    const taggedIntegerRegex =
-      /(?:^|[\s|(/:[])(?:(CR|DR)\s+)?(?:(₹|rs\.?|inr)\s*([+-])?\s*(\d{1,6})(?:\s*(CR|DR))?|([+-])?(\d{1,6})\s*(CR|DR)\.?\b)(?=$|[\s|,;)\]])/gi;
-    while ((m = taggedIntegerRegex.exec(text)) !== null) {
-      const rawDigits = m[4] || m[7];
-      if (!rawDigits) continue;
-      const val = parseFloat(rawDigits);
-      if (isNaN(val) || val <= 0) continue;
-      const tag = resolveAmountTag(m[5] || m[8] || m[1], m[3] || m[6]);
-      results.push({
+  const taggedIntegerRegex =
+    /(?:^|[\s|(/:[])(?:(CR|DR)\s+)?(?:(₹|rs\.?|inr)\s*([+-])?\s*(\d{1,6})(?:\s*(CR|DR))?|([+-])?(\d{1,6})\s*(CR|DR)\.?\b)(?=$|[\s|,;)\]])/gi;
+  while ((m = taggedIntegerRegex.exec(text)) !== null) {
+    const raw = m[0].replace(/^[\s|(/:[]+/, '').trim();
+    const start = m.index + (m[0].length - m[0].replace(/^[\s|(/:[]+/, '').length);
+    const end = m.index + m[0].length;
+    if (overlapsExisting(start, end)) continue;
+
+    const rawDigits = m[4] || m[7];
+    if (!rawDigits) continue;
+    const val = parseFloat(rawDigits);
+    if (isNaN(val) || val <= 0) continue;
+    const tag = resolveAmountTag(m[5] || m[8] || m[1], m[3] || m[6]);
+    matchedTokens.push({
+      start,
+      end,
+      token: {
         value: val,
-        raw: m[0].replace(/^[\s|(/:[]+/, '').trim(),
+        raw,
         tag,
-      });
-    }
+      },
+    });
   }
 
-  return results;
+  matchedTokens.sort((a, b) => a.start - b.start);
+  return matchedTokens.map((entry) => entry.token);
 }
 
 interface ParsedPdfRowResult {
@@ -2635,6 +2666,7 @@ function parseBankStatementPdfTextWithMeta(text: string): InternalPdfParseResult
     confidence: DirectionConfidence;
   }> = [];
   const consumedLines = new Set<number>();
+  const noiseLines = new Set<number>();
   const errors: string[] = [];
 
   const lines = mergeSplitDateLines(
@@ -2650,7 +2682,7 @@ function parseBankStatementPdfTextWithMeta(text: string): InternalPdfParseResult
   while (i < lines.length) {
     const line = lines[i];
     if (STATEMENT_NOISE_LINE_REGEX.test(line)) {
-      consumedLines.add(i);
+      noiseLines.add(i);
       i++;
       continue;
     }
@@ -2754,7 +2786,7 @@ function parseBankStatementPdfTextWithMeta(text: string): InternalPdfParseResult
   // Pass 2: Sequential columnar tokens (SBI/ICICI style vertical cells) for any unconsumed lines
   let idx = 0;
   while (idx < lines.length) {
-    if (consumedLines.has(idx)) {
+    if (consumedLines.has(idx) || noiseLines.has(idx)) {
       idx++;
       continue;
     }
@@ -2764,6 +2796,10 @@ function parseBankStatementPdfTextWithMeta(text: string): InternalPdfParseResult
       const firstDateMatch = line.match(DATE_REGEX);
       const normalizedDate = firstDateMatch ? normalizeDate(firstDateMatch[0]) : null;
       let nextIdx = idx + 1;
+
+      while (nextIdx < lines.length && (noiseLines.has(nextIdx) || STATEMENT_NOISE_LINE_REGEX.test(lines[nextIdx]))) {
+        nextIdx++;
+      }
 
       if (
         !isDualDateHeader &&
@@ -2782,7 +2818,7 @@ function parseBankStatementPdfTextWithMeta(text: string): InternalPdfParseResult
         !DUAL_DATE_ONLY_REGEX.test(lines[nextIdx])
       ) {
         const token = lines[nextIdx];
-        if (STATEMENT_NOISE_LINE_REGEX.test(token)) {
+        if (noiseLines.has(nextIdx) || STATEMENT_NOISE_LINE_REGEX.test(token)) {
           nextIdx++;
           continue;
         }
@@ -2791,7 +2827,14 @@ function parseBankStatementPdfTextWithMeta(text: string): InternalPdfParseResult
           break;
         }
         if (amountCells) {
-          const peek = nextIdx + 1 < lines.length ? lines[nextIdx + 1] : '';
+          let peekIdx = nextIdx + 1;
+          while (
+            peekIdx < lines.length &&
+            (noiseLines.has(peekIdx) || STATEMENT_NOISE_LINE_REGEX.test(lines[peekIdx]))
+          ) {
+            peekIdx++;
+          }
+          const peek = peekIdx < lines.length ? lines[peekIdx] : '';
           if (parseColumnarAmountLine(peek)) {
             break;
           }
@@ -2808,6 +2851,10 @@ function parseBankStatementPdfTextWithMeta(text: string): InternalPdfParseResult
         !DUAL_DATE_ONLY_REGEX.test(lines[nextIdx]) &&
         parsedAmounts.length < 4
       ) {
+        if (noiseLines.has(nextIdx) || STATEMENT_NOISE_LINE_REGEX.test(lines[nextIdx])) {
+          nextIdx++;
+          continue;
+        }
         const cells = parseColumnarAmountLine(lines[nextIdx]);
         if (!cells) break;
         parsedAmounts.push(...cells);

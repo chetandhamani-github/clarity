@@ -26,3 +26,4 @@ export const useRemindersStore = create<RemindersUiState>((set) => ({
       searchQuery: '',
     }),
 }));
+

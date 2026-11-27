@@ -9,6 +9,7 @@ import {
   updateAccount,
   updateAccountBalance,
 } from '@/services/database/account-dao';
+import { isTransactionAfterSnapshot } from '@/services/database/reconciliation-service';
 import {
   findManualMatch,
   insertTransaction,
@@ -557,6 +558,8 @@ export class NotificationLedgerService {
               type: txType,
               timestamp: transaction.timestamp,
               rawBody: transaction.rawBody,
+              merchant: effectiveMerchant,
+              note: finalNote,
             });
           }
         }
@@ -669,27 +672,34 @@ export class NotificationLedgerService {
         ) {
           let reconciledBalance = latestBalance.available_balance;
           if (latestBalance.transaction_date) {
-            const subsequentTxs =
+            const snapshotYmd = latestBalance.transaction_date.slice(0, 10);
+            const candidateTxs =
               (await database.getAllAsync<{
                 id: string;
                 amount: number;
                 type: string;
                 account_id: string;
                 to_account_id?: string | null;
+                date?: string | null;
+                created_at?: string | null;
               }>(
-                `SELECT id, amount, type, account_id, to_account_id
+                `SELECT id, amount, type, account_id, to_account_id, date, created_at
                  FROM transactions
                  WHERE (account_id = ? OR to_account_id = ?)
-                   AND date > ?
+                   AND SUBSTR(date, 1, 10) >= ?
                    AND (id != ? OR ? IS NULL)`,
                 [
                   account.id,
                   account.id,
-                  latestBalance.transaction_date,
+                  snapshotYmd,
                   latestBalance.transaction_id ?? null,
                   latestBalance.transaction_id ?? null,
                 ]
               )) ?? [];
+
+            const subsequentTxs = candidateTxs.filter((tx) =>
+              isTransactionAfterSnapshot(tx.date, tx.created_at, latestBalance.transaction_date)
+            );
 
             let deltaSinceSnapshot = 0;
             for (const tx of subsequentTxs) {
@@ -875,6 +885,58 @@ export class NotificationLedgerService {
     }
   }
 
+  private static textMentionsAccountTransfer(text: string, account?: Account): boolean {
+    if (!text || !account) return false;
+
+    const mask = normalizeNotificationMask(account.lastFour);
+    if (
+      mask &&
+      new RegExp(`(?:xx|x|\\*|ending\\s+|a\\/c\\s*)${mask}\\b`, 'i').test(text)
+    ) {
+      return true;
+    }
+
+    if (!/\b(?:transfer(?:red)?|xfer|neft|imps|rtgs|trf)\b/i.test(text)) {
+      return false;
+    }
+
+    const keys = [
+      account.institution ? getBankKey(account.institution) : '',
+      account.name ? getBankKey(account.name) : '',
+    ].filter(Boolean);
+
+    for (const [pattern, key] of BANK_KEY_RULES) {
+      if (keys.includes(key) && pattern.test(text)) {
+        return true;
+      }
+    }
+
+    const ignoredTokens = new Set([
+      'bank',
+      'savings',
+      'current',
+      'checking',
+      'account',
+      'card',
+      'credit',
+      'debit',
+      'wallet',
+      'payment',
+      'payments',
+      'primary',
+      'new',
+    ]);
+    const fallbackWords = `${account.institution || ''} ${account.name || ''}`
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length >= 3 && !ignoredTokens.has(w));
+
+    return fallbackWords.some((word) => {
+      const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`\\b${escaped}\\b`, 'i').test(text);
+    });
+  }
+
   private static async pairCrossAccountTransfer(incoming: {
     id: string;
     accountId: string;
@@ -883,6 +945,8 @@ export class NotificationLedgerService {
     type: 'expense' | 'income';
     timestamp: number;
     rawBody?: string;
+    merchant?: string;
+    note?: string;
   }): Promise<void> {
     if (
       incoming.rawBody &&
@@ -921,6 +985,29 @@ export class NotificationLedgerService {
         counterpart.note &&
         /\b(?:reversal|refund|cashback|reward)\b/i.test(counterpart.note)
       ) {
+        return;
+      }
+
+      // Require explicit self-transfer / internal-transfer / counterpart-account signals so unrelated
+      // debit+credit notifications of equal amount are never auto-merged or deleted.
+      const selfTransferRegex =
+        /\b(?:self[\s-]*transfer|own[\s-]*account|internal[\s-]*transfer|credit[\s-]*card[\s-]*(?:bill[\s-]*)?payment|cc[\s-]*payment|bill[\s-]*pay[\s-]*card)\b/i;
+      const incomingText = `${incoming.rawBody || ''} ${incoming.merchant || ''} ${incoming.note || ''}`.trim();
+      const counterpartText = `${counterpart.note || ''} ${counterpart.merchant || ''}`.trim();
+      let hasSelfTransferIntent =
+        selfTransferRegex.test(incomingText) || selfTransferRegex.test(counterpartText);
+
+      if (!hasSelfTransferIntent) {
+        const accounts = await getAllAccounts();
+        const incomingAccount = accounts.find((a) => a.id === incoming.accountId);
+        const counterpartAccount = accounts.find((a) => a.id === counterpart.account_id);
+
+        hasSelfTransferIntent =
+          this.textMentionsAccountTransfer(incomingText, counterpartAccount) ||
+          this.textMentionsAccountTransfer(counterpartText, incomingAccount);
+      }
+
+      if (!hasSelfTransferIntent) {
         return;
       }
 

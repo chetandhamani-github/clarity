@@ -331,7 +331,15 @@ export class RemindersRepository {
 
     let nextReminder: Reminder | undefined;
     if (existing.repeatRule !== 'none') {
-      const nextDate = calculateNextReminderDate(existing.remindAtDate, existing.repeatRule);
+      const todayStr = getLocalTodayYmd();
+      let nextDate = calculateNextReminderDate(existing.remindAtDate, existing.repeatRule);
+      let safety = 0;
+      while (nextDate < todayStr && safety < 500) {
+        const candidate = calculateNextReminderDate(nextDate, existing.repeatRule);
+        if (candidate <= nextDate) break;
+        nextDate = candidate;
+        safety++;
+      }
       nextReminder = await this.insertReminder({
         title: existing.title,
         notes: existing.notes,
@@ -365,3 +373,4 @@ export class RemindersRepository {
     DeviceEventEmitter.emit('remindersUpdated');
   }
 }
+

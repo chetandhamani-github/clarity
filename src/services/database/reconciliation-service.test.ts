@@ -1,10 +1,12 @@
 import {
   getAccountReconciliationStatus,
   createBalanceAdjustmentEntry,
+  isTransactionAfterSnapshot,
 } from './reconciliation-service';
 import { getDatabase } from './index';
 import { getAccountById } from './account-dao';
 import { insertTransaction } from './transaction-dao';
+import { formatLocalDate } from '@/utils/format';
 
 jest.mock('./index', () => ({
   getDatabase: jest.fn(),
@@ -124,5 +126,69 @@ describe('Reconciliation Service', () => {
       }),
       { updateAccountBalance: true }
     );
+  });
+
+  it('includes same-day date-only manual transactions logged after an ISO snapshot timestamp', async () => {
+    expect(
+      isTransactionAfterSnapshot(
+        '2026-11-27',
+        '2026-11-27T14:00:00.000Z',
+        '2026-11-27T10:00:00.000Z'
+      )
+    ).toBe(true);
+    expect(
+      isTransactionAfterSnapshot(
+        '2026-11-27',
+        '2026-11-27T08:00:00.000Z',
+        '2026-11-27T10:00:00.000Z'
+      )
+    ).toBe(false);
+
+    (getAccountById as jest.Mock).mockResolvedValueOnce({
+      id: 'acc-1',
+      name: 'HDFC Savings',
+      type: 'savings',
+      balance: 9500,
+    });
+    mockDb.getFirstAsync.mockResolvedValueOnce({
+      available_balance: 10000,
+      transaction_date: '2026-11-27T10:00:00.000Z',
+      transaction_id: 'tx-sms-snap',
+    });
+    mockDb.getAllAsync.mockResolvedValueOnce([
+      {
+        id: 'tx-pre',
+        amount: 200,
+        type: 'expense',
+        account_id: 'acc-1',
+        date: '2026-11-27',
+        created_at: '2026-11-27T08:00:00.000Z',
+      },
+      {
+        id: 'tx-post',
+        amount: 500,
+        type: 'expense',
+        account_id: 'acc-1',
+        date: '2026-11-27',
+        created_at: '2026-11-27T12:00:00.000Z',
+      },
+    ]);
+
+    const status = await getAccountReconciliationStatus('acc-1');
+    expect(status?.calculatedBalance).toBe(9500);
+    expect(status?.discrepancy).toBe(0);
+    expect(status?.hasDiscrepancy).toBe(false);
+  });
+
+  it('uses snapshot local calendar date across UTC midnight boundaries', () => {
+    const snapshotIso = '2026-11-27T20:00:00.000Z';
+    const localSnapYmd = formatLocalDate(new Date(snapshotIso));
+
+    expect(
+      isTransactionAfterSnapshot(localSnapYmd, '2026-11-27T19:00:00.000Z', snapshotIso)
+    ).toBe(false);
+    expect(
+      isTransactionAfterSnapshot(localSnapYmd, '2026-11-27T21:00:00.000Z', snapshotIso)
+    ).toBe(true);
   });
 });

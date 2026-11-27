@@ -37,6 +37,15 @@ export async function getExportStats(): Promise<ExportStats> {
   };
 }
 
+function escapeCsvCell(val: string | number | undefined | null): string {
+  if (val === undefined || val === null) return '""';
+  let str = String(val);
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
 export async function exportTransactionsToCSV(): Promise<{
   success: boolean;
   uri?: string;
@@ -58,26 +67,20 @@ export async function exportTransactionsToCSV(): Promise<{
       'Recurring',
       'Note',
     ];
-    const rows = transactions.map((t) => {
-      const escape = (val: string | number | undefined | null) => {
-        if (val === undefined || val === null) return '""';
-        const str = String(val).replace(/"/g, '""');
-        return `"${str}"`;
-      };
-
-      return [
-        escape(t.id),
-        escape(t.date),
-        escape(t.type),
-        escape(t.accountName),
-        escape(t.toAccountName || ''),
-        escape(t.category),
-        escape(t.merchant),
+    const rows = transactions.map((t) =>
+      [
+        escapeCsvCell(t.id),
+        escapeCsvCell(t.date),
+        escapeCsvCell(t.type),
+        escapeCsvCell(t.accountName),
+        escapeCsvCell(t.toAccountName || ''),
+        escapeCsvCell(t.category),
+        escapeCsvCell(t.merchant),
         Number(t.amount).toFixed(2),
         t.isRecurring ? 'Yes' : 'No',
-        escape(t.note || ''),
-      ].join(',');
-    });
+        escapeCsvCell(t.note || ''),
+      ].join(',')
+    );
 
     const csvContent = [headers.join(','), ...rows].join('\n');
     const filename = `clarity_transactions_${getLocalTodayYmd()}.csv`;
@@ -240,6 +243,16 @@ export interface StatementExportOptions {
   action?: 'share' | 'print';
 }
 
+function escapeHtml(value: unknown): string {
+  if (value === undefined || value === null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export async function exportCustomStatement(options: StatementExportOptions): Promise<{
   success: boolean;
   uri?: string;
@@ -259,6 +272,7 @@ export async function exportCustomStatement(options: StatementExportOptions): Pr
       : null;
 
     const sym = getCurrencySymbol();
+    const safeSym = escapeHtml(sym);
     const totalIncome = transactions
       .filter((t) => t.type === 'income')
       .reduce((sum, t) => sum + t.amount, 0);
@@ -289,26 +303,20 @@ export async function exportCustomStatement(options: StatementExportOptions): Pr
         'Recurring',
         'Note',
       ];
-      const rows = transactions.map((t) => {
-        const escape = (val: string | number | undefined | null) => {
-          if (val === undefined || val === null) return '""';
-          const str = String(val).replace(/"/g, '""');
-          return `"${str}"`;
-        };
-
-        return [
-          escape(t.id),
-          escape(t.date),
-          escape(t.type),
-          escape(t.accountName),
-          escape(t.toAccountName || ''),
-          escape(t.category),
-          escape(t.merchant),
+      const rows = transactions.map((t) =>
+        [
+          escapeCsvCell(t.id),
+          escapeCsvCell(t.date),
+          escapeCsvCell(t.type),
+          escapeCsvCell(t.accountName),
+          escapeCsvCell(t.toAccountName || ''),
+          escapeCsvCell(t.category),
+          escapeCsvCell(t.merchant),
           t.amount,
           t.isRecurring ? 'Yes' : 'No',
-          escape(t.note || ''),
-        ].join(',');
-      });
+          escapeCsvCell(t.note || ''),
+        ].join(',')
+      );
 
       const csvContent = [headers.join(','), ...rows].join('\n');
       const filename = `clarity_statement_${getLocalTodayYmd()}.csv`;
@@ -334,17 +342,24 @@ export async function exportCustomStatement(options: StatementExportOptions): Pr
           const isIncome = t.type === 'income';
           const sign = isIncome ? '+' : t.type === 'expense' ? '-' : '';
           const color = isIncome ? '#10B981' : '#111827';
+          const displayMerchant = escapeHtml(t.type === 'transfer' ? 'Transfer' : t.merchant);
+          const accountLabel = `${escapeHtml(t.accountName)}${t.toAccountName ? ` → ${escapeHtml(t.toAccountName)}` : ''}`;
           return `
             <tr>
-              <td>${t.date}</td>
-              <td>${t.type === 'transfer' ? 'Transfer' : t.merchant}</td>
-              <td><span class="badge">${t.category}</span></td>
-              <td>${t.accountName}${t.toAccountName ? ` → ${t.toAccountName}` : ''}</td>
-              <td style="text-align: right; color: ${color}; font-weight: 600;">${sign}${sym}${t.amount.toFixed(2)}</td>
+              <td>${escapeHtml(t.date)}</td>
+              <td>${displayMerchant}</td>
+              <td><span class="badge">${escapeHtml(t.category)}</span></td>
+              <td>${accountLabel}</td>
+              <td style="text-align: right; color: ${color}; font-weight: 600;">${sign}${safeSym}${t.amount.toFixed(2)}</td>
             </tr>
           `;
         })
         .join('');
+
+      const safeDateRangeLabel = escapeHtml(dateRangeLabel);
+      const safeAccountSummary = selectedAccount
+        ? `${escapeHtml(selectedAccount.name)} (${escapeHtml(selectedAccount.type)})`
+        : 'All Accounts';
 
       const htmlContent = `
         <!DOCTYPE html>
@@ -377,25 +392,25 @@ export async function exportCustomStatement(options: StatementExportOptions): Pr
               <div class="title">Official Financial Statement</div>
             </div>
             <div class="meta">
-              <div><strong>Period:</strong> ${dateRangeLabel}</div>
-              <div><strong>Account:</strong> ${selectedAccount ? `${selectedAccount.name} (${selectedAccount.type})` : 'All Accounts'}</div>
-              <div><strong>Generated:</strong> ${new Date().toLocaleDateString()}</div>
+              <div><strong>Period:</strong> ${safeDateRangeLabel}</div>
+              <div><strong>Account:</strong> ${safeAccountSummary}</div>
+              <div><strong>Generated:</strong> ${escapeHtml(new Date().toLocaleDateString())}</div>
             </div>
           </div>
 
           <div class="summary-cards">
             <div class="card">
               <div class="card-label">Total Income</div>
-              <div class="card-value" style="color: #10B981;">+${sym}${totalIncome.toFixed(2)}</div>
+              <div class="card-value" style="color: #10B981;">+${safeSym}${totalIncome.toFixed(2)}</div>
             </div>
             <div class="card">
               <div class="card-label">Total Expenses</div>
-              <div class="card-value" style="color: #EF4444;">-${sym}${totalExpense.toFixed(2)}</div>
+              <div class="card-value" style="color: #EF4444;">-${safeSym}${totalExpense.toFixed(2)}</div>
             </div>
             <div class="card">
               <div class="card-label">Net Cash Flow</div>
               <div class="card-value" style="color: ${netCashFlow >= 0 ? '#10B981' : '#EF4444'};">
-                ${netCashFlow >= 0 ? '+' : ''}${sym}${netCashFlow.toFixed(2)}
+                ${netCashFlow >= 0 ? '+' : ''}${safeSym}${netCashFlow.toFixed(2)}
               </div>
             </div>
           </div>
@@ -417,7 +432,7 @@ export async function exportCustomStatement(options: StatementExportOptions): Pr
           </table>
 
           <div class="footer">
-            Generated securely by Clarity Personal Finance App on ${new Date().toLocaleString()}
+            Generated securely by Clarity Personal Finance App on ${escapeHtml(new Date().toLocaleString())}
           </div>
         </body>
         </html>

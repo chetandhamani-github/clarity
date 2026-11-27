@@ -1,15 +1,16 @@
-import React, { useCallback, useState } from 'react';
-import { View, StyleSheet, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useAccounts } from '@/hooks/use-accounts';
-import { useCreateTransaction } from '@/hooks/use-transactions';
 import { VoiceTransactionModal } from '@/components/modals/VoiceTransactionModal';
 import { useToast } from '@/components/ui';
+import { useAccounts } from '@/hooks/use-accounts';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
+import { useCreateTransaction } from '@/hooks/use-transactions';
+import type { ParsedVoiceTransaction } from '@/services/voice/voice-parser';
 import { useTheme } from '@/theme';
+import { pickDefaultAccountId } from '@/utils/account-metrics';
 import { getCurrencySymbol } from '@/utils/format';
 import { haptics } from '@/utils/haptics';
-import type { ParsedVoiceTransaction } from '@/services/voice/voice-parser';
+import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 export default function VoiceAddScreen() {
   const router = useRouter();
@@ -54,10 +55,10 @@ export default function VoiceAddScreen() {
   const handleDirectSave = useCallback(
     (parsed: ParsedVoiceTransaction) => {
       setModalVisible(false);
+      const defaultAccountId = pickDefaultAccountId(accounts);
       const targetAccount =
         accounts.find((a) => a.id === parsed.accountId) ||
-        accounts.find((a) => a.isPrimary) ||
-        accounts[0];
+        (defaultAccountId ? accounts.find((a) => a.id === defaultAccountId) : undefined);
       if (!targetAccount) {
         showToast('Please add a bank account first', 'error');
         handleDismiss();
@@ -69,8 +70,8 @@ export default function VoiceAddScreen() {
           accountId: targetAccount.id,
           amount: parsed.amount,
           type: parsed.type || 'expense',
-          merchant: parsed.merchant || 'General',
-          category: parsed.category || 'General',
+          merchant: parsed.merchant || 'Other',
+          category: parsed.category || 'Other',
           date: new Date().toISOString(),
           note: parsed.note || 'Logged via Quick Voice',
           isRecurring: false,

@@ -79,7 +79,13 @@ export function TimePickerModal({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
       <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity
           activeOpacity={1}
@@ -184,10 +190,9 @@ export function TimePickerModal({
                   key={preset.value}
                   style={[
                     styles.presetChip,
-                    {
-                      backgroundColor: active ? colors.primaryContainer : colors.surfaceContainerHighest,
-                      borderColor: active ? colors.primary : 'transparent',
-                    },
+                    active
+                      ? { backgroundColor: colors.primaryContainer, borderColor: colors.primary }
+                      : [styles.presetChipInactive, { backgroundColor: colors.surfaceContainerHighest }],
                   ]}
                   onPress={() => {
                     const parsed = parseHm(preset.value);
@@ -196,6 +201,8 @@ export function TimePickerModal({
                   }}
                 >
                   <Text
+                    variant="labelMd"
+                    numberOfLines={1}
                     style={[
                       styles.presetText,
                       { color: active ? colors.onPrimaryContainer : colors.onSurface },
@@ -305,10 +312,17 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: radius.md,
     borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  presetChipInactive: {
+    borderColor: 'transparent',
   },
   presetText: {
     ...typography.labelMd,
     fontFamily: fontFamilies.semiBold,
+    flexShrink: 0,
   },
   footer: {
     flexDirection: 'row',

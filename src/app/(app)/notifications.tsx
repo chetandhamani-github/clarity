@@ -371,9 +371,6 @@ const getStyles = (colors: ThemeColors) => {
     headerIconBtn: {
       padding: 6,
     },
-    headerPlaceholder: {
-      width: 44,
-    },
     tabBarContainer: {
       backgroundColor: colors.surfaceContainerLow,
       borderBottomWidth: 1,

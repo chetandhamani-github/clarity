@@ -53,6 +53,9 @@ describe('account-metrics helpers', () => {
 
     expect(pickDefaultAccountId([bank1, bank2])).toBe('bank-2');
     expect(pickDefaultAccountId([bank1])).toBe('bank-1');
+    expect(pickDefaultAccountId([loan, bank1])).toBe('bank-1');
+    const lent = makeAccount({ id: 'lent-1', name: 'Lent Money', type: 'lent', isPrimary: false });
+    expect(pickDefaultAccountId([lent, loan, bank1])).toBe('bank-1');
     expect(pickDefaultAccountId([])).toBeNull();
     expect(pickDefaultSourceAccountId([bank1, bank2, loan], loan.id)).toBe('bank-2');
   });

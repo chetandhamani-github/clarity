@@ -30,6 +30,7 @@ export interface Bill {
   notes?: string;
   isRecurring: boolean;
   frequency: BillFrequency;
+  anchorDay?: number;
   lastPaidDate?: string;
   paidTransactionId?: string;
   paymentUrl?: string;
@@ -71,6 +72,7 @@ export interface CreateBillDTO {
   notes?: string;
   isRecurring?: boolean;
   frequency?: BillFrequency;
+  anchorDay?: number;
   paymentUrl?: string;
   accountReference?: string;
   source?: BillSource;
@@ -92,6 +94,7 @@ export interface UpdateBillDTO {
   notes?: string;
   isRecurring?: boolean;
   frequency?: BillFrequency;
+  anchorDay?: number | null;
   lastPaidDate?: string | null;
   paidTransactionId?: string | null;
   paymentUrl?: string | null;

@@ -92,5 +92,69 @@ class ApiProtectionInterceptorTest {
                 .extracting(e -> ((ApiException) e).getStatus())
                 .isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
     }
+
+    @Test
+    @DisplayName("AI endpoint rejects invalid Bearer token even when X-Installation-Id is present")
+    void shouldRejectInvalidBearerToken() {
+        when(userRepository.findByAuthToken("bad-token")).thenReturn(Optional.empty());
+
+        MockHttpServletRequest req = new MockHttpServletRequest("POST", "/api/v1/ai/chat");
+        req.addHeader("X-Installation-Id", "valid-install-123");
+        req.addHeader("Authorization", "Bearer bad-token");
+        MockHttpServletResponse res = new MockHttpServletResponse();
+
+        assertThatThrownBy(() -> interceptor.preHandle(req, res, new Object()))
+                .isInstanceOf(ApiException.class)
+                .extracting(e -> ((ApiException) e).getStatus())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    @DisplayName("AI endpoint enforces per-IP ceiling across rotated X-Installation-Id headers")
+    void shouldRateLimitAiByIpAcrossRotatedInstallationIds() {
+        when(deviceRepository.findByInstallationId(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(Optional.empty());
+
+        for (int i = 0; i < 45; i++) {
+            MockHttpServletRequest req = new MockHttpServletRequest("POST", "/api/v1/ai/chat");
+            req.setRemoteAddr("198.51.100.42");
+            req.addHeader("X-Installation-Id", "rotated-install-" + i);
+            assertThat(interceptor.preHandle(req, new MockHttpServletResponse(), new Object())).isTrue();
+        }
+
+        MockHttpServletRequest blockedReq = new MockHttpServletRequest("POST", "/api/v1/ai/chat");
+        blockedReq.setRemoteAddr("198.51.100.42");
+        blockedReq.addHeader("X-Installation-Id", "rotated-install-999");
+
+        assertThatThrownBy(() -> interceptor.preHandle(blockedReq, new MockHttpServletResponse(), new Object()))
+                .isInstanceOf(ApiException.class)
+                .extracting(e -> ((ApiException) e).getStatus())
+                .isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    @Test
+    @DisplayName("AI endpoint ignores spoofed X-Forwarded-For from direct untrusted client IP")
+    void shouldIgnoreSpoofedForwardedForFromPublicRemoteAddr() {
+        when(deviceRepository.findByInstallationId(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(Optional.empty());
+
+        for (int i = 0; i < 45; i++) {
+            MockHttpServletRequest req = new MockHttpServletRequest("POST", "/api/v1/ai/chat");
+            req.setRemoteAddr("203.0.113.77");
+            req.addHeader("X-Forwarded-For", "198.51.100." + i);
+            req.addHeader("X-Installation-Id", "spoof-install-" + i);
+            assertThat(interceptor.preHandle(req, new MockHttpServletResponse(), new Object())).isTrue();
+        }
+
+        MockHttpServletRequest blockedReq = new MockHttpServletRequest("POST", "/api/v1/ai/chat");
+        blockedReq.setRemoteAddr("203.0.113.77");
+        blockedReq.addHeader("X-Forwarded-For", "198.51.100.250");
+        blockedReq.addHeader("X-Installation-Id", "spoof-install-final");
+
+        assertThatThrownBy(() -> interceptor.preHandle(blockedReq, new MockHttpServletResponse(), new Object()))
+                .isInstanceOf(ApiException.class)
+                .extracting(e -> ((ApiException) e).getStatus())
+                .isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+    }
 }
 

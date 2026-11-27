@@ -40,14 +40,27 @@ export function useNotificationListener() {
 
     const unsubscribe = NativeNotificationListenerAdapter.subscribeToNotifications(
       async (notif: RawNotificationPayload) => {
-        if (!isEnabledRef.current) return;
-        if (!enabledPkgsRef.current.includes(notif.packageName)) return;
+        if (!isEnabledRef.current || !enabledPkgsRef.current.includes(notif.packageName)) {
+          if (notif.id) {
+            NativeNotificationListenerAdapter.ackPendingNotifications([notif.id]).catch(() => false);
+          }
+          return;
+        }
 
         try {
           const result = await NotificationParsingService.processNotification(notif, {
             parseTransactions: parseTxRef.current,
             parseBills: parseBillsRef.current,
           });
+
+          if (
+            notif.id &&
+            !(result.type === 'IGNORED' && result.reason === 'APP_RESET_IN_PROGRESS')
+          ) {
+            await NativeNotificationListenerAdapter.ackPendingNotifications([notif.id]).catch(
+              () => false
+            );
+          }
 
           if (result.type === 'BILL' && result.isNew !== false) {
             showDetectedBillModal(result.bill, result.billId);
@@ -57,7 +70,7 @@ export function useNotificationListener() {
             refreshHealth().catch(() => null);
           }
         } catch {
-          // Fault isolation: incoming notification failure must not crash UI
+          // Fault isolation: leave buffered notification un-acked so next drain retries safely
         }
       }
     );

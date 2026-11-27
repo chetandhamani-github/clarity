@@ -30,6 +30,7 @@ import { useAccounts } from '@/hooks/use-accounts';
 import { useGoals } from '@/hooks/use-goals';
 import { useBudgetPlan, useCategorySpending } from '@/hooks/use-budget';
 import { usePortfolioSummary } from '@/hooks/use-investments';
+import { pickDefaultAccountId } from '@/utils/account-metrics';
 import { useInvalidateCashflow, useSafeToSpend } from '@/hooks/use-cashflow';
 import { invalidateAnalyticsAndHealthQueries } from '@/hooks/use-financial-health';
 import { useMonthlyTotals, useNetWorthHistory, useTransactions, useCreateTransaction } from '@/hooks/use-transactions';
@@ -137,10 +138,13 @@ export default function DashboardScreen() {
         return;
       }
 
-      const defaultAccount = accounts.find((a) => a.isPrimary) || accounts[0];
+      const defaultAccountId = pickDefaultAccountId(accounts);
       const targetAccount = parsed.accountId
-        ? accounts.find((a) => a.id === parsed.accountId) || defaultAccount
-        : defaultAccount;
+        ? accounts.find((a) => a.id === parsed.accountId) ||
+          (defaultAccountId ? accounts.find((a) => a.id === defaultAccountId) : undefined)
+        : defaultAccountId
+          ? accounts.find((a) => a.id === defaultAccountId)
+          : undefined;
 
       if (!targetAccount) {
         showToast('Please add a bank account first', 'error');
@@ -152,8 +156,8 @@ export default function DashboardScreen() {
           accountId: targetAccount.id,
           amount: parsed.amount,
           type: parsed.type || 'expense',
-          merchant: parsed.merchant || 'General',
-          category: parsed.category || 'General',
+          merchant: parsed.merchant || 'Other',
+          category: parsed.category || 'Other',
           date: new Date().toISOString(),
           createdAt: new Date().toISOString(),
           note: parsed.note || 'Logged via Voice',

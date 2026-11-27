@@ -426,11 +426,9 @@ export class BillService {
 
     const initialStatus = matchedPayment
       ? 'paid'
-      : diffDays < -30
-        ? 'paid'
-        : diffDays < 0
-          ? 'overdue'
-          : 'upcoming';
+      : diffDays < 0
+        ? 'overdue'
+        : 'upcoming';
 
     const created = await this.createBill({
       title: extracted.title,

@@ -23,6 +23,7 @@ export interface DebtPayoffStep {
 export interface DebtStrategyResult {
   strategy: 'snowball' | 'avalanche';
   totalMonths: number;
+  isUnpayableWithCurrentPayment?: boolean;
   debtFreeDate: string; // e.g. "Oct 2027"
   totalInterestPaid: number;
   totalPrincipalPaid: number;
@@ -34,6 +35,7 @@ export interface DebtStrategyResult {
     balance: number;
     interestRate: number;
     payoffMonth: number;
+    isUnpayable?: boolean;
     payoffDate: string;
   }[];
 }
@@ -63,7 +65,9 @@ const DEFAULT_APR_BY_TYPE: Record<string, number> = {
 
 function formatMonthYear(monthsFromNow: number): string {
   const d = new Date();
-  d.setMonth(d.getMonth() + monthsFromNow);
+  const targetMonth = d.getMonth() + monthsFromNow;
+  d.setDate(1);
+  d.setMonth(targetMonth);
   const monthNames = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
@@ -78,8 +82,8 @@ export async function getActiveDebtList(): Promise<DebtItem[]> {
   const accounts = await getAllAccounts();
   const activeRecurring = await getActiveRecurringTransactions();
 
-  const liabilityAccounts = accounts.filter((a) =>
-    ['credit', 'loan', 'borrowed'].includes(a.type) || a.balance < 0
+  const liabilityAccounts = accounts.filter(
+    (a) => ['credit', 'loan', 'borrowed'].includes(a.type) && a.balance < 0
   );
 
   const debts: DebtItem[] = [];
@@ -88,9 +92,11 @@ export async function getActiveDebtList(): Promise<DebtItem[]> {
     const rawBalance = Math.abs(acc.balance);
     if (rawBalance <= 0) continue;
 
-    // Check if there is a recurring EMI or payment configured for this account
+    // Match recurring EMIs / payments (Clarity logs debt payments as transfers to liability accounts or expenses)
     const matchedRecurring = activeRecurring.find(
-      (r) => r.accountId === acc.id && r.type === 'expense'
+      (r) =>
+        (r.type === 'transfer' && r.toAccountId === acc.id) ||
+        (r.accountId === acc.id && r.type === 'expense')
     );
 
     // Compute minimum monthly payment
@@ -237,19 +243,22 @@ export function simulateDebtStrategy(
     }
   }
 
+  const hasUnpaidDebt = active.some((d) => !d.isPaid);
   const payoffOrder = active.map((d) => ({
     id: d.id,
     name: d.name,
     balance: debts.find((orig) => orig.id === d.id)?.balance || 0,
     interestRate: d.interestRate,
-    payoffMonth: d.payoffMonth || month,
-    payoffDate: formatMonthYear(d.payoffMonth || month),
+    payoffMonth: d.isPaid ? d.payoffMonth : maxMonths,
+    isUnpayable: !d.isPaid,
+    payoffDate: d.isPaid ? formatMonthYear(d.payoffMonth) : '30+ yrs (raise payment)',
   }));
 
   return {
     strategy,
     totalMonths: month,
-    debtFreeDate: formatMonthYear(month),
+    isUnpayableWithCurrentPayment: hasUnpaidDebt,
+    debtFreeDate: hasUnpaidDebt ? '30+ yrs (raise payment)' : formatMonthYear(month),
     totalInterestPaid: Math.round(totalInterestAccumulated),
     totalPrincipalPaid: Math.round(initialPrincipal),
     totalCost: Math.round(initialPrincipal + totalInterestAccumulated),

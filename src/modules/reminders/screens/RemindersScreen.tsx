@@ -94,7 +94,10 @@ export function RemindersScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={StyleSheet.flatten([
+          styles.scrollContent,
+          { paddingBottom: 40 },
+        ])}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={
@@ -208,6 +211,8 @@ export function RemindersScreen() {
                     onPress={() => setSelectedTab(tab.key)}
                   >
                     <Text
+                      variant="labelMd"
+                      numberOfLines={1}
                       style={[
                         styles.tabText,
                         { color: active ? colors.onPrimary : colors.onSurfaceVariant },
@@ -264,6 +269,8 @@ export function RemindersScreen() {
                   onPress={() => setSelectedCategory('all')}
                 >
                   <Text
+                    variant="labelMd"
+                    numberOfLines={1}
                     style={[
                       styles.catChipText,
                       {
@@ -294,6 +301,8 @@ export function RemindersScreen() {
                       onPress={() => setSelectedCategory(cat.value)}
                     >
                       <Text
+                        variant="labelMd"
+                        numberOfLines={1}
                         style={[
                           styles.catChipText,
                           {
@@ -432,19 +441,23 @@ const styles = StyleSheet.create({
   tabPill: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
+    flexShrink: 0,
   },
   tabText: {
     ...typography.labelMd,
     fontFamily: fontFamilies.semiBold,
+    flexShrink: 0,
   },
   tabBadge: {
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 10,
+    flexShrink: 0,
   },
   tabBadgeText: {
     fontSize: 11,
@@ -459,10 +472,14 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: radius.md,
     borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   catChipText: {
     ...typography.labelMd,
     fontFamily: fontFamilies.semiBold,
+    flexShrink: 0,
   },
   emptyBox: {
     alignItems: 'center',

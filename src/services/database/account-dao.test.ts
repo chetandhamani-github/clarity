@@ -1,5 +1,6 @@
 import {
   clearAccountData,
+  deleteAccount,
   getAllAccounts,
   insertAccount,
   setPrimaryAccount,
@@ -256,6 +257,28 @@ describe('account-dao and reordering', () => {
     expect(mockDb.execAsync).toHaveBeenCalledWith('BEGIN TRANSACTION');
     expect(mockDb.execAsync).toHaveBeenCalledWith('ROLLBACK');
     expect(mockDeleteReceiptImage).not.toHaveBeenCalled();
+  });
+
+  it('deleteAccount purges transactions, parsed links, bills, goal contributions, receipts, and deletes account', async () => {
+    mockDb.getAllAsync
+      .mockResolvedValueOnce([
+        { id: 'tx-9', parsed_tx_id: 'ptx-9', receipt_uri: 'file:///receipts/tx-9.jpg' },
+      ])
+      .mockResolvedValueOnce([{ id: 'gc-9', goal_id: 'goal-9', amount: 400 }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    await deleteAccount('acc-del');
+
+    expect(mockDb.execAsync).toHaveBeenCalledWith('BEGIN TRANSACTION');
+    expect(mockDb.runAsync).toHaveBeenCalledWith(
+      expect.stringContaining("duplicate_of = 'USER_DELETED'"),
+      ['tx-9']
+    );
+    expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM accounts WHERE id = ?', ['acc-del']);
+    expect(mockDb.execAsync).toHaveBeenCalledWith('COMMIT');
+    expect(mockDeleteReceiptImage).toHaveBeenCalledWith('file:///receipts/tx-9.jpg');
+    expect(mockClearDuplicateCache).toHaveBeenCalled();
   });
 });
 

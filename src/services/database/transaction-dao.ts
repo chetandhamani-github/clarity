@@ -298,7 +298,7 @@ export async function insertTransaction(
   await ensureTransactionsSchema(db);
   const id = generateId();
 
-  // 1. Get current account to calculate new balance
+  // 1. Validate accounts exist and compute relative balance deltas
   const account = await getAccountById(data.accountId);
   if (!account) throw new Error('Account not found');
 
@@ -306,12 +306,14 @@ export async function insertTransaction(
   if (data.type === 'income') balanceChange = data.amount;
   else if (data.type === 'expense' || data.type === 'transfer') balanceChange = -data.amount;
 
-  const newBalance = Math.round((account.balance + balanceChange) * 100) / 100;
   const shouldUpdateAccountBalance = options.updateAccountBalance !== false;
 
   let toAccount: Account | null = null;
   if (data.type === 'transfer') {
     if (!data.toAccountId) throw new Error('Transfer missing destination account');
+    if (data.toAccountId === data.accountId) {
+      throw new Error('Source and destination accounts cannot be the same');
+    }
     toAccount = await getAccountById(data.toAccountId);
     if (!toAccount) throw new Error('Destination account not found');
   }
@@ -406,18 +408,17 @@ export async function insertTransaction(
     }
 
     if (shouldUpdateAccountBalance && balanceChange !== 0) {
-      await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
-        newBalance,
-        data.accountId,
-      ]);
+      await db.runAsync(
+        'UPDATE accounts SET balance = ROUND(COALESCE(balance, 0) + ?, 2) WHERE id = ?',
+        [balanceChange, data.accountId]
+      );
     }
 
     if (shouldUpdateAccountBalance && toAccount && data.toAccountId) {
-      const newToBalance = Math.round((toAccount.balance + data.amount) * 100) / 100;
-      await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
-        newToBalance,
-        data.toAccountId,
-      ]);
+      await db.runAsync(
+        'UPDATE accounts SET balance = ROUND(COALESCE(balance, 0) + ?, 2) WHERE id = ?',
+        [data.amount, data.toAccountId]
+      );
     }
   };
 
@@ -445,7 +446,7 @@ export async function insertTransaction(
           merchant: data.merchant,
           type: data.type,
           date: data.date,
-          category: data.category,
+          category: finalCategory,
         }).catch(() => {});
       })
       .catch(() => {});
@@ -469,76 +470,73 @@ export async function updateTransaction(
   const db = getDatabase();
   await ensureTransactionsSchema(db);
 
-  // 1. Fetch the existing transaction
-  const oldTx = await db.getFirstAsync<TransactionRow>('SELECT * FROM transactions WHERE id = ?', [
-    id,
-  ]);
-  if (!oldTx) throw new Error('Transaction not found');
-
-  // We need to figure out what data is new, falling back to old
-  const newAccountId = data.accountId ?? oldTx.account_id;
-  const newToAccountId = data.toAccountId !== undefined ? data.toAccountId : oldTx.to_account_id;
-  const newAmount = data.amount ?? oldTx.amount;
-  const newType = data.type ?? oldTx.type;
-
-  const oldAccount = await getAccountById(oldTx.account_id);
-  const shouldRevertLinkedBills =
-    newType !== 'expense' || Math.abs(newAmount - oldTx.amount) > Math.max(1, oldTx.amount * 0.02);
   let revertedBills: { modernBills: RevertedBillInfo[]; legacyCount: number } = {
     modernBills: [],
     legacyCount: 0,
   };
 
   const executeUpdate = async () => {
-    // 2. Revert old transaction's effect on old account
-    if (oldAccount) {
-      let balanceRevert = 0;
-      if (oldTx.type === 'income') balanceRevert = -oldTx.amount;
-      else if (oldTx.type === 'expense' || oldTx.type === 'transfer') balanceRevert = oldTx.amount;
+    // 1. Fetch the existing transaction inside the SQLite transaction for isolation
+    const oldTx = await db.getFirstAsync<TransactionRow>('SELECT * FROM transactions WHERE id = ?', [
+      id,
+    ]);
+    if (!oldTx) throw new Error('Transaction not found');
 
-      if (balanceRevert !== 0) {
-        oldAccount.balance = Math.round((oldAccount.balance + balanceRevert) * 100) / 100;
-        await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
-          oldAccount.balance,
-          oldAccount.id,
-        ]);
-      }
+    const newAccountId = data.accountId ?? oldTx.account_id;
+    const newToAccountId = data.toAccountId !== undefined ? data.toAccountId : oldTx.to_account_id;
+    const newAmount = data.amount ?? oldTx.amount;
+    const newType = data.type ?? oldTx.type;
+
+    if (newType === 'transfer' && (!newToAccountId || newAccountId === newToAccountId)) {
+      throw new Error('Transfer requires distinct source and destination accounts');
+    }
+
+    if (newAccountId !== oldTx.account_id) {
+      const targetSource = await getAccountById(newAccountId);
+      if (!targetSource) throw new Error('Account not found');
+    }
+    if (newType === 'transfer' && newToAccountId && newToAccountId !== oldTx.to_account_id) {
+      const targetDest = await getAccountById(newToAccountId);
+      if (!targetDest) throw new Error('Destination account not found');
+    }
+
+    const shouldRevertLinkedBills =
+      newType !== 'expense' || Math.abs(newAmount - oldTx.amount) > Math.max(1, oldTx.amount * 0.02);
+
+    // 2. Atomically revert old transaction's effect on accounts
+    let balanceRevert = 0;
+    if (oldTx.type === 'income') balanceRevert = -oldTx.amount;
+    else if (oldTx.type === 'expense' || oldTx.type === 'transfer') balanceRevert = oldTx.amount;
+
+    if (balanceRevert !== 0) {
+      await db.runAsync(
+        'UPDATE accounts SET balance = ROUND(COALESCE(balance, 0) + ?, 2) WHERE id = ?',
+        [balanceRevert, oldTx.account_id]
+      );
     }
     if (oldTx.type === 'transfer' && oldTx.to_account_id) {
-      const oldToAccount = await getAccountById(oldTx.to_account_id);
-      if (oldToAccount) {
-        oldToAccount.balance = Math.round((oldToAccount.balance - oldTx.amount) * 100) / 100;
-        await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
-          oldToAccount.balance,
-          oldToAccount.id,
-        ]);
-      }
+      await db.runAsync(
+        'UPDATE accounts SET balance = ROUND(COALESCE(balance, 0) - ?, 2) WHERE id = ?',
+        [oldTx.amount, oldTx.to_account_id]
+      );
     }
 
-    // 3. Apply new transaction's effect on new accounts (fetched post-revert to avoid stale balances)
-    const newAccount = await getAccountById(newAccountId);
-    if (newAccount) {
-      let balanceApply = 0;
-      if (newType === 'income') balanceApply = newAmount;
-      else if (newType === 'expense' || newType === 'transfer') balanceApply = -newAmount;
+    // 3. Atomically apply new transaction's effect on target accounts
+    let balanceApply = 0;
+    if (newType === 'income') balanceApply = newAmount;
+    else if (newType === 'expense' || newType === 'transfer') balanceApply = -newAmount;
 
-      if (balanceApply !== 0) {
-        newAccount.balance = Math.round((newAccount.balance + balanceApply) * 100) / 100;
-        await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
-          newAccount.balance,
-          newAccount.id,
-        ]);
-      }
+    if (balanceApply !== 0) {
+      await db.runAsync(
+        'UPDATE accounts SET balance = ROUND(COALESCE(balance, 0) + ?, 2) WHERE id = ?',
+        [balanceApply, newAccountId]
+      );
     }
     if (newType === 'transfer' && newToAccountId) {
-      const newToAccount = await getAccountById(newToAccountId);
-      if (newToAccount) {
-        newToAccount.balance = Math.round((newToAccount.balance + newAmount) * 100) / 100;
-        await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
-          newToAccount.balance,
-          newToAccount.id,
-        ]);
-      }
+      await db.runAsync(
+        'UPDATE accounts SET balance = ROUND(COALESCE(balance, 0) + ?, 2) WHERE id = ?',
+        [newAmount, newToAccountId]
+      );
     }
 
     // 4. Update the transaction row itself
@@ -552,6 +550,9 @@ export async function updateTransaction(
     if (data.toAccountId !== undefined) {
       sets.push('to_account_id = ?');
       params.push(data.toAccountId);
+    } else if (newType !== 'transfer' && oldTx.to_account_id) {
+      sets.push('to_account_id = ?');
+      params.push(null);
     }
     if (data.amount !== undefined) {
       sets.push('amount = ?');
@@ -616,22 +617,28 @@ export async function updateTransaction(
     }
 
     // 5. Sync with goal contributions if this transaction is linked
-    if (data.amount !== undefined) {
-      const gc = await db.getFirstAsync<any>(
-        'SELECT * FROM goal_contributions WHERE transaction_id = ?',
-        [id]
-      );
-      if (gc) {
-        const diff = data.amount - oldTx.amount;
+    const gc = await db.getFirstAsync<any>(
+      'SELECT * FROM goal_contributions WHERE transaction_id = ?',
+      [id]
+    );
+    if (gc) {
+      if (newType !== 'expense') {
+        await db.runAsync('DELETE FROM goal_contributions WHERE id = ?', [gc.id]);
+        await db.runAsync(
+          'UPDATE goals SET current_amount = MAX(0, current_amount - ?) WHERE id = ?',
+          [gc.amount, gc.goal_id]
+        );
+      } else if (data.amount !== undefined) {
+        const diff = newAmount - oldTx.amount;
         if (diff !== 0) {
           await db.runAsync('UPDATE goal_contributions SET amount = ? WHERE id = ?', [
-            data.amount,
+            newAmount,
             gc.id,
           ]);
-          await db.runAsync('UPDATE goals SET current_amount = current_amount + ? WHERE id = ?', [
-            diff,
-            gc.goal_id,
-          ]);
+          await db.runAsync(
+            'UPDATE goals SET current_amount = MAX(0, current_amount + ?) WHERE id = ?',
+            [diff, gc.goal_id]
+          );
         }
       }
     }
@@ -667,42 +674,34 @@ export async function updateTransaction(
 
 export async function deleteTransaction(id: string): Promise<void> {
   const db = getDatabase();
-  const tx = await db.getFirstAsync<TransactionRow>('SELECT * FROM transactions WHERE id = ?', [
-    id,
-  ]);
-  if (!tx) return;
-
-  const account = await getAccountById(tx.account_id);
   let revertedBills: { modernBills: RevertedBillInfo[]; legacyCount: number } = {
     modernBills: [],
     legacyCount: 0,
   };
 
   const executeDelete = async () => {
-    // 1. Revert transaction's effect on account
-    if (account) {
-      let balanceRevert = 0;
-      if (tx.type === 'income') balanceRevert = -tx.amount;
-      else if (tx.type === 'expense' || tx.type === 'transfer') balanceRevert = tx.amount;
+    const tx = await db.getFirstAsync<TransactionRow>('SELECT * FROM transactions WHERE id = ?', [
+      id,
+    ]);
+    if (!tx) return;
 
-      if (balanceRevert !== 0) {
-        account.balance = Math.round((account.balance + balanceRevert) * 100) / 100;
-        await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
-          account.balance,
-          account.id,
-        ]);
-      }
+    // 1. Atomically revert transaction's effect on accounts
+    let balanceRevert = 0;
+    if (tx.type === 'income') balanceRevert = -tx.amount;
+    else if (tx.type === 'expense' || tx.type === 'transfer') balanceRevert = tx.amount;
+
+    if (balanceRevert !== 0) {
+      await db.runAsync(
+        'UPDATE accounts SET balance = ROUND(COALESCE(balance, 0) + ?, 2) WHERE id = ?',
+        [balanceRevert, tx.account_id]
+      );
     }
 
     if (tx.type === 'transfer' && tx.to_account_id) {
-      const toAccount = await getAccountById(tx.to_account_id);
-      if (toAccount) {
-        toAccount.balance = Math.round((toAccount.balance - tx.amount) * 100) / 100;
-        await db.runAsync('UPDATE accounts SET balance = ? WHERE id = ?', [
-          toAccount.balance,
-          toAccount.id,
-        ]);
-      }
+      await db.runAsync(
+        'UPDATE accounts SET balance = ROUND(COALESCE(balance, 0) - ?, 2) WHERE id = ?',
+        [tx.amount, tx.to_account_id]
+      );
     }
 
     // 2. Sync with goal contributions if this transaction is linked
@@ -712,10 +711,10 @@ export async function deleteTransaction(id: string): Promise<void> {
     );
     if (gc) {
       await db.runAsync('DELETE FROM goal_contributions WHERE id = ?', [gc.id]);
-      await db.runAsync('UPDATE goals SET current_amount = current_amount - ? WHERE id = ?', [
-        gc.amount,
-        gc.goal_id,
-      ]);
+      await db.runAsync(
+        'UPDATE goals SET current_amount = MAX(0, current_amount - ?) WHERE id = ?',
+        [gc.amount, gc.goal_id]
+      );
     }
 
     // 2.5. Revert any bills previously settled by this transaction
@@ -981,6 +980,12 @@ export async function getNetWorthHistory(days: number = 30): Promise<HistoryPoin
   );
 
   let runningBalance = currentBalance;
+  // Reverse any future-dated transactions (> todayStr) that already mutated account balances
+  for (const [d, revDelta] of Object.entries(txByDate)) {
+    if (d > todayStr) {
+      runningBalance += revDelta;
+    }
+  }
 
   for (let i = 0; i < safeDays; i++) {
     const dateStr = shiftYmdDays(todayStr, -i);
@@ -1053,6 +1058,12 @@ export async function getAccountHistory(
   );
 
   let runningBalance = currentBalance;
+  // Reverse any future-dated transactions (> todayStr) that already mutated account balances
+  for (const [d, revDelta] of Object.entries(txByDate)) {
+    if (d > todayStr) {
+      runningBalance += revDelta;
+    }
+  }
 
   for (let i = 0; i < safeDays; i++) {
     const dateStr = shiftYmdDays(todayStr, -i);

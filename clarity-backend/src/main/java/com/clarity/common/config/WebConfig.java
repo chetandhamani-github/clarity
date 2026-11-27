@@ -40,7 +40,7 @@ public class WebConfig implements WebMvcConfigurer {
         if (allowedOrigins.length > 0) {
             mapping.allowedOrigins(allowedOrigins).allowCredentials(true);
         } else {
-            mapping.allowedOriginPatterns("*").allowCredentials(false);
+            mapping.allowedOriginPatterns("http://localhost:*", "http://127.0.0.1:*").allowCredentials(false);
         }
     }
 

@@ -1,6 +1,23 @@
+import { mmkv } from '@/lib/storage';
 import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 import { createJSONStorage, persist, StateStorage } from 'zustand/middleware';
+
+export const APP_LOCK_HINT_MMKV_KEY = 'clarity_app_lock_hint_v1';
+
+function persistAppLockHint(
+  biometricEnabled: boolean,
+  timeoutSetting: 'immediate' | '1min' | '5min' | 'never'
+): void {
+  try {
+    mmkv.set(
+      APP_LOCK_HINT_MMKV_KEY,
+      JSON.stringify({ biometricEnabled, timeoutSetting })
+    );
+  } catch {
+    // Ignore storage hint errors
+  }
+}
 
 export const zustandStorage: StateStorage = {
   setItem: async (name, value) => {
@@ -33,6 +50,7 @@ interface AppState {
   hasDismissedOnboardingChecklist: boolean;
   hasCustomBackupPassphrase: boolean;
   isPostResetLocked: boolean;
+  isLockScreenActive: boolean;
   paydayDayOfMonth: number;
   safetyBufferAmount: number;
   clipboardDetectionEnabled: boolean;
@@ -61,6 +79,7 @@ interface AppState {
   setHasDismissedOnboardingChecklist: (dismissed: boolean) => void;
   setHasCustomBackupPassphrase: (value: boolean) => void;
   setPostResetLocked: (locked: boolean) => void;
+  setLockScreenActive: (active: boolean) => void;
   setPaydayDayOfMonth: (day: number) => void;
   setSafetyBufferAmount: (amt: number) => void;
   setClipboardDetectionEnabled: (enabled: boolean) => void;
@@ -101,6 +120,7 @@ export const useAppStore = create<AppState>()(
       hasDismissedOnboardingChecklist: false,
       hasCustomBackupPassphrase: false,
       isPostResetLocked: false,
+      isLockScreenActive: false,
       paydayDayOfMonth: 1,
       safetyBufferAmount: 2000,
       clipboardDetectionEnabled: true,
@@ -116,8 +136,16 @@ export const useAppStore = create<AppState>()(
       setOnboarded: (value) => set({ hasOnboarded: value }),
       setTheme: (theme) => set({ theme }),
       setCurrency: (currency) => set({ currency }),
-      setBiometricEnabled: (value) => set({ biometricEnabled: value }),
-      setTimeoutSetting: (value) => set({ timeoutSetting: value }),
+      setBiometricEnabled: (value) =>
+        set((state) => {
+          persistAppLockHint(value, state.timeoutSetting);
+          return { biometricEnabled: value };
+        }),
+      setTimeoutSetting: (value) =>
+        set((state) => {
+          persistAppLockHint(state.biometricEnabled, value);
+          return { timeoutSetting: value };
+        }),
       setGoogleDriveConnected: (connected, email = null) =>
         set({
           googleDriveConnected: connected,
@@ -135,6 +163,7 @@ export const useAppStore = create<AppState>()(
         set({ hasDismissedOnboardingChecklist: dismissed }),
       setHasCustomBackupPassphrase: (value) => set({ hasCustomBackupPassphrase: value }),
       setPostResetLocked: (locked) => set({ isPostResetLocked: locked }),
+      setLockScreenActive: (active) => set({ isLockScreenActive: active }),
       setPaydayDayOfMonth: (day) => set({ paydayDayOfMonth: Math.min(31, Math.max(1, day)) }),
       setSafetyBufferAmount: (amt) => set({ safetyBufferAmount: Math.max(0, amt) }),
       setClipboardDetectionEnabled: (enabled) => set({ clipboardDetectionEnabled: enabled }),
@@ -151,8 +180,15 @@ export const useAppStore = create<AppState>()(
     {
       name: 'app-storage',
       storage: createJSONStorage(() => zustandStorage),
+      partialize: ({ isLockScreenActive: _ignored, _hasHydrated: _ignoredHydrated, ...persisted }) =>
+        persisted,
       onRehydrateStorage: () => (state) => {
-        state?.setHasHydrated(true);
+        if (state) {
+          persistAppLockHint(state.biometricEnabled, state.timeoutSetting);
+          state.setHasHydrated(true);
+          return;
+        }
+        useAppStore.getState().setHasHydrated(true);
       },
     }
   )

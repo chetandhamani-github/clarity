@@ -476,8 +476,35 @@ export default function ImportStatementScreen() {
         );
       }
 
-      if (shouldSyncBalance && statementBalance !== null) {
-        await updateAccountBalance(selectedAccountId, statementBalance);
+      const isLiability = isLiabilityAccountType(selectedAccount?.type);
+      const signedStatementBalance =
+        statementBalance !== null
+          ? (isLiability ? -Math.abs(statementBalance) : statementBalance)
+          : null;
+
+      if (shouldSyncBalance && signedStatementBalance !== null) {
+        let targetSyncedBalance = signedStatementBalance;
+
+        if (statementDate) {
+          const allAccountTxs = await getTransactions({ accountId: selectedAccountId });
+          const newerTxs = allAccountTxs.filter(
+            (tx) => tx.date && tx.date.slice(0, 10) > statementDate.slice(0, 10)
+          );
+          let newerDelta = 0;
+          for (const tx of newerTxs) {
+            if (tx.type === 'income') {
+              newerDelta += tx.amount;
+            } else if (tx.type === 'expense') {
+              newerDelta -= tx.amount;
+            } else if (tx.type === 'transfer') {
+              if (tx.accountId === selectedAccountId) newerDelta -= tx.amount;
+              else if (tx.toAccountId === selectedAccountId) newerDelta += tx.amount;
+            }
+          }
+          targetSyncedBalance = Math.round((signedStatementBalance + newerDelta) * 100) / 100;
+        }
+
+        await updateAccountBalance(selectedAccountId, targetSyncedBalance);
       }
 
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
@@ -488,6 +515,13 @@ export default function ImportStatementScreen() {
       invalidateAnalyticsAndHealthQueries(queryClient);
       queueAutoBackup('import-statement');
 
+      const syncedDisplayBalance =
+        statementBalance !== null
+          ? (isLiabilityAccountType(selectedAccount?.type)
+              ? -Math.abs(statementBalance)
+              : statementBalance)
+          : 0;
+
       if (txsToImport.length > 0) {
         showToast(
           `Imported ${txsToImport.length} transaction${txsToImport.length === 1 ? '' : 's'} into ${selectedAccount?.name || 'account'}`,
@@ -495,7 +529,7 @@ export default function ImportStatementScreen() {
         );
       } else if (statementBalance !== null) {
         showToast(
-          `Updated ${selectedAccount?.name || 'account'} balance to ${formatCurrency(statementBalance)}`,
+          `Updated ${selectedAccount?.name || 'account'} balance to ${formatCurrency(syncedDisplayBalance)}`,
           'success'
         );
       }
@@ -525,11 +559,18 @@ export default function ImportStatementScreen() {
     ? newTransactions
     : newTransactions.slice(0, PREVIEW_COLLAPSED_COUNT);
 
+  const signedDisplayBalance =
+    statementBalance !== null
+      ? isSelectedAccountLiability
+        ? -Math.abs(statementBalance)
+        : statementBalance
+      : null;
+
   const importButtonLabel =
     totalSelectedCount > 0
       ? `Import ${totalSelectedCount} Transaction${totalSelectedCount === 1 ? '' : 's'}`
-      : canApplyBalanceOnly && statementBalance !== null
-      ? `Update Balance to ${formatCurrency(statementBalance)}`
+      : canApplyBalanceOnly && signedDisplayBalance !== null
+      ? `Update Balance to ${formatCurrency(signedDisplayBalance)}`
       : 'No Transactions Selected';
 
   return (
@@ -776,7 +817,9 @@ export default function ImportStatementScreen() {
                   />
                   <Text style={[styles.balanceToggleText, { color: colors.onSurfaceVariant }]}>
                     Update {selectedAccount?.name || 'account'} balance to{' '}
-                    {formatCurrency(statementBalance)}
+                    {formatCurrency(
+                      isSelectedAccountLiability ? -Math.abs(statementBalance) : statementBalance
+                    )}
                   </Text>
                 </TouchableOpacity>
 

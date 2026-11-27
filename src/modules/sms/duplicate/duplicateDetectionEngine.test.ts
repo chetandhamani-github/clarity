@@ -167,6 +167,7 @@ describe('DuplicateDetectionEngine', () => {
 
   it('correctly evaluates merchant compatibility, mask compatibility, and reference tokens', () => {
     expect(areMerchantsCompatible('Chai Point', 'chaipoint@okicici')).toBe(true);
+    expect(areMerchantsCompatible('Chai Point', 'vyapar.16912345@hdfcbank')).toBe(true);
     expect(areMerchantsCompatible('Swiggy', 'UPI/412345678901/SWIGGY INDIA')).toBe(true);
     expect(areMerchantsCompatible('Swiggy', 'Zomato')).toBe(false);
 

@@ -325,5 +325,40 @@ describe('NotificationLedgerService & resolveTargetAccountPreview', () => {
       expect.any(Object)
     );
   });
+
+  it('never merges or deletes unrelated cross-account transactions without explicit self-transfer intent', async () => {
+    const { getAllAccounts } = require('@/services/database/account-dao');
+    const { getDatabase } = require('@/services/database');
+    const db = getDatabase();
+    getAllAccounts.mockResolvedValue([
+      makeAccount({ id: 'acc-hdfc', name: 'HDFC Bank', institution: 'HDFC Bank', lastFour: '1111' }),
+      makeAccount({ id: 'acc-sbi', name: 'SBI Bank', institution: 'SBI Bank', lastFour: '2222' }),
+    ]);
+
+    // Counterpart exists for exact same amount within 15 minutes, but it is an unrelated merchant credit
+    db.getFirstAsync.mockResolvedValueOnce({
+      id: 'tx-unrelated-income',
+      account_id: 'acc-sbi',
+      note: 'Auto-tracked (SBI Bank)',
+      merchant: 'Rahul Friend',
+    });
+
+    await NotificationLedgerService.importParsedTransactions([
+      makeParsedTx({
+        id: 'parsed-zomato',
+        amount: 500,
+        type: 'DEBIT',
+        merchant: 'Zomato',
+        bank: 'HDFC Bank',
+        accountMask: '1111',
+        rawBody: 'Rs.500 spent on HDFC Card xx1111 at Zomato',
+      }),
+    ]);
+
+    expect(db.runAsync).not.toHaveBeenCalledWith(
+      'DELETE FROM transactions WHERE id = ?',
+      expect.anything()
+    );
+  });
 });
 

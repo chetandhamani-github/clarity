@@ -126,4 +126,58 @@ describe('export-service', () => {
       })
     );
   });
+
+  it('escapes HTML tags and quotes inside merchant, category, and account names in PDF HTML', async () => {
+    const Print = require('expo-print');
+    const { getTransactions } = require('@/services/database/transaction-dao');
+    (getTransactions as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 'tx-xss',
+        date: '2026-09-02',
+        type: 'expense',
+        merchant: '<script>alert("xss")</script> & Co',
+        category: '<b>Food</b>',
+        amount: 250,
+        accountName: 'Bank "Primary"',
+        isRecurring: false,
+      },
+    ]);
+
+    const res = await exportCustomStatement({ format: 'pdf' });
+    expect(res.success).toBe(true);
+
+    const html: string = (Print.printToFileAsync as jest.Mock).mock.calls[0][0].html;
+    expect(html).not.toContain('<script>');
+    expect(html).toContain('&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt; &amp; Co');
+    expect(html).toContain('&lt;b&gt;Food&lt;/b&gt;');
+    expect(html).toContain('Bank &quot;Primary&quot;');
+  });
+
+  it('neutralizes CSV formula injection payloads in exported statements', async () => {
+    const { getTransactions } = require('@/services/database/transaction-dao');
+    (getTransactions as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 'tx-csv',
+        date: '2026-09-02',
+        type: 'expense',
+        merchant: '=CMD|"/C calc"!A0',
+        category: '+SUM(1,2)',
+        amount: 120,
+        accountName: '-Checking',
+        toAccountName: '@Savings',
+        isRecurring: false,
+        note: '\tFormula note',
+      },
+    ]);
+
+    const res = await exportCustomStatement({ format: 'csv' });
+    expect(res.success).toBe(true);
+
+    const csv: string = (FileSystem.writeAsStringAsync as jest.Mock).mock.calls[0][1];
+    expect(csv).toContain(`"'=CMD|""/C calc""!A0"`);
+    expect(csv).toContain(`"'+SUM(1,2)"`);
+    expect(csv).toContain(`"'-Checking"`);
+    expect(csv).toContain(`"'@Savings"`);
+    expect(csv).toContain(`"'\tFormula note"`);
+  });
 });

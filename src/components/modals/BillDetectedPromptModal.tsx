@@ -20,6 +20,7 @@ import { BillsRepository } from '@/modules/bills/database/bills.repository';
 import { mapExternalBillerCategory } from '@/modules/bills/utils/bill-helpers';
 import { useBillsStore } from '@/modules/bills/store/bills.store';
 import { BillAlertEngine } from '@/services/notifications/bill-alert-engine';
+import { useSmsStore } from '@/store/useSmsStore';
 
 export function BillDetectedPromptModal() {
   const { colors } = useTheme();
@@ -30,6 +31,7 @@ export function BillDetectedPromptModal() {
   const bill = useNotificationStore((state) => state.activeDetectedBill);
   const activeDetectedBillId = useNotificationStore((state) => state.activeDetectedBillId);
   const closeDetectedBillModal = useNotificationStore((state) => state.closeDetectedBillModal);
+  const isTransactionPromptVisible = useSmsStore((state) => state.isPromptVisible);
 
   if (!bill) return null;
 
@@ -115,7 +117,7 @@ export function BillDetectedPromptModal() {
   };
 
   const handlePayNow = async () => {
-    if (bill.paymentUrl) {
+    if (bill.paymentUrl && /^(?:https?:\/\/|upi:\/\/pay\?)/i.test(bill.paymentUrl)) {
       try {
         await Linking.openURL(bill.paymentUrl);
       } catch {
@@ -126,7 +128,7 @@ export function BillDetectedPromptModal() {
 
   return (
     <Modal
-      visible={visible}
+      visible={visible && !isTransactionPromptVisible}
       transparent
       animationType="fade"
       onRequestClose={closeDetectedBillModal}

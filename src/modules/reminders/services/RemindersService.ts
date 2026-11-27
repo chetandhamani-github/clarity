@@ -17,6 +17,27 @@ function formatHmLabel(raw: string): string {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
+export function resolveLinkedActionUrl(
+  linkedType?: Reminder['linkedType'],
+  linkedId?: string
+): string {
+  if (!linkedType || !linkedId) return '/(app)/reminders';
+  switch (linkedType) {
+    case 'bill':
+      return `/(app)/bill-details?billId=${linkedId}`;
+    case 'subscription':
+      return '/(app)/bills';
+    case 'account':
+      return `/(app)/account-details?accountId=${linkedId}`;
+    case 'goal':
+      return `/(app)/goal-details?id=${linkedId}`;
+    case 'splitwise_person':
+      return `/(app)/splitwise-person-details?personId=${linkedId}`;
+    default:
+      return '/(app)/reminders';
+  }
+}
+
 function getNextCreditCardDueYmd(dueDay: number, today = new Date()): string {
   const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const curMonthMax = new Date(startOfToday.getFullYear(), startOfToday.getMonth() + 1, 0).getDate();
@@ -147,7 +168,9 @@ export class RemindersService {
         snoozeUntil: r.snoozeUntil,
         repeatRule: r.repeatRule,
         status: isOverdue ? 'overdue' : isSnoozed ? 'snoozed' : 'pending',
-        actionUrl: '/(app)/reminders',
+        actionUrl: resolveLinkedActionUrl(r.linkedType, r.linkedId),
+        linkedType: r.linkedType,
+        linkedId: r.linkedId,
         notes: r.notes,
       });
     }
@@ -216,7 +239,7 @@ export class RemindersService {
         isSnoozed: false,
         repeatRule: 'monthly',
         status: 'pending',
-        actionUrl: `/(app)/account-details?id=${acc.id}`,
+        actionUrl: `/(app)/account-details?accountId=${acc.id}`,
       });
     }
 
@@ -262,3 +285,4 @@ export class RemindersService {
     };
   }
 }
+

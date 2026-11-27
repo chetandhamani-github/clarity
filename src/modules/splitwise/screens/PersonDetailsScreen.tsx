@@ -418,6 +418,28 @@ export function PersonDetailsScreen() {
         showBack
         rightNode={
           <View style={styles.headerActions}>
+            {!isSettled && (
+              <TouchableOpacity
+                style={styles.headerBtn}
+                onPress={() =>
+                  router.navigate({
+                    pathname: '/(app)/add-reminder',
+                    params: {
+                      title: isOwedToMe
+                        ? `Follow up with ${person.name}`
+                        : `Pay ${person.name}`,
+                      category: 'splitwise',
+                      amount: Math.abs(personBalance.netBalance).toString(),
+                      linkedType: 'splitwise_person',
+                      linkedId: person.id,
+                    },
+                  })
+                }
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialIcons name="add-alarm" size={20} color={colors.primary} />
+              </TouchableOpacity>
+            )}
             {person.phone && (
               <TouchableOpacity
                 style={styles.headerBtn}

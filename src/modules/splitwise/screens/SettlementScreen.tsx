@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -192,22 +192,32 @@ export function SettlementScreen() {
     );
   }, [selectedPerson, debts, settlements, expenses]);
 
-  // Auto-detect direction and prefill amount from current balance if not user-specified
+  const autoFilledForPersonRef = useRef<string | null>(null);
+
+  // Auto-detect direction and net settlement amount ONCE when selecting a person (never override user toggles)
   useEffect(() => {
-    if (personBalance && !params.type) {
-      if (personBalance.status === 'YOU_OWE' && selectedType !== 'YOU_PAID' && !params.amount) {
+    if (!selectedPerson || !personBalance) return;
+    if (autoFilledForPersonRef.current === selectedPerson.id) return;
+
+    autoFilledForPersonRef.current = selectedPerson.id;
+    const netAbs = BalanceCalculator.roundCurrency(Math.abs(personBalance.netBalance));
+
+    if (personBalance.status === 'YOU_OWE') {
+      if (!params.type) {
         setValue('type', 'YOU_PAID');
-        if ((personBalance.remainingPayable ?? 0) > 0 && !currentAmount) {
-          setValue('amount', (personBalance.remainingPayable ?? Math.abs(personBalance.netBalance)).toString());
-        }
-      } else if (personBalance.status === 'OWED_TO_ME' && selectedType !== 'THEY_PAID' && !params.amount) {
+      }
+      if (!params.amount && netAbs > 0) {
+        setValue('amount', netAbs.toString());
+      }
+    } else if (personBalance.status === 'OWED_TO_ME') {
+      if (!params.type) {
         setValue('type', 'THEY_PAID');
-        if (personBalance.remainingReceivable > 0 && !currentAmount) {
-          setValue('amount', personBalance.remainingReceivable.toString());
-        }
+      }
+      if (!params.amount && netAbs > 0) {
+        setValue('amount', netAbs.toString());
       }
     }
-  }, [personBalance, selectedType, currentAmount, params.amount, params.type, setValue]);
+  }, [selectedPerson, personBalance, params.amount, params.type, setValue]);
 
   const filteredPeople = useMemo(() => {
     if (!friendSearch.trim()) return people;

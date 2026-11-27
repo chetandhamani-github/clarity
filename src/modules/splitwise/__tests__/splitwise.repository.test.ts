@@ -332,5 +332,26 @@ describe('SplitwiseRepository', () => {
       expect(history[1].debtType).toBe('OWE_ME');
       expect(history[1].amount).toBe(1500);
     });
+
+    it('computes getOverallSummary netBalance per person so one friend overpayment does not wipe another debt', async () => {
+      mockDb.getFirstAsync
+        .mockResolvedValueOnce({ count: 2 })
+        .mockResolvedValueOnce({ total_owed_to_me: 1000, total_i_owe: 0 })
+        .mockResolvedValueOnce({ total_owed_to_me: 0, total_i_owe: 0 })
+        .mockResolvedValueOnce({ total_settled: 1500, total_settled_by_them: 1500, total_settled_by_you: 0 })
+        .mockResolvedValueOnce({ count: 0 });
+
+      // p1 owes 1000 (0 settled), p2 settled 1500 despite owing 0 (net -1500 payable back)
+      mockDb.getAllAsync
+        .mockResolvedValueOnce([{ person_id: 'p1', type: 'OWE_ME', total_amount: 1000 }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { person_id: 'p2', settlement_type: 'THEY_PAID', total_amount: 1500 },
+        ]);
+
+      const overall = await SplitwiseRepository.getOverallSummary();
+      expect(overall.totalOwedToMe).toBe(1000);
+      expect(overall.netBalance).toBe(-500);
+    });
   });
 });

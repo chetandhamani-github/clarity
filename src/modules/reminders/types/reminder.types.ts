@@ -96,6 +96,8 @@ export interface UnifiedReminderItem {
   repeatRule: ReminderRepeatRule;
   status: 'pending' | 'snoozed' | 'overdue' | 'completed';
   actionUrl: string;
+  linkedType?: ReminderLinkedType;
+  linkedId?: string;
   notes?: string;
 }
 
@@ -107,14 +109,14 @@ export interface ReminderCategoryMeta {
 }
 
 export const REMINDER_CATEGORIES: ReminderCategoryMeta[] = [
-  { value: 'general', label: 'General', icon: 'notifications-none', color: '#6366f1' },
+  { value: 'bill_custom', label: 'Custom Bill', icon: 'receipt-long', color: '#4f46e5' },
   { value: 'tax', label: 'Tax & Filing', icon: 'account-balance', color: '#dc2626' },
   { value: 'insurance', label: 'Insurance', icon: 'verified-user', color: '#059669' },
-  { value: 'trial', label: 'Free Trial', icon: 'hourglass-bottom', color: '#d97706' },
   { value: 'investment', label: 'Investment / SIP', icon: 'trending-up', color: '#2563eb' },
+  { value: 'trial', label: 'Free Trial', icon: 'hourglass-bottom', color: '#d97706' },
   { value: 'splitwise', label: 'IOU / Follow-up', icon: 'people-outline', color: '#9333ea' },
   { value: 'daily_log', label: 'Daily Habit', icon: 'edit-calendar', color: '#0891b2' },
-  { value: 'bill_custom', label: 'Custom Bill', icon: 'receipt-long', color: '#4f46e5' },
+  { value: 'general', label: 'General', icon: 'notifications-none', color: '#6366f1' },
 ];
 
 export const REMINDER_REPEAT_OPTIONS: { value: ReminderRepeatRule; label: string }[] = [
@@ -125,3 +127,4 @@ export const REMINDER_REPEAT_OPTIONS: { value: ReminderRepeatRule; label: string
   { value: 'quarterly', label: 'Quarterly' },
   { value: 'yearly', label: 'Yearly' },
 ];
+

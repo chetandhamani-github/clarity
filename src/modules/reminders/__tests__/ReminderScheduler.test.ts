@@ -213,4 +213,37 @@ describe('ReminderScheduler', () => {
 
     expect(mockScheduleNotificationAsync).toHaveBeenCalledTimes(45);
   });
+
+  it('schedules advance notices inside the rolling window even when due date exceeds 45 days', async () => {
+    const day48 = '2027-01-14';
+    (RemindersRepository.getActiveReminders as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 'rem-advance-edge',
+        title: 'Annual Policy Renewal',
+        notes: '',
+        category: 'insurance' as const,
+        remindAtDate: day48,
+        remindAtTime: '09:00',
+        repeatRule: 'none' as const,
+        advanceDays: 7,
+        status: 'pending' as const,
+        createdAt: '',
+        updatedAt: '',
+      },
+    ]);
+
+    await ReminderScheduler.syncAll();
+
+    expect(RemindersRepository.getActiveReminders).toHaveBeenCalledWith(75);
+    expect(mockScheduleNotificationAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identifier: `${REMINDER_TRIGGER_PREFIXES.CUSTOM}rem-advance-edge`,
+        trigger: expect.objectContaining({
+          type: 'date',
+          date: new Date(2027, 0, 7, 9, 0, 0, 0),
+        }),
+      })
+    );
+  });
 });
+

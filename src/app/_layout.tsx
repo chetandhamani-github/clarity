@@ -10,7 +10,7 @@ import { mmkv } from '@/lib/storage';
 import { BackendProvider } from '@/providers/BackendProvider';
 import { initDatabase } from '@/services/database';
 import { checkUpcomingBillReminders, checkUpcomingGoalDeadlines } from '@/services/notifications/alert-engine';
-import { useAppStore } from '@/store/use-app-store';
+import { APP_LOCK_HINT_MMKV_KEY, useAppStore } from '@/store/use-app-store';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { useSmsStore } from '@/store/useSmsStore';
 import { typography } from '@/theme';
@@ -35,9 +35,16 @@ SplashScreen.preventAutoHideAsync();
 
 function checkInitialLockState(): boolean {
   try {
-    const raw = mmkv.getString('app-storage');
-    if (raw) {
-      const parsed = JSON.parse(raw);
+    const hintRaw = mmkv.getString(APP_LOCK_HINT_MMKV_KEY);
+    if (hintRaw) {
+      const hint = JSON.parse(hintRaw);
+      if (hint?.biometricEnabled && hint?.timeoutSetting !== 'never') {
+        return true;
+      }
+    }
+    const legacyRaw = mmkv.getString('app-storage');
+    if (legacyRaw) {
+      const parsed = JSON.parse(legacyRaw);
       if (parsed?.state?.biometricEnabled && parsed?.state?.timeoutSetting !== 'never') {
         return true;
       }
@@ -59,6 +66,9 @@ export default function RootLayout() {
   const isNotificationDisclosureVisible = useNotificationStore((state) => state.isDisclosureVisible);
   const closeNotificationDisclosure = useNotificationStore((state) => state.closeDisclosure);
   const lastBackgroundTime = useRef<number | null>(null);
+  const isBiometricAuthActiveRef = useRef(false);
+  const suppressLockUntilRef = useRef(0);
+  const hasEvaluatedColdStartLockRef = useRef(false);
 
   const biometricEnabled = useAppStore((state) => state.biometricEnabled);
   const timeoutSetting = useAppStore((state) => state.timeoutSetting);
@@ -96,12 +106,18 @@ export default function RootLayout() {
     };
   }, [theme, colors]);
 
-  // Cold start / App launch lock
+  // Cold start / App launch lock (evaluate once after async SecureStore hydration completes)
   useEffect(() => {
-    if (hasHydrated && biometricEnabled && timeoutSetting !== 'never') {
-      setIsAppLocked(true);
-    }
+    if (!hasHydrated || hasEvaluatedColdStartLockRef.current) return;
+    hasEvaluatedColdStartLockRef.current = true;
+    const shouldLock = biometricEnabled && timeoutSetting !== 'never';
+    setIsAppLocked(shouldLock);
+    useAppStore.getState().setLockScreenActive(shouldLock);
   }, [hasHydrated, biometricEnabled, timeoutSetting]);
+
+  useEffect(() => {
+    useAppStore.getState().setLockScreenActive(isAppLocked);
+  }, [isAppLocked]);
 
   // First-time launch Notification tracking permission prompt (Android only, first priority)
   useEffect(() => {
@@ -159,7 +175,7 @@ export default function RootLayout() {
           const { processDueRecurringTransactions } =
             await import('@/services/database/recurring-dao');
           await processDueRecurringTransactions();
-          await checkUpcomingBillReminders();
+          await checkUpcomingBillReminders({ skipNativeSync: true });
           await checkUpcomingGoalDeadlines();
           const { ReminderScheduler } = await import('@/modules/reminders/services/ReminderScheduler');
           await ReminderScheduler.syncAll().catch(() => {});
@@ -203,13 +219,20 @@ export default function RootLayout() {
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
+        if (isBiometricAuthActiveRef.current || Date.now() < suppressLockUntilRef.current) {
+          return;
+        }
         lastBackgroundTime.current = Date.now();
         const state = useAppStore.getState();
         // Mask screen immediately in task switcher if biometric lock is enabled
         if (state.biometricEnabled) {
           setIsScreenShielded(true);
         }
-        if (state.biometricEnabled && state.timeoutSetting === 'immediate') {
+        if (
+          state.biometricEnabled &&
+          state.timeoutSetting === 'immediate' &&
+          nextAppState === 'background'
+        ) {
           setIsAppLocked(true);
         }
         import('@/services/cloud/google-drive-service')
@@ -217,7 +240,10 @@ export default function RootLayout() {
           .catch(() => {});
       } else if (nextAppState === 'active') {
         const state = useAppStore.getState();
-        if (state.biometricEnabled && lastBackgroundTime.current) {
+        const isBiometricSuppressActive =
+          isBiometricAuthActiveRef.current || Date.now() < suppressLockUntilRef.current;
+
+        if (!isBiometricSuppressActive && state.biometricEnabled && lastBackgroundTime.current) {
           const elapsedSeconds = (Date.now() - lastBackgroundTime.current) / 1000;
           let threshold = 0;
           if (state.timeoutSetting === 'immediate') threshold = 0;
@@ -236,7 +262,7 @@ export default function RootLayout() {
         import('@/services/database/recurring-dao')
           .then(({ processDueRecurringTransactions }) => processDueRecurringTransactions())
           .catch(() => {});
-        checkUpcomingBillReminders().catch(() => {});
+        checkUpcomingBillReminders({ skipNativeSync: true }).catch(() => {});
         import('@/modules/reminders/services/ReminderScheduler')
           .then(({ ReminderScheduler }) => ReminderScheduler.syncAll())
           .catch(() => {});
@@ -256,12 +282,12 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if ((fontsLoaded || fontsError) && dbReady) {
+    if ((fontsLoaded || fontsError) && dbReady && hasHydrated) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontsError, dbReady]);
+  }, [fontsLoaded, fontsError, dbReady, hasHydrated]);
 
-  if ((!fontsLoaded && !fontsError) || !dbReady) {
+  if ((!fontsLoaded && !fontsError) || !dbReady || !hasHydrated) {
     return null;
   }
 
@@ -298,7 +324,21 @@ export default function RootLayout() {
                     </Text>
                   </View>
                 )}
-                <AppLockModal visible={isAppLocked} onUnlock={() => setIsAppLocked(false)} />
+                <AppLockModal
+                  visible={isAppLocked}
+                  onAuthActiveChange={(active) => {
+                    isBiometricAuthActiveRef.current = active;
+                    if (!active) {
+                      suppressLockUntilRef.current = Date.now() + 1500;
+                    }
+                  }}
+                  onUnlock={() => {
+                    suppressLockUntilRef.current = Date.now() + 2000;
+                    lastBackgroundTime.current = null;
+                    setIsScreenShielded(false);
+                    setIsAppLocked(false);
+                  }}
+                />
                 <NotificationPermissionPromptModal
                   visible={
                     isNotificationDisclosureVisible ||

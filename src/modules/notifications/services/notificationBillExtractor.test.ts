@@ -54,6 +54,14 @@ describe('NotificationBillExtractor', () => {
         text: 'Low balance alert for your ICICI FASTag: Avl Bal Rs. 120.00',
         postTime: REF_TIME,
       },
+      {
+        id: 'n7',
+        packageName: 'com.phonepe.app',
+        appName: 'PhonePe',
+        title: 'Adani Electricity',
+        text: 'Adani Electricity bill of ₹1,420 paid via PhonePe before due date 28-Nov-26',
+        postTime: REF_TIME,
+      },
     ];
 
     for (const notif of noiseCases) {
@@ -97,6 +105,21 @@ describe('NotificationBillExtractor', () => {
       amountDue: 1420,
       dueDate: '2026-11-28',
       accountReference: '102938475',
+    });
+
+    const generatedWithLastDate = NotificationBillExtractor.extractBill({
+      id: 'el1b',
+      packageName: 'com.phonepe.app',
+      appName: 'PhonePe',
+      title: 'Adani Electricity',
+      text: 'Bill of ₹1,420 generated. Last date 28-Nov-26.',
+      postTime: REF_TIME,
+    });
+    expect(generatedWithLastDate).toMatchObject({
+      billerName: 'Adani Electricity',
+      billerCategory: 'electricity',
+      amountDue: 1420,
+      dueDate: '2026-11-28',
     });
 
     const priorityBill = NotificationBillExtractor.extractBill({

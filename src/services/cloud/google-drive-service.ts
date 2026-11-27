@@ -1008,7 +1008,7 @@ export async function deleteAllBackups(
     // 1. List all files in the private appDataFolder
     const listUrl = `${DRIVE_FILES_ENDPOINT}?spaces=appDataFolder&fields=files(id,name)&pageSize=100`;
     let listResponse = await fetchWithTimeout(listUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: { Authorization: `Bearer ${token}` },
     });
 
     if (listResponse.status === 401) {

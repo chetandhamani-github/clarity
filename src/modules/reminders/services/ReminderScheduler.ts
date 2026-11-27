@@ -295,12 +295,13 @@ export class ReminderScheduler {
 
     const pendingItems: PendingScheduleItem[] = [];
 
-    // 2a. Custom reminders
+    // 2a. Custom reminders (fetch wider date horizon so advanceDays notices inside the 45-day window are included)
+    const maxTriggerMs = nowMs + ROLLING_WINDOW_DAYS * 24 * 60 * 60 * 1000;
     try {
-      const activeReminders = await RemindersRepository.getActiveReminders(ROLLING_WINDOW_DAYS);
+      const activeReminders = await RemindersRepository.getActiveReminders(ROLLING_WINDOW_DAYS + 30);
       for (const r of activeReminders) {
         const triggerDate = buildTriggerDateForReminder(r, nowMs);
-        if (!triggerDate) continue;
+        if (!triggerDate || triggerDate.getTime() > maxTriggerMs) continue;
         const amountSnippet =
           r.amount !== undefined && r.amount > 0 ? ` (${formatCurrency(r.amount)})` : '';
         pendingItems.push({
@@ -403,7 +404,7 @@ export class ReminderScheduler {
             data: {
               type: 'cc_reminder',
               accountId: acc.id,
-              actionUrl: `/(app)/account-details?id=${acc.id}`,
+              actionUrl: `/(app)/account-details?accountId=${acc.id}`,
             },
           });
         }
@@ -500,3 +501,4 @@ export class ReminderScheduler {
     }
   }
 }
+

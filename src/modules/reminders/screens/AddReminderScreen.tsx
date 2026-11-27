@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ScrollView,
+  Platform,
   StyleSheet,
   TextInput,
   TouchableOpacity,
@@ -62,6 +62,7 @@ export function AddReminderScreen() {
   const existing = [...customReminders, ...completedReminders].find(
     (r) => r.id === params.reminderId
   );
+  const effectiveLinkedType = existing?.linkedType ?? params.linkedType;
 
   const [title, setTitle] = useState(params.title ?? '');
   const [category, setCategory] = useState<ReminderCategory>(params.category ?? 'general');
@@ -189,10 +190,38 @@ export function AddReminderScreen() {
       />
 
       <KeyboardAwareScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
+        style={styles.flex1}
+        contentContainerStyle={StyleSheet.flatten([
+          styles.scrollContent,
+          { paddingBottom: 32 },
+        ])}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        enableOnAndroid={true}
+        enableAutomaticScroll={true}
+        enableResetScrollToCoords={false}
+        extraScrollHeight={Platform.OS === 'ios' ? 140 : 160}
+        extraHeight={Platform.OS === 'ios' ? 75 : 140}
+        keyboardOpeningTime={0}
       >
+        {effectiveLinkedType ? (
+          <View
+            style={[
+              styles.linkedBanner,
+              {
+                backgroundColor: colors.primaryContainer,
+                borderColor: colors.primary,
+              },
+            ]}
+          >
+            <MaterialIcons name="link" size={16} color={colors.onPrimaryContainer} />
+            <Text style={[styles.linkedBannerText, { color: colors.onPrimaryContainer }]}>
+              Linked to {effectiveLinkedType.replace('_', ' ')}
+            </Text>
+          </View>
+        ) : null}
+
         <Text style={[styles.label, { color: colors.onSurfaceVariant }]}>Title</Text>
         <TextInput
           style={[
@@ -210,11 +239,7 @@ export function AddReminderScreen() {
         />
 
         <Text style={[styles.label, { color: colors.onSurfaceVariant }]}>Category</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipsScroll}
-        >
+        <View style={styles.wrapRow}>
           {REMINDER_CATEGORIES.map((cat) => {
             const active = category === cat.value;
             return (
@@ -235,6 +260,8 @@ export function AddReminderScreen() {
                   color={active ? colors.onPrimaryContainer : colors.onSurfaceVariant}
                 />
                 <Text
+                  variant="labelMd"
+                  numberOfLines={1}
                   style={[
                     styles.chipText,
                     { color: active ? colors.onPrimaryContainer : colors.onSurface },
@@ -245,7 +272,7 @@ export function AddReminderScreen() {
               </TouchableOpacity>
             );
           })}
-        </ScrollView>
+        </View>
 
         <Text style={[styles.label, { color: colors.onSurfaceVariant }]}>
           Amount (Optional)
@@ -286,7 +313,7 @@ export function AddReminderScreen() {
               onPress={() => setShowDatePicker(true)}
             >
               <MaterialIcons name="event" size={18} color={colors.primary} />
-              <Text style={[styles.pickerText, { color: colors.onSurface }]}>
+              <Text variant="bodyMd" numberOfLines={1} style={[styles.pickerText, { color: colors.onSurface }]}>
                 {formatDate(remindAtDate)}
               </Text>
             </TouchableOpacity>
@@ -305,7 +332,7 @@ export function AddReminderScreen() {
               onPress={() => setShowTimePicker(true)}
             >
               <MaterialIcons name="schedule" size={18} color={colors.primary} />
-              <Text style={[styles.pickerText, { color: colors.onSurface }]}>
+              <Text variant="bodyMd" numberOfLines={1} style={[styles.pickerText, { color: colors.onSurface }]}>
                 {formatTimeDisplay(remindAtTime)}
               </Text>
             </TouchableOpacity>
@@ -320,7 +347,7 @@ export function AddReminderScreen() {
               <TouchableOpacity
                 key={opt.value}
                 style={[
-                  styles.chip,
+                  styles.textChip,
                   {
                     backgroundColor: active ? colors.primaryContainer : colors.surfaceContainerLow,
                     borderColor: active ? colors.primary : colors.outlineVariant,
@@ -329,6 +356,8 @@ export function AddReminderScreen() {
                 onPress={() => setRepeatRule(opt.value)}
               >
                 <Text
+                  variant="labelMd"
+                  numberOfLines={1}
                   style={[
                     styles.chipText,
                     { color: active ? colors.onPrimaryContainer : colors.onSurface },
@@ -349,7 +378,7 @@ export function AddReminderScreen() {
               <TouchableOpacity
                 key={opt.value}
                 style={[
-                  styles.chip,
+                  styles.textChip,
                   {
                     backgroundColor: active ? colors.primaryContainer : colors.surfaceContainerLow,
                     borderColor: active ? colors.primary : colors.outlineVariant,
@@ -358,6 +387,8 @@ export function AddReminderScreen() {
                 onPress={() => setAdvanceDays(opt.value)}
               >
                 <Text
+                  variant="labelMd"
+                  numberOfLines={1}
                   style={[
                     styles.chipText,
                     { color: active ? colors.onPrimaryContainer : colors.onSurface },
@@ -391,7 +422,8 @@ export function AddReminderScreen() {
         <TouchableOpacity
           style={[
             styles.saveBtn,
-            { backgroundColor: colors.primary, opacity: isSaving ? 0.7 : 1 },
+            { backgroundColor: colors.primary },
+            isSaving && styles.saveBtnDisabled,
           ]}
           onPress={handleSave}
           disabled={isSaving}
@@ -442,10 +474,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     ...typography.bodyMd,
   },
-  chipsScroll: {
-    gap: 8,
-    paddingVertical: 2,
-  },
   wrapRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -454,15 +482,31 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
+    minHeight: 36,
     borderRadius: radius.md,
     borderWidth: 1,
+    flexShrink: 0,
+  },
+  textChip: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    minHeight: 36,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexShrink: 0,
   },
   chipText: {
     ...typography.labelMd,
     fontFamily: fontFamilies.semiBold,
+    fontSize: 12,
+    lineHeight: 18,
+    flexShrink: 0,
   },
   amountRow: {
     flexDirection: 'row',
@@ -501,6 +545,7 @@ const styles = StyleSheet.create({
   pickerText: {
     ...typography.bodyMd,
     fontFamily: fontFamilies.semiBold,
+    flexShrink: 1,
   },
   notesInput: {
     borderRadius: radius.md,
@@ -518,6 +563,24 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: 14,
     marginTop: 24,
+  },
+  saveBtnDisabled: {
+    opacity: 0.7,
+  },
+  linkedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 4,
+  },
+  linkedBannerText: {
+    ...typography.labelMd,
+    fontFamily: fontFamilies.semiBold,
+    textTransform: 'capitalize',
   },
   saveBtnText: {
     ...typography.labelMd,

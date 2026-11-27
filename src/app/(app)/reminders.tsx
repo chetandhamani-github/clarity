@@ -4,3 +4,4 @@ import { RemindersScreen } from '@/modules/reminders';
 export default function RemindersRoute() {
   return <RemindersScreen />;
 }
+
