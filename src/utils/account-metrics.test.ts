@@ -3,6 +3,7 @@ import {
   getAccountTypeShortLabel,
   isLiabilityAccountType,
   isLiquidAccountType,
+  pickDefaultAccountId,
   pickDefaultSourceAccountId,
   summarizeAccounts,
 } from './account-metrics';
@@ -43,6 +44,17 @@ describe('account-metrics helpers', () => {
     expect(pickDefaultSourceAccountId([loan, card, bank], loan.id)).toBe('bank-1');
     expect(pickDefaultSourceAccountId([loan, card], loan.id)).toBe('cc-1');
     expect(pickDefaultSourceAccountId([loan], loan.id)).toBeNull();
+  });
+
+  it('prefers primary account in pickDefaultAccountId and pickDefaultSourceAccountId', () => {
+    const bank1 = makeAccount({ id: 'bank-1', name: 'Bank 1', type: 'savings', isPrimary: false });
+    const bank2 = makeAccount({ id: 'bank-2', name: 'Bank 2', type: 'savings', isPrimary: true });
+    const loan = makeAccount({ id: 'loan-1', name: 'Loan', type: 'loan', balance: -10000 });
+
+    expect(pickDefaultAccountId([bank1, bank2])).toBe('bank-2');
+    expect(pickDefaultAccountId([bank1])).toBe('bank-1');
+    expect(pickDefaultAccountId([])).toBeNull();
+    expect(pickDefaultSourceAccountId([bank1, bank2, loan], loan.id)).toBe('bank-2');
   });
 
   it('computes transfer balance preview for paying 2k from main bank to 20k debt account', () => {

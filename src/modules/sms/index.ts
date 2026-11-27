@@ -1,6 +1,4 @@
 export * from './types';
-export * from './reader/smsReaderService';
-export * from './reader/mockSmsReaderAdapter';
 export * from './classifier/smsClassificationEngine';
 export * from './extractor/transactionExtractor';
 export * from './parser/parserRegistry';

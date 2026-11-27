@@ -112,10 +112,47 @@ export function usePushNotifications(options: UsePushNotificationsOptions = {}) 
 
       const payload = response?.notification?.request?.content;
       const data = payload?.data as
-        | { type?: string; actionUrl?: string; billId?: string }
+        | { type?: string; actionUrl?: string; billId?: string; reminderId?: string }
         | undefined;
 
       // Handle interactive notification actions (lock screen / notification buttons)
+      if (actionId === 'REMINDER_MARK_DONE') {
+        dismissTrayNotification(reqId);
+        if (data?.reminderId) {
+          try {
+            const { RemindersService } = await import('@/modules/reminders/services/RemindersService');
+            await RemindersService.completeReminder(data.reminderId);
+            await queryClient.invalidateQueries({ queryKey: ['reminders'] });
+            DeviceEventEmitter.emit('remindersUpdated');
+          } catch {
+            // Fall through quietly; background actions should not crash root layout
+          }
+        }
+        return;
+      }
+
+      if (actionId === 'REMINDER_SNOOZE_1D') {
+        dismissTrayNotification(reqId);
+        if (data?.reminderId) {
+          try {
+            const { RemindersService } = await import('@/modules/reminders/services/RemindersService');
+            await RemindersService.snoozeReminder(data.reminderId, 24);
+            await queryClient.invalidateQueries({ queryKey: ['reminders'] });
+            DeviceEventEmitter.emit('remindersUpdated');
+          } catch {
+            // Fall through quietly
+          }
+        }
+        return;
+      }
+
+      if (actionId === 'REMINDER_OPEN') {
+        routerRef.current.navigate(
+          data?.actionUrl ? (data.actionUrl as any) : ('/(app)/reminders' as any)
+        );
+        return;
+      }
+
       if (actionId === 'MARK_PAID') {
         dismissTrayNotification(reqId);
         if (data?.billId) {

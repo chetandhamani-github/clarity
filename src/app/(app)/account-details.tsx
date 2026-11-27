@@ -14,7 +14,7 @@ import { typography, useTheme, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useAccount, useClearAccountData, useDeleteAccount } from '@/hooks/use-accounts';
+import { useAccount, useClearAccountData, useDeleteAccount, useSetPrimaryAccount } from '@/hooks/use-accounts';
 import { usePaginatedTransactions, useAccountHistory } from '@/hooks/use-transactions';
 import { useAccountReconciliation, useCreateAdjustmentEntry } from '@/hooks/use-reconciliation';
 import { useToast, useAlert, DiscrepancyBanner } from '@/components/ui';
@@ -48,6 +48,7 @@ export default function AccountDetailsScreen() {
   const { mutate: createAdjustment, isPending: isAdjusting } = useCreateAdjustmentEntry();
   const { mutate: clearAccountData, isPending: isClearingData } = useClearAccountData();
   const { mutate: deleteAccount, isPending: isDeleting } = useDeleteAccount();
+  const { setPrimary, isPending: isSettingPrimary } = useSetPrimaryAccount();
   const [showMenu, setShowMenu] = useState(false);
   const { showToast } = useToast();
   const { showAlert } = useAlert();
@@ -126,6 +127,23 @@ export default function AccountDetailsScreen() {
   const handleEdit = () => {
     setShowMenu(false);
     router.navigate(`/(app)/add-account?id=${accountId}`);
+  };
+
+  const handleTogglePrimary = () => {
+    if (!account || isSettingPrimary) return;
+    setShowMenu(false);
+    const nextPrimary = !account.isPrimary;
+    setPrimary(nextPrimary ? account.id : null, {
+      onSuccess: () => {
+        showToast(
+          nextPrimary ? `${account.name} set as primary account` : 'Primary account cleared',
+          'success'
+        );
+      },
+      onError: () => {
+        showToast('Failed to update primary account', 'error');
+      },
+    });
   };
 
   const canImportStatement = account ? supportsStatementImport(account.type) : false;
@@ -309,7 +327,15 @@ export default function AccountDetailsScreen() {
             <View style={styles.card}>
               <View style={styles.cardHeader}>
                 <View style={styles.flex1}>
-                  <Text style={styles.accountLabel}>{account.name.toUpperCase()}</Text>
+                  <View style={styles.accountNameRow}>
+                    <Text style={styles.accountLabel}>{account.name.toUpperCase()}</Text>
+                    {account.isPrimary && (
+                      <View style={styles.primaryPill}>
+                        <MaterialIcons name="star" size={12} color={colors.onPrimaryContainer} />
+                        <Text style={styles.primaryPillText}>PRIMARY</Text>
+                      </View>
+                    )}
+                  </View>
                   <Text style={styles.balanceText}>{formatCurrency(account.balance)}</Text>
                   {account.institution && (
                     <Text style={styles.institutionText}>{account.institution}</Text>
@@ -803,6 +829,20 @@ export default function AccountDetailsScreen() {
                 <Text style={styles.menuItemText}>Import Statement</Text>
               </TouchableOpacity>
             )}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={handleTogglePrimary}
+              disabled={isSettingPrimary}
+            >
+              <MaterialIcons
+                name={account?.isPrimary ? 'star' : 'star-outline'}
+                size={20}
+                color={colors.primary}
+              />
+              <Text style={styles.menuItemText}>
+                {account?.isPrimary ? 'Remove Primary' : 'Set as Primary Account'}
+              </Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
               <MaterialIcons name="edit" size={20} color={colors.onSurface} />
               <Text style={styles.menuItemText}>Edit Account</Text>
@@ -840,6 +880,28 @@ const getStyles = (colors: ThemeColors) => {
     },
     flex1: {
       flex: 1,
+    },
+    accountNameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    primaryPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: colors.primaryContainer,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    primaryPillText: {
+      ...typography.labelMd,
+      fontSize: 10,
+      lineHeight: 14,
+      fontFamily: 'Manrope_700Bold',
+      color: colors.onPrimaryContainer,
     },
     chartContainer: {
       marginTop: 12,

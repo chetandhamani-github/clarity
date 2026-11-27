@@ -60,6 +60,7 @@ function generateId(): string {
 export type InsertNotificationInput = Omit<Notification, 'id' | 'isRead' | 'createdAt'> & {
   createdAt?: string;
   metadata?: Record<string, unknown>;
+  notifySystem?: boolean;
 };
 
 export async function insertNotification(
@@ -85,19 +86,21 @@ export async function insertNotification(
   const isBillOrAlert = type === 'bill' || type === 'alert';
   const isBillCategory = type === 'bill' || Boolean(notification.metadata?.billId);
 
-  // Trigger native system notification tray alert with appropriate channel & category
-  triggerLocalSystemNotification({
-    title: notification.title,
-    body: notification.description,
-    channelId: isBillOrAlert ? NOTIFICATION_CHANNELS.BILLS_ALERTS : NOTIFICATION_CHANNELS.DEFAULT,
-    categoryIdentifier: isBillCategory ? NOTIFICATION_CATEGORIES.BILL_REMINDER : undefined,
-    data: {
-      ...(notification.metadata ?? {}),
-      notificationId: id,
-      type,
-      actionUrl: notification.actionUrl,
-    },
-  }).catch(() => {});
+  if (notification.notifySystem !== false) {
+    // Trigger native system notification tray alert with appropriate channel & category
+    triggerLocalSystemNotification({
+      title: notification.title,
+      body: notification.description,
+      channelId: isBillOrAlert ? NOTIFICATION_CHANNELS.BILLS_ALERTS : NOTIFICATION_CHANNELS.DEFAULT,
+      categoryIdentifier: isBillCategory ? NOTIFICATION_CATEGORIES.BILL_REMINDER : undefined,
+      data: {
+        ...(notification.metadata ?? {}),
+        notificationId: id,
+        type,
+        actionUrl: notification.actionUrl,
+      },
+    }).catch(() => {});
+  }
 
   DeviceEventEmitter.emit('notificationsUpdated');
 }

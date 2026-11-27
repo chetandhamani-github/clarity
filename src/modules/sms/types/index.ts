@@ -141,21 +141,6 @@ export interface IBankParser {
   parse(message: RawSmsMessage, classification?: ClassificationResult): ExtractedTransaction | null;
 }
 
-export interface SmsReadOptions {
-  limit?: number;
-  offset?: number;
-  sinceTimestamp?: number;
-  startDate?: number;
-  endDate?: number;
-  address?: string;
-}
-
-export interface ISmsReaderAdapter {
-  isAvailable(): Promise<boolean>;
-  getSms(options?: SmsReadOptions): Promise<RawSmsMessage[]>;
-  getSmsSince(timestamp: number, limit?: number): Promise<RawSmsMessage[]>;
-}
-
 export type TransactionSourceType = 'SMS' | 'EMAIL' | 'STATEMENT_PDF' | 'STATEMENT_CSV';
 
 export interface BaseFinancialDocument {

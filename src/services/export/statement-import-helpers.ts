@@ -2,6 +2,7 @@ import type { AccountType, Transaction, TransactionType } from '@/types';
 import {
   areMerchantsCompatible,
   extractReferenceToken,
+  normalizeMerchantTokens,
 } from '@/modules/sms/duplicate/duplicateDetectionEngine';
 import { SUPPORTED_BANK_PROFILES, type BankProfile } from './pdf-statement-parser';
 
@@ -143,8 +144,13 @@ function toDateKey(value: string): string {
 export function deduplicateStatementTransactions(
   items: StatementImportItem[],
   existingTransactions: Transaction[]
-): { newTransactions: StatementImportItem[]; duplicateCount: number } {
+): {
+  newTransactions: StatementImportItem[];
+  duplicateTransactions: StatementImportItem[];
+  duplicateCount: number;
+} {
   const nonDuplicates: StatementImportItem[] = [];
+  const duplicateTransactions: StatementImportItem[] = [];
   let duplicateCount = 0;
   const matchedExistingIds = new Set<string>();
   const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
@@ -153,6 +159,7 @@ export function deduplicateStatementTransactions(
     const txDateKey = toDateKey(tx.date);
     const txDateMs = new Date(`${txDateKey}T00:00:00Z`).getTime();
     const txRef = extractReferenceToken(`${tx.merchant} ${tx.note}`);
+    const txTokens = normalizeMerchantTokens(tx.merchant);
 
     const matchedItem = existingTransactions.find((existing) => {
       if (matchedExistingIds.has(existing.id)) return false;
@@ -176,11 +183,11 @@ export function deduplicateStatementTransactions(
         Number.isFinite(existingDateMs) &&
         Math.abs(existingDateMs - txDateMs) <= TWO_DAYS_MS
       ) {
-        return (
-          Boolean(tx.merchant?.trim()) &&
-          Boolean(existing.merchant?.trim()) &&
-          areMerchantsCompatible(existing.merchant, tx.merchant)
-        );
+        const existingTokens = normalizeMerchantTokens(existing.merchant);
+        if (txTokens.length === 0 || existingTokens.length === 0) {
+          return false;
+        }
+        return areMerchantsCompatible(existing.merchant, tx.merchant);
       }
 
       return false;
@@ -188,11 +195,12 @@ export function deduplicateStatementTransactions(
 
     if (matchedItem) {
       matchedExistingIds.add(matchedItem.id);
+      duplicateTransactions.push(tx);
       duplicateCount++;
     } else {
       nonDuplicates.push(tx);
     }
   }
 
-  return { newTransactions: nonDuplicates, duplicateCount };
+  return { newTransactions: nonDuplicates, duplicateTransactions, duplicateCount };
 }

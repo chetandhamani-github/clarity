@@ -1,5 +1,5 @@
+import { NotificationLedgerService } from '@/modules/notifications/services/notificationLedgerService';
 import { LocalCategorizerEngine } from '@/modules/sms/categorizer/localCategorizerEngine';
-import { SmsSyncService } from '@/modules/sms/services/smsSyncService';
 import { SmsDao } from '@/modules/sms/storage/smsDao';
 import type {
   ExtractedTransaction,
@@ -18,7 +18,7 @@ function generateId(): string {
 
 export class ReviewQueueService {
   /**
-   * Create a review queue item from a failed or ambiguous SMS parse attempt.
+   * Create a review queue item from a failed or ambiguous notification parse attempt.
    */
   public static createReviewItem = createReviewItem;
 
@@ -41,11 +41,12 @@ export class ReviewQueueService {
   }
 
   /**
-   * Resolve an item by supplying user-verified or manually entered transaction details.
+   * Resolve an item by supplying user-verified transaction details and optional target account.
    */
   public static async resolveItem(
     reviewItem: ReviewQueueItem,
-    verifiedData: ExtractedTransaction
+    verifiedData: ExtractedTransaction,
+    overrideAccountId?: string
   ): Promise<ParsedTransaction> {
     const category = LocalCategorizerEngine.categorize(verifiedData);
     const parsedTx: ParsedTransaction = {
@@ -60,16 +61,18 @@ export class ReviewQueueService {
       referenceNumber: verifiedData.referenceNumber,
       availableBalance: verifiedData.availableBalance,
       timestamp: verifiedData.timestamp,
-      confidence: 1.0, // Manually confirmed by user
+      confidence: 1.0,
       isDuplicate: false,
       rawBody: reviewItem.body,
       createdAt: new Date().toISOString(),
     };
 
-    // Save before importing so the link to the main transaction can be persisted.
     await SmsDao.saveParsedTransactionsBatch([parsedTx]);
 
-    await SmsSyncService.importParsedTransactions([parsedTx]);
+    await NotificationLedgerService.importParsedTransactions(
+      [parsedTx],
+      overrideAccountId ? { accountOverrides: { [parsedTx.id]: overrideAccountId } } : undefined
+    );
 
     await SmsDao.updateReviewQueueStatus(reviewItem.id, 'resolved');
 

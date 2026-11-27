@@ -55,7 +55,9 @@ export default function VoiceAddScreen() {
     (parsed: ParsedVoiceTransaction) => {
       setModalVisible(false);
       const targetAccount =
-        accounts.find((a) => a.id === parsed.accountId) || accounts[0];
+        accounts.find((a) => a.id === parsed.accountId) ||
+        accounts.find((a) => a.isPrimary) ||
+        accounts[0];
       if (!targetAccount) {
         showToast('Please add a bank account first', 'error');
         handleDismiss();

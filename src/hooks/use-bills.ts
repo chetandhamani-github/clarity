@@ -1,18 +1,18 @@
 import { useEffect } from 'react';
 import { DeviceEventEmitter } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { BillsRepository } from '@/modules/bills/database/bills.repository';
 import {
   getAllBills,
   getUpcomingBills,
   getPaidBills,
-  getMonthlyBillSummary,
   insertBill,
   updateBill,
   deleteBill,
   markBillAsPaid,
   dismissBill,
 } from '@/services/database/bill-dao';
-import type { BillReminder, BillStatus } from '@/types';
+import type { BillReminder, BillStatus, MonthlyBillSummary } from '@/types';
 
 export function useBills() {
   const queryClient = useQueryClient();
@@ -62,6 +62,58 @@ export function usePaidBills(limit: number = 50) {
   });
 }
 
+async function getModernMonthlyBillSummary(
+  month: number,
+  year: number
+): Promise<MonthlyBillSummary> {
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const monthPrefix = `${year}-${pad(month)}`;
+  const allBills = await BillsRepository.getAllBills();
+
+  let totalCommitted = 0;
+  let totalPaid = 0;
+  let totalPending = 0;
+  let totalOverdue = 0;
+  let upcomingCount = 0;
+  let paidCount = 0;
+
+  for (const bill of allBills) {
+    const isDueInMonth = bill.dueDate?.startsWith(monthPrefix);
+    const isPaidInMonth = bill.lastPaidDate ? bill.lastPaidDate.startsWith(monthPrefix) : isDueInMonth;
+
+    if (!isDueInMonth && !(bill.status === 'paid' && isPaidInMonth)) {
+      continue;
+    }
+
+    if (isDueInMonth && bill.status !== 'dismissed') {
+      totalCommitted += bill.amount;
+    }
+
+    if (bill.status === 'paid' && isPaidInMonth) {
+      totalPaid += bill.amount;
+      paidCount++;
+    } else if (bill.status === 'overdue' && isDueInMonth) {
+      totalOverdue += bill.amount;
+      totalPending += bill.amount;
+      upcomingCount++;
+    } else if (bill.status === 'upcoming' && isDueInMonth) {
+      totalPending += bill.amount;
+      upcomingCount++;
+    }
+  }
+
+  return {
+    month,
+    year,
+    totalCommitted,
+    totalPaid,
+    totalPending,
+    totalOverdue,
+    upcomingCount,
+    paidCount,
+  };
+}
+
 export function useMonthlyBillSummary(month: number, year: number) {
   const queryClient = useQueryClient();
 
@@ -74,7 +126,7 @@ export function useMonthlyBillSummary(month: number, year: number) {
 
   return useQuery({
     queryKey: ['bills', 'summary', month, year],
-    queryFn: () => getMonthlyBillSummary(month, year),
+    queryFn: () => getModernMonthlyBillSummary(month, year),
   });
 }
 

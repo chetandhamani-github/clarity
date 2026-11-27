@@ -30,6 +30,7 @@ import { useAccounts } from '@/hooks/use-accounts';
 import { insertTransaction } from '@/services/database/transaction-dao';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateAnalyticsAndHealthQueries } from '@/hooks/use-financial-health';
+import { pickDefaultSourceAccountId } from '@/utils/account-metrics';
 import type { TransactionType } from '@/types';
 
 export interface SettlementFormData {
@@ -90,15 +91,30 @@ export function SettlementScreen() {
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [showAccountPicker, setShowAccountPicker] = useState(false);
 
+  const bankAccounts = useMemo(
+    () =>
+      accounts.filter(
+        (a) => a.type !== 'lent' && a.type !== 'borrowed' && a.type !== 'loan'
+      ),
+    [accounts]
+  );
+
   useEffect(() => {
-    if (accounts.length > 0 && !selectedAccountId) {
-      setSelectedAccountId(accounts[0].id);
+    if (bankAccounts.length === 0) {
+      if (selectedAccountId) {
+        setSelectedAccountId('');
+      }
+      return;
     }
-  }, [accounts, selectedAccountId]);
+
+    if (!selectedAccountId || !bankAccounts.some((a) => a.id === selectedAccountId)) {
+      setSelectedAccountId(pickDefaultSourceAccountId(bankAccounts) ?? '');
+    }
+  }, [bankAccounts, selectedAccountId]);
 
   const selectedAccount = useMemo(
-    () => accounts.find((a) => a.id === selectedAccountId),
-    [accounts, selectedAccountId]
+    () => bankAccounts.find((a) => a.id === selectedAccountId),
+    [bankAccounts, selectedAccountId]
   );
 
   const todayStr = useMemo(() => getLocalTodayYmd(), []);
@@ -834,15 +850,15 @@ export function SettlementScreen() {
             </View>
 
             <Switch
-              value={reconcileAccount && accounts.length > 0}
+              value={reconcileAccount && bankAccounts.length > 0}
               onValueChange={setReconcileAccount}
               trackColor={{ false: colors.surfaceContainerHighest, true: colors.primary }}
               thumbColor="#ffffff"
-              disabled={accounts.length === 0}
+              disabled={bankAccounts.length === 0}
             />
           </View>
 
-          {reconcileAccount && accounts.length > 0 ? (
+          {reconcileAccount && bankAccounts.length > 0 ? (
             <View style={styles.reconcileBody}>
               <Text style={[styles.reconcileSubtitle, { color: colors.onSurfaceVariant }]}>
                 {isTheyPaid
@@ -911,7 +927,7 @@ export function SettlementScreen() {
             </View>
           ) : (
             <Text style={[styles.reconcileDisabledNote, { color: colors.onSurfaceVariant }]}>
-              {accounts.length === 0
+              {bankAccounts.length === 0
                 ? 'No bank accounts found. Create an account in the Accounts tab to auto-sync settlements.'
                 : 'Off: Settlement will be recorded only in Splitwise without affecting bank balances.'}
             </Text>
@@ -1237,7 +1253,7 @@ export function SettlementScreen() {
               style={styles.friendsListScroll}
               showsVerticalScrollIndicator={false}
             >
-              {accounts.map((acc) => {
+              {bankAccounts.map((acc) => {
                 const isSelected = acc.id === selectedAccountId;
                 return (
                   <TouchableOpacity

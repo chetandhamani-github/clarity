@@ -1,5 +1,6 @@
 import { Header, HomeSkeleton, ProgressBar, Text, useToast, renderChartPointerLabel } from '@/components/ui';
 import { UpcomingBillsWidget, useBills } from '@/modules/bills';
+import { UpcomingRemindersWidget } from '@/modules/reminders';
 import { SplitwiseWidget } from '@/modules/splitwise';
 import { SafeToSpendWidget } from '@/components/dashboard/SafeToSpendWidget';
 import { HealthScoreWidget } from '@/components/dashboard/HealthScoreWidget';
@@ -136,9 +137,10 @@ export default function DashboardScreen() {
         return;
       }
 
+      const defaultAccount = accounts.find((a) => a.isPrimary) || accounts[0];
       const targetAccount = parsed.accountId
-        ? accounts.find((a) => a.id === parsed.accountId) || accounts[0]
-        : accounts[0];
+        ? accounts.find((a) => a.id === parsed.accountId) || defaultAccount
+        : defaultAccount;
 
       if (!targetAccount) {
         showToast('Please add a bank account first', 'error');
@@ -686,6 +688,9 @@ export default function DashboardScreen() {
 
               {/* Upcoming Bills & Utilities Carousel */}
               <UpcomingBillsWidget />
+
+              {/* Upcoming Reminders & Financial Tasks */}
+              <UpcomingRemindersWidget />
 
               {/* Splitwise Shared Expenses Widget */}
               <SplitwiseWidget />

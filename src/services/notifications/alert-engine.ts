@@ -8,11 +8,31 @@ import { hasSentReminder, markReminderSent } from '@/services/notifications/remi
 import { ReminderService } from '@/modules/bills/services/ReminderService';
 import { BillAlertEngine } from './bill-alert-engine';
 import { formatCurrency } from '@/utils/format';
+import { useAppStore } from '@/store/use-app-store';
 import type { Transaction } from '@/types';
 
 const BILL_REMINDER_CHECK_COOLDOWN_MS = 60 * 1000;
 let billRemindersInFlight: Promise<void> | null = null;
 let lastBillReminderCheckAt = 0;
+
+function getNotificationPreferences() {
+  try {
+    const state = useAppStore.getState?.();
+    return {
+      billRemindersEnabled: state?.billRemindersEnabled !== false,
+      cardDueAlertsEnabled: state?.cardDueAlertsEnabled !== false,
+      budgetAlertsEnabled: state?.budgetAlertsEnabled !== false,
+      goalRemindersEnabled: state?.goalRemindersEnabled !== false,
+    };
+  } catch {
+    return {
+      billRemindersEnabled: true,
+      cardDueAlertsEnabled: true,
+      budgetAlertsEnabled: true,
+      goalRemindersEnabled: true,
+    };
+  }
+}
 
 export function resetBillReminderCheckCooldown(): void {
   lastBillReminderCheckAt = 0;
@@ -35,6 +55,8 @@ export async function evaluateCategoryBudgetAlert(
   month: number,
   year: number
 ): Promise<void> {
+  if (!getNotificationPreferences().budgetAlertsEnabled) return;
+
   try {
     const db = getDatabase();
     const monthStr = month.toString().padStart(2, '0');
@@ -99,6 +121,7 @@ export async function evaluateTransactionBudgetAlerts(
   transaction: Omit<Transaction, 'id'> | Transaction
 ): Promise<void> {
   if (transaction.type !== 'expense') return;
+  if (!getNotificationPreferences().budgetAlertsEnabled) return;
 
   try {
     const db = getDatabase();
@@ -161,6 +184,8 @@ export async function evaluateGoalMilestoneAlerts(
   previousAmount: number,
   newAmount: number
 ): Promise<void> {
+  if (!getNotificationPreferences().goalRemindersEnabled) return;
+
   try {
     const goal = await getGoalById(goalId);
     if (!goal || goal.targetAmount <= 0) return;
@@ -224,17 +249,21 @@ export async function checkUpcomingBillReminders(
       const todayStr = formatYmd(today);
       const in3DaysStr = formatYmd(in3Days);
 
-      const upcoming = await db.getAllAsync<{
-        id: string;
-        merchant: string;
-        amount: number;
-        next_process_date: string;
-      }>(
-        `SELECT id, merchant, amount, next_process_date 
-         FROM recurring_transactions 
-         WHERE is_active = 1 AND type = 'expense' AND next_process_date > ? AND next_process_date <= ?`,
-        [todayStr, in3DaysStr]
-      );
+      const prefs = getNotificationPreferences();
+
+      const upcoming = prefs.billRemindersEnabled
+        ? await db.getAllAsync<{
+            id: string;
+            merchant: string;
+            amount: number;
+            next_process_date: string;
+          }>(
+            `SELECT id, merchant, amount, next_process_date 
+             FROM recurring_transactions 
+             WHERE is_active = 1 AND type = 'expense' AND next_process_date >= ? AND next_process_date <= ?`,
+            [todayStr, in3DaysStr]
+          )
+        : [];
 
       for (const bill of upcoming) {
         const alertKey = `recurring_due:${bill.id}:${bill.next_process_date}`;
@@ -262,20 +291,24 @@ export async function checkUpcomingBillReminders(
       }
 
       // Evaluate unified modern bills repository reminders once
-      await ReminderService.evaluateAllBillReminders();
+      if (prefs.billRemindersEnabled) {
+        await ReminderService.evaluateAllBillReminders();
+      }
 
       // Evaluate upcoming subscription renewals
-      const upcomingSubs = await db.getAllAsync<{
-        id: string;
-        name: string;
-        amount: number;
-        next_renewal_date: string;
-      }>(
-        `SELECT id, name, amount, next_renewal_date 
-         FROM subscriptions 
-         WHERE status = 'active' AND next_renewal_date > ? AND next_renewal_date <= ?`,
-        [todayStr, in3DaysStr]
-      );
+      const upcomingSubs = prefs.billRemindersEnabled
+        ? await db.getAllAsync<{
+            id: string;
+            name: string;
+            amount: number;
+            next_renewal_date: string;
+          }>(
+            `SELECT id, name, amount, next_renewal_date 
+             FROM subscriptions 
+             WHERE status = 'active' AND next_renewal_date >= ? AND next_renewal_date <= ?`,
+            [todayStr, in3DaysStr]
+          )
+        : [];
 
       for (const sub of upcomingSubs) {
         const alertKey = `subscription_due:${sub.id}:${sub.next_renewal_date}`;
@@ -303,14 +336,16 @@ export async function checkUpcomingBillReminders(
       }
 
       // Evaluate credit card utilization & due dates
-      const creditAccounts = await db.getAllAsync<{
-        id: string;
-        name: string;
-        type: string;
-        balance: number;
-        credit_limit: number | null;
-        due_day: number | null;
-      }>("SELECT id, name, type, balance, credit_limit, due_day FROM accounts WHERE type = 'credit'");
+      const creditAccounts = prefs.cardDueAlertsEnabled
+        ? await db.getAllAsync<{
+            id: string;
+            name: string;
+            type: string;
+            balance: number;
+            credit_limit: number | null;
+            due_day: number | null;
+          }>("SELECT id, name, type, balance, credit_limit, due_day FROM accounts WHERE type = 'credit'")
+        : [];
 
       for (const acc of creditAccounts) {
         await evaluateAccountBalanceAlerts({
@@ -341,6 +376,8 @@ export async function checkUpcomingBillReminders(
 }
 
 export async function checkUpcomingGoalDeadlines(): Promise<void> {
+  if (!getNotificationPreferences().goalRemindersEnabled) return;
+
   try {
     const db = getDatabase();
     const today = new Date();

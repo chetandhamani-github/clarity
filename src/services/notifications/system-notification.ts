@@ -12,12 +12,14 @@ export const NOTIFICATION_CHANNELS = {
   DEFAULT: 'default',
   PULSE: 'lockscreen_pulse',
   BILLS_ALERTS: 'bills_and_alerts',
+  REMINDERS: 'financial_reminders',
 } as const;
 
 export const NOTIFICATION_CATEGORIES = {
   DAILY_PULSE: 'DAILY_PULSE',
   BILL_REMINDER: 'BILL_REMINDER',
   ANOMALY: 'ANOMALY',
+  REMINDER: 'REMINDER',
 } as const;
 
 export interface SystemNotificationOptions {
@@ -63,6 +65,18 @@ export async function setupNotificationChannelsAndCategories(): Promise<void> {
         importance: maxImportance,
         vibrationPattern: [0, 300, 200, 300],
         lightColor: '#EF4444',
+        lockscreenVisibility: publicVisibility,
+        bypassDnd: false,
+        showBadge: true,
+      });
+
+      // Custom Financial Reminders
+      await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNELS.REMINDERS, {
+        name: 'Financial Reminders',
+        description: 'Custom scheduled money tasks, follow-ups, and tax/insurance deadlines',
+        importance: maxImportance,
+        vibrationPattern: [0, 250, 200, 250],
+        lightColor: '#6366F1',
         lockscreenVisibility: publicVisibility,
         bypassDnd: false,
         showBadge: true,
@@ -118,6 +132,30 @@ export async function setupNotificationChannelsAndCategories(): Promise<void> {
           buttonTitle: 'Dismiss',
           options: {
             opensAppToForeground: false,
+          },
+        },
+      ]);
+
+      await Notifications.setNotificationCategoryAsync(NOTIFICATION_CATEGORIES.REMINDER, [
+        {
+          identifier: 'REMINDER_MARK_DONE',
+          buttonTitle: 'Mark Done',
+          options: {
+            opensAppToForeground: false,
+          },
+        },
+        {
+          identifier: 'REMINDER_SNOOZE_1D',
+          buttonTitle: 'Snooze 1d',
+          options: {
+            opensAppToForeground: false,
+          },
+        },
+        {
+          identifier: 'REMINDER_OPEN',
+          buttonTitle: 'Open',
+          options: {
+            opensAppToForeground: true,
           },
         },
       ]);

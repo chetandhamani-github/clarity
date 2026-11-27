@@ -22,6 +22,7 @@ export interface ClarityBackupPayload {
     bills?: any[];
     bill_reminders?: any[];
     subscriptions?: any[];
+    reminders?: any[];
     splitwise_people?: any[];
     splitwise_debts?: any[];
     splitwise_settlements?: any[];
@@ -44,6 +45,13 @@ export interface ClarityBackupPayload {
       hideBalances?: boolean;
       paydayDayOfMonth?: number;
       safetyBufferAmount?: number;
+      defaultReminderTime?: string;
+      dailyPulseEnabled?: boolean;
+      dailyPulseTime?: string;
+      billRemindersEnabled?: boolean;
+      cardDueAlertsEnabled?: boolean;
+      budgetAlertsEnabled?: boolean;
+      goalRemindersEnabled?: boolean;
     };
   };
 }
@@ -116,6 +124,7 @@ export function isMeaningfulDatabaseSnapshot(payload: ClarityBackupPayload | nul
   if (Array.isArray(data.recurring_transactions) && data.recurring_transactions.length > 0) return true;
   if (Array.isArray(data.bills) && data.bills.length > 0) return true;
   if (Array.isArray(data.subscriptions) && data.subscriptions.length > 0) return true;
+  if (Array.isArray(data.reminders) && data.reminders.length > 0) return true;
   if (Array.isArray(data.splitwise_debts) && data.splitwise_debts.length > 0) return true;
   if (Array.isArray(data.splitwise_people) && data.splitwise_people.length > 0) return true;
   if (Array.isArray(data.splitwise_groups) && data.splitwise_groups.length > 0) return true;
@@ -169,6 +178,7 @@ export async function generateDatabaseSnapshot(): Promise<ClarityBackupPayload> 
   const bills = await safeGetAll('SELECT * FROM bills');
   const bill_reminders = await safeGetAll('SELECT * FROM bill_reminders');
   const subscriptions = await safeGetAll('SELECT * FROM subscriptions');
+  const reminders = await safeGetAll('SELECT * FROM reminders');
   const splitwise_people = await safeGetAll('SELECT * FROM splitwise_people');
   const splitwise_debts = await safeGetAll('SELECT * FROM splitwise_debts');
   const splitwise_settlements = await safeGetAll('SELECT * FROM splitwise_settlements');
@@ -195,6 +205,13 @@ export async function generateDatabaseSnapshot(): Promise<ClarityBackupPayload> 
       hideBalances: appState.hideBalances,
       paydayDayOfMonth: appState.paydayDayOfMonth,
       safetyBufferAmount: appState.safetyBufferAmount,
+      defaultReminderTime: appState.defaultReminderTime,
+      dailyPulseEnabled: appState.dailyPulseEnabled,
+      dailyPulseTime: appState.dailyPulseTime,
+      billRemindersEnabled: appState.billRemindersEnabled,
+      cardDueAlertsEnabled: appState.cardDueAlertsEnabled,
+      budgetAlertsEnabled: appState.budgetAlertsEnabled,
+      goalRemindersEnabled: appState.goalRemindersEnabled,
     };
   } catch {
     // Graceful fallback if Zustand store unavailable in headless environment
@@ -214,6 +231,7 @@ export async function generateDatabaseSnapshot(): Promise<ClarityBackupPayload> 
     bills,
     bill_reminders,
     subscriptions,
+    reminders,
     splitwise_people,
     splitwise_debts,
     splitwise_settlements,
@@ -299,6 +317,7 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
         DELETE FROM bill_reminders;
         DELETE FROM bills;
         DELETE FROM subscriptions;
+        DELETE FROM reminders;
         DELETE FROM splitwise_expense_splits;
         DELETE FROM splitwise_expenses;
         DELETE FROM splitwise_group_members;
@@ -329,8 +348,8 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
     if (Array.isArray(data.accounts)) {
       for (const a of data.accounts) {
         await db.runAsync(
-          `INSERT INTO accounts (id, name, type, balance, institution, last_four, sort_order, billing_cycle_day, due_day, credit_limit, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO accounts (id, name, type, balance, institution, last_four, sort_order, is_primary, billing_cycle_day, due_day, credit_limit, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             a.id,
             a.name,
@@ -339,6 +358,7 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
             a.institution ?? '',
             a.last_four ?? a.lastFour ?? '',
             a.sort_order ?? a.sortOrder ?? 0,
+            a.is_primary ?? (a.isPrimary ? 1 : 0),
             a.billing_cycle_day ?? a.billingCycleDay ?? null,
             a.due_day ?? a.dueDay ?? null,
             a.credit_limit ?? a.creditLimit ?? null,
@@ -647,6 +667,67 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
           );
         } catch {
           // Ignore
+        }
+      }
+    }
+
+    // 12b. Insert Custom Reminders (if present)
+    if (Array.isArray(data.reminders)) {
+      for (const r of data.reminders) {
+        try {
+          let remStatus = String(r.status ?? 'pending').toLowerCase();
+          if (!['pending', 'snoozed', 'completed', 'dismissed'].includes(remStatus)) {
+            remStatus = 'pending';
+          }
+
+          let repeatRule = String(r.repeat_rule ?? r.repeatRule ?? 'none').toLowerCase();
+          if (!['none', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'].includes(repeatRule)) {
+            repeatRule = 'none';
+          }
+
+          let category = String(r.category ?? 'general').toLowerCase();
+          if (
+            ![
+              'general',
+              'tax',
+              'insurance',
+              'trial',
+              'investment',
+              'splitwise',
+              'daily_log',
+              'bill_custom',
+            ].includes(category)
+          ) {
+            category = 'general';
+          }
+
+          await db.runAsync(
+            `INSERT INTO reminders (
+              id, title, notes, category, amount, remind_at_date, remind_at_time,
+              repeat_rule, advance_days, status, snooze_until, linked_type, linked_id,
+              completed_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              r.id,
+              r.title,
+              r.notes ?? '',
+              category,
+              r.amount ?? null,
+              r.remind_at_date ?? r.remindAtDate ?? getLocalTodayYmd(),
+              r.remind_at_time ?? r.remindAtTime ?? '09:00',
+              repeatRule,
+              Number(r.advance_days ?? r.advanceDays ?? 0),
+              remStatus,
+              r.snooze_until ?? r.snoozeUntil ?? null,
+              r.linked_type ?? r.linkedType ?? null,
+              r.linked_id ?? r.linkedId ?? null,
+              r.completed_at ?? r.completedAt ?? null,
+              r.created_at ?? r.createdAt ?? new Date().toISOString(),
+              r.updated_at ?? r.updatedAt ?? r.created_at ?? new Date().toISOString(),
+            ]
+          );
+        } catch {
+          // Ignore individual malformed rows
         }
       }
     }
@@ -1017,23 +1098,33 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
 
     await db.execAsync('COMMIT');
 
-    // Reset reminder/alert deduplication state, cancel stale OS alarms, and resync restored bills
+    // Reset reminder/alert deduplication state, cancel stale OS alarms, and resync restored bills & reminders
     try {
-      const { cleanupRedundantLegacyBillReminders } = await import('./migrations');
+      const {
+        migrateLegacyBillRemindersToBills,
+        cleanupRedundantLegacyBillReminders,
+      } = await import('./migrations');
+      await migrateLegacyBillRemindersToBills(db);
       await cleanupRedundantLegacyBillReminders(db);
 
       const { BillsRepository } = await import('@/modules/bills/database/bills.repository');
       BillsRepository.resetSchemaCache();
+
+      const { RemindersRepository } = await import('@/modules/reminders/database/reminders.repository');
+      RemindersRepository.resetSchemaCache();
 
       const { resetBillReminderCheckCooldown } = await import('@/services/notifications/alert-engine');
       resetBillReminderCheckCooldown();
 
       const { BillAlertEngine } = await import('@/services/notifications/bill-alert-engine');
       await BillAlertEngine.cancelAllNativeBillReminders();
-      await BillAlertEngine.syncAllNativeBillReminders();
+
+      const { ReminderScheduler } = await import('@/modules/reminders/services/ReminderScheduler');
+      await ReminderScheduler.syncAll();
 
       const { DeviceEventEmitter } = await import('react-native');
       DeviceEventEmitter.emit('billsUpdated');
+      DeviceEventEmitter.emit('remindersUpdated');
       DeviceEventEmitter.emit('notificationsUpdated');
     } catch {
       // Ignore post-restore notification sync failures in constrained environments
@@ -1059,6 +1150,27 @@ export async function restoreDatabaseFromSnapshot(payload: ClarityBackupPayload)
         }
         if (typeof data.preferences.safetyBufferAmount === 'number') {
           store.setSafetyBufferAmount(data.preferences.safetyBufferAmount);
+        }
+        if (typeof data.preferences.defaultReminderTime === 'string') {
+          store.setDefaultReminderTime(data.preferences.defaultReminderTime);
+        }
+        if (typeof data.preferences.dailyPulseEnabled === 'boolean') {
+          store.setDailyPulseEnabled(data.preferences.dailyPulseEnabled);
+        }
+        if (typeof data.preferences.dailyPulseTime === 'string') {
+          store.setDailyPulseTime(data.preferences.dailyPulseTime);
+        }
+        if (typeof data.preferences.billRemindersEnabled === 'boolean') {
+          store.setBillRemindersEnabled(data.preferences.billRemindersEnabled);
+        }
+        if (typeof data.preferences.cardDueAlertsEnabled === 'boolean') {
+          store.setCardDueAlertsEnabled(data.preferences.cardDueAlertsEnabled);
+        }
+        if (typeof data.preferences.budgetAlertsEnabled === 'boolean') {
+          store.setBudgetAlertsEnabled(data.preferences.budgetAlertsEnabled);
+        }
+        if (typeof data.preferences.goalRemindersEnabled === 'boolean') {
+          store.setGoalRemindersEnabled(data.preferences.goalRemindersEnabled);
         }
       } catch {
         // Ignore store update failure in testing/headless mode

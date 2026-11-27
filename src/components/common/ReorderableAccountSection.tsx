@@ -367,9 +367,17 @@ export function ReorderableAccountSection({
                     />
                   </View>
                   <View style={styles.accountNameContainer}>
-                    <Text style={styles.accountName} numberOfLines={1}>
-                      {account.name}
-                    </Text>
+                    <View style={styles.accountNameRow}>
+                      <Text style={styles.accountName} numberOfLines={1}>
+                        {account.name}
+                      </Text>
+                      {account.isPrimary ? (
+                        <View style={styles.primaryBadge}>
+                          <MaterialIcons name="star" size={10} color={colors.onPrimaryContainer} />
+                          <Text style={styles.primaryBadgeText}>PRIMARY</Text>
+                        </View>
+                      ) : null}
+                    </View>
                     <View style={styles.accountBadgeRow}>
                       {account.institution ? (
                         <View
@@ -458,6 +466,8 @@ const getStyles = (colors: ThemeColors) => {
       alignItems: 'center',
       gap: 12,
       flex: 1,
+      minWidth: 0,
+      overflow: 'hidden',
     },
     accountIconContainer: {
       width: 44,
@@ -465,20 +475,32 @@ const getStyles = (colors: ThemeColors) => {
       borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',
+      flexShrink: 0,
     },
     accountNameContainer: {
       flex: 1,
+      minWidth: 0,
+      overflow: 'hidden',
+    },
+    accountNameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      minWidth: 0,
     },
     accountName: {
       ...typography.bodyMd,
       fontFamily: 'Manrope_600SemiBold',
       color: colors.onSurface,
+      flexShrink: 1,
+      minWidth: 0,
     },
     accountBadgeRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
       marginTop: 2,
+      overflow: 'hidden',
     },
     bankBadge: {
       paddingHorizontal: 6,
@@ -494,14 +516,33 @@ const getStyles = (colors: ThemeColors) => {
       lineHeight: 14,
       textAlignVertical: 'center',
     },
+    primaryBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+      backgroundColor: colors.primaryContainer,
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: 4,
+      flexShrink: 0,
+    },
+    primaryBadgeText: {
+      fontSize: 10,
+      fontFamily: 'Manrope_700Bold',
+      lineHeight: 14,
+      color: colors.onPrimaryContainer,
+    },
     accountType: {
       ...typography.labelMd,
       fontSize: 12,
       color: colors.outline,
+      flexShrink: 1,
+      minWidth: 0,
     },
     accountItemRight: {
       alignItems: 'flex-end',
       justifyContent: 'center',
+      flexShrink: 0,
     },
     accountBalanceActive: {
       ...typography.headlineSm,

@@ -24,6 +24,7 @@ interface AccountRow {
   institution: string;
   last_four: string;
   sort_order?: number;
+  is_primary?: number;
   billing_cycle_day?: number | null;
   due_day?: number | null;
   credit_limit?: number | null;
@@ -40,6 +41,7 @@ function mapRow(row: AccountRow): Account {
     institution: row.institution,
     lastFour: row.last_four,
     sortOrder: row.sort_order ?? 0,
+    isPrimary: Boolean(row.is_primary),
     billingCycleDay: row.billing_cycle_day ?? undefined,
     dueDay: row.due_day ?? undefined,
     creditLimit: row.credit_limit ?? undefined,
@@ -51,7 +53,7 @@ function mapRow(row: AccountRow): Account {
 export async function getAllAccounts(): Promise<Account[]> {
   const db = getDatabase();
   const rows = await db.getAllAsync<AccountRow>(
-    'SELECT * FROM accounts ORDER BY sort_order ASC, created_at DESC'
+    'SELECT * FROM accounts ORDER BY is_primary DESC, sort_order ASC, created_at DESC'
   );
   return rows.map(mapRow);
 }
@@ -77,9 +79,14 @@ export async function insertAccount(data: Omit<Account, 'id' | 'createdAt'>): Pr
     sortOrder = (maxRow?.max_order ?? -1) + 1;
   }
 
+  const isPrimary = data.isPrimary ? 1 : 0;
+  if (isPrimary) {
+    await db.runAsync('UPDATE accounts SET is_primary = 0 WHERE is_primary = 1');
+  }
+
   await db.runAsync(
-    `INSERT INTO accounts (id, name, type, balance, institution, last_four, sort_order, billing_cycle_day, due_day, credit_limit, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO accounts (id, name, type, balance, institution, last_four, sort_order, is_primary, billing_cycle_day, due_day, credit_limit, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       data.name,
@@ -88,6 +95,7 @@ export async function insertAccount(data: Omit<Account, 'id' | 'createdAt'>): Pr
       data.institution,
       data.lastFour,
       sortOrder,
+      isPrimary,
       data.billingCycleDay ?? null,
       data.dueDay ?? null,
       data.creditLimit ?? null,
@@ -101,6 +109,7 @@ export async function insertAccount(data: Omit<Account, 'id' | 'createdAt'>): Pr
     ...data,
     balance: roundedBalance,
     sortOrder,
+    isPrimary: Boolean(isPrimary),
     createdAt: now,
     updatedAt,
   };
@@ -146,6 +155,13 @@ export async function updateAccount(
     sets.push('sort_order = ?');
     params.push(data.sortOrder);
   }
+  if (data.isPrimary !== undefined) {
+    if (data.isPrimary) {
+      await db.runAsync('UPDATE accounts SET is_primary = 0 WHERE id != ? AND is_primary = 1', [id]);
+    }
+    sets.push('is_primary = ?');
+    params.push(data.isPrimary ? 1 : 0);
+  }
   if (data.billingCycleDay !== undefined) {
     sets.push('billing_cycle_day = ?');
     params.push(data.billingCycleDay);
@@ -167,6 +183,30 @@ export async function updateAccount(
 
   params.push(id);
   await db.runAsync(`UPDATE accounts SET ${sets.join(', ')} WHERE id = ?`, params);
+}
+
+export async function setPrimaryAccount(id: string | null): Promise<void> {
+  const db = getDatabase();
+  const now = new Date().toISOString();
+  const execute = async () => {
+    await db.runAsync('UPDATE accounts SET is_primary = 0, updated_at = ? WHERE is_primary = 1', [now]);
+    if (id) {
+      await db.runAsync('UPDATE accounts SET is_primary = 1, updated_at = ? WHERE id = ?', [now, id]);
+    }
+  };
+
+  if (typeof db.withTransactionAsync === 'function') {
+    await db.withTransactionAsync(execute);
+  } else {
+    await db.execAsync('BEGIN TRANSACTION');
+    try {
+      await execute();
+      await db.execAsync('COMMIT');
+    } catch (error) {
+      await db.execAsync('ROLLBACK');
+      throw error;
+    }
+  }
 }
 
 export async function updateAccountsOrder(orderedIds: string[]): Promise<void> {

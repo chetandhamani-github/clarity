@@ -161,6 +161,8 @@ export default function RootLayout() {
           await processDueRecurringTransactions();
           await checkUpcomingBillReminders();
           await checkUpcomingGoalDeadlines();
+          const { ReminderScheduler } = await import('@/modules/reminders/services/ReminderScheduler');
+          await ReminderScheduler.syncAll().catch(() => {});
 
           // Initialize opportunistic background daily auto-backup scheduler
           const { initScheduledBackupListener } = await import(
@@ -185,6 +187,7 @@ export default function RootLayout() {
           const unlinked = await SmsDao.getUnlinkedParsedTransactions();
           if (unlinked.length > 0) {
             smsStore.getState().setPendingTransactions(unlinked);
+            smsStore.getState().openTransactionPrompt();
           }
         } catch {
           // Recurring processing error ignored
@@ -234,6 +237,9 @@ export default function RootLayout() {
           .then(({ processDueRecurringTransactions }) => processDueRecurringTransactions())
           .catch(() => {});
         checkUpcomingBillReminders().catch(() => {});
+        import('@/modules/reminders/services/ReminderScheduler')
+          .then(({ ReminderScheduler }) => ReminderScheduler.syncAll())
+          .catch(() => {});
       }
     };
 

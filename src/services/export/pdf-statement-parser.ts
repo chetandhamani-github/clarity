@@ -2414,6 +2414,24 @@ function extractAmountTokens(text: string): ExtractedAmountToken[] {
     }
   }
 
+  if (results.length === 0) {
+    // Allow plain integers under 1,000 when explicitly anchored by currency symbol or CR/DR marker.
+    const taggedIntegerRegex =
+      /(?:^|[\s|(/:[])(?:(CR|DR)\s+)?(?:(₹|rs\.?|inr)\s*([+-])?\s*(\d{1,6})(?:\s*(CR|DR))?|([+-])?(\d{1,6})\s*(CR|DR)\.?\b)(?=$|[\s|,;)\]])/gi;
+    while ((m = taggedIntegerRegex.exec(text)) !== null) {
+      const rawDigits = m[4] || m[7];
+      if (!rawDigits) continue;
+      const val = parseFloat(rawDigits);
+      if (isNaN(val) || val <= 0) continue;
+      const tag = resolveAmountTag(m[5] || m[8] || m[1], m[3] || m[6]);
+      results.push({
+        value: val,
+        raw: m[0].replace(/^[\s|(/:[]+/, '').trim(),
+        tag,
+      });
+    }
+  }
+
   return results;
 }
 
@@ -2608,9 +2626,15 @@ interface InternalPdfParseResult {
   resolvedByBalance: boolean[];
 }
 
+const SERIAL_PREFIXED_DATE_REGEX = new RegExp(`^\\d{1,4}\\s+${DATE_PATTERN_SRC}(?=[\\s|]|$)`, 'i');
+
 function parseBankStatementPdfTextWithMeta(text: string): InternalPdfParseResult {
-  const transactions: ParsedPdfTransaction[] = [];
-  const confidences: DirectionConfidence[] = [];
+  const parsedEntries: Array<{
+    lineIdx: number;
+    transaction: ParsedPdfTransaction;
+    confidence: DirectionConfidence;
+  }> = [];
+  const consumedLines = new Set<number>();
   const errors: string[] = [];
 
   const lines = mergeSplitDateLines(
@@ -2626,13 +2650,20 @@ function parseBankStatementPdfTextWithMeta(text: string): InternalPdfParseResult
   while (i < lines.length) {
     const line = lines[i];
     if (STATEMENT_NOISE_LINE_REGEX.test(line)) {
+      consumedLines.add(i);
       i++;
       continue;
     }
 
-    if (LEADING_DATE_REGEX.test(line) && !SINGLE_DATE_REGEX.test(line) && !DUAL_DATE_ONLY_REGEX.test(line)) {
+    const startsTxRow =
+      (LEADING_DATE_REGEX.test(line) || SERIAL_PREFIXED_DATE_REGEX.test(line)) &&
+      !SINGLE_DATE_REGEX.test(line) &&
+      !DUAL_DATE_ONLY_REGEX.test(line);
+
+    if (startsTxRow) {
       const immediateParsed = parseTransactionRowWithMeta(line);
       if (immediateParsed) {
+        consumedLines.add(i);
         // Attach up to 3 pure narration continuation lines (no date, no decimal amounts)
         let extra = '';
         let k = i + 1;
@@ -2644,6 +2675,7 @@ function parseBankStatementPdfTextWithMeta(text: string): InternalPdfParseResult
           extractAmountTokens(lines[k]).length === 0
         ) {
           extra += ` ${lines[k]}`;
+          consumedLines.add(k);
           k++;
         }
         if (extra.trim()) {
@@ -2657,28 +2689,47 @@ function parseBankStatementPdfTextWithMeta(text: string): InternalPdfParseResult
             }
           }
         }
-        transactions.push(immediateParsed.transaction);
-        confidences.push(immediateParsed.confidence);
+        parsedEntries.push({
+          lineIdx: i,
+          transaction: immediateParsed.transaction,
+          confidence: immediateParsed.confidence,
+        });
         i = k;
         continue;
       }
 
-      // Wrapped row: date + narration on line 1, optional value date, amounts on lines 2..8
+      // Wrapped row: date + narration on line 1, optional value date, amounts on lines 2..14
       let merged = line;
       let matched = false;
-      for (let look = 1; look <= 8 && i + look < lines.length; look++) {
+      const candidateIndices = [i];
+      for (let look = 1; look <= 14 && i + look < lines.length; look++) {
         const nextLine = lines[i + look];
-        if (STATEMENT_NOISE_LINE_REGEX.test(nextLine) || parseTransactionRowWithMeta(nextLine) !== null) {
+        if (STATEMENT_NOISE_LINE_REGEX.test(nextLine)) {
+          // Skip page headers/footers that split a transaction across a page break.
+          candidateIndices.push(i + look);
+          continue;
+        }
+        if (parseTransactionRowWithMeta(nextLine) !== null) {
           break;
         }
-        if (LEADING_DATE_REGEX.test(nextLine) && !(look === 1 && SINGLE_DATE_REGEX.test(nextLine))) {
+        if (
+          (LEADING_DATE_REGEX.test(nextLine) || SERIAL_PREFIXED_DATE_REGEX.test(nextLine)) &&
+          !(look === 1 && SINGLE_DATE_REGEX.test(nextLine))
+        ) {
           break;
         }
         merged += ` ${nextLine}`;
+        candidateIndices.push(i + look);
         const parsedWrapped = parseTransactionRowWithMeta(merged);
         if (parsedWrapped) {
-          transactions.push(parsedWrapped.transaction);
-          confidences.push(parsedWrapped.confidence);
+          for (const idxUsed of candidateIndices) {
+            consumedLines.add(idxUsed);
+          }
+          parsedEntries.push({
+            lineIdx: i,
+            transaction: parsedWrapped.transaction,
+            confidence: parsedWrapped.confidence,
+          });
           i += look + 1;
           matched = true;
           break;
@@ -2688,149 +2739,173 @@ function parseBankStatementPdfTextWithMeta(text: string): InternalPdfParseResult
     } else if (line.length >= 8 && DATE_REGEX.test(line) && !SINGLE_DATE_REGEX.test(line)) {
       const parsedMid = parseTransactionRowWithMeta(line);
       if (parsedMid) {
-        transactions.push(parsedMid.transaction);
-        confidences.push(parsedMid.confidence);
+        consumedLines.add(i);
+        parsedEntries.push({
+          lineIdx: i,
+          transaction: parsedMid.transaction,
+          confidence: parsedMid.confidence,
+        });
       }
     }
 
     i++;
   }
 
-  // Pass 2: Sequential columnar tokens (SBI/ICICI style vertical cells)
-  if (transactions.length === 0) {
-    let idx = 0;
-    while (idx < lines.length) {
-      const line = lines[idx];
-      const isDualDateHeader = DUAL_DATE_ONLY_REGEX.test(line);
-      if (SINGLE_DATE_REGEX.test(line) || isDualDateHeader) {
-        const firstDateMatch = line.match(DATE_REGEX);
-        const normalizedDate = firstDateMatch ? normalizeDate(firstDateMatch[0]) : null;
-        let nextIdx = idx + 1;
+  // Pass 2: Sequential columnar tokens (SBI/ICICI style vertical cells) for any unconsumed lines
+  let idx = 0;
+  while (idx < lines.length) {
+    if (consumedLines.has(idx)) {
+      idx++;
+      continue;
+    }
+    const line = lines[idx];
+    const isDualDateHeader = DUAL_DATE_ONLY_REGEX.test(line);
+    if (SINGLE_DATE_REGEX.test(line) || isDualDateHeader) {
+      const firstDateMatch = line.match(DATE_REGEX);
+      const normalizedDate = firstDateMatch ? normalizeDate(firstDateMatch[0]) : null;
+      let nextIdx = idx + 1;
 
-        if (!isDualDateHeader && nextIdx < lines.length && SINGLE_DATE_REGEX.test(lines[nextIdx])) {
+      if (
+        !isDualDateHeader &&
+        nextIdx < lines.length &&
+        !consumedLines.has(nextIdx) &&
+        SINGLE_DATE_REGEX.test(lines[nextIdx])
+      ) {
+        nextIdx++;
+      }
+
+      let narration = '';
+      while (
+        nextIdx < lines.length &&
+        !consumedLines.has(nextIdx) &&
+        !SINGLE_DATE_REGEX.test(lines[nextIdx]) &&
+        !DUAL_DATE_ONLY_REGEX.test(lines[nextIdx])
+      ) {
+        const token = lines[nextIdx];
+        if (STATEMENT_NOISE_LINE_REGEX.test(token)) {
           nextIdx++;
+          continue;
         }
-
-        let narration = '';
-        while (nextIdx < lines.length && !SINGLE_DATE_REGEX.test(lines[nextIdx]) && !DUAL_DATE_ONLY_REGEX.test(lines[nextIdx])) {
-          const token = lines[nextIdx];
-          const amountCells = parseColumnarAmountLine(token);
-          if (amountCells && amountCells.some((c) => c !== null)) {
+        const amountCells = parseColumnarAmountLine(token);
+        if (amountCells && amountCells.some((c) => c !== null)) {
+          break;
+        }
+        if (amountCells) {
+          const peek = nextIdx + 1 < lines.length ? lines[nextIdx + 1] : '';
+          if (parseColumnarAmountLine(peek)) {
             break;
           }
-          if (amountCells) {
-            const peek = nextIdx + 1 < lines.length ? lines[nextIdx + 1] : '';
-            if (parseColumnarAmountLine(peek)) {
-              break;
-            }
+        }
+        narration += (narration ? ' ' : '') + token;
+        nextIdx++;
+      }
+
+      const parsedAmounts: Array<ColumnarAmountCell | null> = [];
+      while (
+        nextIdx < lines.length &&
+        !consumedLines.has(nextIdx) &&
+        !SINGLE_DATE_REGEX.test(lines[nextIdx]) &&
+        !DUAL_DATE_ONLY_REGEX.test(lines[nextIdx]) &&
+        parsedAmounts.length < 4
+      ) {
+        const cells = parseColumnarAmountLine(lines[nextIdx]);
+        if (!cells) break;
+        parsedAmounts.push(...cells);
+        nextIdx++;
+      }
+
+      if (normalizedDate && parsedAmounts.length >= 1) {
+        let txAmount = 0;
+        let isIncome = false;
+        let rowBalance: number | undefined;
+        let confidence: DirectionConfidence = 'default';
+
+        // Preserve null ("-") column placeholders so [null, credit, balance] stays identifiable.
+        if (parsedAmounts.length >= 3) {
+          const debitCell = parsedAmounts[0];
+          const creditCell = parsedAmounts[1];
+          const balCell = parsedAmounts[parsedAmounts.length - 1];
+          if (balCell !== null) {
+            rowBalance = balCell.val;
           }
-          narration += (narration ? ' ' : '') + token;
-          nextIdx++;
-        }
 
-        const parsedAmounts: Array<ColumnarAmountCell | null> = [];
-        while (
-          nextIdx < lines.length &&
-          !SINGLE_DATE_REGEX.test(lines[nextIdx]) &&
-          !DUAL_DATE_ONLY_REGEX.test(lines[nextIdx]) &&
-          parsedAmounts.length < 4
-        ) {
-          const cells = parseColumnarAmountLine(lines[nextIdx]);
-          if (!cells) break;
-          parsedAmounts.push(...cells);
-          nextIdx++;
-        }
-
-        if (normalizedDate && parsedAmounts.length >= 1) {
-          let txAmount = 0;
-          let isIncome = false;
-          let rowBalance: number | undefined;
-          let confidence: DirectionConfidence = 'default';
-
-          // Preserve null ("-") column placeholders so [null, credit, balance] stays identifiable.
-          if (parsedAmounts.length >= 3) {
-            const debitCell = parsedAmounts[0];
-            const creditCell = parsedAmounts[1];
-            const balCell = parsedAmounts[parsedAmounts.length - 1];
-            if (balCell !== null) {
-              rowBalance = balCell.val;
-            }
-
-            if ((debitCell === null || debitCell.val === 0) && creditCell && creditCell.val > 0) {
-              txAmount = creditCell.val;
-              isIncome = true;
-              confidence = 'explicit';
-            } else if (debitCell && debitCell.val > 0 && (creditCell === null || creditCell.val === 0)) {
-              txAmount = debitCell.val;
-              isIncome = false;
-              confidence = 'explicit';
-            } else {
-              const positiveCells = parsedAmounts.filter(
-                (p): p is ColumnarAmountCell => p !== null && p.val > 0
-              );
-              if (positiveCells.length >= 2) {
-                rowBalance = positiveCells[positiveCells.length - 1].val;
-                txAmount = positiveCells[0].val;
-                isIncome = positiveCells[0].isCredit;
-                if (positiveCells[0].isCredit || positiveCells[0].isDebit) {
-                  confidence = 'explicit';
-                }
-              } else if (positiveCells.length === 1) {
-                txAmount = positiveCells[0].val;
-                isIncome = positiveCells[0].isCredit;
-                if (positiveCells[0].isCredit || positiveCells[0].isDebit) {
-                  confidence = 'explicit';
-                }
-              }
-            }
-          } else if (parsedAmounts.length === 2) {
-            const col0 = parsedAmounts[0];
-            const col1 = parsedAmounts[1];
-            if (col0 === null && col1 && col1.val > 0) {
-              txAmount = col1.val;
-              isIncome = true;
-              confidence = 'explicit';
-            } else if (col0 && col0.val > 0 && col1 === null) {
-              txAmount = col0.val;
-              isIncome = false;
-              confidence = 'explicit';
-            } else if (col0 && col1 && col0.val > 0) {
-              txAmount = col0.val;
-              rowBalance = col1.val;
-              isIncome = col0.isCredit;
-              if (col0.isCredit || col0.isDebit) {
+          if ((debitCell === null || debitCell.val === 0) && creditCell && creditCell.val > 0) {
+            txAmount = creditCell.val;
+            isIncome = true;
+            confidence = 'explicit';
+          } else if (debitCell && debitCell.val > 0 && (creditCell === null || creditCell.val === 0)) {
+            txAmount = debitCell.val;
+            isIncome = false;
+            confidence = 'explicit';
+          } else {
+            const positiveCells = parsedAmounts.filter(
+              (p): p is ColumnarAmountCell => p !== null && p.val > 0
+            );
+            if (positiveCells.length >= 2) {
+              rowBalance = positiveCells[positiveCells.length - 1].val;
+              txAmount = positiveCells[0].val;
+              isIncome = positiveCells[0].isCredit;
+              if (positiveCells[0].isCredit || positiveCells[0].isDebit) {
                 confidence = 'explicit';
               }
-            } else if (col1 && col1.val > 0) {
-              txAmount = col1.val;
-              isIncome = col1.isCredit;
-              if (col1.isCredit || col1.isDebit) {
+            } else if (positiveCells.length === 1) {
+              txAmount = positiveCells[0].val;
+              isIncome = positiveCells[0].isCredit;
+              if (positiveCells[0].isCredit || positiveCells[0].isDebit) {
                 confidence = 'explicit';
               }
             }
-          } else if (parsedAmounts[0] && parsedAmounts[0].val > 0) {
-            txAmount = parsedAmounts[0].val;
-            isIncome = parsedAmounts[0].isCredit;
-            if (parsedAmounts[0].isCredit || parsedAmounts[0].isDebit) {
+          }
+        } else if (parsedAmounts.length === 2) {
+          const col0 = parsedAmounts[0];
+          const col1 = parsedAmounts[1];
+          if (col0 === null && col1 && col1.val > 0) {
+            txAmount = col1.val;
+            isIncome = true;
+            confidence = 'explicit';
+          } else if (col0 && col0.val > 0 && col1 === null) {
+            txAmount = col0.val;
+            isIncome = false;
+            confidence = 'explicit';
+          } else if (col0 && col1 && col0.val > 0) {
+            txAmount = col0.val;
+            rowBalance = col1.val;
+            isIncome = col0.isCredit;
+            if (col0.isCredit || col0.isDebit) {
+              confidence = 'explicit';
+            }
+          } else if (col1 && col1.val > 0) {
+            txAmount = col1.val;
+            isIncome = col1.isCredit;
+            if (col1.isCredit || col1.isDebit) {
               confidence = 'explicit';
             }
           }
+        } else if (parsedAmounts[0] && parsedAmounts[0].val > 0) {
+          txAmount = parsedAmounts[0].val;
+          isIncome = parsedAmounts[0].isCredit;
+          if (parsedAmounts[0].isCredit || parsedAmounts[0].isDebit) {
+            confidence = 'explicit';
+          }
+        }
 
-          if (txAmount > 0) {
-            if (confidence !== 'explicit') {
-              const narrDir = inferDirectionFromNarration(narration);
-              if (narrDir) {
-                isIncome = narrDir === 'income';
-                confidence = 'inferred';
-              }
+        if (txAmount > 0) {
+          if (confidence !== 'explicit') {
+            const narrDir = inferDirectionFromNarration(narration);
+            if (narrDir) {
+              isIncome = narrDir === 'income';
+              confidence = 'inferred';
             }
+          }
 
-            const cleanNarr =
-              narration.replace(/[/\\|:_\-\t]+/g, ' ').replace(/\s+/g, ' ').trim() ||
-              'Bank Transaction';
-            const merchant = cleanNarr.split(' ').slice(0, 4).join(' ');
+          const cleanNarr =
+            narration.replace(/[/\\|:_\-\t]+/g, ' ').replace(/\s+/g, ' ').trim() ||
+            'Bank Transaction';
+          const merchant = cleanNarr.split(' ').slice(0, 4).join(' ');
 
-            transactions.push({
+          parsedEntries.push({
+            lineIdx: idx,
+            transaction: {
               date: normalizedDate,
               merchant,
               amount: txAmount,
@@ -2838,17 +2913,21 @@ function parseBankStatementPdfTextWithMeta(text: string): InternalPdfParseResult
               category: inferCategory(cleanNarr),
               note: cleanNarr,
               ...(rowBalance !== undefined ? { balance: rowBalance } : {}),
-            });
-            confidences.push(confidence);
-          }
+            },
+            confidence,
+          });
         }
-
-        idx = nextIdx;
-      } else {
-        idx++;
       }
+
+      idx = nextIdx;
+    } else {
+      idx++;
     }
   }
+
+  parsedEntries.sort((a, b) => a.lineIdx - b.lineIdx);
+  const transactions = parsedEntries.map((entry) => entry.transaction);
+  const confidences = parsedEntries.map((entry) => entry.confidence);
 
   const openingBalance = extractOpeningBalanceFromText(text);
   const resolvedByBalance = resolveDirectionByRunningBalance(

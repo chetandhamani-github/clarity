@@ -296,6 +296,7 @@ export class SmsDao {
     updates: {
       bank?: string;
       accountMask?: string;
+      merchant?: string;
       referenceNumber?: string;
       availableBalance?: number;
     }
@@ -310,6 +311,10 @@ export class SmsDao {
     if (updates.accountMask !== undefined) {
       sets.push('account_mask = ?');
       params.push(updates.accountMask);
+    }
+    if (updates.merchant !== undefined) {
+      sets.push('merchant = ?');
+      params.push(updates.merchant);
     }
     if (updates.referenceNumber !== undefined) {
       sets.push('reference_number = ?');

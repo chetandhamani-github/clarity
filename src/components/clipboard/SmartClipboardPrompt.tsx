@@ -102,8 +102,9 @@ export function SmartClipboardPrompt() {
   const handleQuickSave = async () => {
     if (!intent) return;
 
-    // Pick first valid bank account or fallback
+    // Pick primary account, first valid liquid bank account, or fallback
     const targetAccount =
+      accounts.find((a) => a.isPrimary) ||
       accounts.find((a) => ['savings', 'checking', 'current', 'wallet'].includes(a.type)) ||
       accounts[0];
 

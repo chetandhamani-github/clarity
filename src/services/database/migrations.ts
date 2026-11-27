@@ -11,6 +11,7 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
       institution TEXT NOT NULL DEFAULT '',
       last_four TEXT NOT NULL DEFAULT '',
       sort_order INTEGER NOT NULL DEFAULT 0,
+      is_primary INTEGER NOT NULL DEFAULT 0,
       billing_cycle_day INTEGER,
       due_day INTEGER,
       credit_limit REAL,
@@ -428,6 +429,12 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
   }
 
   try {
+    await db.execAsync('ALTER TABLE accounts ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0;');
+  } catch {
+    // Column may already exist
+  }
+
+  try {
     await db.execAsync('ALTER TABLE accounts ADD COLUMN credit_limit REAL;');
   } catch {
     // Column may already exist
@@ -481,8 +488,124 @@ export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
     // Notifications migration fallback
   }
 
-  // Remove redundant dual-written legacy bill_reminders rows that already exist in bills
+  // Migrate any remaining legacy bill_reminders rows into canonical bills table, then clean up duplicates
+  await migrateLegacyBillRemindersToBills(db);
   await cleanupRedundantLegacyBillReminders(db);
+
+  // Reminders module schema
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS reminders (
+      id TEXT PRIMARY KEY NOT NULL,
+      title TEXT NOT NULL,
+      notes TEXT NOT NULL DEFAULT '',
+      category TEXT NOT NULL CHECK(
+        category IN ('general', 'tax', 'insurance', 'trial', 'investment', 'splitwise', 'daily_log', 'bill_custom')
+      ) DEFAULT 'general',
+      amount REAL DEFAULT NULL,
+      remind_at_date TEXT NOT NULL,
+      remind_at_time TEXT NOT NULL DEFAULT '09:00',
+      repeat_rule TEXT NOT NULL CHECK(
+        repeat_rule IN ('none', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly')
+      ) DEFAULT 'none',
+      advance_days INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL CHECK(
+        status IN ('pending', 'snoozed', 'completed', 'dismissed')
+      ) DEFAULT 'pending',
+      snooze_until TEXT DEFAULT NULL,
+      linked_type TEXT DEFAULT NULL CHECK(
+        linked_type IS NULL OR linked_type IN ('bill', 'account', 'goal', 'subscription', 'splitwise_person')
+      ),
+      linked_id TEXT DEFAULT NULL,
+      completed_at TEXT DEFAULT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_reminders_status_date ON reminders(status, remind_at_date ASC);
+    CREATE INDEX IF NOT EXISTS idx_reminders_linked ON reminders(linked_type, linked_id);
+  `);
+}
+
+export async function migrateLegacyBillRemindersToBills(
+  db: SQLite.SQLiteDatabase
+): Promise<void> {
+  try {
+    await db.execAsync(`
+      INSERT OR IGNORE INTO bills (
+        id,
+        title,
+        provider,
+        category,
+        amount,
+        min_amount,
+        due_date,
+        reminder_days,
+        status,
+        notes,
+        is_recurring,
+        frequency,
+        last_paid_date,
+        paid_transaction_id,
+        payment_url,
+        account_reference,
+        source,
+        sms_id,
+        created_at,
+        updated_at
+      )
+      SELECT
+        br.id,
+        br.biller_name,
+        br.biller_name,
+        CASE
+          WHEN br.biller_category IN ('electricity', 'water', 'mobile', 'internet', 'credit_card', 'emi', 'insurance', 'rent', 'education', 'subscription', 'other')
+            THEN br.biller_category
+          WHEN LOWER(br.biller_category) = 'broadband' THEN 'internet'
+          WHEN LOWER(br.biller_category) = 'loan' THEN 'emi'
+          ELSE 'other'
+        END,
+        br.amount_due,
+        br.min_amount_due,
+        br.due_date,
+        COALESCE(br.reminder_days_before, 3),
+        CASE br.status
+          WHEN 'PAID' THEN 'paid'
+          WHEN 'OVERDUE' THEN 'overdue'
+          WHEN 'DISMISSED' THEN 'dismissed'
+          ELSE 'upcoming'
+        END,
+        COALESCE(br.note, ''),
+        CASE WHEN br.repeat_frequency IN ('monthly', 'quarterly', 'yearly') THEN 1 ELSE 0 END,
+        CASE
+          WHEN br.repeat_frequency IN ('one_time', 'monthly', 'quarterly', 'yearly')
+            THEN br.repeat_frequency
+          ELSE 'one_time'
+        END,
+        br.paid_date,
+        br.paid_transaction_id,
+        br.payment_url,
+        br.account_reference,
+        CASE br.source WHEN 'SMS' THEN 'sms' ELSE 'manual' END,
+        br.sms_id,
+        br.created_at,
+        br.created_at
+      FROM bill_reminders br
+      WHERE NOT EXISTS (
+        SELECT 1 FROM bills b
+        WHERE b.id = br.id
+          OR (br.sms_id IS NOT NULL AND br.sms_id != '' AND b.sms_id = br.sms_id)
+          OR (
+            b.due_date = br.due_date
+            AND (
+              LOWER(TRIM(b.provider)) = LOWER(TRIM(br.biller_name))
+              OR LOWER(TRIM(b.title)) = LOWER(TRIM(br.biller_name))
+            )
+          )
+      );
+    `);
+  } catch {
+    // Legacy bill_reminders migration fallback
+  }
 }
 
 export async function cleanupRedundantLegacyBillReminders(

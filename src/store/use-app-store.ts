@@ -37,6 +37,13 @@ interface AppState {
   safetyBufferAmount: number;
   clipboardDetectionEnabled: boolean;
   lastDismissedClipboardHash: string | null;
+  defaultReminderTime: string;
+  dailyPulseEnabled: boolean;
+  dailyPulseTime: string;
+  billRemindersEnabled: boolean;
+  cardDueAlertsEnabled: boolean;
+  budgetAlertsEnabled: boolean;
+  goalRemindersEnabled: boolean;
   setHasHydrated: (value: boolean) => void;
   setOnboarded: (value: boolean) => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -58,6 +65,20 @@ interface AppState {
   setSafetyBufferAmount: (amt: number) => void;
   setClipboardDetectionEnabled: (enabled: boolean) => void;
   setLastDismissedClipboardHash: (hash: string | null) => void;
+  setDefaultReminderTime: (time: string) => void;
+  setDailyPulseEnabled: (enabled: boolean) => void;
+  setDailyPulseTime: (time: string) => void;
+  setBillRemindersEnabled: (enabled: boolean) => void;
+  setCardDueAlertsEnabled: (enabled: boolean) => void;
+  setBudgetAlertsEnabled: (enabled: boolean) => void;
+  setGoalRemindersEnabled: (enabled: boolean) => void;
+}
+
+function normalizeTimeHm(value: string, fallback: string): string {
+  const trimmed = value.trim();
+  const match = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(trimmed);
+  if (!match) return fallback;
+  return `${match[1].padStart(2, '0')}:${match[2]}`;
 }
 
 export const useAppStore = create<AppState>()(
@@ -84,6 +105,13 @@ export const useAppStore = create<AppState>()(
       safetyBufferAmount: 2000,
       clipboardDetectionEnabled: true,
       lastDismissedClipboardHash: null,
+      defaultReminderTime: '09:00',
+      dailyPulseEnabled: false,
+      dailyPulseTime: '20:00',
+      billRemindersEnabled: true,
+      cardDueAlertsEnabled: true,
+      budgetAlertsEnabled: true,
+      goalRemindersEnabled: true,
       setHasHydrated: (value) => set({ _hasHydrated: value }),
       setOnboarded: (value) => set({ hasOnboarded: value }),
       setTheme: (theme) => set({ theme }),
@@ -111,6 +139,14 @@ export const useAppStore = create<AppState>()(
       setSafetyBufferAmount: (amt) => set({ safetyBufferAmount: Math.max(0, amt) }),
       setClipboardDetectionEnabled: (enabled) => set({ clipboardDetectionEnabled: enabled }),
       setLastDismissedClipboardHash: (hash) => set({ lastDismissedClipboardHash: hash }),
+      setDefaultReminderTime: (time) =>
+        set({ defaultReminderTime: normalizeTimeHm(time, '09:00') }),
+      setDailyPulseEnabled: (enabled) => set({ dailyPulseEnabled: enabled }),
+      setDailyPulseTime: (time) => set({ dailyPulseTime: normalizeTimeHm(time, '20:00') }),
+      setBillRemindersEnabled: (enabled) => set({ billRemindersEnabled: enabled }),
+      setCardDueAlertsEnabled: (enabled) => set({ cardDueAlertsEnabled: enabled }),
+      setBudgetAlertsEnabled: (enabled) => set({ budgetAlertsEnabled: enabled }),
+      setGoalRemindersEnabled: (enabled) => set({ goalRemindersEnabled: enabled }),
     }),
     {
       name: 'app-storage',

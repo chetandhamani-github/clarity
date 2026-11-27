@@ -330,15 +330,22 @@ export function ReorderableBankAccounts({
                         color={branding.color}
                       />
                     </View>
-                    <View
-                      style={[
-                        styles.bankPill,
-                        { backgroundColor: branding.backgroundColor },
-                      ]}
-                    >
-                      <Text style={[styles.bankPillText, { color: branding.color }]} numberOfLines={1}>
-                        {branding.shortName}
-                      </Text>
+                    <View style={styles.cardHeaderRight}>
+                      {acc.isPrimary ? (
+                        <View style={styles.primaryPill}>
+                          <MaterialIcons name="star" size={11} color={colors.onPrimaryContainer} />
+                        </View>
+                      ) : null}
+                      <View
+                        style={[
+                          styles.bankPill,
+                          { backgroundColor: branding.backgroundColor },
+                        ]}
+                      >
+                        <Text style={[styles.bankPillText, { color: branding.color }]} numberOfLines={1}>
+                          {branding.shortName}
+                        </Text>
+                      </View>
                     </View>
                   </View>
 
@@ -409,6 +416,19 @@ const getStyles = (colors: ThemeColors) => {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
+    },
+    cardHeaderRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    primaryPill: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: colors.primaryContainer,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     bankIconCircle: {
       width: 32,

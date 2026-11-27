@@ -56,6 +56,7 @@ export async function clearDatabase(): Promise<void> {
     DROP TABLE IF EXISTS splitwise_debts;
     DROP TABLE IF EXISTS splitwise_people;
     DROP TABLE IF EXISTS investment_holdings;
+    DROP TABLE IF EXISTS reminders;
     DROP TABLE IF EXISTS subscriptions;
     DROP TABLE IF EXISTS bills;
     DROP TABLE IF EXISTS bill_reminders;

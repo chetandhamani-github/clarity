@@ -1,5 +1,5 @@
 import type { MaterialIcons } from '@expo/vector-icons';
-import type { ExtractedBill } from '@/modules/sms/extractor/billExtractor';
+import type { ExtractedBill } from '../services/notificationBillExtractor';
 import type { ParsedTransaction } from '@/modules/sms/types';
 
 export interface RawNotificationPayload {
@@ -26,10 +26,14 @@ export interface NotificationListenerHealth {
   lastDisconnectedAt?: number;
 }
 
+export type TargetAppRole = 'bank' | 'upi' | 'hybrid';
+
 export interface TargetAppConfig {
   packageName: string;
   name: string;
   category: 'upi' | 'banking';
+  appRole?: TargetAppRole;
+  institution?: string;
   icon: React.ComponentProps<typeof MaterialIcons>['name'];
   enabled: boolean;
 }

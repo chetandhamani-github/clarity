@@ -2,6 +2,7 @@ import {
   clearAccountData,
   getAllAccounts,
   insertAccount,
+  setPrimaryAccount,
   updateAccount,
   updateAccountsOrder,
 } from './account-dao';
@@ -43,7 +44,7 @@ describe('account-dao and reordering', () => {
     (getDatabase as jest.Mock).mockReturnValue(mockDb);
   });
 
-  it('getAllAccounts orders by sort_order ASC, created_at DESC', async () => {
+  it('getAllAccounts orders by is_primary DESC, sort_order ASC, created_at DESC', async () => {
     const mockRows = [
       {
         id: 'acc-1',
@@ -53,6 +54,7 @@ describe('account-dao and reordering', () => {
         institution: 'HDFC',
         last_four: '1234',
         sort_order: 0,
+        is_primary: 1,
         created_at: '2026-01-01T00:00:00.000Z',
       },
       {
@@ -63,6 +65,7 @@ describe('account-dao and reordering', () => {
         institution: '',
         last_four: '',
         sort_order: 1,
+        is_primary: 0,
         created_at: '2026-01-02T00:00:00.000Z',
       },
     ];
@@ -72,11 +75,30 @@ describe('account-dao and reordering', () => {
     const accounts = await getAllAccounts();
 
     expect(mockDb.getAllAsync).toHaveBeenCalledWith(
-      'SELECT * FROM accounts ORDER BY sort_order ASC, created_at DESC'
+      'SELECT * FROM accounts ORDER BY is_primary DESC, sort_order ASC, created_at DESC'
     );
     expect(accounts).toHaveLength(2);
     expect(accounts[0].sortOrder).toBe(0);
+    expect(accounts[0].isPrimary).toBe(true);
     expect(accounts[1].sortOrder).toBe(1);
+    expect(accounts[1].isPrimary).toBe(false);
+  });
+
+  it('setPrimaryAccount clears existing primary flag and sets target account as primary', async () => {
+    await setPrimaryAccount('acc-2');
+
+    expect(mockDb.execAsync).toHaveBeenCalledWith('BEGIN TRANSACTION');
+    expect(mockDb.runAsync).toHaveBeenNthCalledWith(
+      1,
+      'UPDATE accounts SET is_primary = 0, updated_at = ? WHERE is_primary = 1',
+      [expect.any(String)]
+    );
+    expect(mockDb.runAsync).toHaveBeenNthCalledWith(
+      2,
+      'UPDATE accounts SET is_primary = 1, updated_at = ? WHERE id = ?',
+      [expect.any(String), 'acc-2']
+    );
+    expect(mockDb.execAsync).toHaveBeenCalledWith('COMMIT');
   });
 
   it('insertAccount assigns the next incremental sort_order if not provided', async () => {

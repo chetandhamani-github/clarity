@@ -252,5 +252,30 @@ ORDER",UPI123,450.00,,45005.50
         [150, 'income'],
       ]);
     });
+
+    it('handles ISO timestamps, MM/DD/YYYY dates, Rs. prefixed integer amounts, and continuation rows', () => {
+      const trickyCsv = [
+        'Date,Description,Debit,Credit,Balance',
+        '2026-11-25T14:22:00Z,UPI/CHAI POINT,Rs. 500,,"Rs. 12,000"',
+        ',Extra narration line,,,',
+        '11/27/2026,SALARY REFUND,,Rs. 2500,"Rs. 14,500"',
+      ].join('\n');
+
+      const res = parseBankStatementCsv(trickyCsv);
+      expect(res.transactions).toHaveLength(2);
+      expect(res.transactions[0]).toMatchObject({
+        date: '2026-11-25',
+        amount: 500,
+        type: 'expense',
+        balance: 12000,
+      });
+      expect(res.transactions[0].note).toContain('Extra narration line');
+      expect(res.transactions[1]).toMatchObject({
+        date: '2026-11-27',
+        amount: 2500,
+        type: 'income',
+        balance: 14500,
+      });
+    });
   });
 });

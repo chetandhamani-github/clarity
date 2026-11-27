@@ -53,6 +53,8 @@ export function BillDetectedPromptModal() {
           accountReference: bill.accountReference,
           paymentUrl: bill.paymentUrl,
           source: 'sms',
+          frequency: bill.frequency,
+          isRecurring: bill.isRecurring,
           notes: 'Confirmed from notification prompt',
         });
         trackedBill = merged;

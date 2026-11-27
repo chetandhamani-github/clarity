@@ -17,6 +17,11 @@ import { useRouter } from 'expo-router';
 
 import { Header, Text, useAlert, useToast } from '@/components/ui';
 import { LegalModal } from '@/components/modals/LegalModal';
+import {
+  formatTimeDisplay,
+  ReminderScheduler,
+  TimePickerModal,
+} from '@/modules/reminders';
 import { useGoogleDrive } from '@/hooks/use-google-drive';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { resetEntireAppData } from '@/services/app-reset';
@@ -163,6 +168,20 @@ export default function SettingsScreen() {
   const currencySetting = useAppStore((state) => state.currency);
   const setCurrency = useAppStore((state) => state.setCurrency);
   const biometricsEnabled = useAppStore((state) => state.biometricEnabled);
+  const defaultReminderTime = useAppStore((state) => state.defaultReminderTime);
+  const setDefaultReminderTime = useAppStore((state) => state.setDefaultReminderTime);
+  const dailyPulseEnabled = useAppStore((state) => state.dailyPulseEnabled);
+  const setDailyPulseEnabled = useAppStore((state) => state.setDailyPulseEnabled);
+  const dailyPulseTime = useAppStore((state) => state.dailyPulseTime);
+  const setDailyPulseTime = useAppStore((state) => state.setDailyPulseTime);
+  const billRemindersEnabled = useAppStore((state) => state.billRemindersEnabled);
+  const setBillRemindersEnabled = useAppStore((state) => state.setBillRemindersEnabled);
+  const cardDueAlertsEnabled = useAppStore((state) => state.cardDueAlertsEnabled);
+  const setCardDueAlertsEnabled = useAppStore((state) => state.setCardDueAlertsEnabled);
+  const budgetAlertsEnabled = useAppStore((state) => state.budgetAlertsEnabled);
+  const setBudgetAlertsEnabled = useAppStore((state) => state.setBudgetAlertsEnabled);
+  const goalRemindersEnabled = useAppStore((state) => state.goalRemindersEnabled);
+  const setGoalRemindersEnabled = useAppStore((state) => state.setGoalRemindersEnabled);
 
   const {
     isConnected: isDriveConnected,
@@ -192,6 +211,7 @@ export default function SettingsScreen() {
   const [legalModalType, setLegalModalType] = useState<'privacy' | 'terms' | null>(null);
   const [themeModalVisible, setThemeModalVisible] = useState(false);
   const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
+  const [reminderTimeTarget, setReminderTimeTarget] = useState<'default' | 'pulse' | null>(null);
 
   const currentThemeLabel =
     THEME_OPTIONS.find((t) => t.id === themeSetting)?.label || 'System Default';
@@ -477,6 +497,139 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* 3b. Reminders & Alerts Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Reminders & Alerts</Text>
+          <View style={styles.listCard}>
+            <SettingRow
+              icon="alarm"
+              title="Reminders Hub"
+              subtitle="Manage custom tasks, tax dates, trials & upcoming dues"
+              onPress={() => router.navigate('/(app)/reminders')}
+            />
+            <SettingRow
+              icon="schedule"
+              title="Default Reminder Time"
+              subtitle="Used for bills, credit cards, and goal deadlines"
+              value={formatTimeDisplay(defaultReminderTime)}
+              onPress={() => setReminderTimeTarget('default')}
+            />
+            <View style={styles.settingItem}>
+              <View style={styles.settingTextContainer}>
+                <Text style={styles.settingTitle}>Daily Financial Pulse</Text>
+                <Text style={styles.settingSub}>
+                  Daily check-in prompt to log expenses & review Safe-to-Spend
+                </Text>
+              </View>
+              <Switch
+                value={dailyPulseEnabled}
+                onValueChange={(enabled) => {
+                  setDailyPulseEnabled(enabled);
+                  ReminderScheduler.syncDailyPulseSchedule().catch(() => {});
+                }}
+                trackColor={{
+                  false: colors.surfaceContainerHighest,
+                  true: colors.primary,
+                }}
+                thumbColor={colors.surface}
+              />
+            </View>
+            {dailyPulseEnabled && (
+              <>
+                <View style={styles.itemDivider} />
+                <SettingRow
+                  icon="notifications-paused"
+                  title="Daily Pulse Time"
+                  subtitle="Preferred time for daily check-in"
+                  value={formatTimeDisplay(dailyPulseTime)}
+                  onPress={() => setReminderTimeTarget('pulse')}
+                />
+              </>
+            )}
+            <View style={styles.itemDivider} />
+            <View style={styles.settingItem}>
+              <View style={styles.settingTextContainer}>
+                <Text style={styles.settingTitle}>Bill & Subscription Reminders</Text>
+                <Text style={styles.settingSub}>
+                  Upcoming bills, recurring schedules & renewal notifications
+                </Text>
+              </View>
+              <Switch
+                value={billRemindersEnabled}
+                onValueChange={(enabled) => {
+                  setBillRemindersEnabled(enabled);
+                  ReminderScheduler.syncAll().catch(() => {});
+                }}
+                trackColor={{
+                  false: colors.surfaceContainerHighest,
+                  true: colors.primary,
+                }}
+                thumbColor={colors.surface}
+              />
+            </View>
+            <View style={styles.itemDivider} />
+            <View style={styles.settingItem}>
+              <View style={styles.settingTextContainer}>
+                <Text style={styles.settingTitle}>Credit Card Due & Utilization Alerts</Text>
+                <Text style={styles.settingSub}>
+                  Alerts before payment due dates & high credit usage
+                </Text>
+              </View>
+              <Switch
+                value={cardDueAlertsEnabled}
+                onValueChange={(enabled) => {
+                  setCardDueAlertsEnabled(enabled);
+                  ReminderScheduler.syncAll().catch(() => {});
+                }}
+                trackColor={{
+                  false: colors.surfaceContainerHighest,
+                  true: colors.primary,
+                }}
+                thumbColor={colors.surface}
+              />
+            </View>
+            <View style={styles.itemDivider} />
+            <View style={styles.settingItem}>
+              <View style={styles.settingTextContainer}>
+                <Text style={styles.settingTitle}>Budget Threshold Alerts</Text>
+                <Text style={styles.settingSub}>
+                  Warn at 80% and 100% category cap usage
+                </Text>
+              </View>
+              <Switch
+                value={budgetAlertsEnabled}
+                onValueChange={setBudgetAlertsEnabled}
+                trackColor={{
+                  false: colors.surfaceContainerHighest,
+                  true: colors.primary,
+                }}
+                thumbColor={colors.surface}
+              />
+            </View>
+            <View style={styles.itemDivider} />
+            <View style={styles.settingItem}>
+              <View style={styles.settingTextContainer}>
+                <Text style={styles.settingTitle}>Goal Milestones & Deadlines</Text>
+                <Text style={styles.settingSub}>
+                  Remind before savings targets and celebrate progress milestones
+                </Text>
+              </View>
+              <Switch
+                value={goalRemindersEnabled}
+                onValueChange={(enabled) => {
+                  setGoalRemindersEnabled(enabled);
+                  ReminderScheduler.syncAll().catch(() => {});
+                }}
+                trackColor={{
+                  false: colors.surfaceContainerHighest,
+                  true: colors.primary,
+                }}
+                thumbColor={colors.surface}
+              />
+            </View>
+          </View>
+        </View>
+
         {/* 4. Auto-Tracking (Notifications) Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Auto-Tracking</Text>
@@ -753,6 +906,26 @@ export default function SettingsScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <TimePickerModal
+        visible={reminderTimeTarget !== null}
+        title={
+          reminderTimeTarget === 'pulse'
+            ? 'Daily Pulse Notification Time'
+            : 'Default Reminder Time'
+        }
+        value={reminderTimeTarget === 'pulse' ? dailyPulseTime : defaultReminderTime}
+        onChange={(timeHm) => {
+          if (reminderTimeTarget === 'pulse') {
+            setDailyPulseTime(timeHm);
+            ReminderScheduler.syncDailyPulseSchedule().catch(() => {});
+          } else if (reminderTimeTarget === 'default') {
+            setDefaultReminderTime(timeHm);
+            ReminderScheduler.syncAll().catch(() => {});
+          }
+        }}
+        onClose={() => setReminderTimeTarget(null)}
+      />
 
       {/* Theme Picker Modal */}
       <Modal

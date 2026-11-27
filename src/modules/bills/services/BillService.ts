@@ -158,6 +158,8 @@ export class BillService {
     paymentUrl?: string;
     smsId?: string;
     notes?: string;
+    frequency?: BillFrequency;
+    isRecurring?: boolean;
     source: 'sms' | 'email' | 'future_api';
   }): Promise<{ bill: Bill; isNew: boolean }> {
     const db = getDatabase();
@@ -450,8 +452,8 @@ export class BillService {
       paidDate: matchedPayment ? matchedPayment.date.split('T')[0] : undefined,
       paidTransactionId: matchedPayment ? matchedPayment.id : undefined,
       reminderDays: 3,
-      isRecurring: true,
-      frequency: 'monthly',
+      isRecurring: extracted.isRecurring ?? true,
+      frequency: extracted.frequency ?? 'monthly',
     });
 
     return { bill: created, isNew: true };
@@ -493,11 +495,33 @@ export class BillService {
     );
 
     const merchantTokens = new Set(cleanMerchant.split(/\s+/).filter((t) => t.length >= 3));
-    const noiseWords = new Set(['payment', 'billdesk', 'autopay', 'bill', 'paid', 'transfer', 'imps', 'neft', 'rtgs', 'bank']);
+    const noiseWords = new Set([
+      'payment',
+      'billdesk',
+      'autopay',
+      'bill',
+      'paid',
+      'transfer',
+      'imps',
+      'neft',
+      'rtgs',
+      'bank',
+      'credit',
+      'card',
+      'electricity',
+      'water',
+      'gas',
+      'broadband',
+      'utility',
+      'recharge',
+      'subscription',
+    ]);
 
     for (const r of rows) {
       const cleanProvider = (r.provider || r.title).toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
-      const providerTokens = cleanProvider.split(/\s+/).filter((t) => t.length >= 3 && !noiseWords.has(t));
+      const rawProviderTokens = cleanProvider.split(/\s+/).filter((t) => t.length >= 3);
+      const filteredTokens = rawProviderTokens.filter((t) => !noiseWords.has(t));
+      const providerTokens = filteredTokens.length > 0 ? filteredTokens : rawProviderTokens;
       const cleanRef = r.account_reference
         ? r.account_reference.toLowerCase().replace(/[^a-z0-9]/g, '')
         : '';

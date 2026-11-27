@@ -1,6 +1,7 @@
 import { ReviewQueueService } from './reviewQueueService';
 import type { RawSmsMessage, ExtractedTransaction } from '@/modules/sms/types';
 import { SmsDao } from '@/modules/sms/storage/smsDao';
+import { NotificationLedgerService } from '@/modules/notifications/services/notificationLedgerService';
 
 jest.mock('@/modules/sms/storage/smsDao', () => ({
   SmsDao: {
@@ -11,29 +12,29 @@ jest.mock('@/modules/sms/storage/smsDao', () => ({
   },
 }));
 
-jest.mock('@/modules/sms/services/smsSyncService', () => ({
-  SmsSyncService: {
+jest.mock('@/modules/notifications/services/notificationLedgerService', () => ({
+  NotificationLedgerService: {
     importParsedTransactions: jest.fn().mockResolvedValue(undefined),
   },
 }));
 
 describe('ReviewQueueService', () => {
   const sampleMsg: RawSmsMessage = {
-    id: 'sms-rev-1',
-    address: 'UNKNOWN',
+    id: 'notif-rev-1',
+    address: 'Google Pay',
     body: 'Your financial balance updated unexpectedly.',
     date: Date.now(),
   };
 
   it('creates a review item with pending status', () => {
     const item = ReviewQueueService.createReviewItem(sampleMsg, 'UNRECOGNIZED_FORMAT', 0.2);
-    expect(item.smsId).toBe('sms-rev-1');
+    expect(item.smsId).toBe('notif-rev-1');
     expect(item.reason).toBe('UNRECOGNIZED_FORMAT');
     expect(item.status).toBe('pending');
     expect(item.confidence).toBe(0.2);
   });
 
-  it('resolves a review item into a verified parsed transaction', async () => {
+  it('resolves a review item into a verified parsed transaction with optional target account', async () => {
     const item = ReviewQueueService.createReviewItem(sampleMsg, 'MISSING_AMOUNT', 0.4);
     const verifiedData: ExtractedTransaction = {
       amount: 450,
@@ -44,15 +45,17 @@ describe('ReviewQueueService', () => {
       timestamp: Date.now(),
     };
 
-    const parsedTx = await ReviewQueueService.resolveItem(item, verifiedData);
+    const parsedTx = await ReviewQueueService.resolveItem(item, verifiedData, 'acc-override');
     expect(parsedTx.amount).toBe(450);
     expect(parsedTx.merchant).toBe('Swiggy');
     expect(parsedTx.confidence).toBe(1.0);
     expect(parsedTx.category).toBe('Food & Dining');
 
     expect(SmsDao.saveParsedTransactionsBatch).toHaveBeenCalled();
-    const { SmsSyncService } = require('@/modules/sms/services/smsSyncService');
-    expect(SmsSyncService.importParsedTransactions).toHaveBeenCalledWith([parsedTx]);
+    expect(NotificationLedgerService.importParsedTransactions).toHaveBeenCalledWith(
+      [parsedTx],
+      { accountOverrides: { [parsedTx.id]: 'acc-override' } }
+    );
     expect(SmsDao.updateReviewQueueStatus).toHaveBeenCalledWith(item.id, 'resolved');
   });
 

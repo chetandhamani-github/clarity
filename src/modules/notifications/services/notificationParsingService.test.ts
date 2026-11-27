@@ -1,26 +1,20 @@
 import { NotificationParsingService, buildNotificationBody } from './notificationParsingService';
-import { BillExtractor } from '@/modules/sms/extractor/billExtractor';
-import { SmsPipelineService } from '@/modules/sms/services/smsPipelineService';
-import { SmsSyncService } from '@/modules/sms/services/smsSyncService';
+import { NotificationBillExtractor } from './notificationBillExtractor';
+import { DuplicateDetectionEngine } from '@/modules/sms/duplicate/duplicateDetectionEngine';
 import { SmsDao } from '@/modules/sms/storage/smsDao';
 import { BillService } from '@/modules/bills/services/BillService';
 import { BillAlertEngine } from '@/services/notifications/bill-alert-engine';
+import { NotificationLedgerService } from './notificationLedgerService';
 import type { RawNotificationPayload } from '../types';
 
-jest.mock('@/modules/sms/extractor/billExtractor', () => ({
-  BillExtractor: {
+jest.mock('./notificationBillExtractor', () => ({
+  NotificationBillExtractor: {
     extractBill: jest.fn(),
   },
 }));
 
-jest.mock('@/modules/sms/services/smsPipelineService', () => ({
-  SmsPipelineService: {
-    processMessage: jest.fn(),
-  },
-}));
-
-jest.mock('@/modules/sms/services/smsSyncService', () => ({
-  SmsSyncService: {
+jest.mock('./notificationLedgerService', () => ({
+  NotificationLedgerService: {
     importParsedTransactions: jest.fn(),
     enrichDuplicateTransaction: jest.fn().mockResolvedValue(false),
   },
@@ -32,6 +26,21 @@ jest.mock('@/modules/sms/storage/smsDao', () => ({
     saveSmsBatch: jest.fn().mockResolvedValue(undefined),
     saveParsedTransactionsBatch: jest.fn().mockResolvedValue(undefined),
     saveReviewQueueBatch: jest.fn().mockResolvedValue(undefined),
+    getUnlinkedParsedTransactions: jest.fn().mockResolvedValue([]),
+    findPotentialDuplicates: jest.fn().mockResolvedValue([]),
+    findCrossAppDuplicates: jest.fn().mockResolvedValue([]),
+  },
+}));
+
+const mockSetPendingTransactions = jest.fn();
+const mockOpenTransactionPrompt = jest.fn();
+jest.mock('@/store/useSmsStore', () => ({
+  useSmsStore: {
+    getState: () => ({
+      setPendingTransactions: mockSetPendingTransactions,
+      openTransactionPrompt: mockOpenTransactionPrompt,
+      refreshReviewQueueCount: jest.fn().mockResolvedValue(undefined),
+    }),
   },
 }));
 
@@ -55,6 +64,7 @@ jest.mock('@/services/database/bill-dao', () => ({
 describe('NotificationParsingService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    DuplicateDetectionEngine.clearCache();
   });
 
   const sampleTransactionNotification: RawNotificationPayload = {
@@ -90,12 +100,14 @@ describe('NotificationParsingService', () => {
   });
 
   it('correctly processes and schedules a detected bill notification', async () => {
-    (BillExtractor.extractBill as jest.Mock).mockReturnValue({
+    (NotificationBillExtractor.extractBill as jest.Mock).mockReturnValue({
       billerName: 'Adani Electricity',
       billerCategory: 'electricity',
       amountDue: 1420,
       dueDate: '2026-11-28',
       accountReference: '102938475',
+      frequency: 'monthly',
+      isRecurring: true,
     });
 
     (BillService.mergeOrInsertExternalBill as jest.Mock).mockResolvedValue({
@@ -132,8 +144,38 @@ describe('NotificationParsingService', () => {
     );
   });
 
+  it('suppresses modal prompt (isNew: false) if merged bill was already auto-marked as paid', async () => {
+    (NotificationBillExtractor.extractBill as jest.Mock).mockReturnValue({
+      billerName: 'Adani Electricity',
+      billerCategory: 'electricity',
+      amountDue: 1420,
+      dueDate: '2026-11-28',
+    });
+
+    (BillService.mergeOrInsertExternalBill as jest.Mock).mockResolvedValue({
+      bill: {
+        id: 'bill_paid_1',
+        title: 'Adani Electricity',
+        category: 'electricity',
+        amount: 1420,
+        dueDate: '2026-11-28',
+        status: 'paid',
+        reminderDays: 3,
+      },
+      isNew: true,
+    });
+
+    const result = await NotificationParsingService.processNotification(sampleBillNotification);
+
+    expect(result.type).toBe('BILL');
+    if (result.type === 'BILL') {
+      expect(result.isNew).toBe(false);
+    }
+    expect(BillAlertEngine.scheduleNativeBillReminder).not.toHaveBeenCalled();
+  });
+
   it('marks merged duplicate bill notifications with isNew false', async () => {
-    (BillExtractor.extractBill as jest.Mock).mockReturnValue({
+    (NotificationBillExtractor.extractBill as jest.Mock).mockReturnValue({
       billerName: 'Adani Electricity',
       billerCategory: 'electricity',
       amountDue: 1420,
@@ -162,28 +204,9 @@ describe('NotificationParsingService', () => {
     expect(SmsDao.saveSmsBatch).toHaveBeenCalledTimes(1);
   });
 
-  it('correctly extracts, saves, and imports a non-duplicate transaction notification', async () => {
-    (BillExtractor.extractBill as jest.Mock).mockReturnValue(null);
-
-    const mockParsedTransaction = {
-      id: 'tx_uuid_1',
-      smsId: sampleTransactionNotification.id,
-      amount: 450,
-      type: 'DEBIT' as const,
-      merchant: 'Chai Point',
-      category: 'Food & Dining',
-      bank: 'HDFC Bank',
-      accountMask: '1234',
-      referenceNumber: '412345678901',
-      timestamp: sampleTransactionNotification.postTime,
-      confidence: 0.95,
-      isDuplicate: false,
-    };
-
-    (SmsPipelineService.processMessage as jest.Mock).mockResolvedValue({
-      type: 'PARSED',
-      transaction: mockParsedTransaction,
-    });
+  it('parses, saves, and queues a non-duplicate transaction notification for user confirmation', async () => {
+    (NotificationBillExtractor.extractBill as jest.Mock).mockReturnValue(null);
+    (SmsDao.getUnlinkedParsedTransactions as jest.Mock).mockImplementationOnce(async () => []);
 
     const result = await NotificationParsingService.processNotification(
       sampleTransactionNotification
@@ -194,50 +217,50 @@ describe('NotificationParsingService', () => {
       expect(result.isDuplicate).toBe(false);
       expect(result.transaction.amount).toBe(450);
       expect(result.transaction.merchant).toBe('Chai Point');
+      expect(result.transaction.bank).toBe('HDFC Bank');
+      expect(result.transaction.accountMask).toBe('1234');
     }
 
     expect(SmsDao.saveSmsBatch).toHaveBeenCalledTimes(1);
-    expect(SmsDao.saveParsedTransactionsBatch).toHaveBeenCalledWith([mockParsedTransaction]);
-    expect(SmsSyncService.importParsedTransactions).toHaveBeenCalledWith([mockParsedTransaction]);
+    expect(SmsDao.saveParsedTransactionsBatch).toHaveBeenCalledTimes(1);
+    expect(NotificationLedgerService.importParsedTransactions).not.toHaveBeenCalled();
+    expect(mockSetPendingTransactions).toHaveBeenCalledTimes(1);
+    expect(mockOpenTransactionPrompt).toHaveBeenCalledTimes(1);
   });
 
-  it('handles duplicates gracefully without double-importing into ledger', async () => {
-    (BillExtractor.extractBill as jest.Mock).mockReturnValue(null);
+  it('detects cross-app duplicates and enriches original via NotificationLedgerService', async () => {
+    (NotificationBillExtractor.extractBill as jest.Mock).mockReturnValue(null);
 
-    const mockDuplicateTx = {
-      id: 'tx_uuid_dup',
-      smsId: sampleTransactionNotification.id,
-      amount: 450,
-      type: 'DEBIT' as const,
-      merchant: 'Chai Point',
-      category: 'Food & Dining',
-      bank: 'HDFC Bank',
-      accountMask: '1234',
-      referenceNumber: '412345678901',
-      timestamp: sampleTransactionNotification.postTime,
-      confidence: 0.95,
-      isDuplicate: true,
-      duplicateOf: 'existing_tx_id',
-    };
-
-    (SmsPipelineService.processMessage as jest.Mock).mockResolvedValue({
-      type: 'PARSED',
-      transaction: mockDuplicateTx,
+    await NotificationParsingService.processNotification({
+      id: 'notif_gpay_first',
+      packageName: 'com.google.android.apps.nbu.paisa.user',
+      appName: 'Google Pay',
+      title: 'Chai Point',
+      text: 'You paid ₹450',
+      postTime: 1732000000000,
     });
 
-    const result = await NotificationParsingService.processNotification(
-      sampleTransactionNotification
-    );
+    const secondResult = await NotificationParsingService.processNotification({
+      id: 'notif_hdfc_second',
+      packageName: 'com.snapwork.hdfc',
+      appName: 'HDFC Bank',
+      title: 'HDFC Bank Alert',
+      text: 'Rs.450.00 debited from A/c XX1234 to chaipoint@okicici Ref 412345678901 Avl Bal Rs.12,500.00',
+      postTime: 1732000005000,
+    });
 
-    expect(result.type).toBe('TRANSACTION');
-    if (result.type === 'TRANSACTION') {
-      expect(result.isDuplicate).toBe(true);
+    expect(secondResult.type).toBe('TRANSACTION');
+    if (secondResult.type === 'TRANSACTION') {
+      expect(secondResult.isDuplicate).toBe(true);
     }
-
-    // Should save record to DB for audit/history, enrich original if applicable, and NOT import twice
-    expect(SmsDao.saveParsedTransactionsBatch).toHaveBeenCalledWith([mockDuplicateTx]);
-    expect(SmsSyncService.importParsedTransactions).not.toHaveBeenCalled();
-    expect(SmsSyncService.enrichDuplicateTransaction).toHaveBeenCalledWith(mockDuplicateTx);
+    expect(NotificationLedgerService.importParsedTransactions).not.toHaveBeenCalled();
+    expect(NotificationLedgerService.enrichDuplicateTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bank: 'HDFC Bank',
+        accountMask: '1234',
+        isDuplicate: true,
+      })
+    );
   });
 
   it('skips notifications that have already been persisted in SQLite', async () => {
@@ -250,7 +273,7 @@ describe('NotificationParsingService', () => {
     );
 
     expect(result).toEqual({ type: 'IGNORED', reason: 'ALREADY_PROCESSED' });
-    expect(SmsPipelineService.processMessage).not.toHaveBeenCalled();
+    expect(SmsDao.saveParsedTransactionsBatch).not.toHaveBeenCalled();
   });
 
   it('enriches counterparty title for UPI notifications where text omits merchant', () => {
@@ -275,4 +298,3 @@ describe('NotificationParsingService', () => {
     expect(incoming).toBe('Paid you ₹500 from Rahul Sharma');
   });
 });
-

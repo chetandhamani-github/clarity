@@ -7,6 +7,7 @@ import {
   updateAccount as updateAccountDao,
   clearAccountData as clearAccountDataDao,
   deleteAccount as deleteAccountDao,
+  setPrimaryAccount as setPrimaryAccountDao,
   updateAccountsOrder,
   getTotalBalance,
 } from '@/services/database/account-dao';
@@ -173,6 +174,29 @@ export function useReorderAccounts() {
 
   return {
     reorder: (orderedAccounts: Account[]) => mutation.mutate(orderedAccounts),
+    isPending: mutation.isPending,
+  };
+}
+
+export function useSetPrimaryAccount() {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: (id: string | null) => setPrimaryAccountDao(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      invalidateAnalyticsAndHealthQueries(queryClient);
+      queueAutoBackup('set-primary-account');
+    },
+  });
+
+  return {
+    setPrimary: (
+      id: string | null,
+      options?: { onSuccess?: () => void; onError?: (error: Error) => void }
+    ) => {
+      mutation.mutate(id, { onSuccess: options?.onSuccess, onError: options?.onError });
+    },
     isPending: mutation.isPending,
   };
 }

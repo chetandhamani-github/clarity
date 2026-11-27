@@ -6,6 +6,7 @@ export interface Account {
   institution: string;
   lastFour: string;
   sortOrder?: number;
+  isPrimary?: boolean;
   billingCycleDay?: number;
   dueDay?: number;
   creditLimit?: number;
@@ -221,6 +222,7 @@ export type BillerCategory =
   | 'gym'
   | 'tuition'
   | 'maintenance'
+  | 'subscription'
   | 'other';
 
 export const BILLER_CATEGORIES: { label: string; value: BillerCategory; icon: string }[] = [
@@ -238,6 +240,7 @@ export const BILLER_CATEGORIES: { label: string; value: BillerCategory; icon: st
   { label: 'DTH / Cable TV', value: 'dth', icon: 'tv' },
   { label: 'Insurance', value: 'insurance', icon: 'shield' },
   { label: 'Society Maintenance', value: 'maintenance', icon: 'apartment' },
+  { label: 'Subscriptions', value: 'subscription', icon: 'subscriptions' },
   { label: 'Other Bill', value: 'other', icon: 'receipt' },
 ];
 

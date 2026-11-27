@@ -7,13 +7,13 @@ import {
   Platform,
   useWindowDimensions,
 } from 'react-native';
-import { Text, Header, AccountsSkeleton, SkeletonBox, WealthCardSkeleton, renderChartPointerLabel } from '@/components/ui';
+import { Text, Header, AccountsSkeleton, SkeletonBox, WealthCardSkeleton, renderChartPointerLabel, useToast } from '@/components/ui';
 import { typography, useTheme, radius, ThemeColors } from '@/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { LineChart } from 'react-native-gifted-charts';
-import { useAccounts } from '@/hooks/use-accounts';
+import { useAccounts, useSetPrimaryAccount } from '@/hooks/use-accounts';
 import { useAccountHistory } from '@/hooks/use-transactions';
 import { usePortfolioSummary } from '@/hooks/use-investments';
 import {
@@ -440,6 +440,8 @@ function AccountDetailCard({
   onSettleDebt?: () => void;
 }) {
   const router = useRouter();
+  const { showToast } = useToast();
+  const { setPrimary, isPending: isSettingPrimary } = useSetPrimaryAccount();
   const { hideBalances } = useAppStore();
   const isLiability = ['credit', 'loan', 'borrowed'].includes(account.type);
   const hasOutstandingDebt = isLiability && account.balance < 0;
@@ -521,6 +523,12 @@ function AccountDetailCard({
         <View style={styles.detailsHeaderLeft}>
           <View style={styles.detailsLabelRow}>
             <Text style={styles.detailsLabel} numberOfLines={1}>{account.name.toUpperCase()}</Text>
+            {account.isPrimary ? (
+              <View style={styles.primaryBadge}>
+                <MaterialIcons name="star" size={11} color={colors.onPrimaryContainer} />
+                <Text style={styles.primaryBadgeText}>PRIMARY</Text>
+              </View>
+            ) : null}
             {account.institution ? (
               <View style={[styles.bankBadge, { backgroundColor: branding.backgroundColor }]}>
                 <Text style={[styles.bankBadgeText, { color: branding.color }]} numberOfLines={1}>
@@ -542,6 +550,27 @@ function AccountDetailCard({
           ) : null}
         </View>
         <View style={styles.detailsHeaderRight}>
+          <TouchableOpacity
+            style={styles.moreButton}
+            disabled={isSettingPrimary}
+            onPress={() => {
+              const nextPrimary = !account.isPrimary;
+              setPrimary(nextPrimary ? account.id : null, {
+                onSuccess: () => {
+                  showToast(
+                    nextPrimary ? `${account.name} set as primary account` : 'Primary account cleared',
+                    'success'
+                  );
+                },
+              });
+            }}
+          >
+            <MaterialIcons
+              name={account.isPrimary ? 'star' : 'star-outline'}
+              size={18}
+              color={account.isPrimary ? colors.primary : colors.onSurface}
+            />
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.moreButton}
             onPress={() =>
@@ -860,8 +889,24 @@ const getStyles = (colors: ThemeColors) => {
     detailsLabelRow: {
       flexDirection: 'row',
       alignItems: 'center',
+      flexWrap: 'wrap',
       gap: 6,
       marginBottom: 4,
+    },
+    primaryBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      backgroundColor: colors.primaryContainer,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    primaryBadgeText: {
+      fontSize: 10,
+      lineHeight: 14,
+      fontFamily: 'Manrope_700Bold',
+      color: colors.onPrimaryContainer,
     },
     chartSkeletonWrap: {
       flex: 1,
@@ -1069,6 +1114,7 @@ const getStyles = (colors: ThemeColors) => {
     },
     detailsHeaderLeft: {
       flex: 1,
+      minWidth: 0,
     },
     detailsHeaderRight: {
       flexDirection: 'row',

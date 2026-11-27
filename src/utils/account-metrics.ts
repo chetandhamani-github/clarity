@@ -28,6 +28,12 @@ export function getAccountTypeShortLabel(type: AccountType | string): string {
   return ACCOUNT_TYPE_SHORT_LABELS[type] ?? 'Account';
 }
 
+export function pickDefaultAccountId(accounts: Account[]): string | null {
+  if (accounts.length === 0) return null;
+  const primary = accounts.find((acc) => acc.isPrimary);
+  return primary ? primary.id : accounts[0].id;
+}
+
 export function pickDefaultSourceAccountId(
   accounts: Account[],
   excludeAccountId?: string | null
@@ -35,11 +41,22 @@ export function pickDefaultSourceAccountId(
   const candidates = accounts.filter((acc) => acc.id !== excludeAccountId);
   if (candidates.length === 0) return null;
 
+  const primaryLiquid = candidates.find((acc) => acc.isPrimary && isLiquidAccountType(acc.type));
+  if (primaryLiquid) return primaryLiquid.id;
+
   const liquid = candidates.find((acc) => isLiquidAccountType(acc.type));
   if (liquid) return liquid.id;
 
+  const primaryNonLiability = candidates.find(
+    (acc) => acc.isPrimary && !isLiabilityAccountType(acc.type)
+  );
+  if (primaryNonLiability) return primaryNonLiability.id;
+
   const nonLiability = candidates.find((acc) => !isLiabilityAccountType(acc.type));
   if (nonLiability) return nonLiability.id;
+
+  const primary = candidates.find((acc) => acc.isPrimary);
+  if (primary) return primary.id;
 
   return candidates[0].id;
 }

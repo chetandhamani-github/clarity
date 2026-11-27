@@ -1,5 +1,6 @@
 import { BillsRepository } from '@/modules/bills/database/bills.repository';
 import { formatCurrency } from '@/utils/format';
+import { useAppStore } from '@/store/use-app-store';
 import {
   NOTIFICATION_CATEGORIES,
   NOTIFICATION_CHANNELS,
@@ -13,6 +14,10 @@ import {
   setScheduledBillTrigger,
 } from '@/services/notifications/reminder-state';
 
+interface ExpoScheduledRequest {
+  identifier?: string;
+}
+
 interface ExpoNotificationsModule {
   SchedulableTriggerInputTypes?: {
     DATE?: string;
@@ -22,9 +27,42 @@ interface ExpoNotificationsModule {
     content: Record<string, unknown>;
     trigger: Record<string, unknown> | null;
   }) => Promise<string>;
+  getAllScheduledNotificationsAsync?: () => Promise<ExpoScheduledRequest[]>;
   cancelScheduledNotificationAsync?: (identifier: string) => Promise<void>;
   cancelAllScheduledNotificationsAsync?: () => Promise<void>;
   dismissAllNotificationsAsync?: () => Promise<void>;
+}
+
+const BILL_REMINDER_PREFIX = 'bill-reminder-';
+
+function getReminderHourMinute(): { hour: number; minute: number } {
+  try {
+    const raw = useAppStore.getState?.().defaultReminderTime ?? '09:00';
+    const [hStr, mStr] = raw.split(':');
+    const hour = Number(hStr);
+    const minute = Number(mStr);
+    if (
+      Number.isInteger(hour) &&
+      Number.isInteger(minute) &&
+      hour >= 0 &&
+      hour <= 23 &&
+      minute >= 0 &&
+      minute <= 59
+    ) {
+      return { hour, minute };
+    }
+  } catch {
+    // Default fallback when store is unavailable
+  }
+  return { hour: 9, minute: 0 };
+}
+
+function isBillRemindersEnabled(): boolean {
+  try {
+    return useAppStore.getState?.().billRemindersEnabled !== false;
+  } catch {
+    return true;
+  }
 }
 
 let Notifications: ExpoNotificationsModule | null = null;
@@ -58,11 +96,16 @@ export class BillAlertEngine {
 
   /**
    * Schedules a native system notification trigger for an upcoming bill reminder.
-   * Fires at 9:00 AM local time on the reminder target date (or due date if already inside the window).
-   * Preserves active snoozes and avoids redundant rescheduling or past-due 10s loops.
+   * Fires at the user's preferred reminder time (default 9:00 AM local) on the target date
+   * (or due date if already inside the window).
    */
   public static async scheduleNativeBillReminder(bill: SchedulableBill): Promise<void> {
     if (!Notifications || typeof Notifications.scheduleNotificationAsync !== 'function') {
+      return;
+    }
+
+    if (!isBillRemindersEnabled()) {
+      await this.cancelNativeBillReminder(bill.id);
       return;
     }
 
@@ -87,24 +130,22 @@ export class BillAlertEngine {
       const [bYear, bMonth, bDay] = bill.dueDate.split('-').map(Number);
       if (!bYear || !bMonth || !bDay) return;
 
+      const { hour, minute } = getReminderHourMinute();
       const reminderDays = bill.reminderDaysBefore ?? 1;
-      // 9:00 AM on reminder target date
-      const targetDate = new Date(bYear, bMonth - 1, bDay, 9, 0, 0, 0);
+      const targetDate = new Date(bYear, bMonth - 1, bDay, hour, minute, 0, 0);
       targetDate.setDate(targetDate.getDate() - reminderDays);
 
-      // 9:00 AM on the actual due date
-      const dueNineAm = new Date(bYear, bMonth - 1, bDay, 9, 0, 0, 0);
+      const dueTarget = new Date(bYear, bMonth - 1, bDay, hour, minute, 0, 0);
 
       let nextTrigger: Date | null = null;
       if (targetDate.getTime() > nowMs) {
         nextTrigger = targetDate;
-      } else if (dueNineAm.getTime() > nowMs) {
-        // Advance reminder date already passed, schedule once for 9:00 AM on due date
-        nextTrigger = dueNineAm;
+      } else if (dueTarget.getTime() > nowMs) {
+        nextTrigger = dueTarget;
       }
 
       if (!nextTrigger) {
-        // Past 9:00 AM on due date (or overdue); clear stale schedule meta and do not loop
+        // Past reminder time on due date (or overdue); clear stale schedule meta and do not loop
         setScheduledBillTrigger(bill.id, null);
         return;
       }
@@ -118,7 +159,7 @@ export class BillAlertEngine {
 
       const dateTriggerType = Notifications.SchedulableTriggerInputTypes?.DATE ?? 'date';
       await Notifications.scheduleNotificationAsync({
-        identifier: `bill-reminder-${bill.id}`,
+        identifier: `${BILL_REMINDER_PREFIX}${bill.id}`,
         content: {
           title: `Bill Reminder: ${bill.billerName}`,
           body: `${bill.billerName} bill of ${formatCurrency(bill.amountDue)} is due on ${bill.dueDate}.`,
@@ -144,7 +185,7 @@ export class BillAlertEngine {
       return;
     }
     try {
-      await Notifications.cancelScheduledNotificationAsync(`bill-reminder-${billId}`);
+      await Notifications.cancelScheduledNotificationAsync(`${BILL_REMINDER_PREFIX}${billId}`);
     } catch {
       // Ignore
     }
@@ -159,15 +200,30 @@ export class BillAlertEngine {
   }
 
   /**
-   * Cancels all scheduled OS notifications and clears all persisted reminder/snooze state.
+   * Cancels scheduled bill OS notifications by prefix (without wiping non-bill alarms
+   * when getAllScheduledNotificationsAsync is supported) and clears bill reminder state.
    */
   public static async cancelAllNativeBillReminders(): Promise<void> {
     clearAllReminderState();
-    if (!Notifications || typeof Notifications.cancelAllScheduledNotificationsAsync !== 'function') {
-      return;
-    }
+    if (!Notifications) return;
+
     try {
-      await Notifications.cancelAllScheduledNotificationsAsync();
+      if (
+        typeof Notifications.getAllScheduledNotificationsAsync === 'function' &&
+        typeof Notifications.cancelScheduledNotificationAsync === 'function'
+      ) {
+        const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+        for (const req of scheduled) {
+          if (req.identifier?.startsWith(BILL_REMINDER_PREFIX)) {
+            await Notifications.cancelScheduledNotificationAsync(req.identifier);
+          }
+        }
+        return;
+      }
+
+      if (typeof Notifications.cancelAllScheduledNotificationsAsync === 'function') {
+        await Notifications.cancelAllScheduledNotificationsAsync();
+      }
     } catch {
       // Ignore in test/headless mode
     }

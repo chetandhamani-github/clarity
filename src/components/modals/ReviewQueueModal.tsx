@@ -1,5 +1,7 @@
 import { SkeletonBox, SkeletonText, Text, useToast } from '@/components/ui';
+import { useAccounts } from '@/hooks/use-accounts';
 import { useSafeInsets } from '@/hooks/use-safe-insets';
+import { resolveTargetAccountPreview } from '@/modules/notifications/services/notificationLedgerService';
 import { ReviewQueueService } from '@/modules/sms/reviewQueue/reviewQueueService';
 import type { ExtractedTransaction, ReviewQueueItem } from '@/modules/sms/types';
 import { useSmsStore } from '@/store/useSmsStore';
@@ -10,7 +12,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateAnalyticsAndHealthQueries } from '@/hooks/use-financial-health';
 import { getCurrencySymbol } from '@/utils/format';
-import { useCallback, useEffect, useState } from 'react';
+import { getAccountTypeIcon } from '@/utils/icons';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     KeyboardAvoidingView,
@@ -35,6 +38,9 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const refreshReviewQueueCount = useSmsStore((state) => state.refreshReviewQueueCount);
+  const { accounts } = useAccounts();
+  const accountsRef = useRef(accounts);
+  accountsRef.current = accounts;
 
   const [items, setItems] = useState<ReviewQueueItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -44,7 +50,23 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
   const [amountStr, setAmountStr] = useState('');
   const [merchant, setMerchant] = useState('');
   const [direction, setDirection] = useState<'DEBIT' | 'CREDIT'>('DEBIT');
+  const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const initFields = useCallback((item: ReviewQueueItem) => {
+    setAmountStr(item.extractedData?.amount ? item.extractedData.amount.toString() : '');
+    setMerchant(item.extractedData?.merchant || '');
+    setDirection(item.extractedData?.type || 'DEBIT');
+    const resolution = resolveTargetAccountPreview(
+      {
+        bank: item.extractedData?.bank || 'Bank / UPI',
+        accountMask: item.extractedData?.accountMask || 'XXXX',
+        rawBody: item.body,
+      },
+      accountsRef.current
+    );
+    setSelectedAccountId(resolution.account?.id);
+  }, []);
 
   const loadItems = useCallback(async () => {
     setIsLoading(true);
@@ -60,13 +82,7 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
-
-  const initFields = (item: ReviewQueueItem) => {
-    setAmountStr(item.extractedData?.amount ? item.extractedData.amount.toString() : '');
-    setMerchant(item.extractedData?.merchant || '');
-    setDirection(item.extractedData?.type || 'DEBIT');
-  };
+  }, [showToast, initFields]);
 
   useEffect(() => {
     if (visible) {
@@ -75,6 +91,22 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
   }, [visible, loadItems]);
 
   const currentItem: ReviewQueueItem | undefined = items[activeItemIndex];
+
+  useEffect(() => {
+    if (!selectedAccountId && currentItem && accounts.length > 0) {
+      const resolution = resolveTargetAccountPreview(
+        {
+          bank: currentItem.extractedData?.bank || 'Bank / UPI',
+          accountMask: currentItem.extractedData?.accountMask || 'XXXX',
+          rawBody: currentItem.body,
+        },
+        accounts
+      );
+      if (resolution.account?.id) {
+        setSelectedAccountId(resolution.account.id);
+      }
+    }
+  }, [accounts, currentItem, selectedAccountId]);
 
   const handleApprove = async () => {
     if (!currentItem) return;
@@ -97,7 +129,7 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
         timestamp: currentItem.extractedData?.timestamp || Date.now(),
       };
 
-      await ReviewQueueService.resolveItem(currentItem, verifiedData);
+      await ReviewQueueService.resolveItem(currentItem, verifiedData, selectedAccountId);
       await refreshReviewQueueCount();
       await queryClient.invalidateQueries({ queryKey: ['transactions'] });
       await queryClient.invalidateQueries({ queryKey: ['accounts'] });
@@ -315,6 +347,50 @@ export function ReviewQueueModal({ visible, onClose }: ReviewQueueModalProps) {
                   value={merchant}
                   onChangeText={setMerchant}
                 />
+
+                {/* Account Selector */}
+                {accounts.length > 0 && (
+                  <>
+                    <Text style={styles.fieldLabel}>Account</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.accountChipsScroll}
+                    >
+                      {accounts.map((acc) => {
+                        const isSelected = acc.id === selectedAccountId;
+                        return (
+                          <TouchableOpacity
+                            key={acc.id}
+                            style={[
+                              styles.accountChip,
+                              isSelected && styles.accountChipSelected,
+                            ]}
+                            onPress={() => setSelectedAccountId(acc.id)}
+                            activeOpacity={0.7}
+                          >
+                            <MaterialIcons
+                              name={getAccountTypeIcon(acc.type)}
+                              size={14}
+                              color={isSelected ? colors.onPrimary : colors.onSurfaceVariant}
+                            />
+                            <Text
+                              style={[
+                                styles.accountChipText,
+                                isSelected && styles.accountChipTextSelected,
+                              ]}
+                            >
+                              {acc.name}
+                              {acc.lastFour && !acc.name.includes(acc.lastFour)
+                                ? ` ••${acc.lastFour}`
+                                : ''}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </>
+                )}
               </View>
 
               {/* Action Buttons */}
@@ -517,6 +593,34 @@ const getStyles = (colors: ThemeColors) => {
       fontFamily: 'Manrope_500Medium',
       fontSize: 15,
       color: colors.onSurface,
+    },
+    accountChipsScroll: {
+      gap: spacing.xs,
+      paddingVertical: spacing.xs,
+    },
+    accountChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: radius.md,
+      backgroundColor: colors.surfaceContainerLow,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+    },
+    accountChipSelected: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    accountChipText: {
+      fontFamily: 'Manrope_500Medium',
+      fontSize: 12,
+      color: colors.onSurface,
+    },
+    accountChipTextSelected: {
+      color: colors.onPrimary,
+      fontFamily: 'Manrope_600SemiBold',
     },
     actionsRow: {
       flexDirection: 'row',

@@ -356,5 +356,48 @@ describe('backup-restore-service', () => {
         expect.arrayContaining(['g1', 'Goa Trip'])
       );
     });
+
+    it('restores custom reminders and reminder preferences when present', async () => {
+      const payload: ClarityBackupPayload = {
+        version: 1,
+        appName: 'Clarity',
+        exportedAt: '2026-09-01T12:00:00.000Z',
+        data: {
+          accounts: [],
+          transactions: [],
+          goals: [],
+          goal_contributions: [],
+          budget_plans: [],
+          budget_categories: [],
+          recurring_transactions: [],
+          notifications: [],
+          reminders: [
+            {
+              id: 'rem-1',
+              title: 'Advance Tax',
+              category: 'tax',
+              amount: 15000,
+              remindAtDate: '2026-12-15',
+              remindAtTime: '10:00',
+              repeatRule: 'quarterly',
+              advanceDays: 3,
+              status: 'pending',
+            },
+          ],
+          preferences: {
+            defaultReminderTime: '08:30',
+            dailyPulseEnabled: true,
+            dailyPulseTime: '21:00',
+          },
+        },
+      };
+
+      await restoreDatabaseFromSnapshot(payload);
+
+      expect(mockDb.runAsync).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO reminders'),
+        expect.arrayContaining(['rem-1', 'Advance Tax', '', 'tax', 15000, '2026-12-15', '10:00'])
+      );
+    });
   });
 });

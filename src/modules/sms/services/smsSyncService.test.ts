@@ -1,8 +1,5 @@
-import { mmkv } from '@/lib/storage';
-import { MockSmsReaderAdapter } from '@/modules/sms/reader/mockSmsReaderAdapter';
-import { SmsReaderService } from '@/modules/sms/reader/smsReaderService';
 import { SmsDao } from '@/modules/sms/storage/smsDao';
-import type { ParsedTransaction, RawSmsMessage } from '@/modules/sms/types';
+import type { ParsedTransaction } from '@/modules/sms/types';
 import { SmsSyncService } from './smsSyncService';
 
 jest.mock('@/modules/sms/storage/smsDao', () => ({
@@ -63,83 +60,33 @@ const initialAccounts = [
   },
 ];
 
-describe('SmsSyncService', () => {
-  const sampleMessages: RawSmsMessage[] = [
-    {
-      id: 'sms-sync-1',
-      address: 'VM-HDFCBK',
-      body: 'Rs.350.00 debited from HDFC Bank A/c **1234 on 15-Jan-25 to VPA swiggy@hdfcbank',
-      date: 1705315200000,
-    },
-    {
-      id: 'sms-sync-2',
-      address: 'VM-HDFCBK',
-      body: 'Your OTP is 445566. Do not share.',
-      date: 1705315300000,
-    },
-  ];
-
+describe('SmsSyncService (notification delegation)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     const { getAllAccounts } = require('@/services/database/account-dao');
     getAllAccounts.mockResolvedValue(initialAccounts);
-    (SmsDao.getExistingSmsIds as jest.Mock).mockResolvedValue(new Set());
-    (SmsDao.getUnlinkedParsedTransactions as jest.Mock).mockResolvedValue([]);
-    SmsReaderService.setAdapter(new MockSmsReaderAdapter(sampleMessages));
-    mmkv.remove('clarity_last_sms_sync_timestamp');
-  });
-
-  afterAll(() => {
-    SmsReaderService.resetAdapter();
-  });
-
-  it('scans all batches, parses financial messages, and saves a durable cursor', async () => {
-    const progressUpdates: Array<{ phase: string }> = [];
-    const result = await SmsSyncService.runInitialScan({
-      batchSize: 1,
-      autoCreateClarityTransactions: true,
-      onProgress: (progress) => progressUpdates.push(progress),
-    });
-
-    expect(result).toMatchObject({
-      scannedCount: 2,
-      parsedCount: 1,
-      reviewCount: 0,
-    });
-    expect(SmsDao.saveSmsBatch).toHaveBeenCalledTimes(2);
-    expect(SmsDao.saveParsedTransactionsBatch).toHaveBeenCalled();
-    expect(progressUpdates.at(-1)?.phase).toBe('complete');
-    expect(SmsSyncService.getLastSyncTimestamp()).toBe(1705315300000);
-  });
-
-  it('re-reads the cursor boundary but does not process an already saved SMS', async () => {
-    SmsSyncService.setLastSyncTimestamp(1705315200000);
-    (SmsDao.getExistingSmsIds as jest.Mock).mockResolvedValue(new Set(['sms-sync-1']));
-
-    const result = await SmsSyncService.runIncrementalScan({
-      autoCreateClarityTransactions: false,
-    });
-
-    expect(result.scannedCount).toBe(2);
-    expect(result.parsedCount).toBe(0);
-    expect(SmsDao.saveParsedTransactionsBatch).toHaveBeenCalledWith([]);
   });
 
   it('creates a separate account when the same bank reports a different suffix', async () => {
-    SmsReaderService.setAdapter(
-      new MockSmsReaderAdapter([
-        {
-          id: 'sms-hdfc-2',
-          address: 'VM-HDFCBK',
-          body: 'Rs.1200.00 debited from HDFC Bank A/c **5678 on 16-Jan-25. Avl Bal: Rs. 25,000.00',
-          date: 1705315400000,
-        },
-      ])
-    );
-
-    await SmsSyncService.runInitialScan({ autoCreateClarityTransactions: true });
-
     const { insertAccount } = require('@/services/database/account-dao');
+    const tx: ParsedTransaction = {
+      id: 'parsed-hdfc-2',
+      smsId: 'notif-hdfc-2',
+      amount: 1200,
+      type: 'DEBIT',
+      merchant: 'Swiggy',
+      category: 'Food & Dining',
+      bank: 'HDFC Bank',
+      accountMask: '5678',
+      availableBalance: 25000,
+      timestamp: 1705315400000,
+      confidence: 0.95,
+      isDuplicate: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    await SmsSyncService.importParsedTransactions([tx]);
+
     expect(insertAccount).toHaveBeenCalledWith(
       expect.objectContaining({
         institution: 'HDFC Bank',
@@ -148,47 +95,12 @@ describe('SmsSyncService', () => {
     );
   });
 
-  it('does not mutate account balances when no explicit SMS balance is available', async () => {
-    const { updateAccountBalance } = require('@/services/database/account-dao');
-
-    await SmsSyncService.consolidateDuplicateBankAccounts();
-
-    expect(updateAccountBalance).not.toHaveBeenCalled();
-  });
-
-  it('reconciles balances using parsed transaction_date rather than a missing timestamp column', async () => {
-    const { getDatabase } = require('@/services/database');
-    await SmsSyncService.consolidateDuplicateBankAccounts();
-
-    const queries = getDatabase().getFirstAsync.mock.calls.map(([query]: [string]) => query);
-    expect(queries.some((query: string) => query.includes('ORDER BY p.transaction_date DESC'))).toBe(true);
-    expect(queries.some((query: string) => query.includes('p.timestamp'))).toBe(false);
-  });
-
-  it('retries a previously saved parsed transaction that has no linked main transaction', async () => {
-    const pending: ParsedTransaction = {
-      id: 'pending-1',
-      smsId: 'old-sms',
-      amount: 500,
-      type: 'DEBIT',
-      merchant: 'Swiggy',
-      category: 'Food & Dining',
-      bank: 'HDFC Bank',
-      accountMask: '1234',
-      timestamp: 1705000000000,
-      confidence: 1,
-      isDuplicate: false,
-      createdAt: new Date().toISOString(),
-    };
-    (SmsDao.getUnlinkedParsedTransactions as jest.Mock).mockResolvedValue([pending]);
-
-    await SmsSyncService.runInitialScan({ autoCreateClarityTransactions: true });
-
-    expect(SmsDao.linkClarityTransaction).toHaveBeenCalledWith('pending-1', 'clarity-tx-1');
-  });
-
-  it('merges late-arriving SMS with an existing manual transaction instead of creating duplicate', async () => {
-    const { findManualMatch, mergeManualWithSmsTransaction, insertTransaction } = require('@/services/database/transaction-dao');
+  it('merges parsed notification with an existing manual transaction instead of creating duplicate', async () => {
+    const {
+      findManualMatch,
+      mergeManualWithSmsTransaction,
+      insertTransaction,
+    } = require('@/services/database/transaction-dao');
     findManualMatch.mockResolvedValueOnce({
       id: 'manual-tx-450',
       accountId: 'acc-1',
@@ -201,46 +113,43 @@ describe('SmsSyncService', () => {
       status: 'PENDING_MATCH',
     });
 
-    const result = await SmsSyncService.runInitialScan({
-      autoCreateClarityTransactions: true,
-    });
+    const tx: ParsedTransaction = {
+      id: 'parsed-merge-1',
+      smsId: 'notif-merge-1',
+      amount: 350,
+      type: 'DEBIT',
+      merchant: 'Swiggy',
+      category: 'Food & Dining',
+      bank: 'HDFC Bank',
+      accountMask: '1234',
+      timestamp: 1705315200000,
+      confidence: 0.95,
+      isDuplicate: false,
+      createdAt: new Date().toISOString(),
+    };
 
-    expect(result.parsedCount).toBe(1);
+    await SmsSyncService.importParsedTransactions([tx]);
+
     expect(findManualMatch).toHaveBeenCalledWith(
       'acc-1',
       350,
       'expense',
-      expect.any(Number),
+      1705315200000,
       24
     );
     expect(mergeManualWithSmsTransaction).toHaveBeenCalledWith(
       'manual-tx-450',
-      expect.objectContaining({
-        smsId: 'sms-sync-1',
-      })
+      expect.objectContaining({ smsId: 'notif-merge-1' })
     );
-    expect(SmsDao.linkClarityTransaction).toHaveBeenCalledWith(expect.any(String), 'manual-tx-450');
-    // insertTransaction should not have been called for this message
+    expect(SmsDao.linkClarityTransaction).toHaveBeenCalledWith('parsed-merge-1', 'manual-tx-450');
     expect(insertTransaction).not.toHaveBeenCalled();
   });
 
-  it('does not reprocess stored SMS messages during another initial scan', async () => {
-    (SmsDao.getExistingSmsIds as jest.Mock).mockResolvedValue(new Set(['sms-sync-1']));
-
-    const result = await SmsSyncService.runInitialScan({
-      autoCreateClarityTransactions: false,
-    });
-
-    expect(result.scannedCount).toBe(2);
-    expect(result.parsedCount).toBe(0);
-    expect(SmsDao.saveParsedTransactionsBatch).toHaveBeenCalledWith([]);
-  });
-
-  it('syncs UPI transactions with missing mask to primary account without skipping', async () => {
+  it('syncs UPI transactions with missing mask to fallback account without skipping', async () => {
     const { insertTransaction } = require('@/services/database/transaction-dao');
     const upiPending: ParsedTransaction = {
       id: 'pending-upi-1',
-      smsId: 'sms-upi',
+      smsId: 'notif-upi',
       amount: 250,
       type: 'DEBIT',
       merchant: 'Chai Point',
@@ -252,9 +161,8 @@ describe('SmsSyncService', () => {
       isDuplicate: false,
       createdAt: new Date().toISOString(),
     };
-    (SmsDao.getUnlinkedParsedTransactions as jest.Mock).mockResolvedValue([upiPending]);
 
-    await SmsSyncService.runInitialScan({ autoCreateClarityTransactions: true });
+    await SmsSyncService.importParsedTransactions([upiPending]);
 
     expect(insertTransaction).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -269,42 +177,25 @@ describe('SmsSyncService', () => {
     expect(SmsDao.linkClarityTransaction).toHaveBeenCalledWith('pending-upi-1', 'clarity-tx-1');
   });
 
-  it('syncs accounts and bills during initial scan when skipHistoricalTransactions is true, but skips creating transactions', async () => {
-    const { insertTransaction } = require('@/services/database/transaction-dao');
-    const { getAllAccounts } = require('@/services/database/account-dao');
-    getAllAccounts.mockResolvedValue(initialAccounts);
-
-    const result = await SmsSyncService.runInitialScan({
-      autoCreateClarityTransactions: false,
-      skipHistoricalTransactions: true,
-    });
-
-    expect(result.scannedCount).toBe(2);
-    expect(result.parsedCount).toBe(1);
-    expect(result.newTransactions).toHaveLength(0);
-    expect(insertTransaction).not.toHaveBeenCalled();
-    expect(SmsDao.saveReviewQueueBatch).not.toHaveBeenCalled();
-    expect(SmsSyncService.getLastSyncTimestamp()).toBe(1705315300000);
-  });
-
-  it('runs initial scan with skipHistoricalTransactions when incremental scan runs without an existing cursor', async () => {
-    // mmkv has no timestamp and SmsDao returns null
-    mmkv.remove('clarity_last_sms_sync_timestamp');
-    (SmsDao.getLatestSmsTimestamp as jest.Mock).mockResolvedValue(null);
-
-    const { insertTransaction } = require('@/services/database/transaction-dao');
-    const result = await SmsSyncService.runIncrementalScan({
-      autoCreateClarityTransactions: false,
-    });
-
-    expect(result.scannedCount).toBe(2);
-    expect(result.newTransactions).toHaveLength(0);
-    expect(insertTransaction).not.toHaveBeenCalled();
-    expect(SmsSyncService.getLastSyncTimestamp()).toBe(1705315300000);
-  });
-
   it('enriches an earlier sparse UPI alert when a richer bank notification arrives', async () => {
     const { getDatabase } = require('@/services/database');
+    const { getAllAccounts } = require('@/services/database/account-dao');
+    getAllAccounts.mockResolvedValue([
+      {
+        id: 'acc-primary',
+        name: 'Primary Bank Account',
+        type: 'savings' as const,
+        balance: 5000,
+        institution: 'Bank / UPI',
+        lastFour: '',
+      },
+      ...initialAccounts,
+    ]);
+    getDatabase().getFirstAsync.mockResolvedValueOnce({
+      account_id: 'acc-primary',
+      amount: 450,
+      type: 'expense',
+    });
     const originalParsed: ParsedTransaction = {
       id: 'parsed-gpay-1',
       smsId: 'notif-gpay-1',
@@ -365,7 +256,7 @@ describe('SmsSyncService', () => {
     getDatabase().getFirstAsync.mockResolvedValueOnce({
       id: 'tx-debit-hdfc',
       account_id: 'acc-1',
-      note: 'Imported via SMS (HDFC Bank)',
+      note: 'Auto-tracked (HDFC Bank)',
       merchant: 'SBI Transfer',
     });
 
@@ -400,4 +291,3 @@ describe('SmsSyncService', () => {
     );
   });
 });
-

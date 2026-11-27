@@ -1,5 +1,5 @@
+import { NotificationLedgerService } from '@/modules/notifications/services/notificationLedgerService';
 import { SmsAnalyticsService } from '@/modules/sms/services/smsAnalyticsService';
-import { SmsSyncService } from '@/modules/sms/services/smsSyncService';
 import { SmsDao } from '@/modules/sms/storage/smsDao';
 import type { ParsedTransaction, SmsAnalytics } from '@/modules/sms/types';
 import { create } from 'zustand';
@@ -16,7 +16,10 @@ interface SmsStoreState {
   setPendingTransactions: (txs: ParsedTransaction[]) => void;
   openTransactionPrompt: () => void;
   closeTransactionPrompt: () => void;
-  importPendingTransactions: (selectedIds?: string[]) => Promise<number>;
+  importPendingTransactions: (
+    selectedIds?: string[],
+    accountOverrides?: Record<string, string>
+  ) => Promise<number>;
   dismissPendingTransactions: (idsToDismiss?: string[]) => Promise<void>;
 }
 
@@ -61,7 +64,10 @@ export const useSmsStore = create<SmsStoreState>((set, get) => ({
     set({ isPromptVisible: false });
   },
 
-  importPendingTransactions: async (selectedIds?: string[]) => {
+  importPendingTransactions: async (
+    selectedIds?: string[],
+    accountOverrides?: Record<string, string>
+  ) => {
     const { pendingTransactions } = get();
     if (pendingTransactions.length === 0) return 0;
 
@@ -77,7 +83,7 @@ export const useSmsStore = create<SmsStoreState>((set, get) => ({
     }
 
     if (toImport.length > 0) {
-      await SmsSyncService.importParsedTransactions(toImport);
+      await NotificationLedgerService.importParsedTransactions(toImport, { accountOverrides });
     }
 
     let remainingUnlinked: ParsedTransaction[] = [];
@@ -94,7 +100,8 @@ export const useSmsStore = create<SmsStoreState>((set, get) => ({
 
     set((state) => ({
       pendingTransactions: remainingUnlinked,
-      isPromptVisible: remainingUnlinked.length === 0 || importedCount > 0 ? false : state.isPromptVisible,
+      isPromptVisible:
+        remainingUnlinked.length === 0 || importedCount > 0 ? false : state.isPromptVisible,
     }));
 
     await get().refreshAnalytics();

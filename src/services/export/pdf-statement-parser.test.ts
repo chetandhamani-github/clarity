@@ -1127,6 +1127,34 @@ ET
       expect(result.transactions[0]).toMatchObject({ amount: 450, type: 'expense' });
       expect(result.transactions[1]).toMatchObject({ amount: 55000, type: 'income' });
     });
+
+    it('parses mixed single-line + vertical columnar rows, page-break interrupted rows, and currency-tagged integers', () => {
+      const mixedText = `
+        01/11/2026 UPI/ZOMATO ORDER ₹500 10,000.00
+        02/11/2026
+        VERY LONG NEFT TRANSFER
+        Page 2 of 5
+        Date Particulars Debit Credit Balance
+        450.00 9,550.00
+        03/11/2026
+        03/11/2026
+        SALARY CREDIT
+        -
+        25,000.00
+        34,550.00
+      `;
+
+      const res = parseBankStatementPdfText(mixedText);
+      expect(res.success).toBe(true);
+      expect(res.transactions).toHaveLength(3);
+      expect(res.transactions[0]).toMatchObject({ date: '2026-11-01', amount: 500 });
+      expect(res.transactions[1]).toMatchObject({ date: '2026-11-02', amount: 450 });
+      expect(res.transactions[2]).toMatchObject({
+        date: '2026-11-03',
+        amount: 25000,
+        type: 'income',
+      });
+    });
   });
 
   describe('SUPPORTED_BANK_PROFILES', () => {

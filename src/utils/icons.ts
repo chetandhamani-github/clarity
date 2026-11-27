@@ -183,6 +183,7 @@ const BILLER_ICON_MAP: Record<string, { icon: IconName; color: string; bg: strin
   gym: { icon: 'fitness-center', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)' },
   tuition: { icon: 'school', color: '#f97316', bg: 'rgba(249, 115, 22, 0.15)' },
   maintenance: { icon: 'apartment', color: '#64748b', bg: 'rgba(100, 116, 139, 0.15)' },
+  subscription: { icon: 'subscriptions', color: '#a855f7', bg: 'rgba(168, 85, 247, 0.15)' },
   other: { icon: 'receipt', color: '#6b7280', bg: 'rgba(107, 114, 128, 0.15)' },
 };
 
@@ -197,18 +198,64 @@ export function getBillerBranding(billerName: string, category?: string): Biller
 
   const lowerName = billerName.toLowerCase().trim();
 
-  // Specific brand custom colors
   if (lowerName.includes('airtel')) {
-    return { name: billerName, category: catKey, color: '#dc2626', backgroundColor: 'rgba(220, 38, 38, 0.15)', icon: 'wifi' };
+    const icon: IconName =
+      catKey === 'dth' ? 'tv' : catKey === 'mobile_postpaid' ? 'smartphone' : 'wifi';
+    return {
+      name: billerName,
+      category: catKey,
+      color: '#dc2626',
+      backgroundColor: 'rgba(220, 38, 38, 0.15)',
+      icon,
+    };
   }
   if (lowerName.includes('jio')) {
-    return { name: billerName, category: catKey, color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.15)', icon: 'wifi' };
+    const icon: IconName = catKey === 'mobile_postpaid' ? 'smartphone' : 'wifi';
+    return {
+      name: billerName,
+      category: catKey,
+      color: '#2563eb',
+      backgroundColor: 'rgba(37, 99, 235, 0.15)',
+      icon,
+    };
   }
-  if (lowerName.includes('bescom') || lowerName.includes('tata power') || lowerName.includes('electricity')) {
+  if (
+    lowerName.includes('bescom') ||
+    lowerName.includes('tata power') ||
+    lowerName.includes('adani') ||
+    lowerName.includes('msedcl') ||
+    lowerName.includes('mahavitaran') ||
+    lowerName.includes('bses') ||
+    lowerName.includes('tpddl') ||
+    lowerName.includes('tangedco') ||
+    lowerName.includes('kseb') ||
+    lowerName.includes('torrent power') ||
+    lowerName.includes('cesc') ||
+    lowerName.includes('electricity')
+  ) {
     return { name: billerName, category: 'electricity', color: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.15)', icon: 'flash-on' };
   }
-  if (lowerName.includes('igl') || lowerName.includes('mgl') || lowerName.includes('gas')) {
+  if (lowerName.includes('igl') || lowerName.includes('mgl') || lowerName.includes('mahanagar gas') || lowerName.includes('adani total gas') || lowerName.includes('gas')) {
     return { name: billerName, category: 'gas', color: '#ea580c', backgroundColor: 'rgba(234, 88, 12, 0.15)', icon: 'local-gas-station' };
+  }
+  if (lowerName.includes('fastag')) {
+    return { name: billerName, category: catKey, color: '#0ea5e9', backgroundColor: 'rgba(14, 165, 233, 0.15)', icon: 'directions-car' };
+  }
+  if (
+    lowerName.includes('netflix') ||
+    lowerName.includes('spotify') ||
+    lowerName.includes('prime') ||
+    lowerName.includes('hotstar') ||
+    lowerName.includes('youtube') ||
+    lowerName.includes('apple') ||
+    lowerName.includes('icloud') ||
+    lowerName.includes('google one') ||
+    lowerName.includes('chatgpt') ||
+    lowerName.includes('claude') ||
+    lowerName.includes('sonyliv') ||
+    lowerName.includes('zee5')
+  ) {
+    return { name: billerName, category: 'subscription', color: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.15)', icon: 'subscriptions' };
   }
   if (lowerName.includes('rent') || lowerName.includes('house rent')) {
     return { name: billerName, category: 'rent', color: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.15)', icon: 'home' };
@@ -219,7 +266,20 @@ export function getBillerBranding(billerName: string, category?: string): Biller
   if (lowerName.includes('cult') || lowerName.includes('gym')) {
     return { name: billerName, category: 'gym', color: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.15)', icon: 'fitness-center' };
   }
-  if (lowerName.includes('hdfc') || lowerName.includes('sbi') || lowerName.includes('icici') || lowerName.includes('axis') || lowerName.includes('credit card')) {
+  if (
+    catKey === 'credit_card' ||
+    lowerName.includes('credit card') ||
+    (catKey !== 'loan_emi' &&
+      (lowerName.includes('hdfc') ||
+        lowerName.includes('sbi') ||
+        lowerName.includes('icici') ||
+        lowerName.includes('axis') ||
+        lowerName.includes('kotak') ||
+        lowerName.includes('indusind') ||
+        lowerName.includes('idfc') ||
+        lowerName.includes('onecard') ||
+        lowerName.includes('amex')))
+  ) {
     const bank = getBankBranding(billerName);
     return { name: billerName, category: 'credit_card', color: bank.color, backgroundColor: bank.backgroundColor, icon: 'credit-card' };
   }

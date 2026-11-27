@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput, Platform } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, TextInput, Platform, Switch } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Text, Header } from '@/components/ui';
 import { typography, useTheme, ThemeColors } from '@/theme';
@@ -50,6 +50,7 @@ export default function AddAccountScreen() {
   const [billingCycleDayStr, setBillingCycleDayStr] = useState('');
   const [dueDayStr, setDueDayStr] = useState('');
   const [creditLimitStr, setCreditLimitStr] = useState('');
+  const [isPrimary, setIsPrimary] = useState(false);
   const [showTypeSelector, setShowTypeSelector] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
@@ -70,6 +71,7 @@ export default function AddAccountScreen() {
       setBillingCycleDayStr(account.billingCycleDay ? account.billingCycleDay.toString() : '');
       setDueDayStr(account.dueDay ? account.dueDay.toString() : '');
       setCreditLimitStr(account.creditLimit ? account.creditLimit.toString() : '');
+      setIsPrimary(Boolean(account.isPrimary));
       setInitialized(true);
     }
   }, [isEditing, account, initialized]);
@@ -110,6 +112,7 @@ export default function AddAccountScreen() {
       balance,
       institution: institution.trim(),
       lastFour: lastFour.trim().slice(0, 4),
+      isPrimary,
       billingCycleDay: validCycleDay,
       dueDay: validDueDay,
       creditLimit: validCreditLimit,
@@ -318,6 +321,24 @@ export default function AddAccountScreen() {
             </View>
           )}
 
+          <View style={styles.primaryToggleRow}>
+            <View style={styles.primaryToggleTextWrap}>
+              <View style={styles.primaryToggleTitleRow}>
+                <MaterialIcons name="star" size={18} color={colors.primary} />
+                <Text style={styles.primaryToggleTitle}>Set as Primary Account</Text>
+              </View>
+              <Text style={styles.primaryToggleSubtitle}>
+                Shows on top and is selected by default when recording expenses or income.
+              </Text>
+            </View>
+            <Switch
+              value={isPrimary}
+              onValueChange={setIsPrimary}
+              trackColor={{ false: colors.surfaceContainerHighest, true: colors.primaryContainer }}
+              thumbColor={isPrimary ? colors.primary : colors.outline}
+            />
+          </View>
+
           <TouchableOpacity
             style={[styles.submitBtn, isPending && styles.submitBtnDisabled]}
             onPress={handleSave}
@@ -473,6 +494,36 @@ const getStyles = (colors: ThemeColors) => {
       ...typography.bodyMd,
       color: colors.outline,
       marginTop: 4,
+    },
+    primaryToggleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      backgroundColor: colors.surfaceContainer,
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+    },
+    primaryToggleTextWrap: {
+      flex: 1,
+      gap: 4,
+    },
+    primaryToggleTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    primaryToggleTitle: {
+      ...typography.bodyLg,
+      fontWeight: '600',
+      color: colors.onSurface,
+    },
+    primaryToggleSubtitle: {
+      ...typography.bodyMd,
+      fontSize: 12,
+      lineHeight: 16,
+      color: colors.onSurfaceVariant,
     },
   });
   return styles;

@@ -3,7 +3,7 @@ import { mmkv } from '@/lib/storage';
 import { NativeNotificationListenerAdapter } from '@/modules/notifications/adapters/nativeNotificationListenerAdapter';
 import { NotificationParsingService } from '@/modules/notifications/services/notificationParsingService';
 import { DEFAULT_TARGET_APPS } from '@/modules/notifications/constants';
-import type { ExtractedBill } from '@/modules/sms/extractor/billExtractor';
+import type { ExtractedBill } from '@/modules/notifications/services/notificationBillExtractor';
 import type {
   NotificationPermissionStatus,
   NotificationListenerHealth,
@@ -247,6 +247,7 @@ export const useNotificationStore = create<NotificationStoreState>((set, get) =>
       if (pending.length === 0) return 0;
 
       let processedCount = 0;
+      let hasNewTransaction = false;
       const ackedIds: string[] = [];
 
       for (const notif of pending) {
@@ -264,6 +265,9 @@ export const useNotificationStore = create<NotificationStoreState>((set, get) =>
           }
           if (result.type === 'BILL' && result.isNew !== false) {
             get().showDetectedBillModal(result.bill, result.billId);
+          }
+          if (result.type === 'TRANSACTION' && !result.isDuplicate) {
+            hasNewTransaction = true;
           }
           if (result.type !== 'IGNORED') {
             processedCount++;
@@ -287,6 +291,9 @@ export const useNotificationStore = create<NotificationStoreState>((set, get) =>
           const unlinked = await SmsDao.getUnlinkedParsedTransactions();
           if (unlinked.length > 0 || useSmsStore.getState().pendingTransactions.length > 0) {
             useSmsStore.getState().setPendingTransactions(unlinked);
+            if (hasNewTransaction && unlinked.length > 0) {
+              useSmsStore.getState().openTransactionPrompt();
+            }
           }
         }
       } catch {

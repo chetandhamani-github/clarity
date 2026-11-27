@@ -167,7 +167,7 @@ export function parseDate(dateStr: string): string | null {
   if (!dateStr) return null;
   const clean = dateStr
     .trim()
-    .replace(/\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?$/i, '')
+    .replace(/(?:T|\s+)\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?(?:\s*[AP]M)?$/i, '')
     .replace(/,/g, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -183,28 +183,30 @@ export function parseDate(dateStr: string): string | null {
     return null;
   }
 
-  // DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
+  // DD/MM/YYYY (or unambiguous MM/DD/YYYY when second component > 12)
   const dmyMatch = clean.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
   if (dmyMatch) {
-    const dayNum = parseInt(dmyMatch[1], 10);
-    const monNum = parseInt(dmyMatch[2], 10);
-    if (dayNum < 1 || dayNum > 31 || monNum < 1 || monNum > 12) return null;
-    const day = dmyMatch[1].padStart(2, '0');
-    const month = dmyMatch[2].padStart(2, '0');
+    const firstNum = parseInt(dmyMatch[1], 10);
+    const secondNum = parseInt(dmyMatch[2], 10);
     const year = dmyMatch[3];
-    return `${year}-${month}-${day}`;
+    if (firstNum >= 1 && firstNum <= 12 && secondNum >= 13 && secondNum <= 31) {
+      return `${year}-${dmyMatch[1].padStart(2, '0')}-${dmyMatch[2].padStart(2, '0')}`;
+    }
+    if (firstNum < 1 || firstNum > 31 || secondNum < 1 || secondNum > 12) return null;
+    return `${year}-${dmyMatch[2].padStart(2, '0')}-${dmyMatch[1].padStart(2, '0')}`;
   }
 
-  // DD/MM/YY
+  // DD/MM/YY (or unambiguous MM/DD/YY)
   const dmyShortMatch = clean.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2})$/);
   if (dmyShortMatch) {
-    const dayNum = parseInt(dmyShortMatch[1], 10);
-    const monNum = parseInt(dmyShortMatch[2], 10);
-    if (dayNum < 1 || dayNum > 31 || monNum < 1 || monNum > 12) return null;
-    const day = dmyShortMatch[1].padStart(2, '0');
-    const month = dmyShortMatch[2].padStart(2, '0');
+    const firstNum = parseInt(dmyShortMatch[1], 10);
+    const secondNum = parseInt(dmyShortMatch[2], 10);
     const year = `20${dmyShortMatch[3]}`;
-    return `${year}-${month}-${day}`;
+    if (firstNum >= 1 && firstNum <= 12 && secondNum >= 13 && secondNum <= 31) {
+      return `${year}-${dmyShortMatch[1].padStart(2, '0')}-${dmyShortMatch[2].padStart(2, '0')}`;
+    }
+    if (firstNum < 1 || firstNum > 31 || secondNum < 1 || secondNum > 12) return null;
+    return `${year}-${dmyShortMatch[2].padStart(2, '0')}-${dmyShortMatch[1].padStart(2, '0')}`;
   }
 
   // DD Mon YYYY / DD-Mon-YY (e.g., 15 Nov 2026, 15-Nov-26, 01 September 2026)
@@ -224,6 +226,19 @@ export function parseDate(dateStr: string): string | null {
     }
   }
 
+  // Mon DD YYYY (e.g., Nov 27 2026)
+  const monDYMatch = clean.match(/^([A-Za-z]{3,9})[/\-\s](\d{1,2})[/\-\s](\d{2,4})$/);
+  if (monDYMatch) {
+    const dayNum = parseInt(monDYMatch[2], 10);
+    const mon = monDYMatch[1].toLowerCase().substring(0, 3);
+    const month = months[mon];
+    let year = monDYMatch[3];
+    if (year.length === 2) year = `20${year}`;
+    if (month && dayNum >= 1 && dayNum <= 31) {
+      return `${year}-${month}-${monDYMatch[2].padStart(2, '0')}`;
+    }
+  }
+
   return null;
 }
 
@@ -232,8 +247,9 @@ export function parseDate(dateStr: string): string | null {
  */
 function cleanAmount(raw: string): number {
   if (!raw) return 0;
-  const numStr = raw.replace(/[^0-9.-]/g, '');
-  const parsed = parseFloat(numStr);
+  const numMatch = raw.match(/\d[\d,]*(?:\.\d+)?|\.\d+/);
+  if (!numMatch) return 0;
+  const parsed = parseFloat(numMatch[0].replace(/,/g, ''));
   return isNaN(parsed) ? 0 : Math.abs(parsed);
 }
 
@@ -244,9 +260,10 @@ function cleanBalance(raw: string): number | undefined {
   if (!raw) return undefined;
   const clean = raw.trim();
   if (!clean) return undefined;
-  const isDr = /\b(?:dr|debit)\b/i.test(clean) || clean.includes('-');
-  const numStr = clean.replace(/[^0-9.]/g, '');
-  const parsed = parseFloat(numStr);
+  const isDr = /\b(?:dr|debit)\b/i.test(clean) || /(?:^|\s)-/.test(clean);
+  const numMatch = clean.match(/\d[\d,]*(?:\.\d+)?|\.\d+/);
+  if (!numMatch) return undefined;
+  const parsed = parseFloat(numMatch[0].replace(/,/g, ''));
   if (isNaN(parsed)) return undefined;
   return isDr ? -parsed : parsed;
 }
@@ -297,7 +314,7 @@ interface CsvColumnMap {
 
 function detectHeaderColumns(rows: string[][]): CsvColumnMap | null {
   let fallbackCandidate: CsvColumnMap | null = null;
-  const maxScanRows = Math.min(rows.length, 60);
+  const maxScanRows = Math.min(rows.length, 100);
 
   for (let r = 0; r < maxScanRows; r++) {
     const headers = rows[r].map((h) =>
@@ -471,7 +488,20 @@ export function parseBankStatementCsv(csvText: string): CsvParseResult {
     const rawDate = row[colDate];
     const normalizedDate = parseDate(rawDate);
     if (!normalizedDate) {
-      ignoredRows++;
+      if (
+        !rawDate?.trim() &&
+        colDesc !== -1 &&
+        row[colDesc]?.trim() &&
+        transactions.length > 0 &&
+        (colDebit === -1 || cleanAmount(row[colDebit]) === 0) &&
+        (colCredit === -1 || cleanAmount(row[colCredit]) === 0) &&
+        (colAmount === -1 || cleanAmount(row[colAmount]) === 0)
+      ) {
+        const lastTx = transactions[transactions.length - 1];
+        lastTx.note = `${lastTx.note} ${row[colDesc].trim()}`.trim();
+      } else {
+        ignoredRows++;
+      }
       continue;
     }
 

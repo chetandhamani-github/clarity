@@ -232,18 +232,25 @@ export default function NotificationsScreen() {
         showBack
         title="Notifications"
         rightNode={
-          notifications.length > 0 ? (
-            <View style={styles.headerRightActions}>
-              {unreadCount > 0 && (
-                <TouchableOpacity
-                  style={styles.headerIconBtn}
-                  onPress={handleMarkAllRead}
-                  disabled={markingAll}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <MaterialIcons name="done-all" size={20} color={colors.primary} />
-                </TouchableOpacity>
-              )}
+          <View style={styles.headerRightActions}>
+            <TouchableOpacity
+              style={styles.headerIconBtn}
+              onPress={() => router.navigate('/(app)/reminders')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <MaterialIcons name="alarm" size={20} color={colors.primary} />
+            </TouchableOpacity>
+            {notifications.length > 0 && unreadCount > 0 && (
+              <TouchableOpacity
+                style={styles.headerIconBtn}
+                onPress={handleMarkAllRead}
+                disabled={markingAll}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialIcons name="done-all" size={20} color={colors.primary} />
+              </TouchableOpacity>
+            )}
+            {notifications.length > 0 && (
               <TouchableOpacity
                 style={styles.headerIconBtn}
                 onPress={handleClearAll}
@@ -252,10 +259,8 @@ export default function NotificationsScreen() {
               >
                 <MaterialIcons name="delete-outline" size={20} color={colors.onSurfaceVariant} />
               </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.headerPlaceholder} />
-          )
+            )}
+          </View>
         }
       />
 

@@ -79,13 +79,16 @@ export default function ImportStatementScreen() {
   const [parseError, setParseError] = useState<string | null>(null);
   const [parsedTransactions, setParsedTransactions] = useState<StatementImportItem[]>([]);
   const [newTransactions, setNewTransactions] = useState<StatementImportItem[]>([]);
+  const [duplicateTransactions, setDuplicateTransactions] = useState<StatementImportItem[]>([]);
   const [statementBalance, setStatementBalance] = useState<number | null>(null);
   const [statementDate, setStatementDate] = useState<string | null>(null);
   const [applyStatementBalance, setApplyStatementBalance] = useState<boolean>(true);
   const [duplicateCount, setDuplicateCount] = useState<number>(0);
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [showAllPreview, setShowAllPreview] = useState(false);
+  const [showAllPreview, setShowAllPreview] = useState(true);
+  const [showSkippedDuplicates, setShowSkippedDuplicates] = useState(false);
+  const [selectedDuplicateIndexes, setSelectedDuplicateIndexes] = useState<Set<number>>(new Set());
 
   // PDF password unlocking states
   const [pendingPdfUri, setPendingPdfUri] = useState<string | null>(null);
@@ -115,12 +118,15 @@ export default function ImportStatementScreen() {
   const clearPreviewResults = useCallback(() => {
     setParsedTransactions([]);
     setNewTransactions([]);
+    setDuplicateTransactions([]);
     setStatementBalance(null);
     setStatementDate(null);
     setApplyStatementBalance(true);
     setDuplicateCount(0);
     setSelectedTxIndexes(new Set());
-    setShowAllPreview(false);
+    setSelectedDuplicateIndexes(new Set());
+    setShowAllPreview(true);
+    setShowSkippedDuplicates(false);
   }, []);
 
   const closePasswordModal = useCallback(() => {
@@ -183,8 +189,11 @@ export default function ImportStatementScreen() {
     }
 
     const targetAccount = accounts.find((acc) => acc.id === targetAccountId);
-    const { newTransactions: nonDuplicates, duplicateCount: duplicates } =
-      deduplicateStatementTransactions(items, existing);
+    const {
+      newTransactions: nonDuplicates,
+      duplicateTransactions: duplicatesList,
+      duplicateCount: duplicates,
+    } = deduplicateStatementTransactions(items, existing);
 
     if (extractedBalance !== undefined && extractedBalance !== null) {
       setStatementBalance(extractedBalance);
@@ -199,9 +208,12 @@ export default function ImportStatementScreen() {
 
     setParsedTransactions(items);
     setNewTransactions(nonDuplicates);
+    setDuplicateTransactions(duplicatesList);
     setSelectedTxIndexes(new Set(nonDuplicates.map((_, idx) => idx)));
+    setSelectedDuplicateIndexes(new Set());
     setDuplicateCount(duplicates);
-    setShowAllPreview(false);
+    setShowAllPreview(true);
+    setShowSkippedDuplicates(false);
     setParseError(null);
     setIsParsing(false);
     showToast(`Parsed ${items.length} transaction${items.length === 1 ? '' : 's'}`, 'info');
@@ -407,17 +419,34 @@ export default function ImportStatementScreen() {
     }
   };
 
+  const toggleSelectDupTx = (index: number) => {
+    setSelectedDuplicateIndexes((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  };
+
+  const totalSelectedCount = selectedTxIndexes.size + selectedDuplicateIndexes.size;
+
   const canApplyBalanceOnly =
-    statementBalance !== null && applyStatementBalance && selectedTxIndexes.size === 0;
+    statementBalance !== null && applyStatementBalance && totalSelectedCount === 0;
   const canSubmitImport =
     Boolean(selectedAccountId) &&
     !isImporting &&
-    (selectedTxIndexes.size > 0 || canApplyBalanceOnly);
+    (totalSelectedCount > 0 || canApplyBalanceOnly);
 
   const handleImport = async () => {
     if (!selectedAccountId || isImporting) return;
 
-    const txsToImport = newTransactions.filter((_, idx) => selectedTxIndexes.has(idx));
+    const txsToImport = [
+      ...newTransactions.filter((_, idx) => selectedTxIndexes.has(idx)),
+      ...duplicateTransactions.filter((_, idx) => selectedDuplicateIndexes.has(idx)),
+    ];
     const shouldSyncBalance = statementBalance !== null && applyStatementBalance;
 
     if (txsToImport.length === 0 && !shouldSyncBalance) {
@@ -497,8 +526,8 @@ export default function ImportStatementScreen() {
     : newTransactions.slice(0, PREVIEW_COLLAPSED_COUNT);
 
   const importButtonLabel =
-    selectedTxIndexes.size > 0
-      ? `Import ${selectedTxIndexes.size} Transaction${selectedTxIndexes.size === 1 ? '' : 's'}`
+    totalSelectedCount > 0
+      ? `Import ${totalSelectedCount} Transaction${totalSelectedCount === 1 ? '' : 's'}`
       : canApplyBalanceOnly && statementBalance !== null
       ? `Update Balance to ${formatCurrency(statementBalance)}`
       : 'No Transactions Selected';
@@ -688,12 +717,22 @@ export default function ImportStatementScreen() {
                   {newTransactions.length}
                 </Text>
               </View>
-              <View style={styles.statCard}>
+              <TouchableOpacity
+                style={styles.statCard}
+                disabled={duplicateCount === 0}
+                onPress={() => setShowSkippedDuplicates((prev) => !prev)}
+                activeOpacity={duplicateCount > 0 ? 0.7 : 1}
+              >
                 <Text style={styles.statLabel}>Duplicates Skipped</Text>
                 <Text style={[styles.statValue, { color: colors.outline }]}>
                   {duplicateCount}
                 </Text>
-              </View>
+                {duplicateCount > 0 && (
+                  <Text style={styles.statActionHint}>
+                    {showSkippedDuplicates ? 'Hide' : 'Review'}
+                  </Text>
+                )}
+              </TouchableOpacity>
             </View>
 
             {/* Statement Balance Card */}
@@ -828,11 +867,84 @@ export default function ImportStatementScreen() {
                   >
                     <Text style={styles.previewExpandText}>
                       {showAllPreview
-                        ? 'Show fewer transactions'
+                        ? 'Collapse list'
                         : `Show all ${newTransactions.length} transactions (+${newTransactions.length - PREVIEW_COLLAPSED_COUNT} more)`}
                     </Text>
                   </TouchableOpacity>
                 )}
+              </View>
+            )}
+
+            {/* Review Skipped Duplicates */}
+            {duplicateTransactions.length > 0 && showSkippedDuplicates && (
+              <View style={styles.previewCard}>
+                <View style={styles.previewHeader}>
+                  <Text style={styles.previewTitle}>
+                    Skipped as Duplicates ({selectedDuplicateIndexes.size} of {duplicateTransactions.length} Selected)
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (selectedDuplicateIndexes.size === duplicateTransactions.length) {
+                        setSelectedDuplicateIndexes(new Set());
+                      } else {
+                        setSelectedDuplicateIndexes(
+                          new Set(duplicateTransactions.map((_, idx) => idx))
+                        );
+                      }
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={styles.previewSelectAll}>
+                      {selectedDuplicateIndexes.size === duplicateTransactions.length
+                        ? 'Skip All'
+                        : 'Include All'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                {duplicateTransactions.map((tx, idx) => {
+                  const isExpense = tx.type === 'expense';
+                  const isSelected = selectedDuplicateIndexes.has(idx);
+                  return (
+                    <TouchableOpacity
+                      key={`dup-${tx.date}-${tx.merchant}-${tx.amount}-${idx}`}
+                      style={[styles.previewItem, !isSelected && styles.dimmed]}
+                      onPress={() => toggleSelectDupTx(idx)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.previewCheckbox}>
+                        <MaterialIcons
+                          name={isSelected ? 'check-box' : 'check-box-outline-blank'}
+                          size={20}
+                          color={isSelected ? colors.primary : colors.outline}
+                        />
+                      </View>
+                      <View style={styles.previewIconBox}>
+                        <MaterialIcons
+                          name={getCategoryIcon(tx.category)}
+                          size={18}
+                          color={colors.onSurfaceVariant}
+                        />
+                      </View>
+                      <View style={styles.flex1}>
+                        <Text style={styles.previewMerchant} numberOfLines={1}>
+                          {tx.merchant}
+                        </Text>
+                        <Text style={styles.previewMeta}>
+                          {formatDate(tx.date, 'short')} • {tx.category}
+                        </Text>
+                      </View>
+                      <Text
+                        style={[
+                          styles.previewAmount,
+                          { color: isExpense ? colors.error : colors.primary },
+                        ]}
+                      >
+                        {isExpense ? '-' : '+'}
+                        {formatCurrency(tx.amount)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             )}
 
@@ -1250,6 +1362,12 @@ const getStyles = (colors: ThemeColors) => {
       fontSize: 18,
       fontWeight: '700',
       color: colors.onSurface,
+    },
+    statActionHint: {
+      ...typography.labelMd,
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.primary,
     },
     balanceCard: {
       borderRadius: 16,

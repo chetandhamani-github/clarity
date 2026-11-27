@@ -1,3 +1,4 @@
+import { VoiceTransactionModal } from '@/components/modals/VoiceTransactionModal';
 import { DatePickerModal, Header, SkeletonBox, Text, useAlert, useToast } from '@/components/ui';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useCategories } from '@/hooks/use-budget';
@@ -10,28 +11,28 @@ import {
   useTransaction,
   useUpdateTransaction,
 } from '@/hooks/use-transactions';
-import { calculateNextDate } from '@/services/database/recurring-dao';
-import { evaluateTransactionBudgetAlerts } from '@/services/notifications/alert-engine';
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
 import { scanReceiptWithAi } from '@/services/api/ai.api';
-import { VoiceTransactionModal } from '@/components/modals/VoiceTransactionModal';
+import { calculateNextDate } from '@/services/database/recurring-dao';
+import { isNetworkError } from '@/services/network/network.service';
+import { evaluateTransactionBudgetAlerts } from '@/services/notifications/alert-engine';
 import type { ParsedVoiceTransaction } from '@/services/voice/voice-parser';
 import { useNetworkStore } from '@/store/use-network-store';
-import { isNetworkError } from '@/services/network/network.service';
-import { ThemeColors, typography, radius, useTheme } from '@/theme';
+import { radius, ThemeColors, typography, useTheme } from '@/theme';
 import type { Account, RecurringFrequency, TransactionType } from '@/types';
-import { formatCurrency, formatLocalDate, getCurrencySymbol } from '@/utils/format';
 import {
   computeTransferImpact,
   getAccountTypeShortLabel,
   isLiabilityAccountType,
+  pickDefaultAccountId,
   pickDefaultSourceAccountId,
 } from '@/utils/account-metrics';
+import { formatCurrency, formatLocalDate, getCurrencySymbol } from '@/utils/format';
 import { getAccountTypeIcon, getCategoryIcon } from '@/utils/icons';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as Sharing from 'expo-sharing';
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -284,7 +285,7 @@ export default function AddTransactionScreen() {
         setAccountId(pickDefaultSourceAccountId(accounts, params.toAccountId || toAccountId));
         return;
       }
-      setAccountId(accounts[0].id);
+      setAccountId(pickDefaultAccountId(accounts));
     }
   }, [accounts, accountId, isEditing, params.accountId, params.type, params.toAccountId, toAccountId]);
 
@@ -2040,15 +2041,23 @@ export default function AddTransactionScreen() {
                         />
                       </View>
                       <View style={styles.flex1}>
-                        <Text
-                          style={[
-                            styles.categoryOptionText,
-                            isSelected && styles.categoryOptionTextSelected,
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {acc.name}
-                        </Text>
+                        <View style={styles.accountNameRow}>
+                          <Text
+                            style={[
+                              styles.categoryOptionText,
+                              isSelected && styles.categoryOptionTextSelected,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {acc.name}
+                          </Text>
+                          {acc.isPrimary && (
+                            <View style={styles.primaryAccountBadge}>
+                              <MaterialIcons name="star" size={10} color={colors.onPrimaryContainer} />
+                              <Text style={styles.primaryAccountBadgeText}>Primary</Text>
+                            </View>
+                          )}
+                        </View>
                         <Text
                           style={styles.accountSubtext}
                           numberOfLines={1}
@@ -2668,6 +2677,29 @@ const getStyles = (colors: ThemeColors) => {
     categoryOptionText: {
       ...typography.bodyLg,
       color: colors.onSurface,
+      flexShrink: 1,
+    },
+    accountNameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    primaryAccountBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      backgroundColor: colors.primaryContainer,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+      flexShrink: 0,
+    },
+    primaryAccountBadgeText: {
+      ...typography.labelMd,
+      fontSize: 10,
+      lineHeight: 13,
+      fontFamily: 'Manrope_700Bold',
+      color: colors.onPrimaryContainer,
     },
     quickChipsRow: {
       flexDirection: 'row',

@@ -7,18 +7,27 @@ import {
   hasSentReminder,
   markReminderSent,
 } from '@/services/notifications/reminder-state';
+import { useAppStore } from '@/store/use-app-store';
 import { BillsRepository } from '../database/bills.repository';
 import type { Bill } from '../types/bill.types';
 
 const OVERDUE_REMINDER_MAX_DAYS = 14;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
+function isBillRemindersEnabled(): boolean {
+  try {
+    return useAppStore.getState?.().billRemindersEnabled !== false;
+  } catch {
+    return true;
+  }
+}
+
 export class ReminderService {
   /**
    * Schedules or updates local in-app notification alerts for a bill.
    */
   public static async scheduleBillReminder(bill: Bill): Promise<void> {
-    if (bill.status !== 'upcoming') return;
+    if (bill.status !== 'upcoming' || !isBillRemindersEnabled()) return;
 
     const [y, m, d] = bill.dueDate.split('-').map(Number);
     if (!y || !m || !d) return;
@@ -68,6 +77,8 @@ export class ReminderService {
           type: diffDays === 0 ? 'alert' : 'bill',
           actionUrl: '/(app)/bills',
           metadata: { billId: bill.id },
+          // Scheduled OS trigger owns tray notification; avoid double banner on bill save/sync
+          notifySystem: false,
         });
         DeviceEventEmitter.emit('notificationsUpdated');
       }
@@ -88,6 +99,8 @@ export class ReminderService {
    * Triggers at most once per milestone stage (due_soon, due_today, overdue) per billing cycle.
    */
   public static async evaluateAllBillReminders(): Promise<number> {
+    if (!isBillRemindersEnabled()) return 0;
+
     try {
       const upcomingBills = await BillsRepository.getUpcomingBills(7);
       if (upcomingBills.length === 0) return 0;
@@ -170,6 +183,8 @@ export class ReminderService {
             type: alertType,
             actionUrl: '/(app)/bills',
             metadata: { billId: bill.id },
+            // Overdue alerts nudge immediately; due_soon/due_today tray delivery is handled by native scheduled triggers
+            notifySystem: stage === 'overdue',
           });
           alertedCount++;
         }

@@ -26,6 +26,7 @@ export default function AppLayout() {
         <Stack.Screen name="account-transactions" />
         <Stack.Screen name="bills" />
         <Stack.Screen name="bill-details" />
+        <Stack.Screen name="reminders" />
         <Stack.Screen name="splitwise" />
         <Stack.Screen name="splitwise-people" />
         <Stack.Screen name="splitwise-person-details" />
@@ -36,6 +37,7 @@ export default function AppLayout() {
         <Stack.Screen name="add-investment" options={{ presentation: 'modal' }} />
         <Stack.Screen name="add-transaction" options={{ presentation: 'modal' }} />
         <Stack.Screen name="add-bill" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="add-reminder" options={{ presentation: 'modal' }} />
         <Stack.Screen name="add-splitwise-person" options={{ presentation: 'modal' }} />
         <Stack.Screen name="add-splitwise-debt" options={{ presentation: 'modal' }} />
         <Stack.Screen name="add-splitwise-settlement" options={{ presentation: 'modal' }} />

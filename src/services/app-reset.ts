@@ -2,6 +2,8 @@ import { DeviceEventEmitter } from 'react-native';
 import { mmkv } from '@/lib/storage';
 import { BillsRepository } from '@/modules/bills/database/bills.repository';
 import { useBillsStore } from '@/modules/bills/store/bills.store';
+import { RemindersRepository } from '@/modules/reminders/database/reminders.repository';
+import { ReminderScheduler } from '@/modules/reminders/services/ReminderScheduler';
 import { NativeNotificationListenerAdapter } from '@/modules/notifications/adapters/nativeNotificationListenerAdapter';
 import { DEFAULT_TARGET_APPS } from '@/modules/notifications/constants';
 import { NotificationParsingService } from '@/modules/notifications/services/notificationParsingService';
@@ -66,6 +68,7 @@ async function executeResetEntireAppData(queryClient?: QueryClient): Promise<voi
     // 4. Cancel scheduled OS notifications, clear notification tray, & reset alert cooldown
     try {
       await BillAlertEngine.cancelAllNativeBillReminders();
+      await ReminderScheduler.cancelAllNotifications();
       await BillAlertEngine.dismissAllDeliveredNotifications();
     } catch {
       // Ignore in test/headless mode
@@ -74,6 +77,7 @@ async function executeResetEntireAppData(queryClient?: QueryClient): Promise<voi
 
     // 5. Reset repository & engine caches, custom categorizer rules, and native listener buffer
     BillsRepository.resetSchemaCache();
+    RemindersRepository.resetSchemaCache();
     DuplicateDetectionEngine.clearCache();
     LocalCategorizerEngine.clearCustomRules();
     await NativeNotificationListenerAdapter.clearBridgeState().catch(() => false);
@@ -167,6 +171,13 @@ async function executeResetEntireAppData(queryClient?: QueryClient): Promise<voi
     appStore.setOnboarded(false);
     appStore.setPaydayDayOfMonth(1);
     appStore.setSafetyBufferAmount(2000);
+    appStore.setDefaultReminderTime('09:00');
+    appStore.setDailyPulseEnabled(false);
+    appStore.setDailyPulseTime('20:00');
+    appStore.setBillRemindersEnabled(true);
+    appStore.setCardDueAlertsEnabled(true);
+    appStore.setBudgetAlertsEnabled(true);
+    appStore.setGoalRemindersEnabled(true);
 
     // 9. Flush TanStack Query cache and notify mounted non-query listeners
     if (queryClient) {
@@ -178,6 +189,7 @@ async function executeResetEntireAppData(queryClient?: QueryClient): Promise<voi
     try {
       DeviceEventEmitter?.emit?.('appDataReset');
       DeviceEventEmitter?.emit?.('billsUpdated');
+      DeviceEventEmitter?.emit?.('remindersUpdated');
       DeviceEventEmitter?.emit?.('notificationsUpdated');
       DeviceEventEmitter?.emit?.('splitwiseUpdated');
     } catch {
